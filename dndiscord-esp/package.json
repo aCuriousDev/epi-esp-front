@@ -1,32 +1,28 @@
 {
-  "name": "dnd-board-iframe",
-  "version": "0.1.0",
+  "name": "tactical-rpg-poc",
   "private": true,
+  "version": "1.0.0",
   "type": "module",
+  "description": "A DnD-like turn-based tactical RPG POC inspired by Dofus and Baldur's Gate 3",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview --port 5173",
-    "typecheck": "tsc -b --pretty"
+    "build": "tsc && vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@babylonjs/core": "^7.12.0",
-    "@iconify-icon/solid": "^3.0.3",
-    "@solidjs/router": "^0.14.5",
-    "axios": "^1.13.2",
-    "lucide-solid": "^0.548.0",
-    "solid-js": "^1.9.3",
-    "solid-styled-jsx": "^0.27.1",
-    "styled-jsx": "^3.4.7"
+    "@babylonjs/core": "^7.34.1",
+    "@babylonjs/inspector": "^7.54.3",
+    "@babylonjs/loaders": "^7.34.1",
+    "@babylonjs/materials": "^7.34.1",
+    "solid-js": "^1.9.3"
   },
   "devDependencies": {
-    "@iconify-json/game-icons": "^1.2.3",
-    "@types/node": "^22.7.5",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.47",
-    "tailwindcss": "^3.4.14",
-    "typescript": "^5.6.3",
-    "vite": "^5.4.10",
+    "@types/node": "^20.10.0",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.3.2",
+    "vite": "^5.4.0",
     "vite-plugin-solid": "^2.10.2"
   }
 }
