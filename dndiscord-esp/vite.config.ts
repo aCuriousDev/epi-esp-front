@@ -1,19 +1,18 @@
 import { defineConfig } from 'vite';
-import solid from 'vite-plugin-solid';
+import solidPlugin from 'vite-plugin-solid';
+import path from 'path';
 
 export default defineConfig({
-	plugins: [solid()],
-	server: {
-    host: true,
-    port: 5173
+  plugins: [solidPlugin()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
   },
-  preview: {
-    host: true,
-    port: 5173
+  server: {
+    port: 3000,
   },
   build: {
-    target: 'esnext'
-  }
+    target: 'esnext',
+  },
 });
-
-
