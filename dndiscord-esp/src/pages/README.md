@@ -1,0 +1,1 @@
+Route-level components. Each file is a page mounted by the router.
