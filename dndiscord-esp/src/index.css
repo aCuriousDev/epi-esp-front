@@ -2,65 +2,394 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ========================================
+   GLOBAL THEMING - DnD Purple/Blue Theme
+   ======================================== */
 :root {
-  --color-game-dark: #1a1a2e;
-  --color-game-darker: #0f0f1a;
-  --color-game-accent: #e94560;
-  --color-game-gold: #f4c542;
-  --color-game-blue: #0f3460;
-  --color-game-blue-light: #1e5a8e;
-  --color-game-green: #4ade80;
-  --color-game-red: #ef4444;
+	--ring-color: theme(colors.brandStart);
+	/* POC Game colors */
+	--color-game-dark: #1a1a2e;
+	--color-game-darker: #0f0f1a;
+	--color-game-accent: #e94560;
+	--color-game-gold: #f4c542;
+	--color-game-blue: #0f3460;
+	--color-game-blue-light: #1e5a8e;
+	--color-game-green: #4ade80;
+	--color-game-red: #ef4444;
+}
+
+html,
+body,
+#root {
+	height: 100%;
 }
 
 body {
-  background-color: var(--color-game-darker);
-  color: white;
+	background-color: var(--color-game-darker);
+	color: white;
 }
 
 .font-fantasy {
-  font-family: 'Cinzel', Georgia, serif;
+	font-family: "Cinzel", Georgia, serif;
 }
 
-/* Custom scrollbar */
+/* ========================================
+   CUSTOM SCROLLBAR
+   ======================================== */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+	width: 10px;
+	height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-game-darker);
-  border-radius: 4px;
+	background: var(--color-game-darker);
+	border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-game-blue-light);
-  border-radius: 4px;
-  border: 2px solid var(--color-game-darker);
+	background: var(--color-game-blue-light);
+	border-radius: 4px;
+	border: 2px solid var(--color-game-darker);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-game-accent);
+	background: var(--color-game-accent);
 }
 
-/* Game UI components */
+/* ========================================
+   VIGNETTE EFFECT
+   ======================================== */
+.vignette::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	box-shadow: inset 0 0 200px rgba(0, 0, 0, 0.6);
+}
+
+/* ========================================
+   MENU COMPONENTS - Brand Theme
+   ======================================== */
+
+/* Container card */
+.menu-card {
+	@apply w-full max-w-xl p-0;
+}
+
+/* Row wrapper: left badge + right button */
+.menu-row {
+	@apply relative flex items-center w-full sm:w-auto;
+}
+
+.menu-button {
+	@apply relative overflow-hidden w-full sm:w-80 pr-5 pl-16 py-3.5 rounded-xl border border-transparent text-slate-200 tracking-wide transition-transform transition-shadow transition-colors bg-gradient-to-r from-brandStart to-brandEnd shadow-soft hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-brandStart/30 inline-flex items-center justify-center;
+	background-size: 120% 100%;
+	z-index: 1;
+}
+
+/* Subtle gradient pan on hover */
+.menu-button:hover {
+	animation: btnGradientPan 1800ms ease-in-out;
+}
+
+.menu-button-primary {
+	@apply menu-button;
+}
+
+/* Icon-only button (no label, just icon like + button) */
+.menu-button-icon {
+	@apply w-14 h-14 rounded-xl grid place-items-center
+		   bg-gradient-to-r from-brandStart to-brandEnd
+		   border-2 border-white/20 shadow-soft
+		   hover:border-white/40 hover:shadow-lg hover:-translate-y-0.5
+		   transition-all duration-200 cursor-pointer;
+}
+
+.menu-button-icon:hover {
+	animation: btnGradientPan 1800ms ease-in-out;
+}
+
+/* Avatar for profile pictures (circular, no rotation) */
+.menu-avatar {
+	@apply absolute w-12 h-12 rounded-full overflow-hidden border-2 border-white/20 shadow-soft;
+	left: 0;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	z-index: 2;
+}
+
+.menu-avatar img {
+	@apply w-full h-full object-cover;
+}
+
+.decorative-divider {
+	@apply h-px w-40 bg-gradient-to-r from-transparent via-white/50 to-transparent;
+}
+
+/* Title subtle glow */
+.title-shine {
+	text-shadow: 0 0 14px rgba(88, 33, 90, 0.7), 0 0 28px rgba(28, 57, 91, 0.6);
+}
+
+/* Animated shine sweep across gradient text */
+.title-gradient {
+	background-image: linear-gradient(
+			135deg,
+			theme(colors.brandStart) 0%,
+			theme(colors.brandEnd) 100%
+		),
+		linear-gradient(
+			120deg,
+			rgba(255, 255, 255, 0) 0%,
+			rgba(255, 255, 255, 1) 50%,
+			rgba(255, 255, 255, 0) 100%
+		);
+	background-size: 100% 100%, 240% 100%;
+	background-position: 0 0, -240% 0;
+	background-repeat: no-repeat;
+	animation: titleShineMove 6000ms ease-in-out infinite;
+}
+
+@keyframes titleShineMove {
+	to {
+		background-position: 0 0, 200% 0;
+	}
+}
+
+/* Button gradient pan */
+@keyframes btnGradientPan {
+	0% {
+		background-position: 0% 0;
+	}
+	50% {
+		background-position: 50% 0;
+	}
+	100% {
+		background-position: 0% 0;
+	}
+}
+
+/* Shine sweep overlay on buttons (hover only) */
+.menu-button::after {
+	content: "";
+	position: absolute;
+	inset: -1px;
+	pointer-events: none;
+	background-image: linear-gradient(
+			135deg,
+			theme(colors.brandStart) 0%,
+			theme(colors.brandEnd) 100%
+		),
+		linear-gradient(
+			120deg,
+			rgba(255, 255, 255, 0) 0%,
+			rgba(255, 255, 255, 0.6) 50%,
+			rgba(255, 255, 255, 0) 100%
+		);
+	background-size: 100% 100%, 200% 100%;
+	background-position: 0 0, -200% 0;
+	background-repeat: no-repeat;
+	opacity: 0;
+	mix-blend-mode: overlay;
+	transition: opacity 150ms ease-out;
+}
+
+.menu-button:hover::after {
+	opacity: 0.35;
+	animation: titleShineMove 1400ms ease-out;
+}
+
+/* Badge square (rotated) outside the button */
+.menu-badge {
+	@apply absolute grid place-items-center w-14 h-14 rounded-xl pointer-events-none;
+	left: 0;
+	top: 50%;
+	transform: translate(-50%, -50%) rotate(45deg);
+	background-image: linear-gradient(
+		135deg,
+		theme(colors.brandStart),
+		theme(colors.brandEnd)
+	);
+	border: 2px solid rgba(255, 255, 255, 0.16);
+	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+	z-index: 2;
+}
+
+.menu-badge::after {
+	content: "";
+	position: absolute;
+	inset: -2px;
+	border-radius: inherit;
+	background: conic-gradient(
+		from 0deg,
+		theme(colors.brandStart),
+		theme(colors.brandEnd),
+		theme(colors.brandStart)
+	);
+	filter: blur(10px);
+	opacity: 0.35;
+	z-index: -1;
+}
+
+.menu-badge-inner {
+	@apply relative grid place-items-center w-12 h-12 rounded-lg;
+	transform: rotate(-45deg);
+	background: transparent;
+}
+
+.menu-badge-icon {
+	@apply text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.35)];
+}
+
+/* Hover linkage: when hovering the row/button, animate the badge */
+.menu-badge {
+	transition: box-shadow 200ms ease, border-color 200ms ease,
+		transform 200ms ease;
+}
+.menu-badge::after {
+	transition: opacity 200ms ease, filter 200ms ease;
+}
+.menu-badge-icon {
+	transition: transform 200ms ease, filter 200ms ease;
+}
+
+.menu-row:hover .menu-badge {
+	box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+	border-color: rgba(255, 255, 255, 0.28);
+	transform: translate(-50%, -50%) rotate(45deg) scale(1.02);
+}
+
+.menu-row:hover .menu-badge::after {
+	opacity: 0.6;
+	filter: blur(8px);
+}
+
+.menu-row:hover .menu-badge-icon {
+	transform: scale(1.06);
+	filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.35));
+}
+
+.menu-badge:hover {
+	animation: btnGradientPan 1800ms ease-in-out;
+}
+
+/* ========================================
+   SETTINGS BUTTON
+   ======================================== */
+.settings-btn {
+	@apply fixed top-4 right-4 inline-grid place-items-center w-11 h-11 rounded-xl border border-transparent text-slate-200 shadow-soft focus:outline-none;
+	background: linear-gradient(180deg, rgba(8, 12, 20, 0.9), rgba(5, 8, 14, 0.9))
+			padding-box,
+		conic-gradient(
+				from 0deg,
+				theme(colors.brandStart),
+				theme(colors.brandEnd),
+				theme(colors.brandStart)
+			)
+			border-box;
+	background-clip: padding-box, border-box;
+	transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+	z-index: 50;
+}
+
+.settings-btn:hover {
+	transform: translateY(-1px);
+	filter: brightness(1.05);
+	box-shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
+}
+
+.settings-icon {
+	@apply text-white;
+}
+
+/* ========================================
+   CHARACTER ART TRANSITIONS
+   ======================================== */
+.class-art-wrap {
+	position: relative;
+	width: 100%;
+	height: 420px;
+	padding-top: 16px;
+}
+
+.class-art {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+}
+
+.class-art img {
+	width: 100%;
+	height: calc(100% - 16px);
+	object-fit: cover;
+	object-position: center 60%;
+	display: block;
+	transform: translateY(8px);
+	filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.45));
+}
+
+@media (max-width: 640px) {
+	.class-art-wrap {
+		height: 300px;
+	}
+}
+
+@keyframes fadeInUp {
+	0% {
+		opacity: 0;
+		transform: translateY(10px) scale(0.98);
+	}
+	100% {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+@keyframes fadeOutRight {
+	0% {
+		opacity: 1;
+		transform: translateX(0) scale(1);
+	}
+	100% {
+		opacity: 0;
+		transform: translateX(24px) scale(0.98);
+	}
+}
+
+.art-enter {
+	animation: fadeInUp 350ms ease-out forwards;
+}
+
+.art-exit {
+	animation: fadeOutRight 350ms ease-in forwards;
+}
+
+.vignette_picture {
+	width: 7em;
+	border-radius: 10%;
+}
+
+/* ========================================
+   POC GAME UI COMPONENTS
+   ======================================== */
 @layer components {
-  .btn-game {
-    @apply px-4 py-2 bg-game-blue hover:bg-game-blue-light text-white font-semibold rounded-lg
+	.btn-game {
+		@apply px-4 py-2 bg-game-blue hover:bg-game-blue-light text-white font-semibold rounded-lg
            transition-all duration-200 border border-game-gold/40 hover:border-game-gold
            hover:shadow-lg hover:shadow-game-gold/20
            disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-game-blue;
-  }
-  
-  .panel-game {
-    @apply bg-game-dark/95 backdrop-blur-sm border border-game-gold/30 rounded-lg p-4 shadow-xl;
-  }
-  
-  .stat-bar {
-    @apply h-3 rounded-full overflow-hidden bg-game-darker border border-gray-700/50;
-  }
-  
-  .stat-bar-fill {
-    @apply h-full transition-all duration-300 shadow-sm;
-  }
+	}
+
+	.panel-game {
+		@apply bg-game-dark/95 backdrop-blur-sm border border-game-gold/30 rounded-lg p-4 shadow-xl;
+	}
+
+	.stat-bar {
+		@apply h-3 rounded-full overflow-hidden bg-game-darker border border-gray-700/50;
+	}
+
+	.stat-bar-fill {
+		@apply h-full transition-all duration-300 shadow-sm;
+	}
 }
