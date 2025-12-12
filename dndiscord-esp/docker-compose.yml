@@ -1,0 +1,17 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+  # Cloudflare Tunnel - exposes frontend to the internet
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    # Quick tunnel - gives random trycloudflare.com URL (stable while running)
+    command: tunnel --no-autoupdate --url http://frontend:80
