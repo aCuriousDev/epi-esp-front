@@ -7,7 +7,7 @@ import { PaginatedResponseModel } from "./model/PaginatedResponseModel";
 export abstract class ApiCall {
 
     private static config = {
-        apiUrl : ""
+        apiUrl : import.meta.env.VITE_API_URL || "http://localhost:5054"
     }
 
   private static setAuthHeader() {
