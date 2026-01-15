@@ -2,16 +2,25 @@ import { A, useNavigate } from "@solidjs/router";
 import { ArrowLeft, Plus, Settings } from "lucide-solid";
 import { createSignal, For } from "solid-js";
 import ButtonMenu from "../components/common/ButtonMenu";
+import roguePortrait from "../assets/classes/rogue.png";
+
+interface CharacterListItem {
+	id: string;
+	first_name: string;
+	last_name: string;
+	campaign?: { title: string };
+	profil_picture_url: string;
+}
 
 export default function CharactersComponent() {
 	const navigate = useNavigate();
-	const [characters, setCharacters] = createSignal<Array<any>>([
+	const [characters, setCharacters] = createSignal<CharacterListItem[]>([
 		{
+			id: "1",
 			first_name: "Aria",
 			last_name: "SombreLame",
-			campagn: { title: "La quête d'Asteria" },
-			profil_picture_url:
-				"https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png",
+			campaign: { title: "La quête d'Asteria" },
+			profil_picture_url: roguePortrait,
 		},
 	]);
 
@@ -40,7 +49,7 @@ export default function CharactersComponent() {
 						<ButtonMenu
 							label={character.first_name + " " + character.last_name}
 							imageUrl={character.profil_picture_url}
-							onClick={() => console.log("View character:", character)}
+							onClick={() => navigate(`/characters/${character.id}`)}
 						/>
 					)}
 				</For>

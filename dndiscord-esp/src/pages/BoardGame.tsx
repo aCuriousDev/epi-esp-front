@@ -1,5 +1,6 @@
 import { Component, Show, onMount, createSignal } from "solid-js";
 import { useNavigate } from "@solidjs/router";
+import { ArrowLeft, RotateCcw } from "lucide-solid";
 import {
 	GameCanvas,
 	isEngineReady,
@@ -112,19 +113,26 @@ const BoardGame: Component = () => {
 		>
 			<div class="w-full h-screen flex flex-col bg-game-darker overflow-hidden">
 				{/* Header */}
-				<header class="h-12 bg-game-dark/90 border-b border-game-gold/20 flex items-center justify-between px-4">
-					<h1 class="font-fantasy text-game-gold text-xl">
-						⚔️ DnDiscord Combat POC
-					</h1>
-					<div class="flex items-center gap-4">
-						<button class="btn-game text-sm py-1" onClick={() => restartGame()}>
-							Restart
-						</button>
+				<header class="h-14 bg-gradient-to-r from-brandStart/90 to-brandEnd/90 backdrop-blur-sm border-b border-white/10 flex items-center justify-between px-4">
+					<div class="flex items-center gap-3">
 						<button
-							class="btn-game text-sm py-1 bg-gray-700 hover:bg-gray-600"
 							onClick={() => returnToMenu()}
+							class="flex items-center justify-center w-9 h-9 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 transition-colors"
+							aria-label="Retour au menu"
 						>
-							Return to Menu
+							<ArrowLeft class="w-4 h-4 text-white" />
+						</button>
+						<h1 class="font-display text-white text-lg sm:text-xl tracking-wide">
+							DnDiscord
+						</h1>
+					</div>
+					<div class="flex items-center gap-2">
+						<button 
+							class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 text-white text-sm transition-colors"
+							onClick={() => restartGame()}
+						>
+							<RotateCcw class="w-3.5 h-3.5" />
+							<span class="hidden sm:inline">Recommencer</span>
 						</button>
 					</div>
 				</header>

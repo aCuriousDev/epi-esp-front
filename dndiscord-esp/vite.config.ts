@@ -15,4 +15,8 @@ export default defineConfig({
   build: {
     target: 'esnext',
   },
+  optimizeDeps: {
+    // Pre-bundle lucide-solid to avoid ad blockers blocking "fingerprint" icon requests
+    include: ['lucide-solid'],
+  },
 });
