@@ -101,12 +101,13 @@ export const GameCanvas: Component = () => {
   // Create grid when tiles change (only after engine is ready)
   createEffect(() => {
     const tileCount = Object.keys(tiles).length;
-    console.log('[GameCanvas] Tiles effect triggered - Count:', tileCount, 'Engine ready:', isEngineReady());
+    const currentMapId = gameState.mapId;
+    console.log('[GameCanvas] Tiles effect triggered - Count:', tileCount, 'Engine ready:', isEngineReady(), 'MapId:', currentMapId);
     
     if (engineInstance && isEngineReady() && tileCount > 0) {
-      console.log('[GameCanvas] Creating grid with', tileCount, 'tiles');
+      console.log('[GameCanvas] Creating grid with', tileCount, 'tiles', currentMapId ? `using map: ${currentMapId}` : 'using default map');
       // Grid creation is now async due to 3D model loading
-      engineInstance.createGrid(tiles).then(() => {
+      engineInstance.createGrid(tiles, currentMapId).then(() => {
         console.log('[GameCanvas] Grid creation complete');
       }).catch(error => {
         console.error('[GameCanvas] Failed to create grid:', error);

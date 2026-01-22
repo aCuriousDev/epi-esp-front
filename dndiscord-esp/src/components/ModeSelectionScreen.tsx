@@ -1,4 +1,6 @@
 import { Component } from 'solid-js';
+import { A } from '@solidjs/router';
+import { ArrowLeft } from 'lucide-solid';
 import { GameMode } from '../types';
 
 interface ModeSelectionScreenProps {
@@ -7,7 +9,12 @@ interface ModeSelectionScreenProps {
 
 export const ModeSelectionScreen: Component<ModeSelectionScreenProps> = (props) => {
   return (
-    <div class="w-full h-screen flex items-center justify-center bg-game-darker">
+    <div class="w-full h-screen flex items-center justify-center bg-game-darker relative">
+      {/* Back button */}
+      <A href="/" class="settings-btn" aria-label="Retour">
+        <ArrowLeft class="settings-icon h-5 w-5" />
+      </A>
+
       <div class="max-w-5xl w-full px-8">
         {/* Title */}
         <div class="text-center mb-12">

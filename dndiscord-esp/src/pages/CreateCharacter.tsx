@@ -1,5 +1,6 @@
 import { createMemo, createSignal } from "solid-js";
-import { A } from "@solidjs/router";
+import { A, useNavigate } from "@solidjs/router";
+import { addCharacter } from "../stores/charactersStore";
 
 type DnDClass = {
 	key: string;
@@ -150,6 +151,7 @@ const RACES = [
 ];
 
 export default function CreateCharacter() {
+	const navigate = useNavigate();
 	const [selectedClass, setSelectedClass] = createSignal<string>("fighter");
 	const [selectedRace, setSelectedRace] = createSignal<string>("Humain");
 	const [name, setName] = createSignal<string>("");
@@ -159,6 +161,23 @@ export default function CreateCharacter() {
 	const klass = createMemo(
 		() => CLASSES.find((c) => c.key === selectedClass())!
 	);
+
+	const handleCreateCharacter = () => {
+		if (!name().trim()) {
+			alert("Veuillez entrer un nom pour votre personnage");
+			return;
+		}
+
+		addCharacter({
+			name: name().trim(),
+			race: selectedRace(),
+			class: klass().name,
+			classKey: selectedClass(),
+		});
+
+		// Rediriger vers la liste des personnages
+		navigate("/characters");
+	};
 
 	return (
 		<div class="relative min-h-full w-full overflow-y-auto bg-brand-gradient">
@@ -263,9 +282,15 @@ export default function CreateCharacter() {
 							</div>
 						</section>
 
-						{/* <div class="flex justify-end">
-							<button class="menu-button px-6 py-3 w-auto">Continuer</button>
-						</div> */}
+						{/* Bouton de création sous le résumé de la classe */}
+						<div class="flex justify-end">
+							<button 
+								class="menu-button px-6 py-3.5 w-auto"
+								onClick={handleCreateCharacter}
+							>
+								Créer le personnage
+							</button>
+						</div>
 					</section>
 
 					{/* Colonne droite: illustration sticky */}

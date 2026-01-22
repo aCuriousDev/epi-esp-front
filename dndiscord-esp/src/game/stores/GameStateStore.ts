@@ -25,6 +25,7 @@ function createDefaultGameState(): GameState {
     pathPreview: [],
     targetableTiles: [],
     combatLog: [],
+    mapId: null,
   };
 }
 

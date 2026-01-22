@@ -110,8 +110,19 @@ export function moveUnit(targetPos: GridPosition): boolean {
   
   if (!path || path.length === 0) return false;
   
-  // Calculate movement cost
-  const movementCost = path.length - 1; // Don't count starting position
+  // Calculate movement cost by summing the movementCost of each tile in the path
+  // Skip the starting position (index 0)
+  let movementCost = 0;
+  for (let i = 1; i < path.length; i++) {
+    const tileKey = posToKey(path[i]);
+    const tile = tiles[tileKey];
+    if (tile) {
+      movementCost += tile.movementCost;
+    } else {
+      // Fallback to 1 if tile not found
+      movementCost += 1;
+    }
+  }
   
   // Check if unit has enough AP for this move (skip in Free Roam)
   if (!isFreeRoam && unit.stats.currentActionPoints < movementCost) return false;

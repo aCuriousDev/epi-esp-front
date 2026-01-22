@@ -4,6 +4,7 @@ import { JSX } from "solid-js/jsx-runtime";
 interface ButtonMenuProps {
 	className?: string;
 	label?: string;
+	subLabel?: string;
 	icon?: JSX.Element;
 	imageUrl?: string;
 	onMouseEnter?: () => void;
@@ -13,6 +14,7 @@ interface ButtonMenuProps {
 
 export default function ButtonMenu({
 	label,
+	subLabel,
 	icon,
 	imageUrl,
 	className,
@@ -50,7 +52,12 @@ export default function ButtonMenu({
 				onClick={onClick}
 			>
 				{label ? (
-					<span class="font-old text-lg">{label}</span>
+					<div class="flex flex-col items-center">
+						<span class="font-old text-lg">{label}</span>
+						{subLabel && (
+							<span class="text-xs text-slate-300/80 mt-0.5">{subLabel}</span>
+						)}
+					</div>
 				) : (
 					<span class="text-white">{icon}</span>
 				)}

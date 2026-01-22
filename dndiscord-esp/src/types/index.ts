@@ -163,6 +163,7 @@ export enum GameMode {
 
 export enum AppPhase {
   MODE_SELECTION = 'mode_selection',
+  MAP_SELECTION = 'map_selection',
   IN_GAME = 'in_game',
 }
 
@@ -195,6 +196,7 @@ export interface GameState {
   pathPreview: GridPosition[];
   targetableTiles: GridPosition[];
   combatLog: CombatLogEntry[];
+  mapId: string | null; // ID of the selected map
 }
 
 export interface CombatLogEntry {

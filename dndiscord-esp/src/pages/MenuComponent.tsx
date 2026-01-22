@@ -5,6 +5,7 @@ import { Settings } from "lucide-solid";
 import { GameIconsFoldedPaper } from "../components/common/GameIconsFoldedPaper";
 import { GameIconsPencilBrush } from "../components/common/GameIconsPencilBrush";
 import { GameIconsCrossedSwords } from "../components/common/GameIconsCrossedSwords";
+import { GameIconsTreasureMap } from "../components/common/GameIconsTreasureMap";
 import ButtonMenu from "../components/common/ButtonMenu";
 
 export default function MenuComponent() {
@@ -45,6 +46,13 @@ export default function MenuComponent() {
 			hoveringLabel: "rules",
 			route: "/rules",
 			hoveringDescription: "Consultez les règles du jeu.",
+		},
+		{
+			label: "Map Editor",
+			icon: <GameIconsTreasureMap class="menu-badge-icon h-10 w-10" />,
+			hoveringLabel: "map-editor",
+			route: "/map-editor",
+			hoveringDescription: "Créez et éditez vos propres cartes de jeu.",
 		},
 	]);
 	const navigate = useNavigate();

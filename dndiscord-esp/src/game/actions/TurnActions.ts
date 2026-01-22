@@ -20,18 +20,19 @@ import { checkGameOver } from './CombatActions';
 // GAME START
 // ============================================
 
-export function startGame(mode: GameMode = GameMode.COMBAT): void {
+export function startGame(mode: GameMode = GameMode.COMBAT, mapId: string | null = null): void {
   console.log('[startGame] ===== STARTING GAME =====');
   console.log('[startGame] Mode:', mode);
+  console.log('[startGame] Map ID:', mapId || 'default');
   console.log('[startGame] Current units count:', Object.keys(units).length);
   console.log('[startGame] Current tiles count:', Object.keys(tiles).length);
   
   if (mode === GameMode.FREE_ROAM) {
     console.log('[startGame] Initializing FREE ROAM mode...');
-    initializeFreeRoam();
+    initializeFreeRoam(mapId);
   } else {
     console.log('[startGame] Initializing COMBAT mode...');
-    initializeCombat();
+    initializeCombat(mapId);
   }
   
   console.log('[startGame] After init - Units:', Object.keys(units).length, 'Tiles:', Object.keys(tiles).length);
@@ -42,9 +43,9 @@ export function startGame(mode: GameMode = GameMode.COMBAT): void {
 // COMBAT INITIALIZATION
 // ============================================
 
-function initializeCombat(): void {
+function initializeCombat(mapId: string | null = null): void {
   console.log('[initializeCombat] Initializing grid...');
-  initializeGrid();
+  initializeGrid(mapId);
   console.log('[initializeCombat] Grid initialized, tiles:', Object.keys(tiles).length);
   
   console.log('[initializeCombat] Initializing units...');
@@ -69,6 +70,7 @@ function initializeCombat(): void {
       highlightedTiles: [],
       pathPreview: [],
       targetableTiles: [],
+      mapId,
     });
     
     addCombatLog('Battle begins!', 'system');

@@ -145,8 +145,8 @@ export class BabylonEngine {
   // GRID API
   // ============================================
   
-  public async createGrid(tileData: Record<string, Tile>): Promise<void> {
-    await this.gridRenderer.createGrid(tileData);
+  public async createGrid(tileData: Record<string, Tile>, mapId: string | null = null): Promise<void> {
+    await this.gridRenderer.createGrid(tileData, mapId);
   }
   
   // ============================================

@@ -11,6 +11,7 @@ import { CombatLog } from "../components/CombatLog";
 import { TurnOrderDisplay } from "../components/TurnOrderDisplay";
 import { GameOverScreen } from "../components/GameOverScreen";
 import { ModeSelectionScreen } from "../components/ModeSelectionScreen";
+import { MapSelectionForGame } from "../components/MapSelectionForGame";
 import {
 	gameState,
 	startGame,
@@ -26,6 +27,8 @@ const BoardGame: Component = () => {
 	const [appPhase, setAppPhase] = createSignal<AppPhase>(
 		AppPhase.MODE_SELECTION
 	);
+	const [selectedMode, setSelectedMode] = createSignal<GameMode | null>(null);
+	const [selectedMapId, setSelectedMapId] = createSignal<string | null>(null);
 
 	onMount(() => {
 		console.log("[BoardGame] Component mounted, showing mode selection");
@@ -33,8 +36,14 @@ const BoardGame: Component = () => {
 
 	// Functions to manage app phase
 	const startMode = (mode: GameMode) => {
-		console.log("[BoardGame] ========== STARTING MODE:", mode, "==========");
-		console.log("[BoardGame] Setting appPhase to IN_GAME");
+		console.log("[BoardGame] ========== MODE SELECTED:", mode, "==========");
+		setSelectedMode(mode);
+		setAppPhase(AppPhase.MAP_SELECTION);
+	};
+
+	const selectMap = (mapId: string | null) => {
+		console.log("[BoardGame] ========== MAP SELECTED:", mapId || "default", "==========");
+		setSelectedMapId(mapId);
 		setAppPhase(AppPhase.IN_GAME);
 
 		// Wait for engine to be ready before starting game
@@ -42,14 +51,15 @@ const BoardGame: Component = () => {
 			if (isEngineReady()) {
 				console.log(
 					"[BoardGame] Engine is ready, starting game in",
-					mode,
-					"mode"
+					selectedMode(),
+					"mode with map:",
+					mapId || "default"
 				);
 				// Add a small delay to ensure the engine and render loop are fully settled
 				// This prevents the 3D models from being out of sync on first load
 				setTimeout(() => {
 					console.log("[BoardGame] Initializing game now...");
-					startGame(mode);
+					startGame(selectedMode()!, mapId);
 					console.log("[BoardGame] Game initialization complete");
 				}, 150);
 			} else {
@@ -58,6 +68,12 @@ const BoardGame: Component = () => {
 			}
 		};
 		checkEngine();
+	};
+
+	const backToModeSelection = () => {
+		setAppPhase(AppPhase.MODE_SELECTION);
+		setSelectedMode(null);
+		setSelectedMapId(null);
 	};
 
 	const returnToMenu = () => {
@@ -80,10 +96,13 @@ const BoardGame: Component = () => {
 
 	const restartGame = () => {
 		const currentMode = getCurrentMode();
+		const currentMapId = selectedMapId();
 		console.log(
 			"[BoardGame] ========== RESTARTING GAME IN",
 			currentMode,
-			"MODE =========="
+			"MODE WITH MAP:",
+			currentMapId || "default",
+			"=========="
 		);
 
 		// For restart, we DON'T dispose the engine - we just clear game objects and reinitialize
@@ -98,9 +117,10 @@ const BoardGame: Component = () => {
 			console.log(
 				"[BoardGame] Re-initializing game in",
 				currentMode,
-				"mode..."
+				"mode with map:",
+				currentMapId || "default"
 			);
-			startGame(currentMode);
+			startGame(currentMode, currentMapId);
 			console.log("[BoardGame] Game restart complete");
 		}, 100);
 	};
@@ -108,7 +128,17 @@ const BoardGame: Component = () => {
 	return (
 		<Show
 			when={appPhase() === AppPhase.IN_GAME}
-			fallback={<ModeSelectionScreen onSelectMode={startMode} />}
+			fallback={
+				<Show
+					when={appPhase() === AppPhase.MAP_SELECTION}
+					fallback={<ModeSelectionScreen onSelectMode={startMode} />}
+				>
+					<MapSelectionForGame
+						onSelectMap={selectMap}
+						onBack={backToModeSelection}
+					/>
+				</Show>
+			}
 		>
 			<div class="w-full h-screen flex flex-col bg-game-darker overflow-hidden">
 				{/* Header */}
