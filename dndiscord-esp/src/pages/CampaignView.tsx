@@ -1,66 +1,128 @@
 import { A, useParams, useNavigate } from "@solidjs/router";
-import { 
-  ArrowLeft, Crown, Users, Calendar, BookOpen, Settings, 
+import {
+  ArrowLeft, Crown, Users, Calendar, BookOpen, Settings,
   Play, Pause, UserPlus, Trash2, Edit3, Clock, MapPin,
   MessageSquare, ChevronRight, Plus, Check, X
 } from "lucide-solid";
 import { createSignal, onMount, Show, For } from "solid-js";
-import { 
+import {
   Campaign, CampaignStatus, CampaignPlayer, CampaignSession,
-  getStatusColor, getStatusLabel 
+  getStatusColor, getStatusLabel
 } from "../types/campaign";
 import { authStore } from "../stores/auth.store";
 import { AuthService } from "../services/auth.service";
+import {
+  CampaignService,
+  CampaignDetailResponse,
+  CampaignMemberResponse,
+  CampaignStatus as APICampaignStatus
+} from "../services/campaign.service";
 
-// Mock data
-const mockCampaign: Campaign = {
-  id: "1",
-  title: "La Malédiction de Strahd",
-  description: "Plongez dans les brumes de Barovie et affrontez le vampire le plus redouté des Royaumes. Cette campagne d'horreur gothique vous emmènera dans un monde de terreur, de mystère et de tragédie où chaque choix compte.",
-  status: CampaignStatus.Active,
-  visibility: "Private" as any,
-  dungeonMasterId: "dm1",
-  dungeonMasterName: "MaîtreDuJeu",
-  dungeonMasterAvatar: "",
-  maxPlayers: 5,
-  currentPlayers: 4,
-  totalSessions: 12,
-  setting: "Ravenloft",
-  startingLevel: 1,
-  currentLevel: 6,
-  nextSessionDate: "2025-12-15T19:00:00",
-  tags: ["Horreur", "Gothique", "RP Intense"],
-  createdAt: "2025-06-01",
-  players: [
-    { id: "p1", username: "Thorin", role: "player", characterName: "Bruenor le Nain", joinedAt: "2025-06-01" },
-    { id: "p2", username: "Elara", role: "player", characterName: "Aria Sombrelame", joinedAt: "2025-06-01" },
-    { id: "p3", username: "Gandalf42", role: "player", characterName: "Zephyr le Sage", joinedAt: "2025-06-05" },
-    { id: "p4", username: "DragonSlayer", role: "player", characterName: "Kira la Rouge", joinedAt: "2025-06-10" },
-  ],
-  sessions: [
-    { id: "s1", number: 12, title: "Les Tours d'Argent", date: "2025-12-08", completed: true, summary: "Les héros ont découvert les secrets de la tour..." },
-    { id: "s2", number: 11, title: "La Crypte des Ombres", date: "2025-12-01", completed: true, summary: "Exploration de la crypte ancestrale..." },
-    { id: "s3", number: 10, title: "Rencontre avec le Comte", date: "2025-11-24", completed: true },
-  ],
-};
+/**
+ * Map API campaign status (integer) to frontend status (string)
+ */
+function mapCampaignStatus(apiStatus: number): CampaignStatus {
+  switch (apiStatus) {
+    case 0: return CampaignStatus.Planning; // Draft
+    case 1: return CampaignStatus.Active;
+    case 2: return CampaignStatus.Paused;
+    case 3: return CampaignStatus.Completed;
+    case 4: return CampaignStatus.Archived;
+    default: return CampaignStatus.Planning;
+  }
+}
+
+/**
+ * Map API member role to frontend role
+ */
+function mapMemberRole(apiRole: string): "dm" | "player" {
+  switch (apiRole) {
+    case "CoDungeonMaster":
+      return "dm";
+    case "Player":
+    case "Spectator":
+    default:
+      return "player";
+  }
+}
+
+/**
+ * Map frontend status to API status (integer)
+ */
+function mapToAPICampaignStatus(status: CampaignStatus): APICampaignStatus {
+  switch (status) {
+    case CampaignStatus.Planning: return APICampaignStatus.Draft;
+    case CampaignStatus.Active: return APICampaignStatus.Active;
+    case CampaignStatus.Paused: return APICampaignStatus.Paused;
+    case CampaignStatus.Completed: return APICampaignStatus.Completed;
+    case CampaignStatus.Archived: return APICampaignStatus.Archived;
+    default: return APICampaignStatus.Draft;
+  }
+}
+
+/**
+ * Map API campaign response to frontend Campaign type
+ */
+function mapCampaignResponse(apiCampaign: CampaignDetailResponse): Campaign {
+  return {
+    id: apiCampaign.id,
+    title: apiCampaign.name,
+    description: apiCampaign.description,
+    coverImageUrl: apiCampaign.imageUrl,
+    status: mapCampaignStatus(apiCampaign.status),
+    visibility: apiCampaign.isPublic ? "Public" as any : "Private" as any,
+    dungeonMasterId: apiCampaign.dungeonMasterId,
+    dungeonMasterName: "Maître du Jeu", // API doesn't provide this
+    dungeonMasterAvatar: "",
+    maxPlayers: apiCampaign.maxPlayers,
+    currentPlayers: apiCampaign.memberCount,
+    players: apiCampaign.members?.map(m => ({
+      id: m.id,
+      username: m.userId, // API doesn't provide username, using userId
+      role: mapMemberRole(m.role),
+      characterName: m.nickname,
+      joinedAt: m.joinedAt,
+    })) || [],
+    sessions: [], // API doesn't provide sessions yet
+    totalSessions: apiCampaign.snapshotCount || 0,
+    setting: undefined,
+    startingLevel: 1,
+    currentLevel: 1,
+    tags: [],
+    createdAt: apiCampaign.createdAt,
+    updatedAt: apiCampaign.updatedAt,
+  };
+}
 
 export default function CampaignView() {
   const params = useParams();
   const navigate = useNavigate();
   const [campaign, setCampaign] = createSignal<Campaign | null>(null);
   const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal<string | null>(null);
   const [activeTab, setActiveTab] = createSignal<"overview" | "players" | "sessions">("overview");
   const [showInviteModal, setShowInviteModal] = createSignal(false);
+  const [inviteCode, setInviteCode] = createSignal<string | null>(null);
 
   const user = () => authStore.user();
-  const isOwner = () => true; // In real app, check if user is DM
+  const isOwner = () => {
+    const c = campaign();
+    const u = user();
+    return c && u && c.dungeonMasterId === u.id;
+  };
 
   onMount(async () => {
-    // TODO: Fetch campaign from API using params.id
-    setTimeout(() => {
-      setCampaign(mockCampaign);
+    try {
+      setLoading(true);
+      const response = await CampaignService.getCampaign(params.id);
+      const mappedCampaign = mapCampaignResponse(response);
+      setCampaign(mappedCampaign);
+    } catch (err: any) {
+      console.error("Failed to load campaign:", err);
+      setError("Impossible de charger la campagne.");
+    } finally {
       setLoading(false);
-    }, 300);
+    }
   });
 
   const formatDate = (dateStr: string) => {
@@ -84,13 +146,78 @@ export default function CampaignView() {
     });
   };
 
-  const toggleStatus = () => {
+  const toggleStatus = async () => {
     const c = campaign();
     if (!c) return;
-    const newStatus = c.status === CampaignStatus.Active 
-      ? CampaignStatus.Paused 
+
+    const newStatus = c.status === CampaignStatus.Active
+      ? CampaignStatus.Paused
       : CampaignStatus.Active;
-    setCampaign({ ...c, status: newStatus });
+
+    try {
+      const apiStatus = mapToAPICampaignStatus(newStatus);
+      await CampaignService.updateCampaign(c.id, { status: apiStatus });
+      setCampaign({ ...c, status: newStatus });
+    } catch (err) {
+      console.error("Failed to update campaign status:", err);
+      setError("Impossible de modifier le statut de la campagne.");
+    }
+  };
+
+  const handleUpdate = () => {
+    // TODO: Implement edit campaign modal or navigate to edit page
+    navigate(`/campaigns/${params.id}/edit`);
+  };
+
+  const handleDelete = async () => {
+    const c = campaign();
+    if (!c) return;
+
+    if (!confirm(`Êtes-vous sûr de vouloir supprimer "${c.title}" ? Cette action est irréversible.`)) {
+      return;
+    }
+
+    try {
+      await CampaignService.deleteCampaign(c.id);
+      navigate("/campaigns");
+    } catch (err) {
+      console.error("Failed to delete campaign:", err);
+      setError("Impossible de supprimer la campagne.");
+    }
+  };
+
+  const handleGenerateInvite = async () => {
+    const c = campaign();
+    if (!c) return;
+
+    try {
+      const response = await CampaignService.generateInviteCode(c.id, { expiresInHours: 24 });
+      setInviteCode(response.inviteCode);
+      setShowInviteModal(true);
+    } catch (err) {
+      console.error("Failed to generate invite code:", err);
+      setError("Impossible de générer le code d'invitation.");
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string) => {
+    const c = campaign();
+    if (!c) return;
+
+    if (!confirm("Êtes-vous sûr de vouloir retirer ce joueur de la campagne ?")) {
+      return;
+    }
+
+    try {
+      await CampaignService.removeMember(c.id, memberId);
+      // Refresh campaign data
+      const response = await CampaignService.getCampaign(c.id);
+      const mappedCampaign = mapCampaignResponse(response);
+      setCampaign(mappedCampaign);
+    } catch (err) {
+      console.error("Failed to remove member:", err);
+      setError("Impossible de retirer le membre.");
+    }
   };
 
   return (
@@ -323,8 +450,8 @@ export default function CampaignView() {
                     <div class="p-4 border-b border-white/10 flex items-center justify-between">
                       <h3 class="font-display text-lg text-white">Joueurs ({camp().currentPlayers})</h3>
                       <Show when={isOwner() && camp().currentPlayers < camp().maxPlayers}>
-                        <button 
-                          onClick={() => setShowInviteModal(true)}
+                        <button
+                          onClick={handleGenerateInvite}
                           class="flex items-center gap-2 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded-lg transition-colors"
                         >
                           <UserPlus class="w-4 h-4" />
@@ -359,7 +486,11 @@ export default function CampaignView() {
                               </p>
                             </div>
                             <Show when={isOwner()}>
-                              <button class="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors">
+                              <button
+                                onClick={() => handleRemoveMember(player.id)}
+                                class="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
+                                title="Retirer le joueur"
+                              >
                                 <X class="w-4 h-4" />
                               </button>
                             </Show>
@@ -437,12 +568,14 @@ export default function CampaignView() {
                 </button>
                 <Show when={isOwner()}>
                   <button
+                    onClick={handleUpdate}
                     class="py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-white font-semibold hover:bg-white/10 transition-all flex items-center justify-center gap-2"
                   >
                     <Edit3 class="w-5 h-5" />
                     Modifier
                   </button>
                   <button
+                    onClick={handleDelete}
                     class="py-3 px-6 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-semibold hover:bg-red-500/20 transition-all flex items-center justify-center gap-2"
                   >
                     <Trash2 class="w-5 h-5" />
@@ -453,6 +586,49 @@ export default function CampaignView() {
             </main>
           )}
         </Show>
+      </Show>
+
+      {/* Invite Code Modal */}
+      <Show when={showInviteModal()}>
+        <div
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowInviteModal(false)}
+        >
+          <div
+            class="bg-game-dark border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 class="text-xl font-display text-white mb-4">Code d'invitation</h3>
+            <p class="text-slate-400 mb-4">
+              Partagez ce code avec vos joueurs pour les inviter à rejoindre la campagne.
+            </p>
+            <div class="bg-white/5 border border-white/10 rounded-xl p-4 mb-4">
+              <code class="text-purple-400 text-lg font-mono">{inviteCode()}</code>
+            </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(inviteCode() || "");
+                alert("Code copié dans le presse-papiers !");
+              }}
+              class="w-full py-2 px-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-colors"
+            >
+              Copier le code
+            </button>
+          </div>
+        </div>
+      </Show>
+
+      {/* Error Toast */}
+      <Show when={error()}>
+        <div class="fixed bottom-4 right-4 z-50 bg-red-500/90 text-white px-6 py-3 rounded-xl shadow-lg">
+          {error()}
+          <button
+            onClick={() => setError(null)}
+            class="ml-4 text-white/80 hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
       </Show>
 
       <style jsx>{`

@@ -2,6 +2,7 @@ import { A, useNavigate } from "@solidjs/router";
 import { ArrowLeft, Crown, Users, Globe, Lock, Mail, Sparkles, BookOpen, Map, Wand2 } from "lucide-solid";
 import { createSignal, For, Show } from "solid-js";
 import { CampaignVisibility, getVisibilityLabel } from "../types/campaign";
+import { CampaignService, CampaignStatus as APICampaignStatus } from "../services/campaign.service";
 
 // Preset campaign settings
 const SETTINGS_PRESETS = [
@@ -32,10 +33,11 @@ export default function CreateCampaign() {
   const [selectedTags, setSelectedTags] = createSignal<string[]>([]);
   const [isSubmitting, setIsSubmitting] = createSignal(false);
   const [step, setStep] = createSignal(1);
+  const [error, setError] = createSignal<string | null>(null);
 
   const toggleTag = (tag: string) => {
-    setSelectedTags(prev => 
-      prev.includes(tag) 
+    setSelectedTags(prev =>
+      prev.includes(tag)
         ? prev.filter(t => t !== tag)
         : prev.length < 5 ? [...prev, tag] : prev
     );
@@ -44,14 +46,26 @@ export default function CreateCampaign() {
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
     if (!title().trim()) return;
-    
+
     setIsSubmitting(true);
-    
-    // TODO: API call to create campaign
-    setTimeout(() => {
+    setError(null);
+
+    try {
+      const response = await CampaignService.createCampaign({
+        name: title().trim(),
+        description: description().trim() || undefined,
+        maxPlayers: maxPlayers(),
+        isPublic: visibility() === CampaignVisibility.Public,
+        status: APICampaignStatus.Draft,
+      });
+
+      // Redirect to the new campaign page
+      navigate(`/campaigns/${response.id}`);
+    } catch (err: any) {
+      console.error("Failed to create campaign:", err);
+      setError(err.response?.data?.message || "Impossible de créer la campagne. Veuillez réessayer.");
       setIsSubmitting(false);
-      navigate("/campaigns");
-    }, 1000);
+    }
   };
 
   const canProceed = () => {
@@ -106,6 +120,13 @@ export default function CreateCampaign() {
             )}
           </For>
         </div>
+
+        {/* Error message */}
+        <Show when={error()}>
+          <div class="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-center">
+            {error()}
+          </div>
+        </Show>
 
         {/* Form Card */}
         <form onSubmit={handleSubmit} class="campaign-form bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
