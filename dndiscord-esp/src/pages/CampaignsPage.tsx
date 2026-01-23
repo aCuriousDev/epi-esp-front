@@ -1,69 +1,83 @@
 import { A, useNavigate } from "@solidjs/router";
 import { ArrowLeft, Plus, Users, Calendar, Crown, BookOpen } from "lucide-solid";
-import { createSignal, For, Show } from "solid-js";
-import { Campaign, CampaignStatus, getStatusColor, getStatusLabel } from "../types/campaign";
+import { createSignal, For, Show, onMount, createResource } from "solid-js";
+import { Campaign, CampaignStatus, getStatusColor, getStatusLabel, CampaignVisibility } from "../types/campaign";
 import { authStore } from "../stores/auth.store";
 import { AuthService } from "../services/auth.service";
+import { CampaignService, CampaignResponse, CampaignStatus as APICampaignStatus } from "../services/campaign.service";
 
-// Mock data for demonstration
-const mockCampaigns: Campaign[] = [
-  {
-    id: "1",
-    title: "La Malédiction de Strahd",
-    description: "Plongez dans les brumes de Barovie et affrontez le vampire le plus redouté des Royaumes.",
-    status: CampaignStatus.Active,
-    visibility: "Private" as any,
-    dungeonMasterId: "dm1",
-    dungeonMasterName: "MaîtreDuJeu",
-    maxPlayers: 5,
-    currentPlayers: 4,
-    totalSessions: 12,
-    setting: "Ravenloft",
-    startingLevel: 1,
-    currentLevel: 6,
-    nextSessionDate: "2025-12-15T19:00:00",
-    tags: ["Horreur", "Gothique", "RP Intense"],
-    createdAt: "2025-06-01",
-  },
-  {
-    id: "2",
-    title: "Le Trésor des Dragons",
-    description: "Une chasse au trésor épique à travers les montagnes et les donjons oubliés.",
-    status: CampaignStatus.Planning,
-    visibility: "Public" as any,
-    dungeonMasterId: "dm2",
-    dungeonMasterName: "DragonSlayer42",
-    maxPlayers: 6,
-    currentPlayers: 2,
-    totalSessions: 0,
-    setting: "Forgotten Realms",
-    startingLevel: 3,
-    tags: ["Aventure", "Exploration", "Dragons"],
-    createdAt: "2025-11-28",
-  },
-  {
-    id: "3",
-    title: "Chroniques d'Éberron",
-    description: "Magie et technologie s'entremêlent dans ce monde unique de mystères et d'intrigues.",
-    status: CampaignStatus.Paused,
-    visibility: "InviteOnly" as any,
-    dungeonMasterId: "dm1",
-    dungeonMasterName: "MaîtreDuJeu",
-    maxPlayers: 4,
-    currentPlayers: 4,
-    totalSessions: 8,
-    setting: "Eberron",
-    startingLevel: 1,
-    currentLevel: 4,
-    tags: ["Steampunk", "Mystère", "Intrigue"],
-    createdAt: "2025-08-15",
-  },
-];
+/**
+ * Map backend campaign status to frontend status
+ */
+function mapCampaignStatus(status: number | string): CampaignStatus {
+  // Backend sends integers (or as strings in JSON)
+  const statusNum = typeof status === 'number' ? status : parseInt(status);
+
+  switch (statusNum) {
+    case 0: // Draft
+      return CampaignStatus.Planning;
+    case 1: // Active
+      return CampaignStatus.Active;
+    case 2: // Paused (was OnHold)
+      return CampaignStatus.Paused;
+    case 3: // Completed
+      return CampaignStatus.Completed;
+    case 4: // Archived
+      return CampaignStatus.Archived;
+    default:
+      return CampaignStatus.Planning;
+  }
+}
+
+/**
+ * Map backend campaign response to frontend campaign type
+ */
+function mapCampaignResponse(response: CampaignResponse): Campaign {
+  return {
+    id: response.id,
+    title: response.name,
+    description: response.description,
+    coverImageUrl: response.imageUrl,
+    status: mapCampaignStatus(response.status),
+    visibility: response.isPublic ? CampaignVisibility.Public : CampaignVisibility.Private,
+    dungeonMasterId: response.dungeonMasterId,
+    dungeonMasterName: "Maître du Jeu", // TODO: Get from user data
+    maxPlayers: response.maxPlayers,
+    currentPlayers: response.memberCount,
+    totalSessions: 0, // TODO: Add to backend
+    startingLevel: 1, // TODO: Add to backend
+    tags: [], // TODO: Add to backend
+    createdAt: response.createdAt,
+    updatedAt: response.updatedAt,
+    nextSessionDate: response.lastPlayedAt,
+  };
+}
 
 export default function CampaignsPage() {
   const navigate = useNavigate();
-  const [campaigns, setCampaigns] = createSignal<Campaign[]>(mockCampaigns);
+  const [campaigns, setCampaigns] = createSignal<Campaign[]>([]);
   const [filter, setFilter] = createSignal<"all" | "dm" | "player">("all");
+  const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal<string | null>(null);
+
+  // Load campaigns on mount
+  onMount(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await CampaignService.listCampaigns({
+        page: 1,
+        pageSize: 100,
+      });
+      const mappedCampaigns = response.items.map(mapCampaignResponse);
+      setCampaigns(mappedCampaigns);
+    } catch (err) {
+      console.error("Failed to load campaigns:", err);
+      setError("Impossible de charger les campagnes. Veuillez réessayer.");
+    } finally {
+      setLoading(false);
+    }
+  });
 
   const user = () => authStore.user();
   const avatarUrl = () => {
@@ -146,24 +160,41 @@ export default function CampaignsPage() {
           />
         </div>
 
+        {/* Error message */}
+        <Show when={error()}>
+          <div class="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-center">
+            {error()}
+          </div>
+        </Show>
+
+        {/* Loading state */}
+        <Show when={loading()}>
+          <div class="text-center py-16">
+            <div class="w-16 h-16 mx-auto mb-4 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+            <p class="text-slate-300">Chargement des campagnes...</p>
+          </div>
+        </Show>
+
         {/* Campaigns Grid */}
         <Show
-          when={filteredCampaigns().length > 0}
+          when={!loading() && filteredCampaigns().length > 0}
           fallback={
-            <div class="text-center py-16">
-              <div class="w-20 h-20 mx-auto mb-4 rounded-2xl bg-white/5 flex items-center justify-center">
-                <BookOpen class="w-10 h-10 text-slate-500" />
+            <Show when={!loading()}>
+              <div class="text-center py-16">
+                <div class="w-20 h-20 mx-auto mb-4 rounded-2xl bg-white/5 flex items-center justify-center">
+                  <BookOpen class="w-10 h-10 text-slate-500" />
+                </div>
+                <h3 class="text-xl font-semibold text-white mb-2">Aucune campagne</h3>
+                <p class="text-slate-400 mb-6">Créez votre première campagne ou rejoignez-en une existante.</p>
+                <button
+                  onClick={() => navigate("/campaigns/create")}
+                  class="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-colors inline-flex items-center gap-2"
+                >
+                  <Plus class="w-5 h-5" />
+                  Créer une campagne
+                </button>
               </div>
-              <h3 class="text-xl font-semibold text-white mb-2">Aucune campagne</h3>
-              <p class="text-slate-400 mb-6">Créez votre première campagne ou rejoignez-en une existante.</p>
-              <button
-                onClick={() => navigate("/campaigns/create")}
-                class="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-colors inline-flex items-center gap-2"
-              >
-                <Plus class="w-5 h-5" />
-                Créer une campagne
-              </button>
-            </div>
+            </Show>
           }
         >
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

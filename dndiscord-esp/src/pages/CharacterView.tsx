@@ -1,5 +1,5 @@
 import { A, useParams, useNavigate } from "@solidjs/router";
-import { ArrowLeft, Heart, Shield, Zap, Footprints, Edit3, Trash2 } from "lucide-solid";
+import { ArrowLeft, Heart, Shield, Zap, Footprints, Edit3, Trash2, Plus, Minus, TrendingUp } from "lucide-solid";
 import { createSignal, onMount, Show, For } from "solid-js";
 import {
   Character,
@@ -9,6 +9,7 @@ import {
   formatModifier,
   getAbilityModifier,
 } from "../types/character";
+import { CharacterService, CharacterDto } from "../services/character.service";
 
 // Import class portraits
 import barbarianImg from "../assets/classes/barbarian.png";
@@ -39,44 +40,80 @@ const classPortraits: Record<CharacterClass, string> = {
   [CharacterClass.Magicien]: wizardImg,
 };
 
-// Mock data for demonstration - will be replaced with API call
-const mockCharacter: Character = {
-  id: "1",
-  name: "Aria Sombrelame",
-  level: 5,
-  characterClass: CharacterClass.Voleur,
-  race: CharacterRace.Elfe,
-  abilities: {
-    strength: 10,
-    dexterity: 18,
-    constitution: 14,
-    intelligence: 12,
-    wisdom: 13,
-    charisma: 15,
-  },
-  maxHitPoints: 38,
-  currentHitPoints: 32,
-  armorClass: 15,
-  speed: 30,
-  initiative: 4,
-  campaign: { title: "La quête d'Asteria" },
-  createdAt: "2025-01-15",
-};
+/**
+ * Map API character response to frontend Character type
+ */
+function mapCharacterResponse(dto: CharacterDto): Character {
+  return {
+    id: dto.id,
+    name: dto.name,
+    level: dto.level,
+    characterClass: dto.class as CharacterClass,
+    race: dto.race as CharacterRace,
+    abilities: dto.abilities,
+    maxHitPoints: dto.maxHitPoints,
+    currentHitPoints: dto.currentHitPoints,
+    armorClass: 10 + getAbilityModifier(dto.abilities.dexterity), // Basic calculation
+    speed: 30, // Default
+    initiative: getAbilityModifier(dto.abilities.dexterity),
+    createdAt: dto.createdAt,
+  };
+}
 
 export default function CharacterView() {
   const params = useParams();
   const navigate = useNavigate();
   const [character, setCharacter] = createSignal<Character | null>(null);
   const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal<string | null>(null);
 
   onMount(async () => {
-    // TODO: Fetch character from API using params.id
-    // For now, use mock data
-    setTimeout(() => {
-      setCharacter(mockCharacter);
+    try {
+      setLoading(true);
+      const dto = await CharacterService.getCharacter(params.id);
+      const mappedCharacter = mapCharacterResponse(dto);
+      setCharacter(mappedCharacter);
+    } catch (err: any) {
+      console.error("Failed to load character:", err);
+      setError("Impossible de charger le personnage.");
+    } finally {
       setLoading(false);
-    }, 300);
+    }
   });
+
+  const handleHitPointsChange = async (delta: number) => {
+    const char = character();
+    if (!char) return;
+
+    const newHP = Math.max(0, Math.min(char.maxHitPoints, char.currentHitPoints + delta));
+
+    try {
+      const dto = await CharacterService.updateHitPoints(char.id, newHP);
+      const updatedChar = mapCharacterResponse(dto);
+      setCharacter(updatedChar);
+    } catch (err) {
+      console.error("Failed to update hit points:", err);
+      setError("Impossible de mettre à jour les points de vie.");
+    }
+  };
+
+  const handleLevelUp = async () => {
+    const char = character();
+    if (!char) return;
+
+    if (!confirm(`Faire monter ${char.name} au niveau ${char.level + 1} ?`)) {
+      return;
+    }
+
+    try {
+      const dto = await CharacterService.levelUp(char.id);
+      const updatedChar = mapCharacterResponse(dto);
+      setCharacter(updatedChar);
+    } catch (err) {
+      console.error("Failed to level up:", err);
+      setError("Impossible de faire monter de niveau.");
+    }
+  };
 
   const getPortrait = () => {
     const char = character();
@@ -177,16 +214,12 @@ export default function CharacterView() {
                     {/* Action buttons */}
                     <div class="flex gap-2 pt-4 sm:pt-8">
                       <button
-                        class="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
-                        title="Modifier"
+                        onClick={handleLevelUp}
+                        class="px-3 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-600 border border-amber-400/20 hover:from-amber-400 hover:to-yellow-500 transition-colors flex items-center gap-2"
+                        title="Monter de niveau"
                       >
-                        <Edit3 class="w-5 h-5 text-slate-300" />
-                      </button>
-                      <button
-                        class="p-2 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors"
-                        title="Supprimer"
-                      >
-                        <Trash2 class="w-5 h-5 text-red-400" />
+                        <TrendingUp class="w-4 h-4 text-white" />
+                        <span class="text-white text-sm font-semibold">Level Up</span>
                       </button>
                     </div>
                   </div>
@@ -197,9 +230,27 @@ export default function CharacterView() {
                   <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     {/* HP */}
                     <div class="bg-white/5 rounded-xl p-4 border border-white/5">
-                      <div class="flex items-center gap-2 text-red-400 mb-2">
-                        <Heart class="w-4 h-4" />
-                        <span class="text-xs uppercase tracking-wider">Points de vie</span>
+                      <div class="flex items-center justify-between text-red-400 mb-2">
+                        <div class="flex items-center gap-2">
+                          <Heart class="w-4 h-4" />
+                          <span class="text-xs uppercase tracking-wider">Points de vie</span>
+                        </div>
+                        <div class="flex gap-1">
+                          <button
+                            onClick={() => handleHitPointsChange(-1)}
+                            class="w-6 h-6 rounded bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 flex items-center justify-center transition-colors"
+                            title="Retirer 1 PV"
+                          >
+                            <Minus class="w-3 h-3 text-red-400" />
+                          </button>
+                          <button
+                            onClick={() => handleHitPointsChange(1)}
+                            class="w-6 h-6 rounded bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 flex items-center justify-center transition-colors"
+                            title="Ajouter 1 PV"
+                          >
+                            <Plus class="w-3 h-3 text-green-400" />
+                          </button>
+                        </div>
                       </div>
                       <div class="text-2xl font-bold text-white">
                         {char().currentHitPoints}
@@ -337,6 +388,19 @@ export default function CharacterView() {
             </main>
           )}
         </Show>
+      </Show>
+
+      {/* Error Toast */}
+      <Show when={error()}>
+        <div class="fixed bottom-4 right-4 z-50 bg-red-500/90 text-white px-6 py-3 rounded-xl shadow-lg">
+          {error()}
+          <button
+            onClick={() => setError(null)}
+            class="ml-4 text-white/80 hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
       </Show>
     </div>
   );
