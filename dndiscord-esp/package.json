@@ -15,6 +15,7 @@
     "@babylonjs/loaders": "^7.34.1",
     "@babylonjs/materials": "^7.34.1",
     "@iconify-icon/solid": "^3.0.3",
+    "@microsoft/signalr": "^10.0.0",
     "@solidjs/router": "^0.14.5",
     "axios": "^1.13.2",
     "lucide-solid": "^0.548.0",
