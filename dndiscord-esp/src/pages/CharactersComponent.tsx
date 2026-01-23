@@ -1,21 +1,13 @@
 import { A, useNavigate } from "@solidjs/router";
-import { ArrowLeft, Plus, Settings } from "lucide-solid";
+import { ArrowLeft, Plus } from "lucide-solid";
 import { createSignal, For, onMount, Show } from "solid-js";
 import ButtonMenu from "../components/common/ButtonMenu";
-import roguePortrait from "../assets/classes/rogue.png";
+import CharacterCard from "../components/CharacterCard";
 import { CharacterService, CharacterDto } from "../services/character.service";
-
-interface CharacterListItem {
-	id: string;
-	first_name: string;
-	last_name: string;
-	campaign?: { title: string };
-	profil_picture_url: string;
-}
 
 export default function CharactersComponent() {
 	const navigate = useNavigate();
-	const [characters, setCharacters] = createSignal<CharacterListItem[]>([]);
+	const [characters, setCharacters] = createSignal<CharacterDto[]>([]);
 	const [loading, setLoading] = createSignal(true);
 	const [error, setError] = createSignal<string | null>(null);
 
@@ -26,15 +18,8 @@ export default function CharactersComponent() {
 			setError(null);
 			const charactersData = await CharacterService.getMyCharacters();
 
-			// Map backend data to frontend format
-			const mappedCharacters = charactersData.map((char: CharacterDto) => ({
-				id: char.id,
-				first_name: char.name.split(' ')[0] || char.name,
-				last_name: char.name.split(' ').slice(1).join(' ') || '',
-				profil_picture_url: roguePortrait, // TODO: Add character portraits
-			}));
-
-			setCharacters(mappedCharacters);
+			console.log(charactersData);
+			setCharacters(charactersData);
 		} catch (err) {
 			console.error("Failed to load characters:", err);
 			setError("Impossible de charger les personnages. Veuillez réessayer.");
@@ -62,7 +47,7 @@ export default function CharactersComponent() {
 				<div class="mt-6 mx-auto decorative-divider"></div>
 			</header>
 
-			<main class="relative z-10 mx-auto flex min-h-full max-w-5xl flex-col items-center justify-center gap-6 p-6 sm:p-10">
+			<main class="relative z-10 mx-auto flex min-h-full max-w-5xl flex-col items-center gap-6 p-6 sm:p-10">
 				{/* Error message */}
 				<Show when={error()}>
 					<div class="w-full max-w-md p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-center">
@@ -80,21 +65,24 @@ export default function CharactersComponent() {
 
 				{/* Characters list */}
 				<Show when={!loading()}>
-					<For each={characters()}>
-						{(character) => (
-							<ButtonMenu
-								label={character.first_name + " " + character.last_name}
-								imageUrl={character.profil_picture_url}
-								onClick={() => navigate(`/characters/${character.id}`)}
-							/>
-						)}
-					</For>
+					<div class="w-full flex flex-col gap-4">
+						<For each={characters()}>
+							{(character) => (
+								<CharacterCard
+									character={character}
+									onClick={() => navigate(`/characters/${character.id}`)}
+								/>
+							)}
+						</For>
 
-					{/* Add new character button */}
-					<ButtonMenu
-						icon={<Plus class="h-6 w-6" />}
-						onClick={() => navigate("/characters/create")}
-					/>
+						{/* Add new character button */}
+						<div class="w-full max-w-md mx-auto">
+							<ButtonMenu
+								icon={<Plus class="h-6 w-6" />}
+								onClick={() => navigate("/characters/create")}
+							/>
+						</div>
+					</div>
 				</Show>
 			</main>
 		</div>
