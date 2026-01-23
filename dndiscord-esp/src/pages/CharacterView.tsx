@@ -10,35 +10,8 @@ import {
   getAbilityModifier,
 } from "../types/character";
 import { CharacterService, CharacterDto } from "../services/character.service";
+import { GetCharacterProfilPic } from "../utils/characterProfilPic.ts";
 
-// Import class portraits
-import barbarianImg from "../assets/classes/barbarian.png";
-import bardImg from "../assets/classes/bard.png";
-import clericImg from "../assets/classes/cleric.png";
-import druidImg from "../assets/classes/druid.png";
-import fighterImg from "../assets/classes/fighter.png";
-import monkImg from "../assets/classes/monk.png";
-import paladinImg from "../assets/classes/paladin.png";
-import rangerImg from "../assets/classes/ranger.png";
-import rogueImg from "../assets/classes/rogue.png";
-import sorcererImg from "../assets/classes/sorcerer.png";
-import warlockImg from "../assets/classes/warlock.png";
-import wizardImg from "../assets/classes/wizard.png";
-
-const classPortraits: Record<CharacterClass, string> = {
-  [CharacterClass.Barbare]: barbarianImg,
-  [CharacterClass.Barde]: bardImg,
-  [CharacterClass.Clerc]: clericImg,
-  [CharacterClass.Druide]: druidImg,
-  [CharacterClass.Guerrier]: fighterImg,
-  [CharacterClass.Moine]: monkImg,
-  [CharacterClass.Paladin]: paladinImg,
-  [CharacterClass.Rodeur]: rangerImg,
-  [CharacterClass.Voleur]: rogueImg,
-  [CharacterClass.Ensorceleur]: sorcererImg,
-  [CharacterClass.Sorcier]: warlockImg,
-  [CharacterClass.Magicien]: wizardImg,
-};
 
 /**
  * Map API character response to frontend Character type
@@ -117,9 +90,10 @@ export default function CharacterView() {
 
   const getPortrait = () => {
     const char = character();
-    if (!char) return fighterImg;
-    return char.portraitUrl || classPortraits[char.characterClass] || fighterImg;
+    if (!char) return GetCharacterProfilPic.getCharacterProfilPicOrDefault();
+    return char.portraitUrl || GetCharacterProfilPic.getCharacterProfilPic(char.characterClass);
   };
+  
 
   const hpPercentage = () => {
     const char = character();
@@ -179,11 +153,11 @@ export default function CharacterView() {
                   <div class="flex flex-col sm:flex-row gap-6 items-start">
                     {/* Portrait */}
                     <div class="relative flex-shrink-0">
-                      <div class="w-32 h-32 rounded-2xl overflow-hidden border-4 border-game-dark/60 shadow-xl bg-game-darker">
+                      <div class="w-45 h-45 rounded-2xl overflow-hidden shadow-l">
                         <img
                           src={getPortrait()}
                           alt={char().name}
-                          class="w-full h-full object-cover"
+                          class="w-45 h-32 object-contain mx-auto"
                         />
                       </div>
                       {/* Level badge */}
