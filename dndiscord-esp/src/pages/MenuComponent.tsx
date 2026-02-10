@@ -47,6 +47,14 @@ export default function MenuComponent() {
 			emoji: "📜",
 		},
 		{
+			label: "Campagnes Manager",
+			icon: <ScrollText class="menu-badge-icon h-10 w-10" />,
+			hoveringLabel: "campaigns",
+			route: "/campaigns-manager",
+			hoveringDescription: "Gérez vos campagnes",
+			emoji: "📜",
+		},
+		{
 			label: "Règles du jeu",
 			icon: <GameIconsFoldedPaper class="menu-badge-icon h-10 w-10" />,
 			hoveringLabel: "rules",

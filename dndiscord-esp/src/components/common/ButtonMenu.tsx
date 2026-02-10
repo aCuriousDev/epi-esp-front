@@ -8,7 +8,7 @@ interface ButtonMenuProps {
 	imageUrl?: string;
 	onMouseEnter?: () => void;
 	onMouseLeave?: () => void;
-	onClick?: () => void;
+	onClick?: () => void | undefined;
 }
 
 export default function ButtonMenu({

@@ -16,6 +16,7 @@ import type {} from "solid-styled-jsx";
 import CharactersComponent from "./pages/CharactersComponent";
 import { AuthCallback, ProtectedRoute } from "./components/auth";
 import { authStore } from "./stores/auth.store";
+import CampaignManagerPage from "./pages/CampaignManagerPage";
 
 // Initialize auth state on app load
 authStore.init();
@@ -45,9 +46,11 @@ render(
 			<Route path="/characters/create" component={() => <Protected><CreateCharacter /></Protected>} />
 			<Route path="/characters/:id" component={() => <Protected><CharacterView /></Protected>} />
 			<Route path="/campaigns" component={() => <Protected><CampaignsPage /></Protected>} />
+			<Route path="/campaigns/:id/manager" component={() => <Protected><CampaignManagerPage /></Protected>} />
 			<Route path="/campaigns/create" component={() => <Protected><CreateCampaign /></Protected>} />
 			<Route path="/campaigns/:id" component={() => <Protected><CampaignView /></Protected>} />
 			<Route path="/board" component={() => <Protected><BoardGame /></Protected>} />
+			
 		</Router>
 	),
 	document.getElementById("root") as HTMLElement
