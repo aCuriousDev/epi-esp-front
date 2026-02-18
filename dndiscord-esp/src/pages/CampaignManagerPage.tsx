@@ -4,10 +4,11 @@ import { CampaignNode } from '../components/campaign-tree-canvas/nodes/CampaignN
 import { CombatNode, CombatNodeData } from '../components/campaign-tree-canvas/nodes/CombatNode';
 import { StoryNode, StoryNodeData } from '../components/campaign-tree-canvas/nodes/StoryNode';
 import { Component, createSignal, createEffect, Show, For, onMount } from 'solid-js';
-import { ArrowLeft, Book, Map, Plus, Save, Sword } from 'lucide-solid';
+import { ArrowLeft, Book, Map as MapIcon, Plus, Save, Sword } from 'lucide-solid';
 import ButtonMenu from '@/components/common/ButtonMenu';
 import { CampaignService, mapCampaignResponse } from '@/services/campaign.service';
 import { Campaign } from '@/types/campaign';
+import { StartNode } from '@/components/campaign-tree-canvas/nodes/StartNode';
 
 const CampaignManager: Component = () => {
   const params = useParams();
@@ -28,10 +29,6 @@ const CampaignManager: Component = () => {
   // Combat node data
   const [combatEnemies, setCombatEnemies] = createSignal<string[]>([]);
   const [combatDifficulty, setCombatDifficulty] = createSignal<'easy' | 'medium' | 'hard'>('medium');
-
-
-  //Existing Node
-  const [defaultNodes,setDefaultNodes] = createSignal<string[]>(['Histoire','Combat'])
 
   // Node type selector
   const navigate = useNavigate();
@@ -79,6 +76,10 @@ const CampaignManager: Component = () => {
    * Handle node selection
    */
   const handleNodeSelect = (node: CampaignNode | null) => {
+    if (node instanceof StartNode) {
+      setSelectedNode(null); // Pas de panel pour le StartNode
+      return;
+    }
     setSelectedNode(node);
   };
 
@@ -109,7 +110,7 @@ const CampaignManager: Component = () => {
           y: Math.random() * 300 + 100,
           data: {
             text: 'Nouvelle scène...',
-            choices: []
+            choices: ["Choix 1","Choix 2"]
           }
         });
       } else if (type === 'combat') {
@@ -250,7 +251,7 @@ const CampaignManager: Component = () => {
               <h1 class="font-display text-xl text-white tracking-wide">Campagnes</h1>
       
               <button
-                onClick={() => navigate("/campaigns/create")}
+                onClick={()=>handleSaveCampaign}
                 class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all shadow-lg shadow-purple-500/20"
               >
                 <Save class="w-4 h-4" />
@@ -537,7 +538,7 @@ const CampaignManager: Component = () => {
           </Show>
           <Show when={!selectedNode()}>
             <h3 class='font-display text-xl text-white tracking-wide mb-2'>Bloc disponibles</h3>
-            <For each={[{label:"Histoire",icon:<Book/>,blockName:'story'},{label:"Combat",icon:<Sword/>,blockName:'combat'},{label:"Map",icon:<Map/>}]} fallback={<div>Loading...</div>}>
+            <For each={[{label:"Histoire",icon:<Book/>,blockName:'story'},{label:"Combat",icon:<Sword/>,blockName:'combat'},{label:"Map",icon:<MapIcon/>}]} fallback={<div>Loading...</div>}>
               {(item) => 
               <ButtonMenu
               label={item.label}

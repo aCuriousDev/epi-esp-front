@@ -3,6 +3,7 @@ import draw2d from 'draw2d';
 import { CampaignNode } from './nodes/CampaignNode';
 import { StoryNode } from './nodes/StoryNode';
 import { CombatNode } from './nodes/CombatNode';
+import { StartNode } from './nodes/StartNode';
 
 interface CampaignTreeCanvasProps {
   onNodeSelect?: (node: CampaignNode | null) => void;
@@ -74,7 +75,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
 
     // Ajouter le node au canvas
     canvas.add(node, node.x, node.y);
-    
+
     return node;
   };
 
@@ -90,10 +91,10 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
    */
   const exportData = () => {
     if (!canvas) return null;
-    
+
     const writer = new draw2d.io.json.Writer();
     const canvasData = writer.marshal(canvas);
-    
+
     return {
       version: '1.0',
       timestamp: new Date().toISOString(),
@@ -107,16 +108,16 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
    */
   const importData = (data: any) => {
     if (!canvas) return;
-    
+
     // Effacer le canvas
     canvas.clear();
-    
+
     // Restaurer le zoom si présent
     if (data.zoom) {
       currentZoom = data.zoom;
       canvas.setZoom(currentZoom);
     }
-    
+
     // Charger les données
     const reader = new draw2d.io.json.Reader();
     reader.unmarshal(canvas, data.canvas || data);
@@ -127,14 +128,14 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
    */
   const clearCanvas = () => {
     if (!canvas) return;
-    
+
     // Confirmation avant d'effacer
     if (canvas.getFigures().getSize() > 0) {
       if (!confirm('Êtes-vous sûr de vouloir effacer tous les nœuds ?')) {
         return;
       }
     }
-    
+
     canvas.clear();
     selectedNode = null;
     props.onNodeSelect?.(null);
@@ -172,13 +173,13 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
    */
   const fitToPage = () => {
     if (!canvas) return;
-    
+
     const figures = canvas.getFigures();
     if (figures.getSize() === 0) return;
-    
+
     let minX = Infinity, minY = Infinity;
     let maxX = -Infinity, maxY = -Infinity;
-    
+
     figures.each((i: number, figure: any) => {
       const bounds = figure.getBoundingBox();
       minX = Math.min(minX, bounds.x);
@@ -186,16 +187,16 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
       maxX = Math.max(maxX, bounds.x + bounds.w);
       maxY = Math.max(maxY, bounds.y + bounds.h);
     });
-    
+
     const width = maxX - minX;
     const height = maxY - minY;
     const canvasWidth = canvasRef?.clientWidth || 800;
     const canvasHeight = canvasRef?.clientHeight || 600;
-    
+
     const zoomX = canvasWidth / width;
     const zoomY = canvasHeight / height;
     currentZoom = Math.min(zoomX, zoomY, 1.0) * 0.9; // 90% pour laisser de la marge
-    
+
     canvas.setZoom(currentZoom);
   };
 
@@ -208,13 +209,39 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     // Créer le canvas draw2d
     canvas = new draw2d.Canvas(canvasRef.id);
     if (canvas.paper && canvas.paper.canvas) {
-        canvas.paper.canvas.style.backgroundColor = 'transparent';
-      }
+      canvas.paper.canvas.style.backgroundColor = 'transparent';
+    }
     // Installer les politiques
     canvas.installEditPolicy(new draw2d.policy.canvas.SnapToGridEditPolicy(20));
     canvas.installEditPolicy(new draw2d.policy.canvas.WheelZoomPolicy());
     canvas.installEditPolicy(new draw2d.policy.canvas.PanningSelectionPolicy());
+    canvas.installEditPolicy(new draw2d.policy.canvas.KeyboardPolicy());
 
+    const originalExecute = canvas.getCommandStack().execute.bind(canvas.getCommandStack());
+    canvas.getCommandStack().execute = (command: any) => {
+      // Intercepter les commandes de suppression sur le StartNode
+      if (command instanceof draw2d.command.CommandDelete) {
+        const figure = command.figure;
+        if (figure instanceof StartNode) {
+          return; // Bloquer silencieusement
+        }
+      }
+      originalExecute(command);
+    };
+
+    const startNode = new StartNode(
+      50, // centré horizontalement
+      250   // en haut du canvas
+    );
+    canvas.add(startNode, startNode.x, startNode.y);
+
+    // Bloquer explicitement la suppression via commande
+    canvas.on('contextmenu', (emitter: any, event: any) => {
+      if (event.figure instanceof StartNode) {
+        event.preventDefault?.();
+        return false;
+      }
+    });
     // Événement : Sélection d'un node
     canvas.on('select', (emitter: any, event: any) => {
       if (event.figure instanceof CampaignNode) {
@@ -234,17 +261,17 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     // Événement : Création d'une connexion
     canvas.on('connect', (emitter: any, event: any) => {
       const connection = event.connection;
-      
+
       // Personnaliser l'apparence de la connexion
       connection.setColor('#888888');
       connection.setStroke(2);
-      
+
       // Ajouter une flèche
       connection.setTargetDecorator(new draw2d.decoration.connection.ArrowDecorator());
-      
+
       // Utiliser un routeur Manhattan (angles droits)
       connection.setRouter(new draw2d.layout.connection.ManhattanConnectionRouter());
-      
+
       props.onConnectionCreate?.(connection);
     });
 
@@ -276,10 +303,10 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
   });
 
   return (
-    <div 
-      class="campaign-tree-canvas-container" 
-      style={{ 
-        width: '100%', 
+    <div
+      class="campaign-tree-canvas-container"
+      style={{
+        width: '100%',
         height: '100%',
         position: 'relative',
         overflow: 'hidden'
@@ -287,10 +314,10 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     >
       {/* Canvas draw2d */}
       <div
-      class='campaign-view-page'
+        class='campaign-view-page'
         ref={canvasRef}
         id="campaign-tree-canvas"
-         style={{
+        style={{
           width: '100%',
           height: '100%',
           'background-image': `
@@ -338,7 +365,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           >
             −
           </button>
-          
+
           <button
             onClick={zoomReset}
             style={{
@@ -356,7 +383,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           >
             {Math.round(currentZoom * 100)}%
           </button>
-          
+
           <button
             onClick={zoomIn}
             class="p-2 rounded-lg bg-black/30 backdrop-blur-sm border border-white/10 hover:bg-black/50 transition-colors"
@@ -377,7 +404,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
             +
           </button>
         </div>
-        
+
         {/* Fit to page */}
         <button
           onClick={fitToPage}
@@ -396,7 +423,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
         >
           📐 Adapter
         </button>
-        
+
         {/* Clear all */}
         <button
           onClick={clearCanvas}
@@ -433,20 +460,20 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
         </div>
         <div style={{ display: 'flex', 'flex-direction': 'column', gap: '0.25rem' }}>
           <div style={{ display: 'flex', 'align-items': 'center', gap: '0.5rem' }}>
-            <div style={{ 
-              width: '16px', 
-              height: '16px', 
-              background: '#2d2d30', 
+            <div style={{
+              width: '16px',
+              height: '16px',
+              background: '#2d2d30',
               border: '2px solid #3c3c3f',
               'border-radius': '3px'
             }} />
             <span style={{ color: '#d4d4d4' }}>Story (Scène)</span>
           </div>
           <div style={{ display: 'flex', 'align-items': 'center', gap: '0.5rem' }}>
-            <div style={{ 
-              width: '16px', 
-              height: '16px', 
-              background: '#4a1a1a', 
+            <div style={{
+              width: '16px',
+              height: '16px',
+              background: '#4a1a1a',
               border: '2px solid #8b0000',
               'border-radius': '3px'
             }} />
