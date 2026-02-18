@@ -2,7 +2,7 @@ import { A, useNavigate } from "@solidjs/router";
 import { ArrowLeft, Crown, Users, Globe, Lock, Mail, Sparkles, BookOpen, Map, Wand2 } from "lucide-solid";
 import { createSignal, For, Show } from "solid-js";
 import { CampaignVisibility, getVisibilityLabel } from "../types/campaign";
-import { CampaignService, CampaignStatus as APICampaignStatus } from "../services/campaign.service";
+import { CampaignService,  APICampaignStatus } from "../services/campaign.service";
 
 // Preset campaign settings
 const SETTINGS_PRESETS = [

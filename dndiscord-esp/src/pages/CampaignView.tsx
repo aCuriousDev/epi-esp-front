@@ -2,7 +2,8 @@ import { A, useParams, useNavigate } from "@solidjs/router";
 import {
   ArrowLeft, Crown, Users, Calendar, BookOpen, Settings,
   Play, Pause, UserPlus, Trash2, Edit3, Clock, MapPin,
-  MessageSquare, ChevronRight, Plus, Check, X
+  MessageSquare, ChevronRight, Plus, Check, X,
+  Settings2
 } from "lucide-solid";
 import { createSignal, onMount, Show, For } from "solid-js";
 import {
@@ -15,84 +16,21 @@ import {
   CampaignService,
   CampaignDetailResponse,
   CampaignMemberResponse,
-  CampaignStatus as APICampaignStatus
+  APICampaignStatus,
+  mapCampaignResponse,
+  mapToAPICampaignStatus
 } from "../services/campaign.service";
 
-/**
- * Map API campaign status (integer) to frontend status (string)
- */
-function mapCampaignStatus(apiStatus: number): CampaignStatus {
-  switch (apiStatus) {
-    case 0: return CampaignStatus.Planning; // Draft
-    case 1: return CampaignStatus.Active;
-    case 2: return CampaignStatus.Paused;
-    case 3: return CampaignStatus.Completed;
-    case 4: return CampaignStatus.Archived;
-    default: return CampaignStatus.Planning;
-  }
-}
 
-/**
- * Map API member role to frontend role
- */
-function mapMemberRole(apiRole: string): "dm" | "player" {
-  switch (apiRole) {
-    case "CoDungeonMaster":
-      return "dm";
-    case "Player":
-    case "Spectator":
-    default:
-      return "player";
-  }
-}
 
-/**
- * Map frontend status to API status (integer)
- */
-function mapToAPICampaignStatus(status: CampaignStatus): APICampaignStatus {
-  switch (status) {
-    case CampaignStatus.Planning: return APICampaignStatus.Draft;
-    case CampaignStatus.Active: return APICampaignStatus.Active;
-    case CampaignStatus.Paused: return APICampaignStatus.Paused;
-    case CampaignStatus.Completed: return APICampaignStatus.Completed;
-    case CampaignStatus.Archived: return APICampaignStatus.Archived;
-    default: return APICampaignStatus.Draft;
-  }
-}
+
+
+
 
 /**
  * Map API campaign response to frontend Campaign type
  */
-function mapCampaignResponse(apiCampaign: CampaignDetailResponse): Campaign {
-  return {
-    id: apiCampaign.id,
-    title: apiCampaign.name,
-    description: apiCampaign.description,
-    coverImageUrl: apiCampaign.imageUrl,
-    status: mapCampaignStatus(apiCampaign.status),
-    visibility: apiCampaign.isPublic ? "Public" as any : "Private" as any,
-    dungeonMasterId: apiCampaign.dungeonMasterId,
-    dungeonMasterName: "Maître du Jeu", // API doesn't provide this
-    dungeonMasterAvatar: "",
-    maxPlayers: apiCampaign.maxPlayers,
-    currentPlayers: apiCampaign.memberCount,
-    players: apiCampaign.members?.map(m => ({
-      id: m.id,
-      username: m.userId, // API doesn't provide username, using userId
-      role: mapMemberRole(m.role),
-      characterName: m.nickname,
-      joinedAt: m.joinedAt,
-    })) || [],
-    sessions: [], // API doesn't provide sessions yet
-    totalSessions: apiCampaign.snapshotCount || 0,
-    setting: undefined,
-    startingLevel: 1,
-    currentLevel: 1,
-    tags: [],
-    createdAt: apiCampaign.createdAt,
-    updatedAt: apiCampaign.updatedAt,
-  };
-}
+
 
 export default function CampaignView() {
   const params = useParams();
@@ -108,6 +46,7 @@ export default function CampaignView() {
   const isOwner = () => {
     const c = campaign();
     const u = user();
+    console.log(c,u)
     return c && u && c.dungeonMasterId === u.id;
   };
 
@@ -566,6 +505,13 @@ export default function CampaignView() {
                   <Play class="w-5 h-5" />
                   Lancer une session
                 </button>
+                 <button
+                    onClick={()=>navigate(`/campaigns/${campaign()?.id}/manager`)}
+                    class="py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-white font-semibold hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Settings2 class="w-5 h-5" />
+                    Editer
+                  </button>
                 <Show when={isOwner()}>
                   <button
                     onClick={handleUpdate}

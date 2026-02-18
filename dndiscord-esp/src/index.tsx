@@ -46,9 +46,9 @@ render(
 			<Route path="/characters/create" component={() => <Protected><CreateCharacter /></Protected>} />
 			<Route path="/characters/:id" component={() => <Protected><CharacterView /></Protected>} />
 			<Route path="/campaigns" component={() => <Protected><CampaignsPage /></Protected>} />
-			<Route path="/campaigns/:id/manager" component={() => <Protected><CampaignManagerPage /></Protected>} />
 			<Route path="/campaigns/create" component={() => <Protected><CreateCampaign /></Protected>} />
 			<Route path="/campaigns/:id" component={() => <Protected><CampaignView /></Protected>} />
+			<Route path="/campaigns/:id/manager" component={() => <Protected><CampaignManagerPage /></Protected>} />
 			<Route path="/board" component={() => <Protected><BoardGame /></Protected>} />
 			
 		</Router>

@@ -4,7 +4,7 @@ import { createSignal, For, Show, onMount, createResource } from "solid-js";
 import { Campaign, CampaignStatus, getStatusColor, getStatusLabel, CampaignVisibility } from "../types/campaign";
 import { authStore } from "../stores/auth.store";
 import { AuthService } from "../services/auth.service";
-import { CampaignService, CampaignResponse, CampaignStatus as APICampaignStatus } from "../services/campaign.service";
+import { CampaignService, CampaignResponse } from "../services/campaign.service";
 
 /**
  * Map backend campaign status to frontend status
