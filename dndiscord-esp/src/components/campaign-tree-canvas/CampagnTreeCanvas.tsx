@@ -5,6 +5,7 @@ import { StoryNode } from "./nodes/StoryNode";
 import { CombatNode } from "./nodes/CombatNode";
 import { safeConfirm } from "../../services/ui/confirm";
 import { tokens } from "@/styles/design-tokens";
+import { StartNode } from './nodes/StartNode';
 
 interface CampaignTreeCanvasProps {
   onNodeSelect?: (node: CampaignNode | null) => void;
@@ -218,7 +219,33 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     canvas.installEditPolicy(new draw2d.policy.canvas.SnapToGridEditPolicy(20));
     canvas.installEditPolicy(new draw2d.policy.canvas.WheelZoomPolicy());
     canvas.installEditPolicy(new draw2d.policy.canvas.PanningSelectionPolicy());
+    canvas.installEditPolicy(new draw2d.policy.canvas.KeyboardPolicy());
 
+    const originalExecute = canvas.getCommandStack().execute.bind(canvas.getCommandStack());
+    canvas.getCommandStack().execute = (command: any) => {
+      // Intercepter les commandes de suppression sur le StartNode
+      if (command instanceof draw2d.command.CommandDelete) {
+        const figure = command.figure;
+        if (figure instanceof StartNode) {
+          return; // Bloquer silencieusement
+        }
+      }
+      originalExecute(command);
+    };
+
+    const startNode = new StartNode(
+      50, // centré horizontalement
+      250   // en haut du canvas
+    );
+    canvas.add(startNode, startNode.x, startNode.y);
+
+    // Bloquer explicitement la suppression via commande
+    canvas.on('contextmenu', (emitter: any, event: any) => {
+      if (event.figure instanceof StartNode) {
+        event.preventDefault?.();
+        return false;
+      }
+    });
     // Événement : Sélection d'un node
     canvas.on("select", (emitter: any, event: any) => {
       if (event.figure instanceof CampaignNode) {
