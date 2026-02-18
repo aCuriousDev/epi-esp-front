@@ -15,7 +15,7 @@ import { createSignal, For, Show } from "solid-js";
 import { CampaignVisibility, getVisibilityLabel } from "../types/campaign";
 import {
   CampaignService,
-  CampaignStatus as APICampaignStatus,
+  APICampaignStatus,
 } from "../services/campaign.service";
 
 // Preset campaign settings

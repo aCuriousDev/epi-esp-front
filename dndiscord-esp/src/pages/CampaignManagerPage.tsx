@@ -1,15 +1,21 @@
-import { useNavigate } from '@solidjs/router';
+import { useNavigate, useParams } from '@solidjs/router';
 import { CampaignTreeCanvas, CampaignTreeCanvasRef } from '../components/campaign-tree-canvas/CampagnTreeCanvas';
 import { CampaignNode } from '../components/campaign-tree-canvas/nodes/CampaignNode';
 import { CombatNode, CombatNodeData } from '../components/campaign-tree-canvas/nodes/CombatNode';
 import { StoryNode, StoryNodeData } from '../components/campaign-tree-canvas/nodes/StoryNode';
-import { Component, createSignal, createEffect, Show, For } from 'solid-js';
+import { Component, createSignal, createEffect, Show, For, onMount } from 'solid-js';
 import { ArrowLeft, Book, Map, Plus, Save, Sword } from 'lucide-solid';
 import ButtonMenu from '@/components/common/ButtonMenu';
+import { CampaignService, mapCampaignResponse } from '@/services/campaign.service';
+import { Campaign } from '@/types/campaign';
 
 const CampaignManager: Component = () => {
+  const params = useParams();
   // Canvas reference
   const [canvasRef, setCanvasRef] = createSignal<CampaignTreeCanvasRef | undefined>();
+  const [loading, setLoading] = createSignal(true);
+  const [campaign,setCampaign] = createSignal<Campaign>();
+  
 
   // Selected node
   const [selectedNode, setSelectedNode] = createSignal<CampaignNode | null>(null);
@@ -29,6 +35,20 @@ const CampaignManager: Component = () => {
 
   // Node type selector
   const navigate = useNavigate();
+
+
+  onMount(async ()=>{
+     try {
+          setLoading(true);
+          const response = await CampaignService.getCampaign(params.id);
+          const mappedCampaign = mapCampaignResponse(response);
+          setCampaign(mappedCampaign);
+        } catch (err: any) {
+          console.error("Failed to load campaign:", err);
+        } finally {
+          setLoading(false);
+        }
+  })
 
   /**
    * Update form when node is selected
@@ -220,7 +240,7 @@ const CampaignManager: Component = () => {
       {/* Header */}
       <header class="relative z-20 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-game-dark/70 backdrop-blur-md">
               <button
-                onClick={() => navigate("/campaigns")}
+                onClick={() => navigate(`/campaigns/${campaign()?.id}`)}
                 class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
               >
                 <ArrowLeft class="w-5 h-5" />

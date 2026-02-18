@@ -20,7 +20,6 @@ import { AuthService } from "../services/auth.service";
 import {
   CampaignService,
   CampaignResponse,
-  CampaignStatus as APICampaignStatus,
 } from "../services/campaign.service";
 
 /**
