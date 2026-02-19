@@ -1,9 +1,11 @@
 import { onMount, onCleanup } from 'solid-js';
 import draw2d from 'draw2d';
 import { CampaignNode } from './nodes/CampaignNode';
-import { StoryNode } from './nodes/StoryNode';
+import { ChoicesNode } from './nodes/ChoicesNode';
 import { CombatNode } from './nodes/CombatNode';
 import { StartNode } from './nodes/StartNode';
+import { SceneNode } from './nodes/SceneNode';
+import ExportImportModal from './modals/ExportImportModal';
 
 interface CampaignTreeCanvasProps {
   onNodeSelect?: (node: CampaignNode | null) => void;
@@ -13,7 +15,7 @@ interface CampaignTreeCanvasProps {
 
 export interface CampaignTreeCanvasRef {
   addNode: (nodeData: AddNodeData) => CampaignNode;
-  exportData: () => any;
+  exportData: ()=> Promise<any>;
   importData: (data: any) => void;
   clearCanvas: () => void;
   getCanvas: () => draw2d.Canvas | null;
@@ -24,7 +26,7 @@ export interface CampaignTreeCanvasRef {
 }
 
 interface AddNodeData {
-  type: 'story' | 'combat' | 'npc' | 'condition';
+  type: 'choices' | 'combat' | 'scene' | 'condition';
   x?: number;
   y?: number;
   data?: any;
@@ -48,14 +50,21 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
 
     // Créer le node selon son type
     switch (nodeData.type) {
-      case 'story':
-        node = new StoryNode(x, y, {
-          id: generateId('story'),
-          type: 'story',
-          text: nodeData.data?.text || 'Nouvelle scène...',
-          choices: nodeData.data?.choices || [],
-          ...nodeData.data
-        });
+      case 'choices':
+        node = new ChoicesNode(x, y, {
+        id: generateId('choices'),
+        type: 'choices',
+        text: nodeData.data?.text ?? "",
+        choices: nodeData.data?.choices ?? [],
+      });
+        break;
+      case 'scene':
+        node = new SceneNode(x, y, {
+        id: generateId('choices'),
+        type: 'scene',
+        title: nodeData.data?.title ?? "",
+        text: nodeData.data?.text ?? "",
+      });
         break;
 
       case 'combat':
@@ -89,18 +98,20 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
   /**
    * Exporter les données du canvas
    */
-  const exportData = () => {
-    if (!canvas) return null;
-
-    const writer = new draw2d.io.json.Writer();
-    const canvasData = writer.marshal(canvas);
-
-    return {
-      version: '1.0',
-      timestamp: new Date().toISOString(),
-      zoom: currentZoom,
-      canvas: canvasData
-    };
+  const exportData = async () => {
+  if (canvas == null) return null;
+  
+    return new Promise((resolve) => {
+      const writer = new draw2d.io.json.Writer();
+      writer.marshal(canvas!, (json: any) => {
+        resolve({
+          version: '1.0',
+          timestamp: new Date().toISOString(),
+          zoom: currentZoom,
+          canvas: json
+        });
+        });
+      });
   };
 
   /**
@@ -136,7 +147,6 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
       }
     }
 
-    canvas.clear();
     selectedNode = null;
     props.onNodeSelect?.(null);
   };
@@ -230,8 +240,8 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     };
 
     const startNode = new StartNode(
-      50, // centré horizontalement
-      250   // en haut du canvas
+      100, // centré horizontalement
+      300   // en haut du canvas
     );
     canvas.add(startNode, startNode.x, startNode.y);
 
@@ -467,7 +477,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
               border: '2px solid #3c3c3f',
               'border-radius': '3px'
             }} />
-            <span style={{ color: '#d4d4d4' }}>Story (Scène)</span>
+            <span style={{ color: '#d4d4d4' }}>Choices (Scène)</span>
           </div>
           <div style={{ display: 'flex', 'align-items': 'center', gap: '0.5rem' }}>
             <div style={{

@@ -692,15 +692,15 @@ declare module 'draw2d' {
   export namespace io {
     export namespace json {
       export class Writer {
-        constructor();
-        marshal(canvas: Canvas): any;
-      }
+          constructor();
+          marshal(canvas: Canvas, callback: (json: any) => void): void;
+        }
 
-      export class Reader {
-        constructor();
-        unmarshal(canvas: Canvas, data: any): void;
+        export class Reader {
+          constructor();
+          unmarshal(canvas: Canvas, data: any): void;
+        }
       }
-    }
 
     export namespace png {
       export class Writer {
