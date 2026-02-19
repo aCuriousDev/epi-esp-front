@@ -2,34 +2,44 @@ import draw2d from 'draw2d';
 import { tokens } from "@/styles/design-tokens";
 import { CampaignNode, BaseNodeData } from './CampaignNode';
 
-export interface StoryNodeData extends BaseNodeData {
-  type: 'story';
+export interface ChoicesNodeData extends BaseNodeData {
+  type: 'choices';
   text?: string;
   choices?: string[];
 }
 
-export class StoryNode extends CampaignNode {
-  private textLabel!: draw2d.shape.basic.Label;
+export class ChoicesNode extends CampaignNode {
+  private textLabel: draw2d.shape.basic.Label;
 
-  constructor(x: number, y: number, data: StoryNodeData) {
+  constructor(x: number, y: number, data: ChoicesNodeData) {
     super(x, y, data);
-  }
 
-  protected createVisualElements(): void {
-    const storyData = this.nodeData as StoryNodeData;
 
     this.textLabel = new draw2d.shape.basic.Label({
-      text: this.truncateText(storyData?.text ?? '', 35),
+      text: this.truncateText(data?.text ?? '', 35),
       fontSize: 12,
       fontColor: tokens.nodes.story.text,
-      color: tokens.nodes.story.text
+      color: tokens.nodes.story.text,
     });
 
     this.add(this.textLabel, new draw2d.layout.locator.CenterLocator());
   }
+  //#region NODE VISUAL DEFINITION
+  // override createVisualElements(): void {
+  //   const storyData = this.nodeData as ChoicesNodeData;
+
+  //   this.textLabel = new draw2d.shape.basic.Label({
+  //     text: this.truncateText(storyData?.text ?? '', 35),
+  //     fontSize: 12,
+  //     fontColor: '#d4d4d4',
+  //     color: '#f02424',
+  //   });
+
+  //   this.add(this.textLabel, new draw2d.layout.locator.CenterLocator());
+  // }
 
   protected createPorts(): void {
-    const storyData = this.nodeData as StoryNodeData;
+    const storyData = this.nodeData as ChoicesNodeData;
     // Port d'entrée (haut, centré)
     const inputPort = this.createPort(
       'input',
@@ -65,42 +75,32 @@ export class StoryNode extends CampaignNode {
     });
   }
 
+  //#endregion
+  //#region Node Logical Definition
   private truncateText(text: string, maxLength: number): string {
     return text.length <= maxLength ? text : text.substring(0, maxLength) + '...';
   }
 
   public updateText(newText: string): void {
-    (this.nodeData as StoryNodeData).text = newText;
+    console.log("UpdateChoixeText");
+    (this.nodeData as ChoicesNodeData).text = newText;
     this.textLabel.setText(this.truncateText(newText, 35));
     this.setUserData(this.nodeData);
   }
 
-  public updateChoices(newChoices: string[]): void {
-    (this.nodeData as StoryNodeData).choices = newChoices;
 
+  public updateChoices(newChoices: string[]): void {
+     console.log("UpdateChoixes");
+    (this.nodeData as ChoicesNodeData).choices = newChoices;
+    console.log(this.getOutputPorts())
     // Supprimer les anciens ports de sortie
     this.getOutputPorts().each((_: number, port: any) => this.removePort(port));
-
-    if (newChoices.length === 0) {
-      const p = this.createPort(
-        'output',
-        new draw2d.layout.locator.XYAbsPortLocator(this.nodeWidth / 2, this.nodeHeight)
-      );
-      p.setName('output');
-    } else {
-      newChoices.forEach((_, index) => {
-        const spacing = this.nodeWidth / (newChoices.length + 1);
-        const p = this.createPort(
-          'output',
-          new draw2d.layout.locator.XYAbsPortLocator(spacing * (index + 1), this.nodeHeight)
-        );
-        p.setName(`choice-${index}`);
-      });
-    }
-
+    this.createOutputPorts(newChoices)
     this.setUserData(this.nodeData);
+    this.repaint()
   }
 
+  //#endregion
   public getPersistentAttributes(): any {
     return { ...super.getPersistentAttributes(), nodeData: this.nodeData };
   }
@@ -108,7 +108,7 @@ export class StoryNode extends CampaignNode {
   public setPersistentAttributes(memento: any): void {
     super.setPersistentAttributes(memento);
     if (memento.nodeData) {
-      const storyData = this.nodeData as StoryNodeData;
+      const storyData = this.nodeData as ChoicesNodeData;
       this.updateText(storyData?.text ?? '');
       if (storyData.choices) this.updateChoices(storyData.choices);
     }

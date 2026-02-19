@@ -23,8 +23,8 @@ export class CombatNode extends CampaignNode {
     this.background.setColor(tokens.nodes.combat.stroke);
   }
 
-  protected createBackground(): draw2d.shape.basic.Rectangle {
-    return new draw2d.shape.basic.Rectangle({
+  override createBackground(): void {
+    this.background =  new draw2d.shape.basic.Rectangle({
       width: this.nodeWidth,
       height: this.nodeHeight,
       bgColor: '#4a1a1a',
@@ -34,7 +34,7 @@ export class CombatNode extends CampaignNode {
     });
   }
 
-  protected createVisualElements(): void {
+  override createVisualElements(): void {
     const combatData = this.nodeData as CombatNodeData;
 
     this.enemiesLabel = new draw2d.shape.basic.Label({
@@ -43,7 +43,7 @@ export class CombatNode extends CampaignNode {
       fontColor: tokens.text.high,
       color: tokens.text.high
     });
-    this.add(this.enemiesLabel, new draw2d.layout.locator.XYAbsPortLocator(this.nodeWidth / 2, 30));
+    this.add(this.enemiesLabel, new draw2d.layout.locator.XYRelPortLocator(50, 25));
 
     this.difficultyLabel = new draw2d.shape.basic.Label({
       text: this.getDifficultyIcon(combatData.difficulty || 'medium'),
@@ -52,25 +52,25 @@ export class CombatNode extends CampaignNode {
       color: tokens.status.danger,
       bold: true
     });
-    this.add(this.difficultyLabel, new draw2d.layout.locator.XYAbsPortLocator(this.nodeWidth / 2, 70));
+    this.add(this.difficultyLabel, new draw2d.layout.locator.XYRelPortLocator(50, 58));
   }
 
   protected createPorts(): void {
     const inputPort = this.createPort(
       'input',
-      new draw2d.layout.locator.XYAbsPortLocator(this.nodeWidth / 2, 0)
+      new draw2d.layout.locator.XYRelPortLocator(50, 0)
     );
     inputPort.setName('input');
 
     const victoryPort = this.createPort(
       'output',
-      new draw2d.layout.locator.XYAbsPortLocator(this.nodeWidth / 3, this.nodeHeight)
+      new draw2d.layout.locator.XYRelPortLocator(33, 100)
     );
     victoryPort.setName('victory');
 
     const defeatPort = this.createPort(
       'output',
-      new draw2d.layout.locator.XYAbsPortLocator((this.nodeWidth / 3) * 2, this.nodeHeight)
+      new draw2d.layout.locator.XYRelPortLocator(66, 100)
     );
     defeatPort.setName('defeat');
   }

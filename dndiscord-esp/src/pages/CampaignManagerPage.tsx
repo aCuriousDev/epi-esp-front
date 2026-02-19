@@ -1,17 +1,26 @@
 import { useNavigate, useParams } from '@solidjs/router';
 import { CampaignTreeCanvas, CampaignTreeCanvasRef } from '../components/campaign-tree-canvas/CampagnTreeCanvas';
 import { CampaignNode } from '../components/campaign-tree-canvas/nodes/CampaignNode';
-import { CombatNode, CombatNodeData } from '../components/campaign-tree-canvas/nodes/CombatNode';
-import { StoryNode, StoryNodeData } from '../components/campaign-tree-canvas/nodes/StoryNode';
+import { CombatNode } from '../components/campaign-tree-canvas/nodes/CombatNode';
+import { ChoicesNode } from '../components/campaign-tree-canvas/nodes/ChoicesNode';
 import { Component, createSignal, createEffect, Show, For, onMount } from 'solid-js';
-import { ArrowLeft, Book, Map as MapIcon, Plus, Save, Sword } from 'lucide-solid';
+import { ArrowLeft, Book, Edit, GripHorizontal, Map as MapIcon, Plus, Save, Sword } from 'lucide-solid';
 import ButtonMenu from '@/components/common/ButtonMenu';
 import { CampaignService, mapCampaignResponse } from '@/services/campaign.service';
 import { Campaign } from '@/types/campaign';
 import { StartNode } from '@/components/campaign-tree-canvas/nodes/StartNode';
+import ChoicesNodeEditor from '@/components/campaign-tree-canvas/ChoicesNodeEditor';
+import { SceneNode, SceneNodeData } from '@/components/campaign-tree-canvas/nodes/SceneNode';
+import SceneNodeEditor from '@/components/campaign-tree-canvas/SceneNodeEditor';
+import ExportImportModal from '@/components/campaign-tree-canvas/modals/ExportImportModal';
 
 const CampaignManager: Component = () => {
   const params = useParams();
+  const blocs = [
+    {label:"Scene",icon:<Book/>,blockName:'scene'},
+    {label:"Choix",icon:<GripHorizontal/>,blockName:'choices'},
+    {label:"Combat",icon:<Sword/>,blockName:'combat'}]
+    // {label:"Map",icon:<MapIcon/>}]
   // Canvas reference
   const [canvasRef, setCanvasRef] = createSignal<CampaignTreeCanvasRef | undefined>();
   const [loading, setLoading] = createSignal(true);
@@ -22,9 +31,9 @@ const CampaignManager: Component = () => {
   const [selectedNode, setSelectedNode] = createSignal<CampaignNode | null>(null);
   const [nodeType, setNodeType] = createSignal<string>('');
 
-  // Story node data
-  const [storyText, setStoryText] = createSignal<string>('');
-  const [storyChoices, setStoryChoices] = createSignal<string[]>([]);
+  // Choices node data
+  const [storyText, setChoicesText] = createSignal<string>('');
+  const [storyChoices, setChoicesChoices] = createSignal<string[]>([]);
 
   // Combat node data
   const [combatEnemies, setCombatEnemies] = createSignal<string[]>([]);
@@ -33,6 +42,22 @@ const CampaignManager: Component = () => {
   // Node type selector
   const navigate = useNavigate();
 
+  const [modalOpen, setModalOpen] = createSignal(false);
+
+  const handleExport = async () => {
+    const data = await canvasRef()?.exportData();
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${campaign()?.title ?? 'campaign'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (data: any) => {
+    canvasRef()?.importData(data);
+  };
 
   onMount(async ()=>{
      try {
@@ -61,15 +86,15 @@ const CampaignManager: Component = () => {
     setNodeType(data.type);
 
     // Load data based on node type
-    if (data.type === 'story') {
-      const storyData = data as StoryNodeData;
-      setStoryText(storyData.text || '');
-      setStoryChoices(storyData.choices || []);
-    } else if (data.type === 'combat') {
-      const combatData = data as CombatNodeData;
-      setCombatEnemies(combatData.enemies || []);
-      setCombatDifficulty(combatData.difficulty || 'medium');
-    }
+    // if (data.type === 'choices') {
+    //   const storyData = data as ChoicesNodeData;
+    //   setChoicesText(storyData.text || '');
+    //   setChoicesChoices(storyData.choices || []);
+    // } else if (data.type === 'combat') {
+    //   const combatData = data as CombatNodeData;
+    //   setCombatEnemies(combatData.enemies || []);
+    //   setCombatDifficulty(combatData.difficulty || 'medium');
+    // }
   });
 
   /**
@@ -103,9 +128,9 @@ const CampaignManager: Component = () => {
     // const type = selectedNodeType();
 
     try {
-      if (type === 'story') {
+      if (type === 'choices') {
         canvas.addNode({
-          type: 'story',
+          type: 'choices',
           x: Math.random() * 400 + 100,
           y: Math.random() * 300 + 100,
           data: {
@@ -123,6 +148,16 @@ const CampaignManager: Component = () => {
             difficulty: 'medium'
           }
         });
+      }else if (type === 'scene') {
+        canvas.addNode({
+          type: 'scene',
+          x: Math.random() * 400 + 100,
+          y: Math.random() * 300 + 100,
+          data: {
+            title: "Entrez un titre de bloc",
+            text: "Entrez un texte à afficher"
+          }
+        });
       }
     } catch (error) {
       console.error('Error adding node:', error);
@@ -133,43 +168,28 @@ const CampaignManager: Component = () => {
   /**
    * Update the selected node
    */
-  const handleUpdateNode = () => {
-    const node = selectedNode();
+  const handleUpdateNode = (node : CampaignNode) => {
     if (!node) return;
 
     const type = nodeType();
 
-    if (type === 'story' && node instanceof StoryNode) {
-      node.updateText(storyText());
-      node.updateChoices(storyChoices());
+    if (type === 'choices' && node instanceof ChoicesNode) {
+      (selectedNode() as ChoicesNode)?.updateText(node.getData()?.text);
+      (selectedNode() as ChoicesNode).updateChoices(node.getData()?.choices);
     } else if (type === 'combat' && node instanceof CombatNode) {
-      node.updateEnemies(combatEnemies());
-      node.updateDifficulty(combatDifficulty());
+      (selectedNode() as CombatNode).updateEnemies(combatEnemies());
+      (selectedNode() as CombatNode).updateDifficulty(combatDifficulty());
+    }else if (type === 'scene' && node instanceof SceneNode) {
+      (selectedNode() as SceneNode).updateTitle(node.getData()?.title);
+      (selectedNode() as SceneNode).updateText(node.getData()?.text);
     }
   };
 
-  /**
-   * Story Node: Add choice
-   */
-  const handleAddChoice = () => {
-    setStoryChoices([...storyChoices(), 'Nouveau choix']);
-  };
+  
 
-  /**
-   * Story Node: Update choice
-   */
-  const handleUpdateChoice = (index: number, value: string) => {
-    const choices = [...storyChoices()];
-    choices[index] = value;
-    setStoryChoices(choices);
-  };
+  
 
-  /**
-   * Story Node: Remove choice
-   */
-  const handleRemoveChoice = (index: number) => {
-    setStoryChoices(storyChoices().filter((_, i) => i !== index));
-  };
+  
 
   /**
    * Combat Node: Add enemy
@@ -250,13 +270,23 @@ const CampaignManager: Component = () => {
       
               <h1 class="font-display text-xl text-white tracking-wide">Campagnes</h1>
       
-              <button
-                onClick={()=>handleSaveCampaign}
-                class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all shadow-lg shadow-purple-500/20"
-              >
-                <Save class="w-4 h-4" />
-                <span class="hidden sm:inline">Sauvegarder</span>
-              </button>
+              <div class='flex flex-row'>
+                <button
+                      onClick={()=>setModalOpen(true)}
+                      class="mr-1 flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-white-500 hover:text-gray-100 rounded-xl transition-all shadow-lg shadow-gray-500/20"
+                    >
+                      <Edit class="w-4 h-4" />
+                      <span class="hidden sm:inline">Export / Import</span>
+                </button>
+                <button
+                      onClick={()=>handleSaveCampaign}
+                      class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all shadow-lg shadow-purple-500/20"
+                    >
+                      <Save class="w-4 h-4" />
+                      <span class="hidden sm:inline">Sauvegarder</span>
+                </button>
+              </div>
+             
       </header>
         
 
@@ -285,134 +315,16 @@ const CampaignManager: Component = () => {
             </h2>
 
 
-            {/* Story Node Editor */}
-            <Show when={nodeType() === 'story'}>
-              <div>
-                <div style={{ 'margin-bottom': '1.5rem' }}>
-                  <label style={{
-                    display: 'block',
-                    'margin-bottom': '0.5rem',
-                    'font-weight': '500',
-                    'font-size': '0.9rem'
-                  }}>
-                    Texte narratif :
-                  </label>
-                  <textarea
-                    value={storyText()}
-                    onInput={(e) => setStoryText(e.currentTarget.value)}
-                    onBlur={handleUpdateNode}
-                    placeholder="Décrivez la scène..."
-                    style={{
-                      width: '100%',
-                      'min-height': '120px',
-                      background: 'var(--ink-700)',
-                      border: '1px solid var(--ink-500)',
-                      'border-radius': '4px',
-                      color: 'var(--text-high)',
-                      padding: '0.75rem',
-                      'font-family': 'inherit',
-                      'font-size': '0.9rem',
-                      resize: 'vertical'
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <div style={{
-                    display: 'flex',
-                    'justify-content': 'space-between',
-                    'align-items': 'center',
-                    'margin-bottom': '0.5rem'
-                  }}>
-                    <label style={{
-                      'font-weight': '500',
-                      'font-size': '0.9rem'
-                    }}>
-                      Choix disponibles :
-                    </label>
-                    <button
-                      onClick={handleAddChoice}
-                      style={{
-                        padding: '0.25rem 0.5rem',
-                        background: 'var(--arcindigo-500)',
-                        border: 'none',
-                        'border-radius': '3px',
-                        color: 'white',
-                        cursor: 'pointer',
-                        'font-size': '0.85rem'
-                      }}
-                    >
-                      + Ajouter
-                    </button>
-                  </div>
-
-                  <Show when={storyChoices().length > 0} fallback={
-                    <p style={{
-                      color: 'var(--text-low)',
-                      'font-size': '0.9rem',
-                      'font-style': 'italic'
-                    }}>
-                      Aucun choix défini
-                    </p>
-                  }>
-                    <div style={{ display: 'flex', 'flex-direction': 'column', gap: '0.5rem' }}>
-                      <For each={storyChoices()}>
-                        {(choice, index) => (
-                          <div style={{
-                            display: 'flex',
-                            gap: '0.5rem',
-                            'align-items': 'center'
-                          }}>
-                            <span style={{
-                              'min-width': '24px',
-                              color: 'var(--text-low)',
-                              'font-weight': '500'
-                            }}>
-                              {index() + 1}.
-                            </span>
-                            <input
-                              type="text"
-                              value={choice}
-                              onInput={(e) => handleUpdateChoice(index(), e.currentTarget.value)}
-                              onBlur={handleUpdateNode}
-                              style={{
-                                flex: 1,
-                                background: 'var(--ink-700)',
-                                border: '1px solid var(--ink-500)',
-                                'border-radius': '4px',
-                                color: 'var(--text-high)',
-                                padding: '0.5rem',
-                                'font-size': '0.9rem'
-                              }}
-                            />
-                            <button
-                              onClick={() => {
-                                handleRemoveChoice(index());
-                                handleUpdateNode();
-                              }}
-                              style={{
-                                padding: '0.5rem',
-                                background: 'rgba(239,68,68,0.22)',
-                                border: 'none',
-                                'border-radius': '3px',
-                                color: 'var(--status-danger)',
-                                cursor: 'pointer',
-                                'line-height': 1
-                              }}
-                              title="Supprimer ce choix"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        )}
-                      </For>
-                    </div>
-                  </Show>
-                </div>
-              </div>
+            {/* Choices Node Editor */}
+            <Show when={nodeType() === 'choices'}>
+              <ChoicesNodeEditor node={selectedNode() as ChoicesNode} handleUpdateNode={handleUpdateNode} />
+            </Show>
+            {/* Scene Node Editor */}
+            <Show when={nodeType() === 'scene'}>
+              <SceneNodeEditor node={selectedNode() as SceneNode} handleUpdateNode={handleUpdateNode} />
             </Show>
 
-            {/* Combat Node Editor */}
+            {/* Combat Node Editor
             <Show when={nodeType() === 'combat'}>
               <div>
                 <div style={{ 'margin-bottom': '1.5rem' }}>
@@ -534,11 +446,11 @@ const CampaignManager: Component = () => {
                   </select>
                 </div>
               </div>
-            </Show>
+            </Show> */}
           </Show>
           <Show when={!selectedNode()}>
             <h3 class='font-display text-xl text-white tracking-wide mb-2'>Bloc disponibles</h3>
-            <For each={[{label:"Histoire",icon:<Book/>,blockName:'story'},{label:"Combat",icon:<Sword/>,blockName:'combat'},{label:"Map",icon:<MapIcon/>}]} fallback={<div>Loading...</div>}>
+            <For each={blocs} fallback={<div>Loading...</div>}>
               {(item) => 
               <ButtonMenu
               label={item.label}
@@ -559,6 +471,13 @@ const CampaignManager: Component = () => {
           />
         </main>
       </div>
+      <ExportImportModal
+        isOpen={modalOpen()}
+        canvasRef={canvasRef}
+        onClose={() => setModalOpen(false)}
+        onExport={handleExport}
+        onImport={handleImport}
+      />
     </div>
   );
 };

@@ -19,18 +19,18 @@ export class StartNode extends CampaignNode {
     this.nodeHeight = 80;
   }
 
-  protected createBackground(): draw2d.shape.basic.Rectangle {
-    return new draw2d.shape.basic.Rectangle({
+    override createBackground(): void {
+    this.background =  new draw2d.shape.basic.Rectangle({
       width: this.nodeWidth,
       height: this.nodeHeight,
-      bgColor: '#1a3a1a',
+      bgColor: '#236423',
       color: '#2d7a2d',
       stroke: 2,
       radius: 20, // Forme en pilule
     });
   }
 
-  protected createVisualElements(): void {
+  override createVisualElements(): void {
     const label = new draw2d.shape.basic.Label({
       text: '▶ Début',
       fontSize: 16,

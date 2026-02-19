@@ -26,6 +26,8 @@
     "jquery": "^4.0.0",
     "jquery-ui-dist": "^1.13.3",
     "lucide-solid": "^0.548.0",
+    "monaco-editor": "^0.55.1",
+    "prettier": "^3.8.1",
     "solid-js": "^1.9.3",
     "solid-styled-jsx": "^0.27.1",
     "styled-jsx": "^3.4.7"
