@@ -28,7 +28,7 @@ export default function AuthCallback() {
       // Exchange code for token
       const response = await AuthService.exchangeCode(code);
 
-      // Send success message to parent window
+      // Send success message to parent window (use "*" so embed Discord receives it; parent validates event.origin)
       if (window.opener) {
         window.opener.postMessage(
           {
@@ -38,7 +38,7 @@ export default function AuthCallback() {
               token: response.token,
             },
           },
-          window.location.origin
+          "*"
         );
       }
 
@@ -53,14 +53,14 @@ export default function AuthCallback() {
       setErrorMessage(message);
       setStatus("error");
 
-      // Send error message to parent window
+      // Send error message to parent window (use "*" for Discord embed; parent validates event.origin)
       if (window.opener) {
         window.opener.postMessage(
           {
             type: "AUTH_ERROR",
             error: message,
           },
-          window.location.origin
+          "*"
         );
       }
 

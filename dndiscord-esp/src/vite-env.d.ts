@@ -3,7 +3,7 @@
 declare module "jquery-ui-dist/jquery-ui.min.js";
 
 interface ImportMetaEnv {
-  readonly VITE_API_URL: string;
+  readonly VITE_APP_URL?: string;
 }
 
 interface ImportMeta {

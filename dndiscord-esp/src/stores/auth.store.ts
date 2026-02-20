@@ -113,11 +113,16 @@ function createAuthStore() {
         );
       }
 
-      // Listen for message from popup
       return new Promise((resolve, reject) => {
+        const appOrigin = import.meta.env.VITE_APP_URL
+          ? new URL(import.meta.env.VITE_APP_URL).origin
+          : new URL(AuthService.getDiscordRedirectUrl()).origin;
+
         const handleMessage = (event: MessageEvent) => {
-          // Verify origin
-          if (event.origin !== window.location.origin) return;
+          const allowed =
+            event.origin === window.location.origin ||
+            event.origin === appOrigin;
+          if (!allowed) return;
 
           if (event.data?.type === "AUTH_SUCCESS") {
             window.removeEventListener("message", handleMessage);
