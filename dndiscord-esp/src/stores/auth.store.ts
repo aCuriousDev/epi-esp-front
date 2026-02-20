@@ -16,7 +16,7 @@ function createAuthStore() {
    */
   async function init() {
     setIsLoading(true);
-    
+
     if (AuthService.hasToken()) {
       try {
         const currentUser = await AuthService.getCurrentUser();
@@ -28,14 +28,17 @@ function createAuthStore() {
         localStorage.removeItem("token");
         setUser(null);
         setIsAuthenticated(false);
-        
+
         // Don't log the full error in production - it's expected when tokens expire
         if (import.meta.env.DEV) {
-          console.debug("Token validation failed:", error?.response?.status || error?.message);
+          console.debug(
+            "Token validation failed:",
+            error?.response?.status || error?.message,
+          );
         }
       }
     }
-    
+
     setIsLoading(false);
   }
 
@@ -44,7 +47,7 @@ function createAuthStore() {
    */
   async function loginWithCode(code: string) {
     setIsLoading(true);
-    
+
     try {
       const response = await AuthService.exchangeCode(code);
       AuthService.setToken(response.token);
@@ -73,7 +76,7 @@ function createAuthStore() {
    */
   async function logout() {
     setIsLoading(true);
-    
+
     try {
       await AuthService.logout();
     } catch (error) {
@@ -90,22 +93,24 @@ function createAuthStore() {
    */
   async function openDiscordLogin(): Promise<void> {
     try {
-      const authUrl = await AuthService.getDiscordAuthUrl();
-      
+      const authUrl = AuthService.getDiscordRedirectUrl();
+
       // Calculate popup position (center of screen)
       const width = 500;
       const height = 700;
       const left = window.screenX + (window.outerWidth - width) / 2;
       const top = window.screenY + (window.outerHeight - height) / 2;
-      
+
       const popup = window.open(
         authUrl,
         "Discord Login",
-        `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
+        `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`,
       );
 
       if (!popup) {
-        throw new Error("Popup was blocked. Please allow popups for this site.");
+        throw new Error(
+          "Popup was blocked. Please allow popups for this site.",
+        );
       }
 
       // Listen for message from popup
@@ -113,7 +118,7 @@ function createAuthStore() {
         const handleMessage = (event: MessageEvent) => {
           // Verify origin
           if (event.origin !== window.location.origin) return;
-          
+
           if (event.data?.type === "AUTH_SUCCESS") {
             window.removeEventListener("message", handleMessage);
             const { user, token } = event.data.payload;
@@ -148,7 +153,7 @@ function createAuthStore() {
     user,
     isLoading,
     isAuthenticated,
-    
+
     // Actions
     init,
     loginWithCode,
@@ -160,4 +165,3 @@ function createAuthStore() {
 
 // Create singleton store instance
 export const authStore = createRoot(createAuthStore);
-

@@ -1,5 +1,9 @@
 import axios from "axios";
-import type { AuthTokenResponse, DiscordAuthUrlResponse, User } from "../types/auth";
+import type {
+  AuthTokenResponse,
+  DiscordAuthUrlResponse,
+  User,
+} from "../types/auth";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5054";
 
@@ -8,13 +12,21 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5054";
  */
 export const AuthService = {
   /**
-   * Get Discord OAuth URL from backend
+   * Get Discord OAuth URL from backend (requires fetch — blocked by CSP in Discord embed)
    */
   async getDiscordAuthUrl(): Promise<string> {
     const response = await axios.get<DiscordAuthUrlResponse>(
-      `${API_URL}/api/auth/discord/url`
+      `${API_URL}/api/auth/discord/url`,
     );
     return response.data.url;
+  },
+
+  /**
+   * URL de redirection vers Discord OAuth. À utiliser pour la popup en contexte embed Discord :
+   * pas de fetch, juste ouvrir cette URL (navigation), le backend renvoie une 302 vers Discord.
+   */
+  getDiscordRedirectUrl(): string {
+    return `${API_URL}/api/auth/discord/redirect`;
   },
 
   /**
@@ -23,7 +35,7 @@ export const AuthService = {
   async exchangeCode(code: string): Promise<AuthTokenResponse> {
     const response = await axios.post<AuthTokenResponse>(
       `${API_URL}/api/auth/discord/callback`,
-      { code }
+      { code },
     );
     return response.data;
   },
@@ -50,7 +62,7 @@ export const AuthService = {
    */
   async logout(): Promise<void> {
     const token = localStorage.getItem("token");
-    
+
     try {
       if (token) {
         await axios.post(
@@ -60,7 +72,7 @@ export const AuthService = {
             headers: {
               Authorization: `Bearer ${token}`,
             },
-          }
+          },
         );
       }
     } finally {
@@ -97,10 +109,7 @@ export const AuthService = {
       return `https://cdn.discordapp.com/avatars/${user.discordId}/${user.avatar}.png`;
     }
     // Default Discord avatar
-    const defaultIndex = user.discordId 
-      ? parseInt(user.discordId) % 5 
-      : 0;
+    const defaultIndex = user.discordId ? parseInt(user.discordId) % 5 : 0;
     return `https://cdn.discordapp.com/embed/avatars/${defaultIndex}.png`;
   },
 };
-
