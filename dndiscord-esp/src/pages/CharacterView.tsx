@@ -1,5 +1,16 @@
 import { A, useParams, useNavigate } from "@solidjs/router";
-import { ArrowLeft, Heart, Shield, Zap, Footprints, Edit3, Trash2, Plus, Minus, TrendingUp } from "lucide-solid";
+import {
+  ArrowLeft,
+  Heart,
+  Shield,
+  Zap,
+  Footprints,
+  Edit3,
+  Trash2,
+  Plus,
+  Minus,
+  TrendingUp,
+} from "lucide-solid";
 import { createSignal, onMount, Show, For } from "solid-js";
 import {
   Character,
@@ -10,8 +21,7 @@ import {
   getAbilityModifier,
 } from "../types/character";
 import { CharacterService, CharacterDto } from "../services/character.service";
-import { GetCharacterProfilPic } from "../utils/characterProfilPic.ts";
-
+import { GetCharacterProfilPic } from "../utils/characterProfilPic";
 
 /**
  * Map API character response to frontend Character type
@@ -22,14 +32,14 @@ function mapCharacterResponse(dto: CharacterDto): Character {
     name: dto.name,
     level: dto.level,
     characterClass: dto.class as CharacterClass,
-    race: dto.race as CharacterRace,
+    race: dto.race as unknown as CharacterRace,
     abilities: dto.abilities,
     maxHitPoints: dto.maxHitPoints,
     currentHitPoints: dto.currentHitPoints,
     armorClass: 10 + getAbilityModifier(dto.abilities.dexterity), // Basic calculation
     speed: 30, // Default
     initiative: getAbilityModifier(dto.abilities.dexterity),
-    createdAt: dto.createdAt,
+    createdAt: new Date().toISOString(),
   };
 }
 
@@ -58,7 +68,10 @@ export default function CharacterView() {
     const char = character();
     if (!char) return;
 
-    const newHP = Math.max(0, Math.min(char.maxHitPoints, char.currentHitPoints + delta));
+    const newHP = Math.max(
+      0,
+      Math.min(char.maxHitPoints, char.currentHitPoints + delta),
+    );
 
     try {
       const dto = await CharacterService.updateHitPoints(char.id, newHP);
@@ -91,9 +104,11 @@ export default function CharacterView() {
   const getPortrait = () => {
     const char = character();
     if (!char) return GetCharacterProfilPic.getCharacterProfilPicOrDefault();
-    return char.portraitUrl || GetCharacterProfilPic.getCharacterProfilPic(char.characterClass);
+    return (
+      char.portraitUrl ||
+      GetCharacterProfilPic.getCharacterProfilPic(char.characterClass)
+    );
   };
-  
 
   const hpPercentage = () => {
     const char = character();
@@ -126,7 +141,11 @@ export default function CharacterView() {
       <div class="vignette absolute inset-0 pointer-events-none" />
 
       {/* Back button */}
-      <A href="/characters" class="settings-btn !left-4 !right-auto" aria-label="Retour">
+      <A
+        href="/characters"
+        class="settings-btn !left-4 !right-auto"
+        aria-label="Retour"
+      >
         <ArrowLeft class="settings-icon h-5 w-5" />
       </A>
 
@@ -162,7 +181,9 @@ export default function CharacterView() {
                       </div>
                       {/* Level badge */}
                       <div class="absolute -bottom-2 -right-2 w-10 h-10 rounded-full bg-gradient-to-br from-yellow-500 to-amber-600 flex items-center justify-center border-2 border-game-dark shadow-lg">
-                        <span class="text-sm font-bold text-white">{char().level}</span>
+                        <span class="text-sm font-bold text-white">
+                          {char().level}
+                        </span>
                       </div>
                     </div>
 
@@ -174,9 +195,13 @@ export default function CharacterView() {
                       <p class="text-slate-300 mt-1">
                         <span class="text-purple-400">{char().race}</span>
                         {" • "}
-                        <span class="text-amber-400">{char().characterClass}</span>
+                        <span class="text-amber-400">
+                          {char().characterClass}
+                        </span>
                         {" • "}
-                        <span class="text-slate-400">Niveau {char().level}</span>
+                        <span class="text-slate-400">
+                          Niveau {char().level}
+                        </span>
                       </p>
                       <Show when={char().campaign}>
                         <p class="text-slate-400 text-sm mt-2">
@@ -193,7 +218,9 @@ export default function CharacterView() {
                         title="Monter de niveau"
                       >
                         <TrendingUp class="w-4 h-4 text-white" />
-                        <span class="text-white text-sm font-semibold">Level Up</span>
+                        <span class="text-white text-sm font-semibold">
+                          Level Up
+                        </span>
                       </button>
                     </div>
                   </div>
@@ -207,7 +234,9 @@ export default function CharacterView() {
                       <div class="flex items-center justify-between text-red-400 mb-2">
                         <div class="flex items-center gap-2">
                           <Heart class="w-4 h-4" />
-                          <span class="text-xs uppercase tracking-wider">Points de vie</span>
+                          <span class="text-xs uppercase tracking-wider">
+                            Points de vie
+                          </span>
                         </div>
                         <div class="flex gap-1">
                           <button
@@ -228,7 +257,9 @@ export default function CharacterView() {
                       </div>
                       <div class="text-2xl font-bold text-white">
                         {char().currentHitPoints}
-                        <span class="text-slate-500 text-lg">/{char().maxHitPoints}</span>
+                        <span class="text-slate-500 text-lg">
+                          /{char().maxHitPoints}
+                        </span>
                       </div>
                       <div class="mt-2 h-2 bg-game-darker rounded-full overflow-hidden">
                         <div
@@ -242,16 +273,22 @@ export default function CharacterView() {
                     <div class="bg-white/5 rounded-xl p-4 border border-white/5">
                       <div class="flex items-center gap-2 text-blue-400 mb-2">
                         <Shield class="w-4 h-4" />
-                        <span class="text-xs uppercase tracking-wider">Classe d'armure</span>
+                        <span class="text-xs uppercase tracking-wider">
+                          Classe d'armure
+                        </span>
                       </div>
-                      <div class="text-2xl font-bold text-white">{char().armorClass}</div>
+                      <div class="text-2xl font-bold text-white">
+                        {char().armorClass}
+                      </div>
                     </div>
 
                     {/* Initiative */}
                     <div class="bg-white/5 rounded-xl p-4 border border-white/5">
                       <div class="flex items-center gap-2 text-yellow-400 mb-2">
                         <Zap class="w-4 h-4" />
-                        <span class="text-xs uppercase tracking-wider">Initiative</span>
+                        <span class="text-xs uppercase tracking-wider">
+                          Initiative
+                        </span>
                       </div>
                       <div class="text-2xl font-bold text-white">
                         {char().initiative >= 0 ? "+" : ""}
@@ -263,7 +300,9 @@ export default function CharacterView() {
                     <div class="bg-white/5 rounded-xl p-4 border border-white/5">
                       <div class="flex items-center gap-2 text-green-400 mb-2">
                         <Footprints class="w-4 h-4" />
-                        <span class="text-xs uppercase tracking-wider">Vitesse</span>
+                        <span class="text-xs uppercase tracking-wider">
+                          Vitesse
+                        </span>
                       </div>
                       <div class="text-2xl font-bold text-white">
                         {char().speed}
@@ -276,7 +315,9 @@ export default function CharacterView() {
 
               {/* Ability Scores Section */}
               <div class="mt-6 bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-xl">
-                <h2 class="font-display text-xl text-white mb-4">Caractéristiques</h2>
+                <h2 class="font-display text-xl text-white mb-4">
+                  Caractéristiques
+                </h2>
                 <div class="grid grid-cols-3 sm:grid-cols-6 gap-3">
                   <For each={abilities()}>
                     {(ability) => (
@@ -284,7 +325,9 @@ export default function CharacterView() {
                         <div class="text-xs text-slate-400 uppercase tracking-wider mb-1">
                           {ability.abbr}
                         </div>
-                        <div class="text-2xl font-bold text-white">{ability.value}</div>
+                        <div class="text-2xl font-bold text-white">
+                          {ability.value}
+                        </div>
                         <div
                           class={`text-sm font-medium ${
                             getAbilityModifier(ability.value) >= 0
@@ -307,7 +350,9 @@ export default function CharacterView() {
               <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Class Features Placeholder */}
                 <div class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-xl">
-                  <h2 class="font-display text-lg text-white mb-3">Traits de classe</h2>
+                  <h2 class="font-display text-lg text-white mb-3">
+                    Traits de classe
+                  </h2>
                   <div class="space-y-2 text-sm text-slate-300">
                     <div class="flex items-start gap-2">
                       <span class="text-purple-400">•</span>
@@ -326,7 +371,9 @@ export default function CharacterView() {
 
                 {/* Race Features Placeholder */}
                 <div class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-xl">
-                  <h2 class="font-display text-lg text-white mb-3">Traits raciaux</h2>
+                  <h2 class="font-display text-lg text-white mb-3">
+                    Traits raciaux
+                  </h2>
                   <div class="space-y-2 text-sm text-slate-300">
                     <div class="flex items-start gap-2">
                       <span class="text-amber-400">•</span>
@@ -379,4 +426,3 @@ export default function CharacterView() {
     </div>
   );
 }
-
