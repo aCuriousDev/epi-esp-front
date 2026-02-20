@@ -1,6 +1,7 @@
 import { createSignal, createRoot } from "solid-js";
 import type { User } from "../types/auth";
 import { AuthService } from "../services/auth.service";
+import { setupDiscord, isDiscordActivityContext } from "../discord";
 
 /**
  * Global auth store using SolidJS signals
@@ -12,7 +13,7 @@ function createAuthStore() {
   const [isAuthenticated, setIsAuthenticated] = createSignal(false);
 
   /**
-   * Initialize auth state from stored token
+   * Initialize auth state from stored token or Discord Activity (Embedded App SDK).
    */
   async function init() {
     setIsLoading(true);
@@ -30,6 +31,21 @@ function createAuthStore() {
           window.location.pathname + window.location.search,
         );
       } catch (_) {}
+    }
+
+    // Discord Activity (iframe) : auth automatique via Embedded App SDK
+    if (!AuthService.hasToken() && isDiscordActivityContext()) {
+      try {
+        const { user: discordUser, token } = await setupDiscord();
+        AuthService.setToken(token);
+        setUser(discordUser);
+        setIsAuthenticated(true);
+        setIsLoading(false);
+        return;
+      } catch (error) {
+        console.warn("Discord Activity auth failed:", error);
+        // Continue avec le flux classique (pas de token)
+      }
     }
 
     if (AuthService.hasToken()) {
