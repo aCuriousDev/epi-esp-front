@@ -7,11 +7,7 @@ import "@fontsource/im-fell-english-sc";
 import "@fontsource/inter/400.css";
 import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
-import $ from "jquery";
-import "jquery-ui-dist/jquery-ui.min.js";
-import "jquery-ui-dist/jquery-ui.min.css";
-(window as any).jQuery = $;
-(window as any).$ = $;
+import "./lib/jquery-setup";
 
 import MenuComponent from "./pages/MenuComponent";
 
