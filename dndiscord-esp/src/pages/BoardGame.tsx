@@ -8,6 +8,7 @@ import {
 	clearEngineState,
 } from "../components/GameCanvas";
 import { UnitInfoPanel } from "../components/UnitInfoPanel";
+import { SessionPanel } from "../components/SessionPanel";
 import { CombatLog } from "../components/CombatLog";
 import { TurnOrderDisplay } from "../components/TurnOrderDisplay";
 import { GameOverScreen } from "../components/GameOverScreen";
@@ -141,6 +142,7 @@ const BoardGame: Component = () => {
 				<div class="flex-1 flex overflow-hidden min-h-0">
 					{/* Left Panel - Unit Info */}
 					<aside class="w-80 min-w-[280px] max-w-[400px] p-4 flex flex-col gap-4 overflow-y-auto bg-game-darker/50">
+						<SessionPanel />
 						<Show when={getCurrentMode() === GameMode.COMBAT}>
 							<TurnOrderDisplay />
 						</Show>
