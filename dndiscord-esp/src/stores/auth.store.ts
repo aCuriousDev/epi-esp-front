@@ -33,8 +33,12 @@ function createAuthStore() {
       } catch (_) {}
     }
 
-    // Discord Activity (iframe) : auth automatique via Embedded App SDK
-    if (!AuthService.hasToken() && isDiscordActivityContext()) {
+    const shouldUseDiscordActivity =
+      !AuthService.hasToken() &&
+      isDiscordActivityContext() &&
+      !import.meta.env.DEV;
+
+    if (shouldUseDiscordActivity) {
       try {
         const { user: discordUser, token } = await setupDiscord();
         AuthService.setToken(token);
@@ -44,7 +48,6 @@ function createAuthStore() {
         return;
       } catch (error) {
         console.warn("Discord Activity auth failed:", error);
-        // Continue avec le flux classique (pas de token)
       }
     }
 
