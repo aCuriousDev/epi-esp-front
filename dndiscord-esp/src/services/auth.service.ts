@@ -22,11 +22,13 @@ export const AuthService = {
   },
 
   /**
-   * URL de redirection vers Discord OAuth. À utiliser pour la popup en contexte embed Discord :
-   * pas de fetch, juste ouvrir cette URL (navigation), le backend renvoie une 302 vers Discord.
+   * URL de redirection vers Discord OAuth. À utiliser pour la popup ou la redirection fenêtre.
+   * state = URL de retour (quand la popup est bloquée, ex. activité Discord).
    */
-  getDiscordRedirectUrl(): string {
-    return `${API_URL}/api/auth/discord/redirect`;
+  getDiscordRedirectUrl(state?: string): string {
+    const base = `${API_URL}/api/auth/discord/redirect`;
+    if (!state) return base;
+    return base + "?state=" + encodeURIComponent(state);
   },
 
   /**

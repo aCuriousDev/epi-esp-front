@@ -17,6 +17,21 @@ function createAuthStore() {
   async function init() {
     setIsLoading(true);
 
+    // Token renvoyé par le callback en mode redirection (popup bloquée)
+    const hash = window.location.hash;
+    const match = hash && /auth_token=([^&]+)/.exec(hash);
+    if (match) {
+      try {
+        const token = decodeURIComponent(match[1]);
+        AuthService.setToken(token);
+        window.history.replaceState(
+          null,
+          "",
+          window.location.pathname + window.location.search,
+        );
+      } catch (_) {}
+    }
+
     if (AuthService.hasToken()) {
       try {
         const currentUser = await AuthService.getCurrentUser();
@@ -93,9 +108,9 @@ function createAuthStore() {
    */
   async function openDiscordLogin(): Promise<void> {
     try {
-      const authUrl = AuthService.getDiscordRedirectUrl();
+      const returnUrl = window.location.href;
+      const authUrl = AuthService.getDiscordRedirectUrl(returnUrl);
 
-      // Calculate popup position (center of screen)
       const width = 500;
       const height = 700;
       const left = window.screenX + (window.outerWidth - width) / 2;
@@ -108,9 +123,9 @@ function createAuthStore() {
       );
 
       if (!popup) {
-        throw new Error(
-          "Popup was blocked. Please allow popups for this site.",
-        );
+        // Popup bloquée (ex. activité Discord) → redirection de la fenêtre courante
+        window.location.href = authUrl;
+        return;
       }
 
       return new Promise((resolve, reject) => {
