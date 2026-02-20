@@ -104,12 +104,18 @@ function createAuthStore() {
   }
 
   /**
-   * Open Discord OAuth popup
+   * Open Discord OAuth popup (ou redirection si iframe / popup impossible)
    */
   async function openDiscordLogin(): Promise<void> {
     try {
       const returnUrl = window.location.href;
       const authUrl = AuthService.getDiscordRedirectUrl(returnUrl);
+
+      const inIframe = window !== window.top;
+      if (inIframe) {
+        window.location.href = authUrl;
+        return;
+      }
 
       const width = 500;
       const height = 700;
@@ -123,7 +129,7 @@ function createAuthStore() {
       );
 
       if (!popup) {
-        // Popup bloquée (ex. activité Discord) → redirection de la fenêtre courante
+        // Popup bloquée par le navigateur → redirection de la fenêtre courante
         window.location.href = authUrl;
         return;
       }
