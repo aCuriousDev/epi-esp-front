@@ -6,7 +6,14 @@ if (!clientId) {
   console.warn("[Discord] VITE_DISCORD_CLIENT_ID is not set");
 }
 
-const discordSdk = new DiscordSDK(clientId ?? "");
+let discordSdk: DiscordSDK | null = null;
+
+function getDiscordSdkInstance(): DiscordSDK {
+  if (!discordSdk) {
+    discordSdk = new DiscordSDK(clientId ?? "");
+  }
+  return discordSdk;
+}
 
 export interface DiscordAuthResult {
   user: User;
@@ -21,9 +28,10 @@ let auth: DiscordAuthResult | null = null;
  * À appeler quand l'app tourne dans un iframe Discord (Activity).
  */
 export async function setupDiscord(): Promise<DiscordAuthResult> {
-  await discordSdk.ready();
+  const sdk = getDiscordSdkInstance();
+  await sdk.ready();
 
-  const { code } = await discordSdk.commands.authorize({
+  const { code } = await sdk.commands.authorize({
     client_id: clientId ?? "",
     response_type: "code",
     state: "",
@@ -34,7 +42,8 @@ export async function setupDiscord(): Promise<DiscordAuthResult> {
   const apiUrl = import.meta.env.VITE_API_URL || "";
   const base = apiUrl.replace(/\/$/, "");
   const url = `${base}/api/discord/token`;
-  const redirectUri = typeof window !== "undefined" ? window.location.origin : "";
+  const redirectUri =
+    typeof window !== "undefined" ? window.location.origin : "";
 
   const response = await fetch(url, {
     method: "POST",
@@ -45,7 +54,9 @@ export async function setupDiscord(): Promise<DiscordAuthResult> {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Discord token exchange failed: ${response.status} ${text}`);
+    throw new Error(
+      `Discord token exchange failed: ${response.status} ${text}`,
+    );
   }
 
   const data = await response.json();
@@ -65,7 +76,7 @@ export function isDiscordActivityContext(): boolean {
   return typeof window !== "undefined" && window !== window.top;
 }
 
-export function getDiscordSdk(): DiscordSDK {
+export function getDiscordSdk(): DiscordSDK | null {
   return discordSdk;
 }
 

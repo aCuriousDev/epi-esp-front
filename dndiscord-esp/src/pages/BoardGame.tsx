@@ -8,7 +8,6 @@ import {
 	clearEngineState,
 } from "../components/GameCanvas";
 import { UnitInfoPanel } from "../components/UnitInfoPanel";
-import { SessionPanel } from "../components/SessionPanel";
 import { CombatLog } from "../components/CombatLog";
 import { TurnOrderDisplay } from "../components/TurnOrderDisplay";
 import { GameOverScreen } from "../components/GameOverScreen";
@@ -22,6 +21,9 @@ import {
 	clearTiles,
 } from "../game";
 import { GamePhase, AppPhase, GameMode } from "../types";
+import { sessionState } from "../stores/session.store";
+import { leaveSession } from "../services/signalr/multiplayer.service";
+import { LogOut } from "lucide-solid";
 
 const BoardGame: Component = () => {
 	const navigate = useNavigate();
@@ -142,7 +144,24 @@ const BoardGame: Component = () => {
 				<div class="flex-1 flex overflow-hidden min-h-0">
 					{/* Left Panel - Unit Info */}
 					<aside class="w-80 min-w-[280px] max-w-[400px] p-4 flex flex-col gap-4 overflow-y-auto bg-game-darker/50">
-						<SessionPanel />
+						<Show when={sessionState.session}>
+							<div class="panel-game flex flex-col gap-2">
+								<p class="text-gray-400 text-sm">
+									Session: <span class="text-game-gold font-mono text-xs">{sessionState.session!.sessionId.slice(0, 12)}…</span>
+								</p>
+								<button
+									class="w-full flex items-center justify-center gap-2 py-2 rounded border border-white/20 bg-white/5 hover:bg-white/10 text-gray-300 text-sm"
+									onClick={async () => {
+										try {
+											await leaveSession();
+										} catch (_) {}
+									}}
+								>
+									<LogOut class="w-4 h-4" />
+									Quitter la session
+								</button>
+							</div>
+						</Show>
 						<Show when={getCurrentMode() === GameMode.COMBAT}>
 							<TurnOrderDisplay />
 						</Show>
