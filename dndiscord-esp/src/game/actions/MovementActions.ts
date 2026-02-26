@@ -11,6 +11,8 @@ import { gameState, setGameState, addCombatLog, getIsFreeRoamMode } from '../sto
 import { units, setUnits } from '../stores/UnitsStore';
 import { tiles, setTiles, pathfinder, updatePathfinder } from '../stores/TilesStore';
 import { posToKey } from '../utils/GridUtils';
+import { getCurrentSession } from '../../stores/session.store';
+import { sendUnitMove } from '../../services/signalr/multiplayer.service';
 
 // ============================================
 // UNIT SELECTION
@@ -164,7 +166,22 @@ export function moveUnit(targetPos: GridPosition): boolean {
   
   // Update pathfinder with new tile state
   updatePathfinder();
-  
+
+  // En session multijoueur : diffuser le mouvement aux autres joueurs (backend envoie UnitMoved aux autres uniquement)
+  const session = getCurrentSession();
+  if (session) {
+    const remainingAp = units[unit.id].stats.currentActionPoints;
+    const pathForBackend = path.map((p) => ({ x: p.x, y: p.z }));
+    sendUnitMove({
+      unitId: unit.id,
+      path: pathForBackend,
+      apCost: movementCost,
+      remainingAp,
+    }).catch((err) => {
+      console.warn("[MovementActions] sendUnitMove failed:", err);
+    });
+  }
+
   return true;
 }
 
