@@ -109,6 +109,7 @@ function mapCampaignResponse(apiCampaign: CampaignDetailResponse): Campaign {
     status: mapCampaignStatus(apiCampaign.status),
     visibility: apiCampaign.isPublic ? ("Public" as any) : ("Private" as any),
     dungeonMasterId: apiCampaign.dungeonMasterId,
+    isDungeonMaster: apiCampaign.isDungeonMaster,
     dungeonMasterName: "Maître du Jeu", // API doesn't provide this
     dungeonMasterAvatar: "",
     maxPlayers: apiCampaign.maxPlayers,
@@ -147,10 +148,13 @@ export default function CampaignView() {
   const [launchError, setLaunchError] = createSignal<string | null>(null);
 
   const user = () => authStore.user();
+  /** Le créateur/MJ peut lancer une session ; on s’appuie sur l’API (isDungeonMaster) pour éviter les écarts d’identifiants. */
   const isOwner = () => {
     const c = campaign();
+    if (!c) return false;
+    if (c.isDungeonMaster === true) return true;
     const u = user();
-    return c && u && c.dungeonMasterId === u.id;
+    return !!u && c.dungeonMasterId === u.id;
   };
 
   onMount(async () => {

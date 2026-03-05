@@ -113,6 +113,8 @@ export interface CampaignMemberResponse {
 }
 
 export interface CampaignDetailResponse extends CampaignResponse {
+  /** True when the current user is the Dungeon Master of this campaign (from API). */
+  isDungeonMaster?: boolean;
   hasInviteCode: boolean;
   inviteCodeExpiresAt?: string;
   members: CampaignMemberResponse[];
