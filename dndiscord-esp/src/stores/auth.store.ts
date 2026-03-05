@@ -3,6 +3,8 @@ import type { User } from "../types/auth";
 import { AuthService } from "../services/auth.service";
 import { setupDiscord, isDiscordActivityContext } from "../discord";
 
+const isDiscordActivity = isDiscordActivityContext() && !import.meta.env.DEV;
+
 /**
  * Global auth store using SolidJS signals
  * Created with createRoot to persist across component lifecycles
@@ -11,6 +13,7 @@ function createAuthStore() {
   const [user, setUser] = createSignal<User | null>(null);
   const [isLoading, setIsLoading] = createSignal(true);
   const [isAuthenticated, setIsAuthenticated] = createSignal(false);
+  const [activityError, setActivityError] = createSignal<string | null>(null);
 
   /**
    * Initialize auth state from stored token or Discord Activity (Embedded App SDK).
@@ -35,8 +38,7 @@ function createAuthStore() {
 
     const shouldUseDiscordActivity =
       !AuthService.hasToken() &&
-      isDiscordActivityContext() &&
-      !import.meta.env.DEV;
+      isDiscordActivity;
 
     if (shouldUseDiscordActivity) {
       try {
@@ -47,7 +49,9 @@ function createAuthStore() {
         setIsLoading(false);
         return;
       } catch (error) {
-        console.warn("Discord Activity auth failed:", error);
+        const msg = error instanceof Error ? error.message : String(error);
+        console.warn("Discord Activity auth failed:", msg);
+        setActivityError(msg);
       }
     }
 
@@ -127,6 +131,17 @@ function createAuthStore() {
    */
   async function openDiscordLogin(): Promise<void> {
     try {
+      // Dans le contexte Discord Activity, le flux OAuth redirect ne fonctionne pas
+      // (l'iframe ne peut pas naviguer vers des domaines externes).
+      // On utilise directement le SDK Discord.
+      if (isDiscordActivity) {
+        const { user: discordUser, token } = await setupDiscord();
+        AuthService.setToken(token);
+        setUser(discordUser);
+        setIsAuthenticated(true);
+        return;
+      }
+
       const returnUrl = window.location.href;
       const authUrl = AuthService.getDiscordRedirectUrl(returnUrl);
 
@@ -197,6 +212,7 @@ function createAuthStore() {
     // State (getters)
     user,
     isLoading,
+    activityError,
     isAuthenticated,
 
     // Actions

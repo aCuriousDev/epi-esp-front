@@ -31,6 +31,10 @@ export async function setupDiscord(): Promise<DiscordAuthResult> {
   const sdk = getDiscordSdkInstance();
   await sdk.ready();
 
+  // Patch fetch pour router /api/* via le mécanisme Discord (supporte POST)
+  // Requiert un mapping "/api" → "dndiscord.cadran.app" dans le Developer Portal
+  sdk.patchUrlMappings([{ prefix: "/api", target: "dndiscord.cadran.app" }]);
+
   const { code } = await sdk.commands.authorize({
     client_id: clientId ?? "",
     response_type: "code",

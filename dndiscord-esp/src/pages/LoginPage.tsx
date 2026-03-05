@@ -68,6 +68,13 @@ export default function LoginPage() {
                 </div>
               </Show>
 
+              {/* Discord Activity error (debug) */}
+              <Show when={authStore.activityError()}>
+                <div class="w-full p-3 bg-red-500/20 border border-red-500/40 rounded-lg text-red-300 text-xs break-all">
+                  <strong>Activity error:</strong> {authStore.activityError()}
+                </div>
+              </Show>
+
               {/* Login button */}
               <Show when={!authStore.isLoading()}>
                 <div class="flex flex-col items-center gap-6">
