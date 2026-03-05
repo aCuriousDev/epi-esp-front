@@ -42,13 +42,11 @@ export async function setupDiscord(): Promise<DiscordAuthResult> {
   const apiUrl = import.meta.env.VITE_API_URL || "";
   const base = apiUrl.replace(/\/$/, "");
   const url = `${base}/api/discord/token`;
-  const redirectUri =
-    typeof window !== "undefined" ? window.location.origin : "";
 
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code, redirect_uri: redirectUri }),
+    body: JSON.stringify({ code }),
     credentials: "include",
   });
 
