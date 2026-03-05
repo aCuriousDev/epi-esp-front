@@ -41,7 +41,7 @@ export async function setupDiscord(): Promise<DiscordAuthResult> {
 
   // Appel direct vers le backend (CORS autorise *.discordsays.com)
   const apiBase = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
-  const response = await fetch(`${apiBase}/api/discord/token`, {
+  const response = await fetch(`${apiBase}/discord/token`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code }),
