@@ -31,10 +31,6 @@ export async function setupDiscord(): Promise<DiscordAuthResult> {
   const sdk = getDiscordSdkInstance();
   await sdk.ready();
 
-  // Patch fetch pour router /api/* via le mécanisme Discord (supporte POST)
-  // Requiert un mapping "/api" → "dndiscord.cadran.app" dans le Developer Portal
-  sdk.patchUrlMappings([{ prefix: "/api", target: "dndiscord.cadran.app" }]);
-
   const { code } = await sdk.commands.authorize({
     client_id: clientId ?? "",
     response_type: "code",
@@ -43,11 +39,9 @@ export async function setupDiscord(): Promise<DiscordAuthResult> {
     scope: ["identify", "guilds"],
   });
 
-  const apiUrl = import.meta.env.VITE_API_URL || "";
-  const base = apiUrl.replace(/\/$/, "");
-  const url = `${base}/api/discord/token`;
-
-  const response = await fetch(url, {
+  // Appel direct vers le backend (CORS autorise *.discordsays.com)
+  const apiBase = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+  const response = await fetch(`${apiBase}/api/discord/token`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code }),
