@@ -15,6 +15,7 @@ import { initializeUnits } from '../initialization/InitUnits';
 import { initializeFreeRoam } from '../initialization/InitFreeRoam';
 import * as TurnManager from '../TurnManager';
 import { checkGameOver } from './CombatActions';
+import { playTurnStartEffect } from '../vfx/VFXIntegration';
 
 // ============================================
 // GAME START
@@ -149,7 +150,12 @@ export function nextTurn(): void {
   // Determine phase AFTER state is committed
   updateGamePhase();
   
+  // Play turn start VFX for the new active unit
   const currentUnitAfter = getCurrentUnit();
+  if (currentUnitAfter && currentUnitAfter.isAlive) {
+    playTurnStartEffect(currentUnitAfter.position, currentUnitAfter.team as string);
+  }
+  
   console.log('[nextTurn] Current unit after advance:', currentUnitAfter?.name, 'team:', currentUnitAfter?.team);
   console.log('[nextTurn] Game phase:', gameState.phase);
   console.log('=== nextTurn END ===\n');

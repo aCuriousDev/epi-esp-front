@@ -11,6 +11,7 @@ import { gameState, setGameState, addCombatLog } from '../stores/GameStateStore'
 import { units, setUnits, getPlayerUnits, getEnemyUnits } from '../stores/UnitsStore';
 import { tiles, setTiles, pathfinder, updatePathfinder } from '../stores/TilesStore';
 import { posToKey } from '../utils/GridUtils';
+import { playSpellEffect, playDamageEffect, playDeathEffect, playHitReactionEffect, playCameraShake } from '../vfx/VFXIntegration';
 
 // ============================================
 // ABILITY SELECTION
@@ -63,6 +64,15 @@ export function useAbility(targetPos: GridPosition): boolean {
   const distance = Math.abs(targetPos.x - unit.position.x) + Math.abs(targetPos.z - unit.position.z);
   if (distance > ability.range) return false;
   
+  // Fire spell VFX (async, doesn't block game logic)
+  playSpellEffect(
+    unit.position,
+    targetPos,
+    ability.damageType,
+    ability.aoeRadius > 0 ? ability.aoeRadius : undefined,
+    ability.id
+  );
+  
   // Find targets in AOE
   const targetUnitIds: string[] = [];
   
@@ -97,6 +107,16 @@ export function useAbility(targetPos: GridPosition): boolean {
       
       const damage = calculateDamage(unit, target, ability);
       
+      // Play damage impact VFX
+      playDamageEffect(target.position, damage);
+      
+      // Play hit reaction (knockback animation) on the target unit
+      playHitReactionEffect(targetId);
+      
+      // Camera shake on hit (stronger for bigger damage)
+      const shakeIntensity = Math.min(0.05 + damage * 0.005, 0.2);
+      playCameraShake(shakeIntensity, 200);
+      
       setUnits(targetId, produce((t) => {
         t.stats.currentHealth = Math.max(0, t.stats.currentHealth - damage);
         if (t.stats.currentHealth <= 0) {
@@ -113,6 +133,10 @@ export function useAbility(targetPos: GridPosition): boolean {
       
       if (units[targetId].stats.currentHealth <= 0) {
         addCombatLog(`${target.name} has been defeated!`, 'system');
+        // Play death VFX (async, doesn't block)
+        playDeathEffect(targetId, target.team as string);
+        // Heavy camera shake on kill
+        playCameraShake(0.2, 400);
       }
     });
     
