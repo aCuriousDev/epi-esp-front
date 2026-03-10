@@ -2,16 +2,21 @@ import draw2d from 'draw2d';
 import { tokens } from "@/styles/design-tokens";
 import { CampaignNode, BaseNodeData } from './CampaignNode';
 
+export interface VillainPlacement {
+  characterId: string;
+  position: { x: number; y: number };
+}
+
 export interface CombatNodeData extends BaseNodeData {
   type: 'combat';
-  enemies?: string[];
+  title?: string;
+  selectedMap?: string;
   difficulty?: 'easy' | 'medium' | 'hard';
+  villains?: VillainPlacement[];
 }
 
 export class CombatNode extends CampaignNode {
   static NAME = 'CombatNode';
-  private enemiesLabel!: draw2d.shape.basic.Label;
-  private difficultyLabel!: draw2d.shape.basic.Label;
 
   constructor(x: number, y: number, data: CombatNodeData) {
     super(x, y, data);
@@ -25,7 +30,7 @@ export class CombatNode extends CampaignNode {
   }
 
   override createBackground(): void {
-    this.background =  new draw2d.shape.basic.Rectangle({
+    this.background = new draw2d.shape.basic.Rectangle({
       width: this.nodeWidth,
       height: this.nodeHeight,
       bgColor: '#4a1a1a',
@@ -57,38 +62,52 @@ export class CombatNode extends CampaignNode {
   }
 
   protected createPorts(): void {
-    const inputPort = this.createPort(
+    // Port d'entrée à gauche — même layout que Scene/Choices
+    const inputPort = this.createSinglePort(
       'input',
-      new draw2d.layout.locator.XYRelPortLocator(50, 0)
+      new draw2d.layout.locator.XYRelPortLocator(-5, 50)
     );
     inputPort.setName('input');
 
-    const victoryPort = this.createPort(
+    // Port victoire — droite haut
+    const victoryPort = this.createSinglePort(
       'output',
-      new draw2d.layout.locator.XYRelPortLocator(33, 100)
+      new draw2d.layout.locator.XYRelPortLocator(105, 33)
     );
     victoryPort.setName('victory');
 
-    const defeatPort = this.createPort(
+    // Port défaite — droite bas
+    const defeatPort = this.createSinglePort(
       'output',
-      new draw2d.layout.locator.XYRelPortLocator(66, 100)
+      new draw2d.layout.locator.XYRelPortLocator(105, 66)
     );
     defeatPort.setName('defeat');
   }
 
-  private getDifficultyIcon(difficulty: string): string {
-    return { easy: '★☆☆', medium: '★★☆', hard: '★★★' }[difficulty] ?? '★★☆';
-  }
-
-  public updateEnemies(enemies: string[]): void {
-    (this.nodeData as CombatNodeData).enemies = enemies;
-    this.enemiesLabel.setText(`⚔️ Ennemis: ${enemies.length}`);
+  public updateMap(mapId: string): void {
+    (this.nodeData as CombatNodeData).selectedMap = mapId;
     this.setUserData(this.nodeData);
   }
 
   public updateDifficulty(difficulty: 'easy' | 'medium' | 'hard'): void {
     (this.nodeData as CombatNodeData).difficulty = difficulty;
-    this.difficultyLabel.setText(this.getDifficultyIcon(difficulty));
     this.setUserData(this.nodeData);
+  }
+
+  public updateVillains(villains: VillainPlacement[]): void {
+    (this.nodeData as CombatNodeData).villains = villains;
+    this.setUserData(this.nodeData);
+  }
+
+  public getPersistentAttributes(): any {
+    return { ...super.getPersistentAttributes(), nodeData: this.nodeData };
+  }
+
+  public setPersistentAttributes(memento: any): void {
+    super.setPersistentAttributes(memento);
+    if (memento.nodeData) {
+      const data = this.nodeData as CombatNodeData;
+      this.updateTitle(data?.title ?? '');
+    }
   }
 }

@@ -9,6 +9,7 @@ import { ChoicesNode } from "./nodes/ChoicesNode";
 import { SceneNode, SceneNodeData } from "./nodes/SceneNode";
 import { StartNode } from './nodes/StartNode';
 import { SceneNode } from './nodes/SceneNode';
+import { MapNode } from './nodes/MapNode';
 
 interface CampaignTreeCanvasProps {
   onNodeSelect?: (node: CampaignNode | null) => void;
@@ -44,6 +45,7 @@ interface AddNodeData {
 (window as any).CombatNode = CombatNode;
 (window as any).StartNode = StartNode;
 (window as any).scene = SceneNode;
+(window as any).MapNode = MapNode;
 (window as any).draw2d = draw2d;
 
 export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
@@ -79,6 +81,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
         node = new ChoicesNode(x, y, {
           id: existingId ?? generateId('choices'),
           type: 'choices',
+          title: nodeData.data?.title ?? '',
           text: nodeData.data?.text ?? "",
           choices: nodeData.data?.choices ?? [],
         });
@@ -107,7 +110,6 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
         break;
       }
 
-      // TODO: Ajouter NPCNode, ConditionNode, etc.
       default:
         throw new Error(`Unknown node type: ${nodeData.type}`);
     }
