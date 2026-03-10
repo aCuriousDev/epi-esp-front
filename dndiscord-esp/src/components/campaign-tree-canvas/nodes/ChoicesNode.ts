@@ -9,6 +9,8 @@ export interface ChoicesNodeData extends BaseNodeData {
 }
 
 export class ChoicesNode extends CampaignNode {
+    static NAME = 'ChoicesNode';
+
   private textLabel: draw2d.shape.basic.Label;
 
   constructor(x: number, y: number, data: ChoicesNodeData) {

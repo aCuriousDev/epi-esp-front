@@ -38,14 +38,9 @@ const ExportImportModal: Component<ExportImportModalProps> = (props) => {
     reader.readAsText(file);
   };
   onMount(async ()=>{
-    if(props.canvasRef){
-
-    var writer = new draw2d.io.json.Writer();
-     writer.marshal(props.canvasRef()?.getCanvas()!, function (json: string) {
-        setJsonDefinition(json)
-     })
-        var json = JSON.stringify(await props.canvasRef()?.exportData(), null, 2);
-        setJsonDefinition(json);
+    if(props.canvasRef()){
+        const json = await props.canvasRef()?.exportData();
+        setJsonDefinition(json ?? "[]");
     }
   })
 

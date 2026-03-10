@@ -9,6 +9,7 @@ export interface CombatNodeData extends BaseNodeData {
 }
 
 export class CombatNode extends CampaignNode {
+  static NAME = 'CombatNode';
   private enemiesLabel!: draw2d.shape.basic.Label;
   private difficultyLabel!: draw2d.shape.basic.Label;
 

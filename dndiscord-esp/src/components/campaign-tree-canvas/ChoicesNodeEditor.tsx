@@ -1,4 +1,4 @@
-import { Component, createSignal, createEffect, For, Show } from 'solid-js';
+import { Component, createSignal, createEffect, Index, Show } from 'solid-js';
 import { ChoicesNode } from './nodes/ChoicesNode';
 import { CampaignNode } from './nodes/CampaignNode';
 
@@ -10,45 +10,46 @@ interface ChoicesNodeEditorProps {
 const generateId = () => `item-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
 
 const ChoicesNodeEditor: Component<ChoicesNodeEditorProps> = (props : ChoicesNodeEditorProps) => {
-    const [choices, setChoices] = createSignal<string[]>(props.node.getData().choices);
-    const [text,setText] = createSignal<string>(props.node.getData().text)
+    const initialData = props.node.getData();
+    const [choices, setChoices] = createSignal<string[]>(initialData.choices || []);
+    const [text,setText] = createSignal<string>(initialData.text || "");
 
     createEffect(() => {
         // setItems(props.node.getItems());
     });
 
     const save = () => {
-        // setItems(newItems);
-        // prop
-        // 
-        
-    }
+        // Pousser l'état local vers le node Draw2D puis notifier le parent
+        props.node.updateText(text());
+        props.node.updateChoices(choices());
+        props.handleUpdateNode(props.node);
+    };
     /**
    * Choices Node: Remove choice
    */
   const handleRemoveChoice = (index: number) => {
-    var newChoices = choices().filter((_, i) => i !== index);
-    props.node.updateChoices(newChoices)
+    const newChoices = choices().filter((_, i) => i !== index);
     setChoices(newChoices);
+    props.node.updateChoices(newChoices);
+    props.handleUpdateNode(props.node);
   };
     /*
    * Choices Node: Add choice
    */
   const handleAddChoice = () => {
-     var newChoices = [...choices(), 'Nouveau choix'];
-        props.node.updateChoices(newChoices)
-        setChoices(newChoices);
+    const newChoices = [...choices(), 'Nouveau choix'];
+    setChoices(newChoices);
+    props.node.updateChoices(newChoices);
+    props.handleUpdateNode(props.node);
     }
 
   const handleUpdateChoice = (index: number, value: string) => {
     const storyChoices = [...choices()];
     storyChoices[index] = value;
-    props.node.updateChoices(storyChoices)
     setChoices(storyChoices);
   };
 
   const handleUpdateText = (newText: string) => {
-    props.node.updateText(newText)
     setText(newText);
   };
     
@@ -87,7 +88,8 @@ const ChoicesNodeEditor: Component<ChoicesNodeEditorProps> = (props : ChoicesNod
                 <textarea
                     value={text()}
                     onInput={(e) => handleUpdateText(e.currentTarget.value)}
-                    onBlur={()=>props.handleUpdateNode(props.node)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    onBlur={save}
                     placeholder="Décrivez la scène..."
                     style={{
                         width: '100%',
@@ -143,7 +145,7 @@ const ChoicesNodeEditor: Component<ChoicesNodeEditorProps> = (props : ChoicesNod
                     </p>
                 }>
                     <div style={{ display: 'flex', 'flex-direction': 'column', gap: '0.5rem' }}>
-                        <For each={choices()}>
+                        <Index each={choices()}>
                             {(choice, index) => (
                                 <div style={{
                                     display: 'flex',
@@ -155,13 +157,14 @@ const ChoicesNodeEditor: Component<ChoicesNodeEditorProps> = (props : ChoicesNod
                                         color: '#888',
                                         'font-weight': '500'
                                     }}>
-                                        {index() + 1}.
+                                        {index + 1}.
                                     </span>
                                     <input
                                         type="text"
-                                        value={choice}
-                                        onInput={(e) => handleUpdateChoice(index(), e.currentTarget.value)}
-                                        onBlur={()=>props.handleUpdateNode(props.node)}
+                                        value={choice()}
+                                        onInput={(e) => handleUpdateChoice(index, e.currentTarget.value)}
+                                        onKeyDown={(e) => e.stopPropagation()}
+                                        onBlur={save}
                                         style={{
                                             flex: 1,
                                             background: '#1e1e1e',
@@ -174,7 +177,7 @@ const ChoicesNodeEditor: Component<ChoicesNodeEditorProps> = (props : ChoicesNod
                                     />
                                     <button
                                         onClick={() => {
-                                            handleRemoveChoice(index());
+                                            handleRemoveChoice(index);
                                             props.handleUpdateNode(props.node);
                                         }}
                                         style={{
@@ -192,7 +195,7 @@ const ChoicesNodeEditor: Component<ChoicesNodeEditorProps> = (props : ChoicesNod
                                     </button>
                                 </div>
                             )}
-                        </For>
+                        </Index>
                     </div>
                 </Show>
             </div>

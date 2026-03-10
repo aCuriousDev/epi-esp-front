@@ -69,6 +69,7 @@ const SceneNodeEditor: Component<SceneNodeEditorProps> = (props : SceneNodeEdito
                 <textarea
                     value={title()}
                     onInput={(e) => handleUpdateTitle(e.currentTarget.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
                     onBlur={()=>props.handleUpdateNode(props.node)}
                     placeholder="Décrivez la scène..."
                     style={{
@@ -97,6 +98,7 @@ const SceneNodeEditor: Component<SceneNodeEditorProps> = (props : SceneNodeEdito
                 <textarea
                     value={text()}
                     onInput={(e) => handleUpdateText(e.currentTarget.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
                     onBlur={()=>props.handleUpdateNode(props.node)}
                     placeholder="Décrivez la scène..."
                     style={{

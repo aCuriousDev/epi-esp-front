@@ -8,6 +8,7 @@ export interface SceneNodeData extends BaseNodeData {
 }
 
 export class SceneNode extends CampaignNode {
+  static NAME = 'SceneNode';
   private titleLabel: draw2d.shape.basic.Label;
 
   constructor(x: number, y: number, data: SceneNodeData) {
