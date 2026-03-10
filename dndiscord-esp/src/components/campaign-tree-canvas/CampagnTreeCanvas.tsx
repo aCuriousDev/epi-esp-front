@@ -5,6 +5,7 @@ import { ChoicesNode } from './nodes/ChoicesNode';
 import { CombatNode } from './nodes/CombatNode';
 import { StartNode } from './nodes/StartNode';
 import { SceneNode } from './nodes/SceneNode';
+import { MapNode } from './nodes/MapNode';
 
 interface CampaignTreeCanvasProps {
   onNodeSelect?: (node: CampaignNode | null) => void;
@@ -31,7 +32,7 @@ export interface CampaignTreeCanvasRef {
 }
 
 interface AddNodeData {
-  type: 'choices' | 'combat' | 'scene' | 'condition';
+  type: 'choices' | 'combat' | 'scene' | 'map';
   x?: number;
   y?: number;
   data?: any;
@@ -40,6 +41,7 @@ interface AddNodeData {
 (window as any).CombatNode = CombatNode;
 (window as any).StartNode = StartNode;
 (window as any).scene = SceneNode;
+(window as any).MapNode = MapNode;
 (window as any).draw2d = draw2d;
 
 export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
@@ -75,6 +77,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
         node = new ChoicesNode(x, y, {
           id: existingId ?? generateId('choices'),
           type: 'choices',
+          title: nodeData.data?.title ?? '',
           text: nodeData.data?.text ?? "",
           choices: nodeData.data?.choices ?? [],
         });
@@ -96,14 +99,25 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
         node = new CombatNode(x, y, {
           id: existingId ?? generateId('combat'),
           type: 'combat',
-          enemies: nodeData.data?.enemies || [],
-          difficulty: nodeData.data?.difficulty || 'medium',
-          ...nodeData.data
+          title: nodeData.data?.title ?? '',
+          selectedMap: nodeData.data?.selectedMap ?? '',
+          difficulty: nodeData.data?.difficulty ?? 'medium',
+          villains: nodeData.data?.villains ?? [],
         });
         break;
       }
 
-      // TODO: Ajouter NPCNode, ConditionNode, etc.
+      case 'map': {
+        const existingId = nodeData.data?.id as string | undefined;
+        node = new MapNode(x, y, {
+          id: existingId ?? generateId('map'),
+          type: 'map',
+          title: nodeData.data?.title ?? '',
+          selectedMap: nodeData.data?.selectedMap ?? '',
+        });
+        break;
+      }
+
       default:
         throw new Error(`Unknown node type: ${nodeData.type}`);
     }

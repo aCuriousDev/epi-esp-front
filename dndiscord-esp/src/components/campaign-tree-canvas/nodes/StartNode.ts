@@ -42,8 +42,8 @@ export class StartNode extends CampaignNode {
   }
 
   protected createPorts(): void {
-    // Uniquement un port de sortie (bas, centré)
-    const outputPort = this.createPort(
+    // Uniquement un port de sortie (bas, centré) — limité à 1 connexion
+    const outputPort = this.createSinglePort(
       'output',
       new draw2d.layout.locator.XYRelPortLocator(103, 50)
     );
