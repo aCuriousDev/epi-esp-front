@@ -113,6 +113,7 @@ export interface CampaignResponse {
   createdAt: string;
   updatedAt: string;
   lastPlayedAt?: string;
+  campaignTreeDefinition:string;
 }
 
 export interface CampaignMemberResponse {
@@ -130,6 +131,9 @@ export interface CampaignDetailResponse extends CampaignResponse {
   inviteCodeExpiresAt?: string;
   members: CampaignMemberResponse[];
   snapshotCount: number;
+}
+export interface UpdateCampaignManagerRequest {
+  campaignTreeDefinition:string
 }
 
 export interface CampaignListResponse {
@@ -218,6 +222,7 @@ export const mapCampaignResponse = (apiCampaign: CampaignDetailResponse): Campai
     tags: [],
     createdAt: apiCampaign.createdAt,
     updatedAt: apiCampaign.updatedAt,
+    campaignTreeDefinition: apiCampaign.campaignTreeDefinition
   };
 }
 /**
@@ -234,6 +239,15 @@ export const CampaignService = {
       { headers: getAuthHeaders() }
     );
     return response.data;
+  },
+
+  async editCampaignManager(campaignId : string,request:UpdateCampaignManagerRequest) : Promise<CampaignDetailResponse>{
+     const response = await axios.put<CampaignDetailResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/manager`,
+      request,
+      { headers: getAuthHeaders() }
+      );
+      return response.data;
   },
 
   /**

@@ -5,7 +5,6 @@ import { ChoicesNode } from './nodes/ChoicesNode';
 import { CombatNode } from './nodes/CombatNode';
 import { StartNode } from './nodes/StartNode';
 import { SceneNode } from './nodes/SceneNode';
-import ExportImportModal from './modals/ExportImportModal';
 
 interface CampaignTreeCanvasProps {
   onNodeSelect?: (node: CampaignNode | null) => void;
@@ -15,14 +14,20 @@ interface CampaignTreeCanvasProps {
 
 export interface CampaignTreeCanvasRef {
   addNode: (nodeData: AddNodeData) => CampaignNode;
-  exportData: ()=> Promise<any>;
+  exportData: () => string | undefined;
   importData: (data: any) => void;
   clearCanvas: () => void;
   getCanvas: () => draw2d.Canvas | null;
+  getViewportCenter: () => { x: number; y: number } | null;
   zoomIn: () => void;
   zoomOut: () => void;
   zoomReset: () => void;
   fitToPage: () => void;
+  gotoFigure: (figure: any) => void;
+  getTreeBoundingBox: () => any;
+  undo: () => void;
+  redo: () => void;
+  refreshCanvas: () => void;
 }
 
 interface AddNodeData {
@@ -31,12 +36,27 @@ interface AddNodeData {
   y?: number;
   data?: any;
 }
+(window as any).choices = ChoicesNode;
+(window as any).CombatNode = CombatNode;
+(window as any).StartNode = StartNode;
+(window as any).scene = SceneNode;
+(window as any).draw2d = draw2d;
 
 export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
   let canvasRef: HTMLDivElement | undefined;
   let canvas: draw2d.Canvas | null = null;
   let selectedNode: CampaignNode | null = null;
   let currentZoom: number = 1.0;
+
+  const addStartNode = () => {
+    if (!canvas) return;
+    const startNode = new StartNode(
+      100, // centré horizontalement
+      300  // en haut du canvas
+    );
+    canvas.add(startNode, startNode.x, startNode.y);
+    return startNode;
+  };
 
   /**
    * Créer un node en fonction du type
@@ -50,32 +70,38 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
 
     // Créer le node selon son type
     switch (nodeData.type) {
-      case 'choices':
+      case 'choices': {
+        const existingId = nodeData.data?.id as string | undefined;
         node = new ChoicesNode(x, y, {
-        id: generateId('choices'),
-        type: 'choices',
-        text: nodeData.data?.text ?? "",
-        choices: nodeData.data?.choices ?? [],
-      });
+          id: existingId ?? generateId('choices'),
+          type: 'choices',
+          text: nodeData.data?.text ?? "",
+          choices: nodeData.data?.choices ?? [],
+        });
         break;
-      case 'scene':
+      }
+      case 'scene': {
+        const existingId = nodeData.data?.id as string | undefined;
         node = new SceneNode(x, y, {
-        id: generateId('choices'),
-        type: 'scene',
-        title: nodeData.data?.title ?? "",
-        text: nodeData.data?.text ?? "",
-      });
+          id: existingId ?? generateId('scene'),
+          type: 'scene',
+          title: nodeData.data?.title ?? "",
+          text: nodeData.data?.text ?? "",
+        });
         break;
+      }
 
-      case 'combat':
+      case 'combat': {
+        const existingId = nodeData.data?.id as string | undefined;
         node = new CombatNode(x, y, {
-          id: generateId('combat'),
+          id: existingId ?? generateId('combat'),
           type: 'combat',
           enemies: nodeData.data?.enemies || [],
           difficulty: nodeData.data?.difficulty || 'medium',
           ...nodeData.data
         });
         break;
+      }
 
       // TODO: Ajouter NPCNode, ConditionNode, etc.
       default:
@@ -98,40 +124,194 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
   /**
    * Exporter les données du canvas
    */
-  const exportData = async () => {
-  if (canvas == null) return null;
-  
-    return new Promise((resolve) => {
-      const writer = new draw2d.io.json.Writer();
-      writer.marshal(canvas!, (json: any) => {
-        resolve({
-          version: '1.0',
-          timestamp: new Date().toISOString(),
-          zoom: currentZoom,
-          canvas: json
-        });
-        });
-      });
+  // Export — ton format custom
+  const exportData = () => {
+    if (!canvas) return;
+
+    const figures = canvas
+      .getFigures()
+      .asArray()
+      .filter((fig: any) => !(fig instanceof StartNode));
+
+    const lines = canvas.getLines().asArray();
+
+    const result = {
+      nodes: figures.map((fig: any) => ({
+        type: fig.nodeData.type,
+        x: fig.x,
+        y: fig.y,
+        data: fig.nodeData,
+      })),
+      connections: lines.map((conn: any) => {
+        const sourceParent = conn.getSource().getParent();
+        const targetParent = conn.getTarget().getParent();
+        const sourceId = sourceParent.nodeData?.id ?? sourceParent.getId();
+        const targetId = targetParent.nodeData?.id ?? targetParent.getId();
+
+        return {
+          source: {
+            node: sourceId,
+            port: conn.getSource().getName(),
+          },
+          target: {
+            node: targetId,
+            port: conn.getTarget().getName(),
+          },
+        };
+      }),
+    };
+
+    return JSON.stringify(result);
   };
 
-  /**
-   * Importer des données dans le canvas
-   */
+  // Import — reconstruction manuelle
   const importData = (data: any) => {
     if (!canvas) return;
 
-    // Effacer le canvas
     canvas.clear();
 
-    // Restaurer le zoom si présent
-    if (data.zoom) {
-      currentZoom = data.zoom;
-      canvas.setZoom(currentZoom);
+    if (!data) {
+      // Aucun JSON fourni → on garde juste le StartNode
+      addStartNode();
+      return;
     }
 
-    // Charger les données
-    const reader = new draw2d.io.json.Reader();
-    reader.unmarshal(canvas, data.canvas || data);
+    let json = data;
+    if (typeof data === "string") {
+      try {
+        json = JSON.parse(data);
+      } catch (e) {
+        console.error("Invalid campaign tree JSON:", e);
+        return;
+      }
+    }
+
+    if (!json.nodes || !Array.isArray(json.nodes)) return;
+
+    // D'abord, recréer le StartNode et construire une map id → figure
+    const nodeMap: Record<string, CampaignNode> = {};
+
+    const startNode = addStartNode();
+    if (startNode) {
+      const startId = (startNode as any).getData?.().id ?? "start-node";
+      nodeMap[startId] = startNode;
+    }
+
+    json.nodes.forEach((item: any) => {
+      if (item.type === "start" || item.data?.type === "start") {
+        return;
+      }
+      const node = createNode({
+        type: item.type,
+        x: item.x,
+        y: item.y,
+        data: item.data,
+      });
+
+      const dataId = node.getData()?.id;
+      if (dataId) {
+        nodeMap[dataId] = node;
+      }
+    });
+
+    // Puis, recréer les connexions si présentes
+    if (Array.isArray(json.connections)) {
+      const currentCanvas = canvas;
+      if (!currentCanvas) return;
+
+      json.connections.forEach((conn: any) => {
+        const sourceNodeId = conn.source?.node ?? conn.source?.nodeId;
+        const targetNodeId = conn.target?.node ?? conn.target?.nodeId;
+        if (!sourceNodeId || !targetNodeId) return;
+
+        const sourceNode = nodeMap[sourceNodeId];
+        const targetNode = nodeMap[targetNodeId];
+        if (!sourceNode || !targetNode) return;
+
+        const sourcePortName = conn.source.port;
+        const targetPortName = conn.target.port;
+
+        const sourcePort =
+          sourceNode.getPort(sourcePortName) ??
+          sourceNode.getOutputPort?.(sourcePortName);
+        const targetPort =
+          targetNode.getPort(targetPortName) ??
+          targetNode.getInputPort?.(targetPortName);
+
+        if (!sourcePort || !targetPort) return;
+
+        const connection = new draw2d.Connection();
+        connection.setSource(sourcePort);
+        connection.setTarget(targetPort);
+
+        connection.setColor("#888888");
+        connection.setStroke(2);
+        connection.setTargetDecorator(
+          new draw2d.decoration.connection.ArrowDecorator()
+        );
+        connection.setRouter(
+          new draw2d.layout.connection.ManhattanConnectionRouter()
+        );
+
+        currentCanvas.add(connection);
+      });
+    }
+  };
+
+  // Naviguer vers un node
+  const gotoFigure = (figure: any) => {
+    if (!canvas || !canvasRef) return;
+    canvas.setCurrentSelection(figure);
+    const bb = figure.getBoundingBox();
+    const x = (bb.x + bb.w / 2) * (1 / currentZoom);
+    const y = (bb.y + bb.h / 2) * (1 / currentZoom);
+    canvasRef.scrollLeft = x - canvasRef.offsetWidth / 2;
+    canvasRef.scrollTop = y - canvasRef.offsetHeight / 2;
+  };
+
+  // Bounding box de tout le canvas
+  const getTreeBoundingBox = () => {
+    const figures = canvas?.getFigures();
+    if (!figures || figures.getSize() === 0) return null;
+    const box = figures.first().getBoundingBox();
+    figures.each((_: number, figure: any) => box.merge(figure.getBoundingBox()));
+    return box;
+  };
+
+  // Centre de la zone visible du canvas dans les coordonnées draw2d
+  const getViewportCenter = (): { x: number; y: number } | null => {
+    if (!canvas) return null;
+    // Utiliser le centre de la fenêtre visible plutôt que celui du div 5000x5000
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    const point = canvas.fromDocumentToCanvasCoordinate(centerX, centerY);
+    return { x: point.x, y: point.y };
+  };
+
+  // Undo / Redo
+  const undo = () => canvas?.getCommandStack().undo();
+  const redo = () => canvas?.getCommandStack().redo();
+
+  // Export JSON propre
+  const exportJson = (): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      if (!canvas) return reject('Canvas not initialized');
+      const writer = new draw2d.io.json.Writer();
+      writer.marshal(canvas, (json: any) => {
+        resolve(JSON.stringify(json, null, 2));
+      });
+    });
+  };
+
+  // Zoom vers la position de la souris
+  const handleWheelZoom = (event: WheelEvent) => {
+    if (!canvas || !event.ctrlKey) return;
+    event.preventDefault();
+    const delta = event.deltaY * 0.001;
+    const newZoom = Math.min(Math.max(currentZoom + delta, 0.3), 3);
+    const pos = canvas.fromDocumentToCanvasCoordinate(event.clientX, event.clientY);
+    currentZoom = newZoom;
+    canvas.setZoom(newZoom);
   };
 
   /**
@@ -147,6 +327,8 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
       }
     }
 
+    canvas.clear();
+    addStartNode();
     selectedNode = null;
     props.onNodeSelect?.(null);
   };
@@ -158,6 +340,17 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     if (!canvas) return;
     currentZoom = Math.min(currentZoom + 0.1, 3.0);
     canvas.setZoom(currentZoom);
+  };
+
+  const refreshCanvas = () => {
+    if (!canvas) return;
+
+    canvas.getFigures().each((_: number, figure: any) => {
+      figure.getChildren().each((_: number, child: any) => child.repaint());
+      figure.repaint();
+    });
+
+    canvas.getLines().each((_: number, line: any) => line.repaint());
   };
 
   /**
@@ -210,9 +403,6 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     canvas.setZoom(currentZoom);
   };
 
-  /**
-   * Initialisation du canvas
-   */
   onMount(() => {
     if (!canvasRef) return;
 
@@ -227,23 +417,10 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     canvas.installEditPolicy(new draw2d.policy.canvas.PanningSelectionPolicy());
     canvas.installEditPolicy(new draw2d.policy.canvas.KeyboardPolicy());
 
-    const originalExecute = canvas.getCommandStack().execute.bind(canvas.getCommandStack());
-    canvas.getCommandStack().execute = (command: any) => {
-      // Intercepter les commandes de suppression sur le StartNode
-      if (command instanceof draw2d.command.CommandDelete) {
-        const figure = command.figure;
-        if (figure instanceof StartNode) {
-          return; // Bloquer silencieusement
-        }
-      }
-      originalExecute(command);
-    };
+    //Listener
+    canvasRef.addEventListener('wheel', handleWheelZoom, { passive: false });
 
-    const startNode = new StartNode(
-      100, // centré horizontalement
-      300   // en haut du canvas
-    );
-    canvas.add(startNode, startNode.x, startNode.y);
+    addStartNode();
 
     // Bloquer explicitement la suppression via commande
     canvas.on('contextmenu', (emitter: any, event: any) => {
@@ -294,10 +471,16 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
         importData,
         clearCanvas,
         getCanvas: () => canvas,
+        getViewportCenter,
         zoomIn,
         zoomOut,
         zoomReset,
-        fitToPage
+        fitToPage,
+        gotoFigure,
+        getTreeBoundingBox,
+        undo,
+        redo,
+        refreshCanvas
       });
     }
   });
@@ -306,20 +489,16 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
    * Nettoyage
    */
   onCleanup(() => {
-    if (canvas) {
-      canvas.clear();
-      canvas = null;
-    }
+    canvasRef?.removeEventListener('wheel', handleWheelZoom);
+    canvas?.clear();
+    canvas = null;
   });
 
   return (
     <div
       class="campaign-tree-canvas-container"
       style={{
-        width: '100%',
-        height: '100%',
         position: 'relative',
-        overflow: 'hidden'
       }}
     >
       {/* Canvas draw2d */}
@@ -328,8 +507,8 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
         ref={canvasRef}
         id="campaign-tree-canvas"
         style={{
-          width: '100%',
-          height: '100%',
+          width: '5000px',
+          height: '5000px',
           'background-image': `
             linear-gradient(#151d39 1px, transparent 1px),
             linear-gradient(90deg, #151d39 1px, transparent 1px)

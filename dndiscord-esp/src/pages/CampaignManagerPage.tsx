@@ -55,16 +55,18 @@ const CampaignManager: Component = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleImport = (data: any) => {
-    canvasRef()?.importData(data);
+  const handleImport = (json: string|undefined) => {
+    canvasRef()?.importData(json);
   };
 
   onMount(async ()=>{
      try {
           setLoading(true);
+
           const response = await CampaignService.getCampaign(params.id);
           const mappedCampaign = mapCampaignResponse(response);
           setCampaign(mappedCampaign);
+          handleImport(mappedCampaign.campaignTreeDefinition??undefined)
         } catch (err: any) {
           console.error("Failed to load campaign:", err);
         } finally {
@@ -86,16 +88,16 @@ const CampaignManager: Component = () => {
     setNodeType(data.type);
 
     // Load data based on node type
-    // if (data.type === 'choices') {
-    //   const storyData = data as ChoicesNodeData;
-    //   setChoicesText(storyData.text || '');
-    //   setChoicesChoices(storyData.choices || []);
-    // } else if (data.type === 'combat') {
-    //   const combatData = data as CombatNodeData;
-    //   setCombatEnemies(combatData.enemies || []);
-    //   setCombatDifficulty(combatData.difficulty || 'medium');
-    // }
+    if (data.type === 'combat') {
+      const combatData = data as any;
+      setCombatEnemies(combatData.enemies || []);
+      setCombatDifficulty(combatData.difficulty || 'medium');
+    }
   });
+
+  const handleDel = ()=>{
+
+  }
 
   /**
    * Handle node selection
@@ -125,39 +127,50 @@ const CampaignManager: Component = () => {
     const canvas = canvasRef();
     if (!canvas) return;
 
-    // const type = selectedNodeType();
+    // Calculer le centre visible du canvas pour positionner le nouveau bloc
+    const viewportCenter = canvas.getViewportCenter
+      ? canvas.getViewportCenter()
+      : null;
+
+    const baseX = viewportCenter?.x ?? Math.random() * 400 + 100;
+    const baseY = viewportCenter?.y ?? Math.random() * 300 + 100;
 
     try {
+      let newNode: CampaignNode | undefined;
       if (type === 'choices') {
-        canvas.addNode({
+        newNode = canvas.addNode({
           type: 'choices',
-          x: Math.random() * 400 + 100,
-          y: Math.random() * 300 + 100,
+          x: baseX,
+          y: baseY,
           data: {
             text: 'Nouvelle scène...',
             choices: ["Choix 1","Choix 2"]
           }
         });
       } else if (type === 'combat') {
-        canvas.addNode({
+        newNode = canvas.addNode({
           type: 'combat',
-          x: Math.random() * 400 + 100,
-          y: Math.random() * 300 + 100,
+          x: baseX,
+          y: baseY,
           data: {
             enemies: [],
             difficulty: 'medium'
           }
         });
       }else if (type === 'scene') {
-        canvas.addNode({
+        newNode = canvas.addNode({
           type: 'scene',
-          x: Math.random() * 400 + 100,
-          y: Math.random() * 300 + 100,
+          x: baseX,
+          y: baseY,
           data: {
             title: "Entrez un titre de bloc",
             text: "Entrez un texte à afficher"
           }
         });
+      }
+
+      if (newNode && canvas.gotoFigure) {
+        canvas.gotoFigure(newNode);
       }
     } catch (error) {
       console.error('Error adding node:', error);
@@ -168,20 +181,21 @@ const CampaignManager: Component = () => {
   /**
    * Update the selected node
    */
-  const handleUpdateNode = (node : CampaignNode) => {
-    if (!node) return;
+  const handleUpdateNode = (node?: CampaignNode) => {
+    const currentSelected = selectedNode();
+    if (!currentSelected) return;
 
     const type = nodeType();
 
-    if (type === 'choices' && node instanceof ChoicesNode) {
-      (selectedNode() as ChoicesNode)?.updateText(node.getData()?.text);
-      (selectedNode() as ChoicesNode).updateChoices(node.getData()?.choices);
-    } else if (type === 'combat' && node instanceof CombatNode) {
-      (selectedNode() as CombatNode).updateEnemies(combatEnemies());
-      (selectedNode() as CombatNode).updateDifficulty(combatDifficulty());
-    }else if (type === 'scene' && node instanceof SceneNode) {
-      (selectedNode() as SceneNode).updateTitle(node.getData()?.title);
-      (selectedNode() as SceneNode).updateText(node.getData()?.text);
+    if (type === 'choices' && currentSelected instanceof ChoicesNode && node instanceof ChoicesNode) {
+      currentSelected.updateText(node.getData()?.text);
+      currentSelected.updateChoices(node.getData()?.choices);
+    } else if (type === 'combat' && currentSelected instanceof CombatNode) {
+      currentSelected.updateEnemies(combatEnemies());
+      currentSelected.updateDifficulty(combatDifficulty());
+    } else if (type === 'scene' && currentSelected instanceof SceneNode && node instanceof SceneNode) {
+      currentSelected.updateTitle(node.getData()?.title);
+      currentSelected.updateText(node.getData()?.text);
     }
   };
 
@@ -217,15 +231,21 @@ const CampaignManager: Component = () => {
   /**
    * Save campaign
    */
-  const handleSaveCampaign = () => {
+  const handleSaveCampaign = async () => {
     const canvas = canvasRef();
     if (!canvas) return;
 
-    const data = canvas.exportData();
-    console.log('Campaign data:', data);
+    try {
+        const response = await CampaignService.editCampaignManager(campaign()!.id,{
+          campaignTreeDefinition :  canvas.exportData() ?? ""
+        });
+        var mappedCampaign = mapCampaignResponse(response);
+        setCampaign(mappedCampaign);
 
-    localStorage.setItem('dnd-campaign', JSON.stringify(data));
-    alert('Campagne sauvegardée ! ✓');
+        alert("Save !")
+      } catch (err: any) {
+        console.error("Failed to create campaign:", err);
+      }
   };
 
   /**
@@ -279,7 +299,7 @@ const CampaignManager: Component = () => {
                       <span class="hidden sm:inline">Export / Import</span>
                 </button>
                 <button
-                      onClick={()=>handleSaveCampaign}
+                      onClick={()=>handleSaveCampaign()}
                       class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all shadow-lg shadow-purple-500/20"
                     >
                       <Save class="w-4 h-4" />
@@ -324,7 +344,7 @@ const CampaignManager: Component = () => {
               <SceneNodeEditor node={selectedNode() as SceneNode} handleUpdateNode={handleUpdateNode} />
             </Show>
 
-            {/* Combat Node Editor
+            {/* Combat Node Editor */}
             <Show when={nodeType() === 'combat'}>
               <div>
                 <div style={{ 'margin-bottom': '1.5rem' }}>
@@ -377,7 +397,8 @@ const CampaignManager: Component = () => {
                               type="text"
                               value={enemy}
                               onInput={(e) => handleUpdateEnemy(index(), e.currentTarget.value)}
-                              onBlur={handleUpdateNode}
+                              onKeyDown={(e) => e.stopPropagation()}
+                              onBlur={() => handleUpdateNode()}
                               placeholder="Nom de l'ennemi"
                               style={{
                                 flex: 1,
@@ -446,7 +467,7 @@ const CampaignManager: Component = () => {
                   </select>
                 </div>
               </div>
-            </Show> */}
+            </Show>
           </Show>
           <Show when={!selectedNode()}>
             <h3 class='font-display text-xl text-white tracking-wide mb-2'>Bloc disponibles</h3>
@@ -463,7 +484,7 @@ const CampaignManager: Component = () => {
         </aside>
 
         {/* Canvas */}
-        <main style={{ flex: 1, position: 'relative' }}>
+        <main style={{ flex: 1, position: 'relative',overflow:'auto' }}>
           <CampaignTreeCanvas
             ref={setCanvasRef}
             onNodeSelect={handleNodeSelect}

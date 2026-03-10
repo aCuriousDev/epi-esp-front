@@ -58,6 +58,7 @@ export interface Campaign {
   tags?: string[];
   createdAt: string;
   updatedAt?: string;
+  campaignTreeDefinition:string | undefined
 }
 
 export interface CreateCampaignDto {

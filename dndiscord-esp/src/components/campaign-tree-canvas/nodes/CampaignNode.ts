@@ -78,12 +78,26 @@ export abstract class CampaignNode extends draw2d.shape.composite.Group {
   }
   
   /**
+   * Override createCommand pour utiliser CommandDelete au lieu de CommandDeleteGroup.
+   * CommandDelete gère la suppression des connexions automatiquement,
+   * contrairement à CommandDeleteGroup qui ne le fait pas.
+   */
+  public createCommand(request: any): any {
+    if (request?.getPolicy() === draw2d.command.CommandType.DELETE) {
+      if (!this.isDeleteable()) return null;
+      return new draw2d.command.CommandDelete(this);
+    }
+    return super.createCommand(request);
+  }
+
+  /**
    * Sérialisation
    */
   public getPersistentAttributes(): any {
     const attrs = super.getPersistentAttributes();
     return {
       ...attrs,
+      type: (this.constructor as any).NAME, // ✅ force le vrai nom de classe
       nodeData: this.nodeData
     };
   }
