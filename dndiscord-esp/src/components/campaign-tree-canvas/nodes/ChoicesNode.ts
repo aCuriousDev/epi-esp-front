@@ -1,5 +1,6 @@
 import draw2d from 'draw2d';
 import { CampaignNode, BaseNodeData } from './CampaignNode';
+import { ICON_CHOICES } from '../constants/nodeIcons';
 
 export interface ChoicesNodeData extends BaseNodeData {
   type: 'choices';
@@ -13,7 +14,20 @@ export class ChoicesNode extends CampaignNode {
 
   constructor(x: number, y: number, data: ChoicesNodeData) {
     super(x, y, data);
-    // titleLabel est géré par la classe de base (CampaignNode)
+    // titleLabel + icône gérés par la classe de base (CampaignNode)
+  }
+
+  protected getIconSvg(): string { return ICON_CHOICES; }
+
+  override createBackground(): void {
+    this.background = new draw2d.shape.basic.Rectangle({
+      width: this.nodeWidth,
+      height: this.nodeHeight,
+      bgColor: '#0a2a24',
+      color: '#059669',
+      stroke: 2,
+      radius: 8,
+    });
   }
 
   protected createPorts(): void {

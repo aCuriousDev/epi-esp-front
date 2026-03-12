@@ -1,5 +1,20 @@
 declare module 'draw2d' {
   // ============================================================================
+  // SVG FIGURE
+  // ============================================================================
+
+  export class SVGFigure {
+    constructor(attr?: { svg?: string; width?: number; height?: number; resizeable?: boolean });
+    setWidth(width: number): void;
+    setHeight(height: number): void;
+    setDimension(width: number, height: number): void;
+    importSVG(canvas: Canvas, svg: string): void;
+    repaint(attributes?: any): void;
+    getWidth(): number;
+    getHeight(): number;
+  }
+
+  // ============================================================================
   // CANVAS
   // ============================================================================
 
@@ -84,6 +99,14 @@ declare module 'draw2d' {
   }
 
   export namespace command {
+    export enum CommandType {
+      DELETE = 'DELETE',
+      MOVE = 'MOVE',
+      RESIZE = 'RESIZE',
+      CONNECT = 'CONNECT',
+      DISCONNECT = 'DISCONNECT',
+    }
+
     export class CommandDelete extends Command {
       figure: any;
       constructor(figure: any);
@@ -165,8 +188,8 @@ declare module 'draw2d' {
         getPorts(): any;
         getInputPorts(): any;
         getOutputPorts(): any;
-        getInputPort(index: number): Port;
-        getOutputPort(index: number): Port;
+        getInputPort(indexOrName: number | string): Port;
+        getOutputPort(indexOrName: number | string): Port;
 
         // Children
         add(figure: any, locator?: any): void;
@@ -364,8 +387,8 @@ declare module 'draw2d' {
         getInputPorts(): any;
         getOutputPorts(): any;
         getPort(name: string): Port;
-        getInputPort(index: number): Port;
-        getOutputPort(index: number): Port;
+        getInputPort(indexOrName: number | string): Port;
+        getOutputPort(indexOrName: number | string): Port;
 
         // Data
         setUserData(data: any): void;
@@ -389,6 +412,9 @@ declare module 'draw2d' {
         // Persistence
         getPersistentAttributes(): any;
         setPersistentAttributes(memento: any): void;
+
+        // Commands
+        createCommand(request: any): any;
 
         // Behaviour
         isDeleteable(): boolean;
@@ -489,6 +515,9 @@ declare module 'draw2d' {
 
     getAbsoluteX(): number;
     getAbsoluteY(): number;
+
+    setLocator(locator: any): void;
+    getLocator(): any;
 
     setSemanticGroup(group: string): void;
     getSemanticGroup(): string;
