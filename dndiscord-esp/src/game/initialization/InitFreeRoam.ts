@@ -10,6 +10,7 @@ import { setTiles, tiles } from '../stores/TilesStore';
 import { posToKey } from '../utils/GridUtils';
 import { setGameState } from '../stores/GameStateStore';
 import { initializeGrid } from './InitGrid';
+import { playAmbientMusic } from '../audio/SoundIntegration';
 import {
   WARRIOR_ABILITIES,
   MAGE_ABILITIES,
@@ -17,12 +18,12 @@ import {
   cloneAbilities,
 } from '../abilities/AbilityDefinitions';
 
-export function initializeFreeRoam(): void {
+export function initializeFreeRoam(mapId: string | null = null): void {
   console.log('[initializeFreeRoam] Starting Free Roam initialization...');
   
   // Initialize the grid (reuse existing logic)
   console.log('[initializeFreeRoam] Initializing grid...');
-  initializeGrid();
+  initializeGrid(mapId);
   console.log('[initializeFreeRoam] Grid initialized');
 
   const newUnits: Record<string, Unit> = {};
@@ -128,8 +129,12 @@ export function initializeFreeRoam(): void {
     pathPreview: [],
     targetableTiles: [],
     combatLog: [],
+    mapId,
   });
 
   console.log('[initializeFreeRoam] Free Roam mode initialized - Units:', Object.keys(newUnits).length, 'Tiles:', Object.keys(tiles).length);
+
+  // Start exploration ambient music
+  playAmbientMusic('exploration');
 }
 

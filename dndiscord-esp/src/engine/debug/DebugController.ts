@@ -30,7 +30,7 @@ export class DebugController {
   private logDebugInstructions(): void {
     console.log('🔧 DEBUG MODE ENABLED');
     console.log('📹 Camera: Right-click drag to rotate, Scroll to zoom');
-    console.log('🔍 Press "I" to toggle Inspector');
+    console.log('🔍 Press F9 to toggle Inspector');
     console.log('🔄 Press Arrow Keys to manually rotate selected unit');
     console.log('↩️  Press "R" to reset unit rotation');
   }
@@ -48,8 +48,14 @@ export class DebugController {
    * Handle keyboard input for debug controls
    */
   private handleKeyPress(event: KeyboardEvent): void {
-    // Toggle Inspector with "I" key
-    if (event.key === 'i' || event.key === 'I') {
+    // Skip all debug shortcuts when user is typing in an input field
+    const tag = (event.target as HTMLElement)?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (event.target as HTMLElement)?.isContentEditable) {
+      return;
+    }
+
+    // Toggle Inspector with F9 key (changed from "I" to avoid conflict with chat input)
+    if (event.key === 'F9') {
       this.toggleInspector();
       return;
     }

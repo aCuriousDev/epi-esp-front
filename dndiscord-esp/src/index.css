@@ -82,7 +82,7 @@ body {
 }
 
 .menu-button {
-	@apply relative overflow-hidden w-full sm:w-80 pr-5 pl-16 py-3.5 rounded-xl border border-transparent text-slate-200 tracking-wide transition-transform transition-shadow transition-colors bg-gradient-to-r from-brandStart to-brandEnd shadow-soft hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-brandStart/30 inline-flex items-center justify-center;
+	@apply relative overflow-visible w-full sm:w-80 pr-5 pl-20 py-3.5 rounded-xl border border-transparent text-slate-200 tracking-wide transition-transform transition-shadow transition-colors bg-gradient-to-r from-brandStart to-brandEnd shadow-soft hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-brandStart/30 inline-flex items-center justify-center;
 	background-size: 120% 100%;
 	z-index: 1;
 }
@@ -115,11 +115,19 @@ body {
 
 /* Avatar for profile pictures (circular, no rotation) */
 .menu-avatar {
-	@apply absolute w-12 h-12 rounded-full overflow-hidden border-2 border-white/20 shadow-soft;
-	left: 0;
+	@apply absolute w-16 h-16 rounded-full overflow-hidden border-2 border-white/30 shadow-lg;
+	left: -8px;
 	top: 50%;
-	transform: translate(-50%, -50%);
-	z-index: 2;
+	transform: translateY(-50%);
+	z-index: 3;
+	background: linear-gradient(135deg, rgba(75, 30, 78, 0.9) 0%, rgba(22, 44, 68, 0.9) 100%);
+	transition: all 0.2s ease;
+	border-width: 3px;
+}
+
+.menu-row:hover .menu-avatar {
+	@apply border-white/50 shadow-xl;
+	transform: translateY(-50%) scale(1.05);
 }
 
 .menu-avatar img {

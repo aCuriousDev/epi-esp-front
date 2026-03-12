@@ -36,6 +36,8 @@ export {
   getCurrentMode,
   getIsFreeRoamMode,
   getIsCombatMode,
+  getIsDungeonMode,
+  getDungeonState,
   resetGameState,
 } from './stores/GameStateStore';
 
@@ -76,8 +78,10 @@ export {
 
 export {
   startGame,
+  startCombatFromPreparation,
   nextTurn,
   endUnitTurn,
+  transitionToNextRoom,
 } from './actions/TurnActions';
 
 // ============================================
@@ -91,7 +95,7 @@ export { executeEnemyTurn } from './ai/EnemyAI';
 // ============================================
 
 export { initializeGrid } from './initialization/InitGrid';
-export { initializeUnits } from './initialization/InitUnits';
+export { initializeUnits, getAllySpawnPositions } from './initialization/InitUnits';
 export { initializeFreeRoam } from './initialization/InitFreeRoam';
 
 // ============================================
@@ -99,4 +103,10 @@ export { initializeFreeRoam } from './initialization/InitFreeRoam';
 // ============================================
 
 export * as TurnManager from './TurnManager';
+
+// ============================================
+// AUDIO
+// ============================================
+
+export { setSoundEngine, stopAmbientMusic } from './audio/SoundIntegration';
 

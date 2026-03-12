@@ -7,10 +7,14 @@ import {
   ActionManager,
   AbstractMesh,
   ShadowGenerator,
+  Animation,
 } from '@babylonjs/core';
 import { Tile, TileType } from '../../types';
 import { gridToWorld, TILE_SIZE, GRID_SIZE } from '../../game';
+import { posToKey } from '../../game/utils/GridUtils';
 import { ModelLoader } from '../ModelLoader';
+import { loadMap, type SavedMapData, type SavedCellData } from '../../services/mapStorage';
+import { ASSET_PACKS } from '../../config/assetPacks';
 
 export class GridRenderer {
   private scene: Scene;
@@ -18,6 +22,8 @@ export class GridRenderer {
   private modelLoader: ModelLoader;
   private shadowGenerator: ShadowGenerator | null;
   private tileMeshes: Map<string, Mesh | AbstractMesh> = new Map();
+  private teleportOverlays: Mesh[] = [];
+  private mapAssets: Map<string, SavedCellData> = new Map();
   
   // Model paths for dungeon tiles
   private readonly FLOOR_MODEL = '/models/dungeon/floor_tile_small.gltf';
@@ -55,30 +61,171 @@ export class GridRenderer {
 
   /**
    * Create the entire grid
+   * @param tileData - The tile data to render
+   * @param mapId - Optional map ID to load saved map assets
    */
-  public async createGrid(tileData: Record<string, Tile>): Promise<void> {
+  public async createGrid(tileData: Record<string, Tile>, mapId: string | null = null): Promise<void> {
     // Clear existing tiles
     this.clearGrid();
+    this.mapAssets.clear();
+    
+    // Load map assets if mapId is provided
+    if (mapId) {
+      const savedMap = loadMap(mapId);
+      if (savedMap) {
+        console.log('[GridRenderer] Loading saved map assets:', savedMap.name);
+        savedMap.cells.forEach((cell: SavedCellData) => {
+          const key = posToKey({ x: cell.x, z: cell.z });
+          this.mapAssets.set(key, cell);
+        });
+      }
+    }
     
     // Create tiles sequentially to ensure proper loading
     for (const [key, tile] of Object.entries(tileData)) {
-      const mesh = await this.createTile(tile);
+      const mesh = await this.createTile(tile, key);
       this.tileMeshes.set(key, mesh);
     }
     
     // Create grid border
     this.createGridBorder();
+
+    // Create teleport cell overlays
+    if (mapId) {
+      this.createTeleportOverlays(mapId);
+    }
     
     console.log(`Grid created with ${this.tileMeshes.size} tiles`);
   }
 
   /**
-   * Create a single tile mesh
+   * Find asset by path in asset packs
    */
-  private async createTile(tile: Tile): Promise<Mesh | AbstractMesh> {
+  private findAssetByPath(path: string): { path: string; type: string } | null {
+    // Check all asset packs
+    for (const pack of Object.values(ASSET_PACKS)) {
+      const fullPath = `${pack.basePath}/${path}`;
+      if (pack.files.some(file => `${pack.basePath}/${file}` === path || file === path)) {
+        return { path, type: pack.type };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Create a single tile mesh
+   * @param tile - The tile data
+   * @param tileKey - The tile key (e.g., "5,3")
+   */
+  private async createTile(tile: Tile, tileKey: string): Promise<Mesh | AbstractMesh> {
     const worldPos = gridToWorld(tile.position);
     const tileName = `tile_${tile.position.x}_${tile.position.z}`;
     
+    // Check if we have saved map assets for this cell
+    const cellData = this.mapAssets.get(tileKey);
+    
+    let mesh: Mesh | AbstractMesh;
+    
+    // If we have saved map assets, load them instead of default models
+    if (cellData) {
+      mesh = await this.loadMapAssetsForTile(tile, cellData, worldPos, tileName);
+    } else {
+      // Use default models based on tile type
+      mesh = await this.createDefaultTile(tile, worldPos, tileName);
+    }
+    
+    // Configure all tiles
+    mesh.receiveShadows = true;
+    mesh.isPickable = true;
+    if (!mesh.actionManager) {
+      mesh.actionManager = new ActionManager(this.scene);
+    }
+    
+    // Enable shadow receiving for all child meshes
+    mesh.getChildMeshes(true).forEach(child => {
+      child.receiveShadows = true;
+    });
+    
+    // Walls should cast shadows
+    if (tile.type === TileType.WALL) {
+      this.enableShadowCasting(mesh);
+    }
+    
+    return mesh;
+  }
+
+  /**
+   * Load assets from saved map for a tile
+   */
+  private async loadMapAssetsForTile(
+    tile: Tile,
+    cellData: SavedCellData,
+    worldPos: { x: number; z: number },
+    tileName: string
+  ): Promise<Mesh | AbstractMesh> {
+    // Create a parent container for all assets in this cell
+    const container = MeshBuilder.CreateBox(
+      `${tileName}_container`,
+      { width: 0.01, height: 0.01, depth: 0.01 },
+      this.scene
+    );
+    container.position.set(worldPos.x, 0, worldPos.z);
+    container.isVisible = false; // Container is invisible
+    container.isPickable = true;
+    
+    // Load ground asset if present
+    if (cellData.ground) {
+      try {
+        const groundMesh = await this.modelLoader.loadModel(
+          cellData.ground.assetPath,
+          `${tileName}_ground`
+        );
+        groundMesh.position.set(0, cellData.ground.positionY, 0);
+        groundMesh.scaling.setAll(cellData.ground.scale);
+        groundMesh.rotation.y = cellData.ground.rotationY;
+        groundMesh.parent = container;
+        groundMesh.computeWorldMatrix(true);
+        groundMesh.getChildMeshes(false).forEach(child => child.computeWorldMatrix(true));
+      } catch (error) {
+        console.warn(`Failed to load ground asset for ${tileName}:`, error);
+      }
+    }
+    
+    // Load stacked assets
+    for (let i = 0; i < cellData.stackedAssets.length; i++) {
+      const assetData = cellData.stackedAssets[i];
+      try {
+        const assetMesh = await this.modelLoader.loadModel(
+          assetData.assetPath,
+          `${tileName}_asset_${i}`
+        );
+        assetMesh.position.set(0, assetData.positionY, 0);
+        assetMesh.scaling.setAll(assetData.scale);
+        assetMesh.rotation.y = assetData.rotationY;
+        assetMesh.parent = container;
+        assetMesh.computeWorldMatrix(true);
+        assetMesh.getChildMeshes(false).forEach(child => child.computeWorldMatrix(true));
+        
+        // Enable shadow casting for walls and blocks
+        if (assetData.assetType === 'wall' || assetData.assetType === 'block') {
+          this.enableShadowCasting(assetMesh);
+        }
+      } catch (error) {
+        console.warn(`Failed to load asset ${i} for ${tileName}:`, error);
+      }
+    }
+    
+    return container;
+  }
+
+  /**
+   * Create default tile based on tile type
+   */
+  private async createDefaultTile(
+    tile: Tile,
+    worldPos: { x: number; z: number },
+    tileName: string
+  ): Promise<Mesh | AbstractMesh> {
     let mesh: Mesh | AbstractMesh;
     
     switch (tile.type) {
@@ -221,6 +368,56 @@ export class GridRenderer {
   }
 
   /**
+   * Create glowing purple overlays on teleport cells so players can see portals
+   */
+  private createTeleportOverlays(mapId: string): void {
+    this.teleportOverlays.forEach(m => { if (!m.isDisposed()) m.dispose(); });
+    this.teleportOverlays = [];
+
+    const savedMap = loadMap(mapId);
+    if (!savedMap?.spawnZones) return;
+
+    const teleportMat = new StandardMaterial('teleportOverlayMat', this.scene);
+    teleportMat.diffuseColor = new Color3(0.6, 0, 1);
+    teleportMat.emissiveColor = new Color3(0.4, 0, 0.8);
+    teleportMat.alpha = 0.5;
+    teleportMat.disableLighting = true;
+
+    Object.entries(savedMap.spawnZones).forEach(([key, type]) => {
+      if (type !== 'teleport') return;
+      const [x, z] = key.split(',').map(Number);
+      const worldPos = gridToWorld({ x, z });
+
+      const overlay = MeshBuilder.CreatePlane(
+        `teleport_overlay_${x}_${z}`,
+        { width: TILE_SIZE * 0.85, height: TILE_SIZE * 0.85 },
+        this.scene
+      );
+      overlay.rotation.x = Math.PI / 2;
+      overlay.position.set(worldPos.x, 0.12, worldPos.z);
+      overlay.material = teleportMat;
+      overlay.isPickable = false;
+
+      const pulseAnim = new Animation(
+        `teleportPulse_${x}_${z}`,
+        'material.alpha',
+        30,
+        Animation.ANIMATIONTYPE_FLOAT,
+        Animation.ANIMATIONLOOPMODE_CYCLE
+      );
+      pulseAnim.setKeys([
+        { frame: 0, value: 0.3 },
+        { frame: 30, value: 0.6 },
+        { frame: 60, value: 0.3 },
+      ]);
+      overlay.animations.push(pulseAnim);
+      this.scene.beginAnimation(overlay, 0, 60, true);
+
+      this.teleportOverlays.push(overlay);
+    });
+  }
+
+  /**
    * Create decorative border around the grid
    */
   private createGridBorder(): void {
@@ -261,6 +458,9 @@ export class GridRenderer {
       }
     });
     this.tileMeshes.clear();
+
+    this.teleportOverlays.forEach(m => { if (!m.isDisposed()) m.dispose(); });
+    this.teleportOverlays = [];
     
     // Also clear border meshes
     const borderMeshes = this.scene.meshes.filter(m => m.name.startsWith('border_'));

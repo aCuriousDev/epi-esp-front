@@ -6,11 +6,13 @@
 
 import { batch } from 'solid-js';
 import { produce } from 'solid-js/store';
-import { GridPosition, TurnPhase, Unit, Ability } from '../../types';
+import { GridPosition, TurnPhase, Unit, Ability, DamageType, GameMode, GamePhase } from '../../types';
 import { gameState, setGameState, addCombatLog } from '../stores/GameStateStore';
 import { units, setUnits, getPlayerUnits, getEnemyUnits } from '../stores/UnitsStore';
 import { tiles, setTiles, pathfinder, updatePathfinder } from '../stores/TilesStore';
 import { posToKey } from '../utils/GridUtils';
+import { playSpellEffect, playDamageEffect, playDeathEffect, playHitReactionEffect, playCameraShake } from '../vfx/VFXIntegration';
+import { playSpellCastSound, playImpactSound, playDeathSound, playSwordHitSound, playVictorySound, playDefeatSound, playSelectSound, playArrowShotSound, playShieldBashSound, playClawAttackSound } from '../audio/SoundIntegration';
 
 // ============================================
 // ABILITY SELECTION
@@ -29,6 +31,8 @@ export function selectAbility(abilityId: string): void {
   const ability = unit.abilities.find((a) => a.id === abilityId);
   if (!ability || ability.currentCooldown > 0) return;
   if (unit.stats.currentActionPoints < ability.apCost) return;
+  
+  playSelectSound();
   
   batch(() => {
     setGameState({
@@ -62,6 +66,30 @@ export function useAbility(targetPos: GridPosition): boolean {
   // Check range
   const distance = Math.abs(targetPos.x - unit.position.x) + Math.abs(targetPos.z - unit.position.z);
   if (distance > ability.range) return false;
+  
+  // Fire spell VFX (async, doesn't block game logic)
+  playSpellEffect(
+    unit.position,
+    targetPos,
+    ability.damageType,
+    ability.aoeRadius > 0 ? ability.aoeRadius : undefined,
+    ability.id
+  );
+
+  // Sound: per-ability attack sounds
+  if (ability.damageType === DamageType.PHYSICAL) {
+    if (ability.id === 'arrow_shot') {
+      playArrowShotSound();
+    } else if (ability.id === 'shield_bash') {
+      playShieldBashSound();
+    } else if (ability.id === 'claw') {
+      playClawAttackSound();
+    } else {
+      playSwordHitSound();
+    }
+  } else {
+    playSpellCastSound(ability.damageType);
+  }
   
   // Find targets in AOE
   const targetUnitIds: string[] = [];
@@ -97,6 +125,17 @@ export function useAbility(targetPos: GridPosition): boolean {
       
       const damage = calculateDamage(unit, target, ability);
       
+      // Play damage impact VFX + sound
+      playDamageEffect(target.position, damage);
+      playImpactSound();
+      
+      // Play hit reaction (knockback animation) on the target unit
+      playHitReactionEffect(targetId);
+      
+      // Camera shake on hit (stronger for bigger damage)
+      const shakeIntensity = Math.min(0.05 + damage * 0.005, 0.2);
+      playCameraShake(shakeIntensity, 200);
+      
       setUnits(targetId, produce((t) => {
         t.stats.currentHealth = Math.max(0, t.stats.currentHealth - damage);
         if (t.stats.currentHealth <= 0) {
@@ -113,6 +152,11 @@ export function useAbility(targetPos: GridPosition): boolean {
       
       if (units[targetId].stats.currentHealth <= 0) {
         addCombatLog(`${target.name} has been defeated!`, 'system');
+        // Play death VFX + sound (async, doesn't block)
+        playDeathEffect(targetId, target.team as string);
+        playDeathSound();
+        // Heavy camera shake on kill
+        playCameraShake(0.2, 400);
       }
     });
     
@@ -183,11 +227,27 @@ export function checkGameOver(): void {
   const enemyUnits = getEnemyUnits();
   
   if (playerUnits.length === 0) {
-    setGameState('phase', 'game_over' as any);
+    setGameState('phase', GamePhase.GAME_OVER);
     addCombatLog('Defeat! All your units have fallen.', 'system');
-  } else if (enemyUnits.length === 0) {
-    setGameState('phase', 'game_over' as any);
-    addCombatLog('Victory! All enemies have been defeated!', 'system');
+    playDefeatSound();
+    return;
+  }
+
+  if (enemyUnits.length === 0) {
+    if (gameState.mode === GameMode.DUNGEON && gameState.dungeon) {
+      const isLastRoom = gameState.dungeon.currentRoomIndex === gameState.dungeon.totalRooms - 1;
+      if (isLastRoom) {
+        setGameState('phase', GamePhase.GAME_OVER);
+        addCombatLog('Victoire ! Le donjon est terminé ! Tous les ennemis de la dernière salle sont vaincus !', 'system');
+        playVictorySound();
+      } else {
+        addCombatLog('Tous les ennemis de cette salle sont vaincus ! Avancez vers le portail de téléportation.', 'system');
+      }
+    } else {
+      setGameState('phase', GamePhase.GAME_OVER);
+      addCombatLog('Victory! All enemies have been defeated!', 'system');
+      playVictorySound();
+    }
   }
 }
 

@@ -15,7 +15,7 @@ export class ModelLoader {
 
   /**
    * Load a GLB model from the given path
-   * @param modelPath - Path to the GLB file (e.g., '/src/assets/models/characters/knight/knight.glb')
+   * @param modelPath - Path to the GLB file (e.g., '/models/characters/knight/knight.glb')
    * @param uniqueName - Unique identifier for this instance
    * @returns Promise that resolves to the root mesh of the loaded model
    */
