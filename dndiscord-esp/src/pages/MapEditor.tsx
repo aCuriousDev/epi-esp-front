@@ -1,7 +1,7 @@
 import { Component, onMount, onCleanup, createSignal, For, Show, createEffect } from "solid-js";
-import { A, useParams } from "@solidjs/router";
+import { A, useParams, useSearchParams, useNavigate } from "@solidjs/router";
 import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-solid";
-import { saveMap, loadMap, generateMapId, type SavedMapData, type SavedCellData, type SavedAssetData } from "../services/mapStorage";
+import { saveMap, loadMap, generateMapId, loadDungeon, saveDungeon, type SavedMapData, type SavedCellData, type SavedAssetData, type DungeonData } from "../services/mapStorage";
 import {
 	Engine,
 	Scene,
@@ -13,6 +13,7 @@ import {
 	Color3,
 	Color4,
 	StandardMaterial,
+	PBRMaterial,
 	PointerEventTypes,
 	MeshBuilder,
 	TransformNode,
@@ -57,6 +58,7 @@ class GridCell {
 	public readonly x: number;
 	public readonly z: number;
 	private groundMesh: Mesh | null = null;
+	private groundTopY: number = 0; // Hauteur du sommet du sol (pour empiler correctement au-dessus)
 	private stackedAssets: StackedAsset[] = []; // Pile ordonnée du bas vers le haut
 	private cellNode: TransformNode | null = null; // TransformNode parent de la cellule
 
@@ -94,6 +96,8 @@ class GridCell {
 		if (this.cellNode && groundMesh) {
 			groundMesh.parent = this.cellNode;
 			groundMesh.position.y = 0; // Sol toujours à y=0 dans l'espace local
+		} else {
+			this.groundTopY = 0; // Réinitialiser si pas de sol
 		}
 	}
 
@@ -102,6 +106,21 @@ class GridCell {
 	 */
 	public getGround(): Mesh | null {
 		return this.groundMesh;
+	}
+
+	/**
+	 * Définit la hauteur du sommet du sol (topY)
+	 * Appelé après le positionnement du sol pour que l'empilement se fasse au-dessus
+	 */
+	public setGroundTopY(topY: number): void {
+		this.groundTopY = topY;
+	}
+
+	/**
+	 * Obtient la hauteur du sommet du sol
+	 */
+	public getGroundTopY(): number {
+		return this.groundTopY;
 	}
 
 	/**
@@ -139,12 +158,12 @@ class GridCell {
 
 	/**
 	 * Obtient la hauteur totale cumulée de tous les assets empilés
-	 * Retourne 0 si aucun asset n'est empilé
+	 * Retourne groundTopY si aucun asset n'est empilé (pour empiler au-dessus du sol)
 	 */
 	public getStackHeight(): number {
-		if (this.stackedAssets.length === 0) return 0;
+		if (this.stackedAssets.length === 0) return this.groundTopY;
 		const topAsset = this.stackedAssets[this.stackedAssets.length - 1];
-		return topAsset.topY;
+		return Math.max(topAsset.topY, this.groundTopY);
 	}
 
 	/**
@@ -164,6 +183,27 @@ class GridCell {
 		}
 		this.stackedAssets.forEach(sa => meshes.push(sa.mesh));
 		return meshes;
+	}
+
+	/**
+	 * Recalcule les positions Y de tous les assets empilés
+	 * Utilisé après suppression d'un asset au milieu de la pile, ou après changement de sol
+	 * @param assetStackManager - Le gestionnaire d'empilement pour repositionner les meshes
+	 */
+	public restackAssets(assetStackManager: AssetStackManager): void {
+		let currentHeight = this.groundTopY;
+		for (const stackedAsset of this.stackedAssets) {
+			// Repositionner le mesh au sommet courant de la pile
+			assetStackManager.positionMeshAtHeight(stackedAsset.mesh, currentHeight, 0);
+			
+			// Recalculer les positions Y relatives
+			const newPositions = assetStackManager.calculateCellRelativeYPositions(stackedAsset.mesh, 0);
+			stackedAsset.bottomY = newPositions.bottomY;
+			stackedAsset.topY = newPositions.topY;
+			stackedAsset.height = newPositions.height;
+			
+			currentHeight = stackedAsset.topY;
+		}
 	}
 
 	/**
@@ -246,11 +286,12 @@ class GridCell {
 
 	/**
 	 * Exporte les données de la cellule pour la sauvegarde
+	 * @param getAffectedCells - Fonction optionnelle pour obtenir les cellules affectées par un mesh (multi-cases)
 	 */
-	public exportData(): { x: number; z: number; ground?: any; stackedAssets: any[] } {
+	public exportData(getAffectedCells?: (meshName: string) => { x: number; z: number }[]): { x: number; z: number; ground?: any; stackedAssets: any[] } {
 		const stackedAssets = this.stackedAssets.map(sa => {
 			const metadata = sa.mesh.metadata as any;
-			return {
+			const data: any = {
 				assetId: metadata?.assetId || sa.asset.id,
 				assetPath: metadata?.assetPath || sa.asset.path,
 				assetType: metadata?.assetType || sa.asset.type,
@@ -258,9 +299,17 @@ class GridCell {
 				rotationY: sa.mesh.rotation.y,
 				positionY: sa.mesh.position.y,
 			};
+			// Inclure les cellules affectées pour les assets multi-cases
+			if (getAffectedCells) {
+				const affected = getAffectedCells(sa.mesh.name);
+				if (affected.length > 1) {
+					data.affectedCells = affected;
+				}
+			}
+			return data;
 		});
 
-		let ground = undefined;
+		let ground: any = undefined;
 		if (this.groundMesh) {
 			const metadata = this.groundMesh.metadata as any;
 			ground = {
@@ -271,6 +320,13 @@ class GridCell {
 				rotationY: this.groundMesh.rotation.y,
 				positionY: this.groundMesh.position.y,
 			};
+			// Inclure les cellules affectées pour les sols multi-cases
+			if (getAffectedCells) {
+				const affected = getAffectedCells(this.groundMesh.name);
+				if (affected.length > 1) {
+					ground.affectedCells = affected;
+				}
+			}
 		}
 
 		return {
@@ -334,11 +390,22 @@ class GridManager {
 
 	/**
 	 * Exporte toutes les cellules pour la sauvegarde
+	 * Inclut les données multi-cases (affectedCells) pour chaque asset
 	 */
 	public exportData(): Array<{ x: number; z: number; ground?: any; stackedAssets: any[] }> {
+		// Créer une fonction de lookup pour convertir assetCellMap en coordonnées
+		const getAffectedCells = (meshName: string): { x: number; z: number }[] => {
+			const cellKeys = this.assetCellMap.get(meshName);
+			if (!cellKeys) return [];
+			return Array.from(cellKeys).map(key => {
+				const [x, z] = key.split(',').map(Number);
+				return { x, z };
+			});
+		};
+
 		const cellsData: Array<{ x: number; z: number; ground?: any; stackedAssets: any[] }> = [];
 		this.cells.forEach(cell => {
-			const cellData = cell.exportData();
+			const cellData = cell.exportData(getAffectedCells);
 			// Ne sauvegarder que les cellules qui ont du contenu
 			if (cellData.ground || cellData.stackedAssets.length > 0) {
 				cellsData.push(cellData);
@@ -749,6 +816,15 @@ const ASSET_CATEGORIES: AssetCategory[] = (() => {
 
 export default function MapEditor() {
 	const params = useParams<{ mapId?: string }>();
+	const [searchParams] = useSearchParams();
+	const navigate = useNavigate();
+
+	// Dungeon context from URL params
+	const getDungeonId = () => searchParams.dungeon as string | undefined;
+	const getRoomIndex = () => {
+		const r = searchParams.room;
+		return r !== undefined ? parseInt(r as string) : undefined;
+	};
 	
 	let canvasRef!: HTMLCanvasElement;
 	let engine: Engine | null = null;
@@ -760,6 +836,7 @@ export default function MapEditor() {
 	
 	const [mapId, setMapId] = createSignal<string | null>(null);
 	const [mapName, setMapName] = createSignal<string>("Nouvelle Map");
+	const [dungeonData, setDungeonData] = createSignal<DungeonData | null>(null);
 	const [selectedAsset, setSelectedAsset] = createSignal<MapAsset | null>(null);
 	const [expandedCategories, setExpandedCategories] = createSignal<Set<string>>(new Set());
 	const [rotationAngle, setRotationAngle] = createSignal(0);
@@ -770,13 +847,133 @@ export default function MapEditor() {
 	const [showCollisions, setShowCollisions] = createSignal(false);
 	const [collisionPreviewMode, setCollisionPreviewMode] = createSignal(false);
 	const [selectedCollisionAsset, setSelectedCollisionAsset] = createSignal<{ asset: MapAsset; cell: GridCell; mesh: AbstractMesh } | null>(null);
+	const [zoneSelectionMode, setZoneSelectionMode] = createSignal(false);
+	const [selectionStart, setSelectionStart] = createSignal<{ x: number; z: number } | null>(null);
+	const [selectionEnd, setSelectionEnd] = createSignal<{ x: number; z: number } | null>(null);
+	const [isSelecting, setIsSelecting] = createSignal(false);
+	const [isCameraLocked, setIsCameraLocked] = createSignal(false);
+	
+	// Zones de placement pour combats et téléportation
+	const [spawnZones, setSpawnZones] = createSignal<Map<string, "ally" | "enemy" | "teleport">>(new Map());
+	const [contextMenuCell, setContextMenuCell] = createSignal<{ x: number; z: number; screenX: number; screenY: number } | null>(null);
 	
 	let previewMesh: AbstractMesh | null = null;
+	let selectionOverlays: Map<string, Mesh> = new Map(); // Map des overlays de sélection par cellule
 	let previewUpdateTimeout: number | null = null;
 	let isUpdatingPreview: boolean = false; // Flag pour éviter les mises à jour multiples simultanées
 	let collisionOverlays: Map<string, Mesh> = new Map(); // Map des overlays de collision par cellule
 	let collisionPreviewOverlay: Mesh | null = null; // Overlay pour la prévisualisation de collision d'un asset
-	let originalAssetAlpha: Map<AbstractMesh, number> = new Map(); // Sauvegarde de l'alpha original des assets
+	let spawnZoneOverlays: Map<string, Mesh> = new Map(); // Map des overlays de zones de spawn (alliés/ennemis)
+	let originalAssetAlpha: Map<AbstractMesh, number> = new Map(); // Sauvegarde de l'alpha original des assets (preview individuel)
+	let collisionModeAlphas: Map<AbstractMesh, number> = new Map(); // Sauvegarde de l'alpha original des assets (mode collision global)
+	let hoveredMesh: AbstractMesh | null = null; // Mesh actuellement survolé en mode delete/edit
+	let hoveredMeshOriginalMaterials: Map<AbstractMesh, any> = new Map(); // Matériaux originaux (avant clonage) du mesh survolé
+
+	// Update spawn zone overlays visualization
+	const updateSpawnZoneOverlays = () => {
+		if (!scene || !gridManager) return;
+
+		// Clear existing overlays
+		spawnZoneOverlays.forEach((overlay) => {
+			if (!overlay.isDisposed()) {
+				overlay.dispose();
+			}
+		});
+		spawnZoneOverlays.clear();
+
+		// Create overlays for spawn zones
+		spawnZones().forEach((zoneType, cellKey) => {
+			const [x, z] = cellKey.split(',').map(Number);
+			if (x < 0 || x >= GRID_SIZE || z < 0 || z >= GRID_SIZE) return;
+
+			const cell = gridManager!.getCell(x, z);
+			if (!cell) return;
+
+			const cellNode = cell.getCellNode();
+			if (!cellNode) return;
+
+			const overlay = MeshBuilder.CreatePlane(
+				`spawnZone_${x}_${z}`,
+				{ width: TILE_SIZE * 0.95, height: TILE_SIZE * 0.95 },
+				scene
+			);
+			overlay.rotation.x = Math.PI / 2;
+			overlay.position.set(0, 0.04, 0); // Légèrement au-dessus des autres overlays
+			overlay.parent = cellNode;
+			overlay.isPickable = false;
+
+			const material = new StandardMaterial(`spawnZoneMat_${x}_${z}`, scene);
+			if (zoneType === "ally") {
+				material.diffuseColor = new Color3(0, 1, 0);
+				material.emissiveColor = new Color3(0, 0.5, 0);
+			} else if (zoneType === "teleport") {
+				material.diffuseColor = new Color3(0.6, 0, 1);
+				material.emissiveColor = new Color3(0.3, 0, 0.5);
+			} else {
+				material.diffuseColor = new Color3(1, 0, 0);
+				material.emissiveColor = new Color3(0.5, 0, 0);
+			}
+			material.alpha = 0.6;
+			material.disableLighting = true;
+			overlay.material = material;
+
+			spawnZoneOverlays.set(cellKey, overlay);
+		});
+	};
+
+	// Update selection overlay visualization
+	const updateSelectionOverlay = () => {
+		if (!scene || !gridManager) return;
+
+		// Clear existing overlays
+		selectionOverlays.forEach((overlay) => {
+			if (!overlay.isDisposed()) {
+				overlay.dispose();
+			}
+		});
+		selectionOverlays.clear();
+
+		// Create overlays for selected zone
+		const start = selectionStart();
+		const end = selectionEnd();
+		if (!start || !end || !isSelecting()) return;
+
+		const minX = Math.min(start.x, end.x);
+		const maxX = Math.max(start.x, end.x);
+		const minZ = Math.min(start.z, end.z);
+		const maxZ = Math.max(start.z, end.z);
+
+		for (let x = minX; x <= maxX; x++) {
+			for (let z = minZ; z <= maxZ; z++) {
+				if (x >= 0 && x < GRID_SIZE && z >= 0 && z < GRID_SIZE) {
+					const cell = gridManager.getCell(x, z);
+					if (!cell) continue;
+
+					const cellNode = cell.getCellNode();
+					if (!cellNode) continue;
+
+					const overlay = MeshBuilder.CreatePlane(
+						`selection_${x}_${z}`,
+						{ width: TILE_SIZE * 0.95, height: TILE_SIZE * 0.95 },
+						scene
+					);
+					overlay.rotation.x = Math.PI / 2;
+					overlay.position.set(0, 0.03, 0);
+					overlay.parent = cellNode;
+					overlay.isPickable = false;
+
+					const material = new StandardMaterial(`selectionMat_${x}_${z}`, scene);
+					material.diffuseColor = new Color3(0.2, 0.6, 1); // Bleu clair
+					material.emissiveColor = new Color3(0.1, 0.3, 0.5);
+					material.alpha = 0.5;
+					material.disableLighting = true;
+					overlay.material = material;
+
+					selectionOverlays.set(`${x},${z}`, overlay);
+				}
+			}
+		}
+	};
 
 	// Initialize map ID and name from params (in onMount to ensure params are available)
 
@@ -814,6 +1011,15 @@ export default function MapEditor() {
 		clearMap();
 
 		try {
+			if (savedData.spawnZones) {
+				const zonesMap = new Map<string, "ally" | "enemy" | "teleport">();
+				Object.entries(savedData.spawnZones).forEach(([key, type]) => {
+					zonesMap.set(key, type as "ally" | "enemy" | "teleport");
+				});
+				setSpawnZones(zonesMap);
+			} else {
+				setSpawnZones(new Map());
+			}
 			for (const cellData of savedData.cells) {
 				const cell = gridManager.getCell(cellData.x, cellData.z);
 				if (!cell) continue;
@@ -842,13 +1048,17 @@ export default function MapEditor() {
 								assetType: cellData.ground.assetType,
 							};
 							
-							assetStackManager.positionMeshAtHeight(mesh, 0, 0);
-							cell.setGround(mesh as Mesh);
-						}
+						assetStackManager.positionMeshAtHeight(mesh, 0, 0);
+						cell.setGround(mesh as Mesh);
+						
+						// Calculer et stocker la hauteur du sommet du sol
+						const groundPositions = assetStackManager.calculateCellRelativeYPositions(mesh, 0);
+						cell.setGroundTopY(groundPositions.topY);
 					}
 				}
+			}
 
-				// Load stacked assets
+			// Load stacked assets
 				for (const assetData of cellData.stackedAssets) {
 					const asset = findAssetByPath(assetData.assetPath);
 					if (asset) {
@@ -895,32 +1105,60 @@ export default function MapEditor() {
 	};
 
 	// Save current map
+	/** Sauvegarde silencieuse (sans alert), retourne true si succès */
+	const saveMapSilent = (): boolean => {
+		if (!gridManager || !mapId()) return false;
+		const name = mapName().trim();
+		if (!name) return false;
+
+		try {
+			const cellsData = gridManager.exportData();
+
+			const spawnZonesRecord: Record<string, "ally" | "enemy" | "teleport"> = {};
+			spawnZones().forEach((type, key) => {
+				spawnZonesRecord[key] = type;
+			});
+
+			const existingMap = loadMap(mapId()!);
+			const mapData: SavedMapData = {
+				id: mapId()!,
+				name,
+				createdAt: existingMap?.createdAt || Date.now(),
+				updatedAt: Date.now(),
+				cells: cellsData,
+				spawnZones: Object.keys(spawnZonesRecord).length > 0 ? spawnZonesRecord : undefined,
+				mapType: existingMap?.mapType,
+				dungeonId: existingMap?.dungeonId,
+				roomIndex: existingMap?.roomIndex,
+			};
+
+			saveMap(mapData);
+
+			if (dungeonData()) {
+				const d = dungeonData()!;
+				d.updatedAt = Date.now();
+				saveDungeon(d);
+			}
+			return true;
+		} catch (error) {
+			console.error("Error saving map:", error);
+			return false;
+		}
+	};
+
 	const saveCurrentMap = () => {
 		if (!gridManager || !mapId()) {
 			alert("Erreur: Impossible de sauvegarder la map");
 			return;
 		}
-
 		const name = mapName().trim();
 		if (!name) {
 			alert("Veuillez entrer un nom pour la map");
 			return;
 		}
-
-		try {
-			const cellsData = gridManager.exportData();
-			const mapData: SavedMapData = {
-				id: mapId()!,
-				name,
-				createdAt: loadMap(mapId()!)?.createdAt || Date.now(),
-				updatedAt: Date.now(),
-				cells: cellsData,
-			};
-
-			saveMap(mapData);
+		if (saveMapSilent()) {
 			alert("Map sauvegardée avec succès !");
-		} catch (error) {
-			console.error("Error saving map:", error);
+		} else {
 			alert("Erreur lors de la sauvegarde de la map");
 		}
 	};
@@ -928,19 +1166,24 @@ export default function MapEditor() {
 	onMount(() => {
 		if (!canvasRef) return;
 
-		// Initialize map ID and name from params
 		const paramMapId = params.mapId;
 		if (paramMapId === "new") {
-			// Nouvelle map
 			const newId = generateMapId();
 			setMapId(newId);
 			setMapName("Nouvelle Map");
 		} else if (paramMapId) {
-			// Charger une map existante
 			setMapId(paramMapId);
 			const savedMap = loadMap(paramMapId);
 			if (savedMap) {
 				setMapName(savedMap.name);
+			}
+		}
+
+		const dId = getDungeonId();
+		if (dId) {
+			const dungeon = loadDungeon(dId);
+			if (dungeon) {
+				setDungeonData(dungeon);
 			}
 		}
 
@@ -980,6 +1223,42 @@ export default function MapEditor() {
 		setupClickHandler();
 		setupWheelZoom();
 		setupPreviewMesh();
+		
+		// Disable preview mesh when in zone selection mode
+		createEffect(() => {
+			if (zoneSelectionMode()) {
+				cleanupPreviewMesh();
+			}
+		});
+
+		// Keep camera lock boolean in sync with zone selection mode
+		createEffect(() => {
+			setIsCameraLocked(zoneSelectionMode());
+		});
+
+		// Disable camera controls when camera is locked (e.g. zone selection active)
+		createEffect(() => {
+			if (camera && canvasRef) {
+				if (isCameraLocked()) {
+					// Désactiver les contrôles de la caméra
+					camera.detachControl(canvasRef);
+				} else {
+					// Réactiver les contrôles de la caméra
+					camera.attachControl(canvasRef, true);
+				}
+			}
+		});
+
+		// Close context menu when clicking outside
+		const handleClickOutside = (e: MouseEvent) => {
+			if (contextMenuCell()) {
+				setContextMenuCell(null);
+			}
+		};
+		window.addEventListener("click", handleClickOutside);
+		onCleanup(() => {
+			window.removeEventListener("click", handleClickOutside);
+		});
 		
 		// Keyboard handler for rotation (Q and D keys)
 		const handleKeyPress = (e: KeyboardEvent) => {
@@ -1024,6 +1303,20 @@ export default function MapEditor() {
 	onCleanup(() => {
 		cleanupPreviewMesh();
 		clearCollisionPreview();
+		// Clear selection overlays
+		selectionOverlays.forEach((overlay) => {
+			if (!overlay.isDisposed()) {
+				overlay.dispose();
+			}
+		});
+		selectionOverlays.clear();
+		// Clear spawn zone overlays
+		spawnZoneOverlays.forEach((overlay) => {
+			if (!overlay.isDisposed()) {
+				overlay.dispose();
+			}
+		});
+		spawnZoneOverlays.clear();
 		if (gridManager) {
 			gridManager.dispose();
 		}
@@ -1154,6 +1447,104 @@ export default function MapEditor() {
 		}
 	};
 
+	/**
+	 * Rend tous les assets de la map semi-transparents pour voir les overlays de collision
+	 * Supporte StandardMaterial et PBRMaterial (utilisé par les modèles GLTF/GLB)
+	 */
+	const setAllAssetsTransparent = (alpha: number) => {
+		if (!gridManager) return;
+		
+		const setMeshAlpha = (m: AbstractMesh) => {
+			if (!m.material) return;
+			
+			if (m.material instanceof StandardMaterial) {
+				if (!collisionModeAlphas.has(m)) {
+					collisionModeAlphas.set(m, m.material.alpha);
+				}
+				m.material.alpha = alpha;
+			} else if (m.material instanceof PBRMaterial) {
+				if (!collisionModeAlphas.has(m)) {
+					collisionModeAlphas.set(m, m.material.alpha);
+				}
+				m.material.transparencyMode = 2; // ALPHABLEND
+				m.material.alpha = alpha;
+			}
+		};
+
+		gridManager.getAllCells().forEach((cell) => {
+			const allMeshes = cell.getAllMeshes();
+			for (const mesh of allMeshes) {
+				setMeshAlpha(mesh);
+				// Appliquer aussi sur tous les enfants (meshes GLB ont leur géométrie dans les enfants)
+				mesh.getChildMeshes(false).forEach((child) => {
+					if (child instanceof AbstractMesh) {
+						setMeshAlpha(child);
+					}
+				});
+			}
+		});
+	};
+
+	/**
+	 * Restaure l'opacité originale de tous les assets
+	 * Supporte StandardMaterial et PBRMaterial
+	 */
+	const restoreAllAssetsOpacity = () => {
+		if (!gridManager) return;
+		
+		// Restaurer les meshes qui ont été sauvegardés dans la Map
+		collisionModeAlphas.forEach((originalAlpha, mesh) => {
+			if (mesh.isDisposed() || !mesh.material) return;
+			
+			if (mesh.material instanceof StandardMaterial) {
+				mesh.material.alpha = originalAlpha;
+			} else if (mesh.material instanceof PBRMaterial) {
+				mesh.material.alpha = originalAlpha;
+				// Restaurer le mode de transparence si l'alpha original était 1 (opaque)
+				if (originalAlpha >= 1) {
+					mesh.material.transparencyMode = 0; // OPAQUE
+				}
+			}
+		});
+		
+		// S'assurer que tous les meshes de la grille sont restaurés (y compris ceux qui n'étaient pas dans la Map)
+		gridManager.getAllCells().forEach((cell) => {
+			const allMeshes = cell.getAllMeshes();
+			for (const mesh of allMeshes) {
+				const restoreMesh = (m: AbstractMesh) => {
+					if (m.isDisposed() || !m.material) return;
+					
+					// Si le mesh n'était pas dans la Map, restaurer à 1 (opaque par défaut)
+					if (!collisionModeAlphas.has(m)) {
+						if (m.material instanceof StandardMaterial) {
+							m.material.alpha = 1;
+						} else if (m.material instanceof PBRMaterial) {
+							m.material.alpha = 1;
+							m.material.transparencyMode = 0; // OPAQUE
+						}
+					}
+					
+					// Restaurer aussi tous les enfants
+					m.getChildMeshes(false).forEach((child) => {
+						if (child instanceof AbstractMesh) {
+							if (!collisionModeAlphas.has(child)) {
+								if (child.material instanceof StandardMaterial) {
+									child.material.alpha = 1;
+								} else if (child.material instanceof PBRMaterial) {
+									child.material.alpha = 1;
+									child.material.transparencyMode = 0; // OPAQUE
+								}
+							}
+						}
+					});
+				};
+				restoreMesh(mesh);
+			}
+		});
+		
+		collisionModeAlphas.clear();
+	};
+
 	// Update collision overlays
 	const updateCollisionOverlays = () => {
 		if (!scene || !gridManager) return;
@@ -1166,11 +1557,17 @@ export default function MapEditor() {
 		});
 		collisionOverlays.clear();
 
-		if (!showCollisions() && !collisionPreviewMode()) return;
+		if (!showCollisions() && !collisionPreviewMode()) {
+			restoreAllAssetsOpacity();
+			return;
+		}
 
-		// Create overlays for all cells
+		// Rendre les assets transparents pour voir les zones de collision
+		setAllAssetsTransparent(0.25);
+
+		// Create overlays for all cells (passer gridManager pour détecter les assets multi-cases)
 		gridManager.getAllCells().forEach((cell) => {
-			const collisionProps = cell.getCollisionProperties();
+			const collisionProps = cell.getCollisionProperties(gridManager ?? undefined);
 			const cellNode = cell.getCellNode();
 			if (!cellNode) return;
 
@@ -1192,17 +1589,17 @@ export default function MapEditor() {
 				// Red for blocked cells
 				color = new Color3(1, 0, 0);
 				emissive = new Color3(0.5, 0, 0);
-				alpha = 0.4;
+				alpha = 0.6;
 			} else if (collisionProps.movementCost > 1) {
 				// Yellow for difficult terrain
 				color = new Color3(1, 1, 0);
 				emissive = new Color3(0.5, 0.5, 0);
-				alpha = 0.3;
+				alpha = 0.5;
 			} else {
 				// Green for walkable cells
 				color = new Color3(0, 1, 0);
 				emissive = new Color3(0, 0.5, 0);
-				alpha = 0.25;
+				alpha = 0.4;
 			}
 
 			if (scene) {
@@ -1233,17 +1630,19 @@ export default function MapEditor() {
 		const cellNode = assetInfo.cell.getCellNode();
 		if (!cellNode) return;
 
-		// Make the asset transparent
-		const setAlpha = (mesh: AbstractMesh, alpha: number) => {
+		// Make the asset transparent (supporte StandardMaterial et PBRMaterial)
+		const setAlpha = (mesh: AbstractMesh, targetAlpha: number) => {
 			if (mesh.material) {
-				const material = mesh.material as StandardMaterial;
 				if (!originalAssetAlpha.has(mesh)) {
-					originalAssetAlpha.set(mesh, material.alpha);
+					originalAssetAlpha.set(mesh, mesh.material.alpha);
 				}
-				material.alpha = alpha;
+				if (mesh.material instanceof PBRMaterial) {
+					mesh.material.transparencyMode = 2; // ALPHABLEND
+				}
+				mesh.material.alpha = targetAlpha;
 			}
 			mesh.getChildMeshes(false).forEach((child) => {
-				setAlpha(child, alpha);
+				setAlpha(child, targetAlpha);
 			});
 		};
 		setAlpha(assetInfo.mesh, 0.3);
@@ -1293,10 +1692,13 @@ export default function MapEditor() {
 
 	// Clear collision preview
 	const clearCollisionPreview = () => {
-		// Restore original alpha for all meshes
-		originalAssetAlpha.forEach((alpha, mesh) => {
+		// Restore original alpha for all meshes (supporte StandardMaterial et PBRMaterial)
+		originalAssetAlpha.forEach((origAlpha, mesh) => {
 			if (!mesh.isDisposed() && mesh.material) {
-				(mesh.material as StandardMaterial).alpha = alpha;
+				mesh.material.alpha = origAlpha;
+				if (mesh.material instanceof PBRMaterial && origAlpha >= 1) {
+					mesh.material.transparencyMode = 0; // OPAQUE
+				}
 			}
 		});
 		originalAssetAlpha.clear();
@@ -1322,6 +1724,8 @@ export default function MapEditor() {
 				}
 			});
 			collisionOverlays.clear();
+			// Restaurer l'opacité de tous les assets
+			restoreAllAssetsOpacity();
 		}
 	});
 
@@ -1332,12 +1736,39 @@ export default function MapEditor() {
 		}
 	});
 
+	// Update spawn zone overlays when zones change
+	createEffect(() => {
+		if (scene && gridManager) {
+			updateSpawnZoneOverlays();
+		}
+	});
+
+	// Handle spawn zone actions
+	const handleSetSpawnZone = (type: "ally" | "enemy" | "teleport" | null) => {
+		const cell = contextMenuCell();
+		if (!cell) return;
+
+		const cellKey = `${cell.x},${cell.z}`;
+		const newZones = new Map(spawnZones());
+
+		if (type === null) {
+			// Retirer la zone
+			newZones.delete(cellKey);
+		} else {
+			// Ajouter ou modifier la zone
+			newZones.set(cellKey, type);
+		}
+
+		setSpawnZones(newZones);
+		setContextMenuCell(null);
+	};
+
 	// Setup preview mesh
 	const setupPreviewMesh = () => {
 		if (!scene || !camera || !gridManager || !assetStackManager) return;
 
 		scene.onPointerObservable.add((pointerInfo) => {
-			if (pointerInfo.type === PointerEventTypes.POINTERMOVE && (selectedAsset() || editingAsset()) && !deleteMode() && !collisionPreviewMode() && scene) {
+			if (pointerInfo.type === PointerEventTypes.POINTERMOVE && (selectedAsset() || editingAsset()) && !deleteMode() && !collisionPreviewMode() && !zoneSelectionMode() && scene) {
 				if (previewUpdateTimeout !== null) {
 					clearTimeout(previewUpdateTimeout);
 					previewUpdateTimeout = null;
@@ -1378,7 +1809,7 @@ export default function MapEditor() {
 					}
 					previewUpdateTimeout = null;
 				}, 50); // Augmenté à 50ms pour réduire les appels multiples
-			} else if ((!selectedAsset() && !editingAsset()) || deleteMode() || collisionPreviewMode()) {
+			} else if ((!selectedAsset() && !editingAsset()) || deleteMode() || collisionPreviewMode() || zoneSelectionMode()) {
 				if (previewUpdateTimeout !== null) {
 					clearTimeout(previewUpdateTimeout);
 					previewUpdateTimeout = null;
@@ -1474,10 +1905,15 @@ export default function MapEditor() {
 				}
 			}
 
-			// Make preview semi-transparent
+			// Make preview more transparent (accentuated transparency)
 			const setAlpha = (m: AbstractMesh) => {
 				if (m.material) {
-					(m.material as StandardMaterial).alpha = 0.6;
+					if (m.material instanceof StandardMaterial) {
+						m.material.alpha = 0.3; // Plus transparent (était 0.6)
+					} else if (m.material instanceof PBRMaterial) {
+						m.material.transparencyMode = 2; // ALPHABLEND
+						m.material.alpha = 0.3; // Plus transparent (était 0.6)
+					}
 				}
 				m.getChildMeshes().forEach((child) => setAlpha(child));
 			};
@@ -1504,8 +1940,32 @@ export default function MapEditor() {
 		}
 	};
 
-	// Place asset
+	// Place asset on a single cell
 	const placeAsset = async (asset: MapAsset, gridX: number, gridZ: number) => {
+		await placeAssetOnCell(asset, gridX, gridZ);
+	};
+
+	// Place asset on multiple cells (zone selection)
+	const placeAssetOnZone = async (asset: MapAsset, startX: number, startZ: number, endX: number, endZ: number) => {
+		if (!scene || !gridManager || !assetStackManager) return;
+
+		const minX = Math.min(startX, endX);
+		const maxX = Math.max(startX, endX);
+		const minZ = Math.min(startZ, endZ);
+		const maxZ = Math.max(startZ, endZ);
+
+		// Placer l'asset sur toutes les cellules de la zone
+		for (let x = minX; x <= maxX; x++) {
+			for (let z = minZ; z <= maxZ; z++) {
+				if (x >= 0 && x < GRID_SIZE && z >= 0 && z < GRID_SIZE) {
+					await placeAssetOnCell(asset, x, z);
+				}
+			}
+		}
+	};
+
+	// Place asset on a single cell (internal function)
+	const placeAssetOnCell = async (asset: MapAsset, gridX: number, gridZ: number) => {
 		if (!scene || !gridManager || !assetStackManager) {
 			console.warn('[placeAsset] Missing dependencies:', { scene: !!scene, gridManager: !!gridManager, assetStackManager: !!assetStackManager });
 			return;
@@ -1544,6 +2004,29 @@ export default function MapEditor() {
 				mesh.rotation.y = rotationRad;
 			}
 
+			// 2bis. S'assurer que le mesh placé est entièrement opaque (le preview restant en transparence)
+			const setOpaque = (m: AbstractMesh) => {
+				if (m.material) {
+					if (m.material instanceof StandardMaterial) {
+						m.material.alpha = 1;
+					} else if (m.material instanceof PBRMaterial) {
+						m.material.alpha = 1;
+						m.material.transparencyMode = 0; // OPAQUE
+					}
+				}
+				m.getChildMeshes(false).forEach((child) => {
+					if (child instanceof AbstractMesh && child.material) {
+						if (child.material instanceof StandardMaterial) {
+							child.material.alpha = 1;
+						} else if (child.material instanceof PBRMaterial) {
+							child.material.alpha = 1;
+							child.material.transparencyMode = 0;
+						}
+					}
+				});
+			};
+			setOpaque(mesh);
+
 			// 3. Parenter à la cellule
 			const cellNode = cell.getCellNode();
 			if (!cellNode) return;
@@ -1568,10 +2051,33 @@ export default function MapEditor() {
 				// Positionner le bas du sol à y=0
 				assetStackManager.positionMeshAtHeight(mesh, 0, 0);
 				cell.setGround(mesh as Mesh);
+				
+				// Calculer et stocker la hauteur du sommet du sol
+				const groundPositions = assetStackManager.calculateCellRelativeYPositions(mesh, 0);
+				cell.setGroundTopY(groundPositions.topY);
+				
+				// Recalculer les positions de tous les assets empilés au-dessus du nouveau sol
+				cell.restackAssets(assetStackManager);
 			} else {
 				// Pour les autres assets, les empiler
-				// Positionner au-dessus de la pile existante
-				assetStackManager.positionMeshOnStack(mesh, cell);
+				// Calculer la hauteur effective en tenant compte des assets multi-cases
+				let effectiveStackHeight = cell.getStackHeight();
+				
+				// Vérifier les assets d'autres cellules qui débordent sur celle-ci
+				const externalAssets = gridManager.getAssetsAffectingCell(gridX, gridZ);
+				for (const extMesh of externalAssets) {
+					// Ignorer les assets déjà dans la pile de cette cellule
+					const isInStack = cell.getStackedAssets().some(sa => sa.mesh === extMesh);
+					const isGround = cell.getGround() === extMesh;
+					if (isInStack || isGround) continue;
+					
+					// Utiliser le topY world de l'asset externe
+					const extTopY = assetStackManager.calculateWorldTopY(extMesh);
+					effectiveStackHeight = Math.max(effectiveStackHeight, extTopY);
+				}
+				
+				// Positionner au-dessus de la pile effective
+				assetStackManager.positionMeshAtHeight(mesh, effectiveStackHeight, 0);
 				
 				// Créer le StackedAsset et l'ajouter à la pile
 				const stackedAsset = assetStackManager.createStackedAsset(mesh, asset, 0);
@@ -1620,64 +2126,376 @@ export default function MapEditor() {
 		}
 	};
 
+	/**
+	 * Trouve le mesh racine d'un asset placé à partir d'un mesh cliqué/survolé
+	 * (peut être un enfant d'un mesh GLB)
+	 */
+	const findRootAssetMesh = (pickedMesh: AbstractMesh): AbstractMesh | null => {
+		if (!pickedMesh) return null;
+		
+		// Si le mesh lui-même est un asset placé
+		if (pickedMesh.name.startsWith("map_")) return pickedMesh;
+		
+		// Remonter toute la hiérarchie pour trouver le parent "map_"
+		// Les modèles GLB peuvent avoir des TransformNode intermédiaires entre les meshes enfants et la racine
+		let current: any = pickedMesh.parent;
+		while (current) {
+			if (current instanceof AbstractMesh && current.name.startsWith("map_")) {
+				return current;
+			}
+			// Vérifier aussi si c'est un TransformNode qui contient un mesh "map_"
+			if (current instanceof TransformNode) {
+				const children = current.getChildMeshes(false);
+				for (const child of children) {
+					if (child instanceof AbstractMesh && child.name.startsWith("map_")) {
+						return child;
+					}
+				}
+			}
+			current = current.parent;
+		}
+		
+		// Si on n'a rien trouvé, vérifier si le mesh a des enfants qui sont des assets "map_"
+		const childMeshes = pickedMesh.getChildMeshes(false);
+		for (const child of childMeshes) {
+			if (child instanceof AbstractMesh && child.name.startsWith("map_")) {
+				return child;
+			}
+		}
+		
+		return null;
+	};
+
+	/**
+	 * Applique une surbrillance sur un mesh et tous ses enfants
+	 * Clone le matériau pour ne pas affecter les autres meshes qui partagent le même matériau
+	 */
+	const applyHighlight = (mesh: AbstractMesh, color: Color3) => {
+		const applyToMesh = (m: AbstractMesh) => {
+			if (m.material && !hoveredMeshOriginalMaterials.has(m)) {
+				// Sauvegarder le matériau original (partagé)
+				hoveredMeshOriginalMaterials.set(m, m.material);
+				// Cloner le matériau pour que la modification n'affecte que ce mesh
+				const cloned = m.material.clone(m.material.name + "_highlight_" + m.uniqueId);
+				if (cloned) {
+					m.material = cloned;
+					if (cloned instanceof StandardMaterial) {
+						cloned.emissiveColor = color;
+					} else if (cloned instanceof PBRMaterial) {
+						cloned.emissiveColor = color;
+					}
+				}
+			}
+		};
+		applyToMesh(mesh);
+		mesh.getChildMeshes(false).forEach(child => {
+			if (child instanceof AbstractMesh) applyToMesh(child);
+		});
+	};
+
+	/**
+	 * Retire la surbrillance et restaure les matériaux originaux
+	 */
+	const clearHighlight = () => {
+		hoveredMeshOriginalMaterials.forEach((originalMaterial, mesh) => {
+			if (!mesh.isDisposed()) {
+				// Supprimer le matériau cloné
+				const clonedMat = mesh.material;
+				// Restaurer le matériau original (partagé)
+				mesh.material = originalMaterial;
+				// Disposer le clone
+				if (clonedMat && clonedMat !== originalMaterial) {
+					clonedMat.dispose();
+				}
+			}
+		});
+		hoveredMeshOriginalMaterials.clear();
+		hoveredMesh = null;
+	};
+
+	// Get grid coordinates from pointer position
+	const getGridCoordsFromPointer = (): { x: number; z: number } | null => {
+		if (!scene) return null;
+
+		const pickInfo = scene.pick(scene.pointerX, scene.pointerY, (mesh) => {
+			return mesh.name.startsWith("cellPlane_") || mesh.name === "ground";
+		});
+
+		if (pickInfo?.hit && pickInfo.pickedMesh) {
+			const meshName = pickInfo.pickedMesh.name;
+			
+			if (meshName.startsWith("cellPlane_")) {
+				const metadata = pickInfo.pickedMesh.metadata as { gridX: number; gridZ: number };
+				if (metadata && typeof metadata.gridX === 'number' && typeof metadata.gridZ === 'number') {
+					const gridX = metadata.gridX;
+					const gridZ = metadata.gridZ;
+					if (gridX >= 0 && gridX < GRID_SIZE && gridZ >= 0 && gridZ < GRID_SIZE) {
+						return { x: gridX, z: gridZ };
+					}
+				}
+			}
+			
+			if (pickInfo.pickedPoint) {
+				const worldX = pickInfo.pickedPoint.x;
+				const worldZ = pickInfo.pickedPoint.z;
+				const halfSize = (GRID_SIZE * TILE_SIZE) / 2;
+				const gridX = Math.floor((worldX + halfSize) / TILE_SIZE);
+				const gridZ = Math.floor((worldZ + halfSize) / TILE_SIZE);
+				if (gridX >= 0 && gridX < GRID_SIZE && gridZ >= 0 && gridZ < GRID_SIZE) {
+					return { x: gridX, z: gridZ };
+				}
+			}
+		}
+
+		return null;
+	};
+
 	// Setup click handler
 	const setupClickHandler = () => {
 		if (!scene || !camera || !gridManager) return;
 
+		// Filtre de picking pour mode delete/edit : accepte tout mesh sauf les exclusions
+		// findRootAssetMesh s'occupe ensuite de vérifier si c'est un asset placé
+		const deleteEditPickFilter = (mesh: AbstractMesh): boolean => {
+			// Exclure les meshes qui ne sont pas des assets placés
+			if (mesh.name.startsWith("preview_") || 
+			    mesh.name.startsWith("collision_") ||
+			    mesh.name.startsWith("cellPlane_") ||
+			    mesh.name === "ground" ||
+			    mesh.metadata?.isPreview ||
+			    !mesh.isPickable) return false;
+			return true;
+		};
+
+		// Gestionnaire de survol pour la surbrillance en mode delete/edit
+		scene.onPointerObservable.add((pointerInfo) => {
+			if (pointerInfo.type !== PointerEventTypes.POINTERMOVE || !scene) return;
+			if (!deleteMode() && !editMode()) {
+				if (hoveredMesh) clearHighlight();
+				return;
+			}
+
+			const pickInfo = scene.pick(scene.pointerX, scene.pointerY, deleteEditPickFilter);
+
+			if (pickInfo?.hit && pickInfo.pickedMesh) {
+				const rootMesh = findRootAssetMesh(pickInfo.pickedMesh);
+				if (rootMesh && rootMesh !== hoveredMesh) {
+					clearHighlight();
+					hoveredMesh = rootMesh;
+					const highlightColor = deleteMode() 
+						? new Color3(1, 0.2, 0.2)  // Rouge pour suppression
+						: new Color3(0.2, 0.5, 1);  // Bleu pour édition
+					applyHighlight(rootMesh, highlightColor);
+				} else if (!rootMesh && hoveredMesh) {
+					clearHighlight();
+				}
+			} else {
+				if (hoveredMesh) clearHighlight();
+			}
+		});
+
+		// Handle zone selection mode
+		scene.onPointerObservable.add((pointerInfo) => {
+			if (pointerInfo.type === PointerEventTypes.POINTERMOVE && scene && zoneSelectionMode() && isSelecting()) {
+				const coords = getGridCoordsFromPointer();
+				if (coords) {
+					setSelectionEnd(coords);
+					updateSelectionOverlay();
+				}
+			}
+		});
+
+		scene.onPointerObservable.add((pointerInfo) => {
+			if (pointerInfo.type === PointerEventTypes.POINTERUP && scene && zoneSelectionMode() && isSelecting()) {
+				const start = selectionStart();
+				const end = selectionEnd();
+				if (start && end) {
+					const assetToPlace = selectedAsset() || editingAsset()?.asset;
+					if (assetToPlace) {
+						placeAssetOnZone(assetToPlace, start.x, start.z, end.x, end.z);
+						
+						if (editingAsset()) {
+							setEditingAsset(null);
+							setEditMode(false);
+						}
+					}
+				}
+				setIsSelecting(false);
+				setSelectionStart(null);
+				setSelectionEnd(null);
+				updateSelectionOverlay();
+				return;
+			}
+		});
+
 		scene.onPointerObservable.add((pointerInfo) => {
 			if (pointerInfo.type === PointerEventTypes.POINTERDOWN && scene) {
-				// Filtrer pour ne sélectionner que les cellPlanes ou le ground
-				const pickInfo = scene.pick(scene.pointerX, scene.pointerY, (mesh) => {
-					// Permettre les cellPlanes
-					if (mesh.name.startsWith("cellPlane_")) return true;
-					// Permettre le ground seulement si pas d'asset sélectionné (fallback)
-					if (mesh.name === "ground" && !selectedAsset() && !editingAsset()) return true;
-					// Exclure les preview meshes et les overlays de collision
-					if (mesh.name.startsWith("preview_") || 
-					    mesh.name.startsWith("collision_") ||
-					    mesh.metadata?.isPreview) return false;
-					return false;
-				});
+				// Zone selection mode
+				if (zoneSelectionMode() && (selectedAsset() || editingAsset()?.asset)) {
+					const coords = getGridCoordsFromPointer();
+					if (coords) {
+						setSelectionStart(coords);
+						setSelectionEnd(coords);
+						setIsSelecting(true);
+						updateSelectionOverlay();
+					}
+					return;
+				}
+
+				const isDeleteOrEdit = deleteMode() || editMode();
+				
+				// Choisir le filtre selon le mode
+				const pickInfo = isDeleteOrEdit
+					? scene.pick(scene.pointerX, scene.pointerY, deleteEditPickFilter)
+					: scene.pick(scene.pointerX, scene.pointerY, (mesh) => {
+						if (mesh.name.startsWith("preview_") || 
+						    mesh.name.startsWith("collision_") ||
+						    mesh.metadata?.isPreview) return false;
+						if (mesh.name.startsWith("cellPlane_")) return true;
+						if (mesh.name === "ground" && !selectedAsset() && !editingAsset()) return true;
+						return false;
+					});
 
 				if (deleteMode()) {
-					// Delete mode: find and remove clicked mesh
-					if (pickInfo?.hit && pickInfo.pickedMesh && gridManager) {
-						let deletedMesh: AbstractMesh | null = null;
-						const meshToDelete = pickInfo.pickedMesh;
+					// Delete mode: utiliser le mesh survolé (déjà identifié par le hover handler)
+					// ou fallback sur le picking direct
+					let targetMesh: AbstractMesh | null = null;
+					
+					// D'abord essayer avec le mesh survolé
+					if (hoveredMesh) {
+						targetMesh = hoveredMesh;
+						console.log('[DELETE] Using hoveredMesh:', targetMesh.name);
+					} 
+					// Sinon, essayer avec le picking direct
+					else if (pickInfo?.hit && pickInfo.pickedMesh) {
+						targetMesh = findRootAssetMesh(pickInfo.pickedMesh);
+						console.log('[DELETE] Found via pickInfo:', targetMesh?.name);
+					}
+					
+					if (!targetMesh) {
+						// Si aucun mesh n'a été trouvé, essayer un picking sans filtre pour déboguer
+						const debugPick = scene.pick(scene.pointerX, scene.pointerY);
+						if (debugPick?.hit && debugPick.pickedMesh) {
+							targetMesh = findRootAssetMesh(debugPick.pickedMesh);
+							console.log('[DELETE] Found via debugPick:', targetMesh?.name);
+						}
+					}
+					
+					if (targetMesh && gridManager) {
+						console.log('[DELETE] Target mesh found:', targetMesh.name);
 						
-						// Chercher dans toutes les cellules
-						gridManager.getAllCells().forEach((cell) => {
-							const stackedAssets = cell.getStackedAssets();
-							stackedAssets.forEach((stackedAsset) => {
-								if (stackedAsset.mesh === meshToDelete || 
-								    stackedAsset.mesh.getChildMeshes(true).includes(meshToDelete as AbstractMesh)) {
-									deletedMesh = stackedAsset.mesh;
-									cell.removeAsset(stackedAsset.mesh);
-									stackedAsset.mesh.dispose();
-								}
-							});
+						// Sauvegarder la référence ET le nom avant de nettoyer la surbrillance
+						const targetMeshRef = targetMesh;
+						const targetMeshName = targetMesh.name;
+						
+						// Fonction helper pour vérifier si un mesh est le même que le target (y compris les enfants)
+						const isSameMesh = (mesh: AbstractMesh): boolean => {
+							// Comparer par référence directe
+							if (mesh === targetMeshRef) return true;
 							
+							// Comparer par nom (sans le suffixe potentiel ajouté par Babylon)
+							const meshNameBase = mesh.name.split('.')[0]; // Enlever le suffixe comme .crypt
+							const targetNameBase = targetMeshName.split('.')[0];
+							if (meshNameBase === targetNameBase && meshNameBase.startsWith('map_')) return true;
+							
+							// Vérifier si le mesh est un parent/enfant du target
+							let current: any = mesh;
+							while (current) {
+								if (current === targetMeshRef) return true;
+								current = current.parent;
+							}
+							
+							current = targetMeshRef;
+							while (current) {
+								if (current === mesh) return true;
+								current = current.parent;
+							}
+							
+							return false;
+						};
+						
+						// Nettoyer la surbrillance avant suppression
+						clearHighlight();
+						
+						let deletedMesh: AbstractMesh | null = null;
+						
+						// Chercher dans toutes les cellules en vérifiant tous les meshes (y compris enfants)
+						const cellsToRestack: GridCell[] = [];
+						gridManager.getAllCells().forEach((cell) => {
+							// Chercher dans les stacked assets
+							const stackedAssets = cell.getStackedAssets();
+							for (let i = stackedAssets.length - 1; i >= 0; i--) {
+								const stackedAsset = stackedAssets[i];
+								const cellMesh = stackedAsset.mesh;
+								
+								// Vérifier le mesh principal et tous ses enfants
+								if (isSameMesh(cellMesh)) {
+									deletedMesh = cellMesh;
+									console.log('[DELETE] Found in stackedAssets:', deletedMesh.name);
+									cell.removeAsset(cellMesh);
+									cellMesh.dispose();
+									cellsToRestack.push(cell);
+									return; // Sortir de la boucle forEach
+								}
+								
+								// Vérifier aussi tous les enfants du mesh
+								const childMeshes = cellMesh.getChildMeshes(false);
+								for (const child of childMeshes) {
+									if (child instanceof AbstractMesh && isSameMesh(child)) {
+										deletedMesh = cellMesh; // Supprimer le mesh parent
+										console.log('[DELETE] Found via child mesh in stackedAssets:', cellMesh.name);
+										cell.removeAsset(cellMesh);
+										cellMesh.dispose();
+										cellsToRestack.push(cell);
+										return; // Sortir de la boucle forEach
+									}
+								}
+							}
+							
+							// Vérifier aussi le ground si pas encore trouvé
 							const ground = cell.getGround();
-							if (ground === meshToDelete || 
-							    ground?.getChildMeshes(true).includes(meshToDelete as AbstractMesh)) {
+							if (ground && isSameMesh(ground)) {
 								deletedMesh = ground;
-								ground?.dispose();
+								console.log('[DELETE] Found in ground:', deletedMesh.name);
+								ground.dispose();
 								cell.setGround(null);
+								cellsToRestack.push(cell);
 							}
 						});
 						
+						if (!deletedMesh) {
+							console.warn('[DELETE] Mesh not found in grid cells:', targetMeshName);
+							console.log('[DELETE] Available meshes:', gridManager.getAllCells().flatMap(cell => {
+								const meshes: string[] = [];
+								cell.getStackedAssets().forEach(sa => meshes.push(sa.mesh.name));
+								if (cell.getGround()) meshes.push('ground: ' + cell.getGround()!.name);
+								return meshes;
+							}));
+						}
+						
 						// Nettoyer l'enregistrement de l'asset supprimé
 						if (deletedMesh) {
-							const meshName = (deletedMesh as AbstractMesh).name;
+							const meshName = deletedMesh.name;
 							if (meshName) {
 								gridManager.unregisterAsset(meshName);
 							}
+							
+							// Recalculer les positions des assets restants dans les cellules affectées
+							if (assetStackManager) {
+								for (const cell of cellsToRestack) {
+									cell.restackAssets(assetStackManager);
+								}
+							}
+							
+							// Update collision overlays if enabled
+							if (showCollisions() || collisionPreviewMode()) {
+								updateCollisionOverlays();
+							}
+							
+							console.log('[DELETE] Successfully deleted mesh');
 						}
-						
-						// Update collision overlays if enabled
-						if (showCollisions() || collisionPreviewMode()) {
-							updateCollisionOverlays();
-						}
+					} else {
+						console.warn('[DELETE] No target mesh found or gridManager missing');
 					}
 					return;
 				}
@@ -1689,16 +2507,24 @@ export default function MapEditor() {
 				}
 
 				if (editMode()) {
-					// Edit mode: select mesh for repositioning
-					if (pickInfo?.hit && pickInfo.pickedMesh && gridManager) {
+					// Edit mode: utiliser le mesh survolé (déjà identifié par le hover handler)
+					// ou fallback sur le picking direct
+					const rootMesh = hoveredMesh 
+						|| (pickInfo?.hit && pickInfo.pickedMesh ? findRootAssetMesh(pickInfo.pickedMesh) : null);
+					if (rootMesh && gridManager) {
+						
+						// Nettoyer la surbrillance
+						clearHighlight();
+						
 						gridManager.getAllCells().forEach((cell) => {
 							const stackedAssets = cell.getStackedAssets();
 							stackedAssets.forEach((stackedAsset) => {
-								if (stackedAsset.mesh === pickInfo.pickedMesh || 
-								    stackedAsset.mesh.getChildMeshes(true).includes(pickInfo.pickedMesh as AbstractMesh)) {
+								if (stackedAsset.mesh === rootMesh) {
 									setEditingAsset({ asset: stackedAsset.asset, cell, mesh: stackedAsset.mesh });
 									setSelectedAsset(stackedAsset.asset);
 									setRotationAngle(0);
+									// Nettoyer l'enregistrement multi-cases
+									gridManager!.unregisterAsset(stackedAsset.mesh.name);
 									cell.removeAsset(stackedAsset.mesh);
 									stackedAsset.mesh.dispose();
 								}
@@ -1713,8 +2539,47 @@ export default function MapEditor() {
 					return;
 				}
 
-				// Normal placement mode
+				// Normal placement mode (single cell)
+				if (zoneSelectionMode()) {
+					// Zone selection is handled by POINTERUP
+					return;
+				}
+
 				const assetToPlace = selectedAsset() || editingAsset()?.asset;
+				
+				// Si aucun asset n'est sélectionné et aucun mode n'est actif, afficher le menu contextuel
+				if (!assetToPlace && !deleteMode() && !editMode() && !collisionPreviewMode()) {
+					// Vérifier si on a cliqué sur une cellule
+					if (pickInfo?.hit && pickInfo.pickedMesh) {
+						const meshName = pickInfo.pickedMesh.name;
+						
+						if (meshName.startsWith("cellPlane_")) {
+							const metadata = pickInfo.pickedMesh.metadata as { gridX: number; gridZ: number };
+							if (metadata && typeof metadata.gridX === 'number' && typeof metadata.gridZ === 'number') {
+								const gridX = metadata.gridX;
+								const gridZ = metadata.gridZ;
+								
+								if (gridX >= 0 && gridX < GRID_SIZE && gridZ >= 0 && gridZ < GRID_SIZE) {
+									// Obtenir les coordonnées d'écran depuis le canvas
+									const rect = canvasRef.getBoundingClientRect();
+									const screenX = scene.pointerX + rect.left;
+									const screenY = scene.pointerY + rect.top;
+									
+									// Afficher le menu contextuel à la position du clic
+									setContextMenuCell({
+										x: gridX,
+										z: gridZ,
+										screenX,
+										screenY
+									});
+									return;
+								}
+							}
+						}
+					}
+					return;
+				}
+				
 				if (!assetToPlace) return;
 
 				// Check if clicked on grid cell plane
@@ -1765,10 +2630,35 @@ export default function MapEditor() {
 		});
 	};
 
+	// Effect to update selection overlay when selection changes
+	createEffect(() => {
+		if (zoneSelectionMode() && (selectionStart() || selectionEnd())) {
+			updateSelectionOverlay();
+		} else {
+			// Clear overlays when zone selection is disabled
+			selectionOverlays.forEach((overlay) => {
+				if (!overlay.isDisposed()) {
+					overlay.dispose();
+				}
+			});
+			selectionOverlays.clear();
+		}
+	});
+
 	// Clear map
 	const clearMap = () => {
 		cleanupPreviewMesh();
 		clearCollisionPreview();
+		// Clear selection overlays
+		selectionOverlays.forEach((overlay) => {
+			if (!overlay.isDisposed()) {
+				overlay.dispose();
+			}
+		});
+		selectionOverlays.clear();
+		setIsSelecting(false);
+		setSelectionStart(null);
+		setSelectionEnd(null);
 		const manager = gridManager;
 		if (!manager) return;
 		
@@ -1804,7 +2694,60 @@ export default function MapEditor() {
 				<ArrowLeft class="settings-icon h-5 w-5" />
 			</A>
 
-			{/* Toolbar */}
+			{/* Dungeon room header */}
+			<Show when={dungeonData() && getRoomIndex() !== undefined}>
+				{(() => {
+					const dungeon = dungeonData()!;
+					const roomIdx = getRoomIndex()!;
+					const isLastRoom = roomIdx === dungeon.totalRooms - 1;
+					const isFirstRoom = roomIdx === 0;
+
+					const goToRoom = (index: number) => {
+						saveMapSilent();
+						const targetRoomId = dungeon.roomIds[index];
+						window.location.href = `/map-editor/${targetRoomId}?dungeon=${dungeon.id}&room=${index}`;
+					};
+
+					return (
+						<div class="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-purple-900/80 backdrop-blur-sm rounded-xl px-6 py-3 border border-purple-500/30 shadow-lg flex items-center gap-4">
+							<span class="text-purple-200 font-display text-sm">{dungeon.name}</span>
+							<span class="text-purple-400 text-sm font-bold">
+								Salle {roomIdx + 1} / {dungeon.totalRooms}
+							</span>
+							<div class="flex gap-2">
+								<Show when={!isFirstRoom}>
+									<button
+										onClick={() => goToRoom(roomIdx - 1)}
+										class="px-3 py-1 rounded-lg bg-purple-700/50 hover:bg-purple-600/70 text-purple-200 text-xs transition"
+									>
+										Salle précédente
+									</button>
+								</Show>
+								<Show when={!isLastRoom}>
+									<button
+										onClick={() => goToRoom(roomIdx + 1)}
+										class="px-3 py-1 rounded-lg bg-purple-600/70 hover:bg-purple-500/80 text-white text-xs transition font-medium"
+									>
+										Salle suivante
+									</button>
+								</Show>
+							</div>
+							<Show when={!isLastRoom}>
+								<span class="text-purple-400/60 text-xs">
+									N'oubliez pas les cellules de teleportation (violet)
+								</span>
+							</Show>
+							<Show when={isLastRoom}>
+								<span class="text-amber-400/80 text-xs">
+									Dernière salle ! Portail ou tuer les ennemis = victoire
+								</span>
+							</Show>
+						</div>
+					);
+				})()}
+			</Show>
+
+			{/* Main menu (infos + assets) */}
 			<div class="absolute top-4 left-4 z-20 bg-black/60 backdrop-blur-sm rounded-xl p-4 border border-white/10 shadow-lg max-w-xs max-h-[90vh] overflow-y-auto">
 				<h2 class="text-white font-display text-xl mb-4">Map Editor</h2>
 
@@ -1863,6 +2806,7 @@ export default function MapEditor() {
 																setEditingAsset(null);
 																setEditMode(false);
 																setDeleteMode(false);
+																setZoneSelectionMode(false);
 															}}
 														>
 															{asset.name}
@@ -1906,8 +2850,29 @@ export default function MapEditor() {
 					</div>
 				)}
 
+				{selectedAsset() && !deleteMode() && !editMode() && !zoneSelectionMode() && (
+					<p class="mt-3 text-xs text-slate-400">
+						Cliquez sur la grille pour placer: <strong>{selectedAsset()!.name}</strong>
+					</p>
+				)}
+				{selectedAsset() && zoneSelectionMode() && (
+					<p class="mt-3 text-xs text-purple-400">
+						Mode zone: Cliquez et glissez pour sélectionner une zone, puis relâchez pour placer <strong>{selectedAsset()!.name}</strong>
+					</p>
+				)}
+				{editingAsset() && (
+					<p class="mt-3 text-xs text-blue-400">
+						Mode édition: Cliquez sur la grille pour replacer <strong>{editingAsset()!.asset.name}</strong>
+					</p>
+				)}
+			</div>
+
+			{/* Floating tools panel */}
+			<div class="absolute top-4 right-4 z-20 bg-black/60 backdrop-blur-sm rounded-xl p-4 border border-white/10 shadow-lg w-64 max-h-[90vh] overflow-y-auto">
+				<h2 class="text-white font-display text-lg mb-3">Outils</h2>
+
 				{/* Edit Mode Toggle */}
-				<div class="mb-4">
+				<div class="mb-3">
 					<button
 						class={`w-full px-4 py-2 rounded-lg text-sm transition ${
 							editMode()
@@ -1920,6 +2885,8 @@ export default function MapEditor() {
 							cleanupPreviewMesh();
 							if (newEditMode) {
 								setDeleteMode(false);
+								setZoneSelectionMode(false);
+								setCollisionPreviewMode(false);
 								setSelectedAsset(null);
 								setEditingAsset(null);
 							} else {
@@ -1942,7 +2909,7 @@ export default function MapEditor() {
 				</div>
 
 				{/* Delete Mode Toggle */}
-				<div class="mb-4">
+				<div class="mb-3">
 					<button
 						class={`w-full px-4 py-2 rounded-lg text-sm transition ${
 							deleteMode()
@@ -1955,6 +2922,8 @@ export default function MapEditor() {
 							cleanupPreviewMesh();
 							if (newDeleteMode) {
 								setEditMode(false);
+								setZoneSelectionMode(false);
+								setCollisionPreviewMode(false);
 								setSelectedAsset(null);
 								setEditingAsset(null);
 							}
@@ -1966,6 +2935,40 @@ export default function MapEditor() {
 						<p class="mt-2 text-xs text-slate-400">
 							Cliquez sur un objet pour le supprimer
 						</p>
+					)}
+				</div>
+
+				{/* Zone Selection Mode Toggle */}
+				<div class="mb-3">
+					<button
+						class={`w-full px-4 py-2 rounded-lg text-sm transition ${
+							zoneSelectionMode()
+								? "bg-purple-600/80 hover:bg-purple-600 text-white"
+								: "bg-black/40 hover:bg-black/60 border border-white/10 text-slate-200"
+						}`}
+						onClick={() => {
+							const newMode = !zoneSelectionMode();
+							setZoneSelectionMode(newMode);
+							cleanupPreviewMesh();
+							if (newMode) {
+								setDeleteMode(false);
+								setEditMode(false);
+								setCollisionPreviewMode(false);
+							} else {
+								setIsSelecting(false);
+								setSelectionStart(null);
+								setSelectionEnd(null);
+								updateSelectionOverlay();
+							}
+						}}
+					>
+						{zoneSelectionMode() ? "📐 Mode Zone Actif" : "📐 Mode Sélection Zone"}
+					</button>
+					{zoneSelectionMode() && (
+						<div class="mt-2 text-xs text-slate-400 space-y-1">
+							<p>Sélectionnez une zone en cliquant et glissant</p>
+							<p>L'asset sera placé sur toutes les cellules de la zone</p>
+						</div>
 					)}
 				</div>
 
@@ -1984,12 +2987,18 @@ export default function MapEditor() {
 							if (newMode) {
 								setDeleteMode(false);
 								setEditMode(false);
+								setZoneSelectionMode(false);
 								setSelectedAsset(null);
 								setEditingAsset(null);
 								setShowCollisions(false);
 								// Update overlays when mode is activated
 								if (scene && gridManager) {
 									updateCollisionOverlays();
+								}
+							} else {
+								// Restaurer l'opacité des assets quand le mode est désactivé
+								if (scene && gridManager) {
+									restoreAllAssetsOpacity();
 								}
 							}
 						}}
@@ -2021,17 +3030,6 @@ export default function MapEditor() {
 						{isLoading() ? "Chargement..." : "Sauvegarder"}
 					</button>
 				</div>
-
-				{selectedAsset() && !deleteMode() && !editMode() && (
-					<p class="mt-3 text-xs text-slate-400">
-						Cliquez sur la grille pour placer: <strong>{selectedAsset()!.name}</strong>
-					</p>
-				)}
-				{editingAsset() && (
-					<p class="mt-3 text-xs text-blue-400">
-						Mode édition: Cliquez sur la grille pour replacer <strong>{editingAsset()!.asset.name}</strong>
-					</p>
-				)}
 			</div>
 
 			{/* Canvas */}
@@ -2040,6 +3038,61 @@ export default function MapEditor() {
 				class="w-full h-full"
 				style={{ width: "100%", height: "100vh" }}
 			/>
+
+			{/* Context Menu for Spawn Zones */}
+			<Show when={contextMenuCell()}>
+				{(cell) => {
+					const cellKey = `${cell().x},${cell().z}`;
+					const currentZoneType = spawnZones().get(cellKey);
+					
+					return (
+						<div
+							class="fixed z-50 bg-black/90 backdrop-blur-sm rounded-lg border border-white/20 shadow-xl p-2 min-w-[200px]"
+							style={{
+								left: `${cell().screenX + 10}px`,
+								top: `${cell().screenY + 10}px`,
+							}}
+							onClick={(e) => e.stopPropagation()}
+						>
+							<button
+								class="w-full text-left px-4 py-2 rounded hover:bg-green-600/20 text-green-400 text-sm transition flex items-center gap-2"
+								onClick={() => handleSetSpawnZone("ally")}
+							>
+								<div class="w-3 h-3 rounded-full bg-green-500"></div>
+								Placer cellule allié
+							</button>
+							<button
+								class="w-full text-left px-4 py-2 rounded hover:bg-red-600/20 text-red-400 text-sm transition flex items-center gap-2"
+								onClick={() => handleSetSpawnZone("enemy")}
+							>
+								<div class="w-3 h-3 rounded-full bg-red-500"></div>
+								Placer cellule ennemie
+							</button>
+							<button
+								class="w-full text-left px-4 py-2 rounded hover:bg-purple-600/20 text-purple-400 text-sm transition flex items-center gap-2"
+								onClick={() => handleSetSpawnZone("teleport")}
+							>
+								<div class="w-3 h-3 rounded-full bg-purple-500"></div>
+								Placer cellule téléportation
+							</button>
+							{currentZoneType && (
+								<button
+									class="w-full text-left px-4 py-2 rounded hover:bg-gray-600/20 text-gray-300 text-sm transition"
+									onClick={() => handleSetSpawnZone(null)}
+								>
+									Retirer la zone
+								</button>
+							)}
+							<button
+								class="w-full text-left px-4 py-2 rounded hover:bg-gray-600/20 text-gray-400 text-sm transition mt-1 border-t border-white/10 pt-2"
+								onClick={() => setContextMenuCell(null)}
+							>
+								Annuler
+							</button>
+						</div>
+					);
+				}}
+			</Show>
 		</div>
 	);
 }
