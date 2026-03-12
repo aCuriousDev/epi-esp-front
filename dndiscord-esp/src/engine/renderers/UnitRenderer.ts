@@ -11,8 +11,10 @@ import {
   Animation,
   Animatable,
   TransformNode,
+  DynamicTexture,
+  Texture,
 } from '@babylonjs/core';
-import { Unit, UnitType, GridPosition } from '../../types';
+import { Unit, UnitType, GridPosition, Team } from '../../types';
 import { gridToWorld } from '../../game';
 import { ModelLoader } from '../ModelLoader';
 
@@ -56,6 +58,11 @@ export class UnitRenderer {
   private unitMeshes: Map<string, AbstractMesh> = new Map();
   private materials: Map<string, StandardMaterial>;
   private activeAnimations: Map<string, Animatable> = new Map();
+  
+  // Turn indicator ping arrow
+  private pingArrow: Mesh | null = null;
+  private pingAnimation: Animatable | null = null;
+  private currentPingUnitId: string | null = null;
   
   // Model configuration
   private readonly MODEL_PATHS: Record<string, string> = {
@@ -236,6 +243,11 @@ export class UnitRenderer {
     console.log(`  - Mesh ACTUAL position: (${meshCurrentPos.x.toFixed(2)}, ${meshCurrentPos.z.toFixed(2)})`);
     console.log(`  - From world position: (${fromPosObj.x.toFixed(2)}, ${fromPosObj.z.toFixed(2)})`);
     console.log(`  - To world position: (${worldPos.x.toFixed(2)}, ${worldPos.z.toFixed(2)})`);
+    
+    // Update ping position if this is the current unit
+    if (this.currentPingUnitId === unit.id) {
+      this.updatePingPosition();
+    }
     
     const willAnimate = fromPosObj.x !== worldPos.x || fromPosObj.z !== worldPos.z;
     console.log(`  - Will animate movement:`, willAnimate);
@@ -484,28 +496,22 @@ export class UnitRenderer {
 
   /**
    * Set mesh and children visibility
+   * Utilise uniquement isVisible pour éviter de désactiver complètement le mesh (setEnabled)
    */
   private setMeshVisibility(mesh: AbstractMesh, visible: boolean): void {
-    mesh.setEnabled(visible);
+    // Utiliser uniquement isVisible pour la visibilité (pas setEnabled qui désactive complètement)
     mesh.isVisible = visible;
     
-    const children = mesh.getChildMeshes(true);
     const descendants = mesh.getDescendants(false);
-    console.log(`${mesh.name} has ${children.length} child meshes, ${descendants.length} total descendants`);
-    console.log(`Root mesh class: ${mesh.getClassName()}, has parent: ${mesh.parent !== null}`);
-    
-    // Log first few descendants to see structure
-    descendants.slice(0, 5).forEach(desc => {
-      console.log(`  - Descendant: ${desc.name}, class: ${desc.getClassName()}, parent: ${desc.parent?.name}`);
-    });
     
     // Set visibility on all descendants
     descendants.forEach(node => {
       if ('isVisible' in node) {
         (node as any).isVisible = visible;
       }
-      node.setEnabled(visible);
     });
+    
+    console.log(`[UnitRenderer] Set visibility ${visible ? 'VISIBLE' : 'INVISIBLE'} for ${mesh.name} and ${descendants.length} descendants`);
   }
 
   /**
@@ -518,6 +524,31 @@ export class UnitRenderer {
       this.shadowGenerator!.addShadowCaster(childMesh);
     });
     this.shadowGenerator.addShadowCaster(mesh);
+  }
+
+  /**
+   * Définit la visibilité des unités ennemies
+   * @param visible - true pour rendre visibles, false pour invisibles
+   * @param enemyUnitIds - Liste des IDs des unités ennemies
+   */
+  public setEnemyVisibility(visible: boolean, enemyUnitIds: string[]): void {
+    console.log(`[UnitRenderer] setEnemyVisibility(${visible}) for ${enemyUnitIds.length} enemies:`, enemyUnitIds);
+    let visibleCount = 0;
+    let notFoundCount = 0;
+    
+    enemyUnitIds.forEach(unitId => {
+      const mesh = this.unitMeshes.get(unitId);
+      if (mesh) {
+        this.setMeshVisibility(mesh, visible);
+        visibleCount++;
+        console.log(`[UnitRenderer] ${visible ? 'Showed' : 'Hid'} enemy unit: ${unitId}`);
+      } else {
+        notFoundCount++;
+        console.warn(`[UnitRenderer] Enemy unit mesh not found: ${unitId} (may not be created yet)`);
+      }
+    });
+    
+    console.log(`[UnitRenderer] Visibility update complete: ${visibleCount} updated, ${notFoundCount} not found`);
   }
 
   /**
@@ -539,6 +570,17 @@ export class UnitRenderer {
    */
   public clearAllUnits(): void {
     console.log(`[UnitRenderer] Clearing ${this.unitMeshes.size} tracked units`);
+    
+    // Clear ping arrow
+    if (this.pingAnimation) {
+      this.pingAnimation.stop();
+      this.pingAnimation = null;
+    }
+    if (this.pingArrow) {
+      this.pingArrow.dispose();
+      this.pingArrow = null;
+    }
+    this.currentPingUnitId = null;
     
     // First, clear all tracked units
     this.unitMeshes.forEach((mesh, unitId) => {
@@ -598,6 +640,298 @@ export class UnitRenderer {
     } catch (error) {
       console.error('Error preloading models:', error);
     }
+  }
+
+  /**
+   * Create the ping arrow indicator mesh
+   */
+  private createPingArrow(): Mesh {
+    // Create a simple arrow shape using a cone
+    const arrow = MeshBuilder.CreateCylinder('ping_arrow', {
+      height: 0.3,
+      diameterTop: 0.05,
+      diameterBottom: 0.15,
+      tessellation: 8,
+    }, this.scene);
+    
+    // Rotate to point downward
+    arrow.rotation.x = Math.PI;
+    
+    // Create material for the arrow (bright yellow/orange)
+    const material = new StandardMaterial('ping_arrow_material', this.scene);
+    material.emissiveColor = new Color3(1, 0.8, 0); // Bright yellow-orange
+    material.diffuseColor = new Color3(1, 0.8, 0);
+    material.specularColor = new Color3(0, 0, 0);
+    arrow.material = material;
+    
+    // Make it always face the camera (billboard effect)
+    arrow.billboardMode = Mesh.BILLBOARDMODE_ALL;
+    
+    // Initially hidden
+    arrow.isVisible = false;
+    
+    return arrow;
+  }
+
+  /**
+   * Update the ping arrow to show above the current unit's turn
+   * @param unitId - ID of the unit whose turn it is, or null to hide the ping
+   */
+  public updateTurnIndicator(unitId: string | null): void {
+    // If no unit or same unit, do nothing
+    if (unitId === this.currentPingUnitId) {
+      return;
+    }
+    
+    // Stop existing animation if any
+    if (this.pingAnimation) {
+      this.pingAnimation.stop();
+      this.pingAnimation = null;
+    }
+    
+    // Hide arrow if no unit
+    if (!unitId) {
+      if (this.pingArrow) {
+        this.pingArrow.isVisible = false;
+      }
+      this.currentPingUnitId = null;
+      return;
+    }
+    
+    // Get the unit mesh
+    const unitMesh = this.unitMeshes.get(unitId);
+    if (!unitMesh) {
+      console.warn(`[UnitRenderer] Cannot show ping for unit ${unitId}: mesh not found`);
+      return;
+    }
+    
+    // Create arrow if it doesn't exist
+    if (!this.pingArrow) {
+      this.pingArrow = this.createPingArrow();
+    }
+    
+    // Get unit's bounding box to position arrow above it
+    const boundingInfo = unitMesh.getBoundingInfo();
+    const unitHeight = boundingInfo.boundingBox.maximum.y - boundingInfo.boundingBox.minimum.y;
+    const arrowHeight = 0.3; // Height of the arrow mesh
+    
+    // Position arrow high above the unit for maximum visibility
+    this.pingArrow.position.x = unitMesh.position.x;
+    this.pingArrow.position.y = unitMesh.position.y + unitHeight / 2 + arrowHeight + 1.5; // High offset for visibility
+    this.pingArrow.position.z = unitMesh.position.z;
+    
+    // Show the arrow
+    this.pingArrow.isVisible = true;
+    this.currentPingUnitId = unitId;
+    
+    // Create ping animation (bounce up and down)
+    const pingAnimation = new Animation(
+      'ping_animation',
+      'position.y',
+      30, // frames per second
+      Animation.ANIMATIONTYPE_FLOAT,
+      Animation.ANIMATIONLOOPMODE_CYCLE
+    );
+    
+    const startY = this.pingArrow.position.y;
+    const keyframes = [
+      { frame: 0, value: startY },
+      { frame: 15, value: startY + 0.15 }, // Bounce up
+      { frame: 30, value: startY }, // Bounce back down
+    ];
+    
+    pingAnimation.setKeys(keyframes);
+    this.pingArrow.animations = [pingAnimation];
+    
+    // Start the animation
+    this.pingAnimation = this.scene.beginAnimation(this.pingArrow, 0, 30, true);
+  }
+
+  /**
+   * Update ping arrow position when unit moves
+   */
+  public updatePingPosition(): void {
+    if (!this.pingArrow || !this.currentPingUnitId || !this.pingArrow.isVisible) {
+      return;
+    }
+    
+    const unitMesh = this.unitMeshes.get(this.currentPingUnitId);
+    if (!unitMesh) {
+      return;
+    }
+    
+    // Update position to follow unit
+    const boundingInfo = unitMesh.getBoundingInfo();
+    const unitHeight = boundingInfo.boundingBox.maximum.y - boundingInfo.boundingBox.minimum.y;
+    const arrowHeight = 0.3;
+    
+    // Stop animation temporarily to update position
+    const wasAnimating = !!this.pingAnimation;
+    if (wasAnimating && this.pingAnimation) {
+      this.pingAnimation.stop();
+    }
+    
+    // Update position (same offset as in updateTurnIndicator)
+    const newY = unitMesh.position.y + unitHeight / 2 + arrowHeight + 1.5;
+    this.pingArrow.position.x = unitMesh.position.x;
+    this.pingArrow.position.y = newY;
+    this.pingArrow.position.z = unitMesh.position.z;
+    
+    // Restart animation with new position
+    if (wasAnimating) {
+      const pingAnimation = new Animation(
+        'ping_animation',
+        'position.y',
+        30,
+        Animation.ANIMATIONTYPE_FLOAT,
+        Animation.ANIMATIONLOOPMODE_CYCLE
+      );
+      
+      const keyframes = [
+        { frame: 0, value: newY },
+        { frame: 15, value: newY + 0.15 },
+        { frame: 30, value: newY },
+      ];
+      
+      pingAnimation.setKeys(keyframes);
+      this.pingArrow.animations = [pingAnimation];
+      this.pingAnimation = this.scene.beginAnimation(this.pingArrow, 0, 30, true);
+    }
+  }
+
+  /**
+   * Affiche les dégâts flottants au-dessus d'une unité
+   * @param unitId - ID de l'unité qui prend les dégâts
+   * @param damage - Montant des dégâts à afficher
+   */
+  public showDamageNumber(unitId: string, damage: number): void {
+    const unitMesh = this.unitMeshes.get(unitId);
+    if (!unitMesh) {
+      console.warn(`[UnitRenderer] Cannot show damage for unit ${unitId}: mesh not found`);
+      return;
+    }
+
+    const plane = MeshBuilder.CreatePlane(`damage_${unitId}_${Date.now()}`, {
+      size: 1, 
+      width: 2,
+      height: 1,
+    }, this.scene);
+
+    // Positionner le plan à la même hauteur que le ping (unitHeight / 2 + arrowHeight + 1.5)
+    const boundingInfo = unitMesh.getBoundingInfo();
+    const unitHeight = boundingInfo.boundingBox.maximum.y - boundingInfo.boundingBox.minimum.y;
+    const arrowHeight = 0.3;
+    
+    plane.position.x = unitMesh.position.x;
+    plane.position.y = unitMesh.position.y + unitHeight / 2 + arrowHeight + 1.5; // Même hauteur que le ping
+    plane.position.z = unitMesh.position.z;
+    
+    // Faire face à la caméra
+    plane.billboardMode = Mesh.BILLBOARDMODE_ALL;
+    
+    // Créer une texture dynamique un peu plus grande pour le texte
+    const texture = new DynamicTexture(`damage_texture_${unitId}_${Date.now()}`, {
+      width: 192,
+      height: 96,
+    }, this.scene, false);
+    
+    const context = texture.getContext() as CanvasRenderingContext2D;
+    
+    // Rendre le fond complètement transparent
+    context.clearRect(0, 0, 192, 96);
+    context.globalCompositeOperation = 'source-over';
+    
+    // Style du texte - un peu plus grand, juste rouge
+    context.font = 'bold 36px Arial';
+    context.fillStyle = '#FF0000'; // Rouge vif
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    
+    // Dessiner uniquement le texte rouge (sans contour)
+    const text = `- ${damage}`;
+    context.fillText(text, 96, 48);
+    
+    texture.update();
+    
+    // Créer le matériau avec transparence complète du fond
+    const material = new StandardMaterial(`damage_material_${unitId}_${Date.now()}`, this.scene);
+    material.diffuseTexture = texture;
+    material.emissiveColor = new Color3(1, 0, 0); // Rouge émissif
+    material.disableLighting = true; // Toujours visible
+    material.alpha = 1;
+    material.backFaceCulling = false;
+    material.useAlphaFromDiffuseTexture = true; // Utiliser la transparence de la texture
+    material.opacityTexture = texture; // Utiliser la texture pour l'opacité
+    
+    plane.material = material;
+    
+    // Animation plus smooth : monter et disparaître avec easing
+    const startY = plane.position.y;
+    const endY = startY + 0.8; // Monter de 0.8 unités (moins de distance)
+    
+    // Animation de position Y avec plus de frames pour plus de fluidité
+    const positionAnimation = new Animation(
+      'damage_position',
+      'position.y',
+      60, // Plus de FPS pour plus de fluidité
+      Animation.ANIMATIONTYPE_FLOAT,
+      Animation.ANIMATIONLOOPMODE_CONSTANT
+    );
+    
+    // Utiliser une courbe d'easing pour un mouvement plus smooth
+    const positionKeys = [
+      { frame: 0, value: startY },
+      { frame: 20, value: startY + (endY - startY) * 0.3 }, // Début rapide
+      { frame: 50, value: startY + (endY - startY) * 0.8 }, // Ralentissement
+      { frame: 90, value: endY }, // Fin douce
+    ];
+    positionAnimation.setKeys(positionKeys);
+    
+    // Animation d'opacité plus smooth
+    const opacityAnimation = new Animation(
+      'damage_opacity',
+      'material.alpha',
+      60,
+      Animation.ANIMATIONTYPE_FLOAT,
+      Animation.ANIMATIONLOOPMODE_CONSTANT
+    );
+    
+    const opacityKeys = [
+      { frame: 0, value: 0 }, // Commence invisible
+      { frame: 10, value: 1 }, // Apparition rapide
+      { frame: 60, value: 1 }, // Reste visible
+      { frame: 90, value: 0 }, // Disparaît progressivement
+    ];
+    opacityAnimation.setKeys(opacityKeys);
+    
+    // Animation de scale pour un effet de "pop" au début
+    const scaleAnimation = new Animation(
+      'damage_scale',
+      'scaling',
+      60,
+      Animation.ANIMATIONTYPE_VECTOR3,
+      Animation.ANIMATIONLOOPMODE_CONSTANT
+    );
+    
+    const scaleKeys = [
+      { frame: 0, value: new Vector3(0.5, 0.5, 0.5) }, // Commence petit
+      { frame: 15, value: new Vector3(1.2, 1.2, 1.2) }, // Agrandit rapidement
+      { frame: 30, value: new Vector3(1, 1, 1) }, // Retour à la normale
+      { frame: 90, value: new Vector3(0.8, 0.8, 0.8) }, // Rétrécit légèrement à la fin
+    ];
+    scaleAnimation.setKeys(scaleKeys);
+    
+    plane.animations = [positionAnimation, opacityAnimation, scaleAnimation];
+    
+    // Démarrer l'animation avec plus de frames pour plus de fluidité
+    const animatable = this.scene.beginAnimation(plane, 0, 90, false, 1, () => {
+      // Nettoyer après l'animation
+      plane.dispose();
+      material.dispose();
+      texture.dispose();
+    });
+    
+    console.log(`[UnitRenderer] Showing damage ${damage} for unit ${unitId}`);
   }
 }
 

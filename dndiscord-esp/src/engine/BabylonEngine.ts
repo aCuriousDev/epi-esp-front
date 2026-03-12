@@ -256,6 +256,32 @@ export class BabylonEngine {
     this.highlightRenderer.clearPathPreview();
   }
   
+  /**
+   * Définit la visibilité des unités ennemies
+   * @param visible - true pour rendre visibles, false pour invisibles
+   * @param enemyUnitIds - Liste des IDs des unités ennemies
+   */
+  public setEnemyVisibility(visible: boolean, enemyUnitIds: string[]): void {
+    this.unitRenderer.setEnemyVisibility(visible, enemyUnitIds);
+  }
+
+  /**
+   * Met à jour l'indicateur de ping pour montrer quelle unité doit jouer
+   * @param unitId - ID de l'unité dont c'est le tour, ou null pour cacher le ping
+   */
+  public updateTurnIndicator(unitId: string | null): void {
+    this.unitRenderer.updateTurnIndicator(unitId);
+  }
+
+  /**
+   * Affiche les dégâts flottants au-dessus d'une unité
+   * @param unitId - ID de l'unité qui prend les dégâts
+   * @param damage - Montant des dégâts à afficher
+   */
+  public showDamageNumber(unitId: string, damage: number): void {
+    this.unitRenderer.showDamageNumber(unitId, damage);
+  }
+  
   // ============================================
   // INPUT CALLBACKS
   // ============================================

@@ -2,6 +2,7 @@ import { Component, onMount, onCleanup, createEffect, createSignal } from 'solid
 import { BabylonEngine } from '../engine/BabylonEngine';
 import {
   gameState,
+  setGameState,
   tiles,
   units,
   selectUnit,
@@ -11,6 +12,9 @@ import {
   executeEnemyTurn,
   posToKey,
   getIsFreeRoamMode,
+  getEnemyUnits,
+  getCurrentUnit,
+  getAllySpawnPositions,
 } from '../game';
 import { GamePhase, TurnPhase, Team, Unit, GridPosition } from '../types';
 
@@ -206,12 +210,151 @@ export const GameCanvas: Component = () => {
           }
         }
         console.log('[GameCanvas] All units processed');
+        
+        // Mettre à jour la visibilité des ennemis après création/mise à jour des unités
+        const phase = gameState.phase;
+        const enemyUnits = getEnemyUnits();
+        const enemyUnitIds = enemyUnits.map(u => u.id);
+        const shouldBeVisible = phase !== GamePhase.COMBAT_PREPARATION;
+        
+        if (enemyUnitIds.length > 0 && engineInstance) {
+          engineInstance.setEnemyVisibility(shouldBeVisible, enemyUnitIds);
+        }
       } finally {
         isProcessingUnits = false;
       }
     })();
   });
   
+  // Gérer la visibilité des ennemis selon la phase du jeu
+  createEffect(() => {
+    if (!engineInstance || !isEngineReady()) return;
+    
+    // Accéder à units pour déclencher l'effet quand de nouvelles unités sont créées
+    const unitCount = Object.keys(units).length;
+    const phase = gameState.phase;
+    
+    const enemyUnits = getEnemyUnits();
+    const enemyUnitIds = enemyUnits.map(u => u.id);
+    
+    console.log(`[GameCanvas] Visibility effect triggered - Phase: ${phase}, Enemy count: ${enemyUnitIds.length}, Unit count: ${unitCount}`);
+    
+    // En phase de préparation : rendre les ennemis invisibles
+    // Sinon : rendre les ennemis visibles
+    const shouldBeVisible = phase !== GamePhase.COMBAT_PREPARATION;
+    
+    if (enemyUnitIds.length > 0) {
+      console.log(`[GameCanvas] Setting enemy visibility to ${shouldBeVisible ? 'VISIBLE' : 'INVISIBLE'} for ${enemyUnitIds.length} enemies`);
+      engineInstance.setEnemyVisibility(shouldBeVisible, enemyUnitIds);
+    } else {
+      console.warn(`[GameCanvas] No enemy units found! Total units: ${unitCount}`);
+    }
+  });
+
+  // Gérer l'indicateur de ping pour montrer quelle unité doit jouer
+  // Le ping disparaît dès qu'une action est effectuée (déplacement ou sort)
+  let previousCurrentUnitId: string | null = null;
+  let previousCurrentUnitPosition: GridPosition | null = null;
+  let previousCurrentUnitAP: number | null = null;
+  
+  createEffect(() => {
+    if (!engineInstance || !isEngineReady()) return;
+    
+    // Surveiller la phase et l'index de l'unité actuelle
+    const phase = gameState.phase;
+    const currentUnitIndex = gameState.currentUnitIndex;
+    const turnOrder = gameState.turnOrder;
+    
+    // Ne montrer le ping que pendant les phases de combat (pas en préparation)
+    if (phase === GamePhase.COMBAT_PREPARATION || phase === GamePhase.SETUP || phase === GamePhase.GAME_OVER) {
+      engineInstance.updateTurnIndicator(null);
+      previousCurrentUnitId = null;
+      previousCurrentUnitPosition = null;
+      previousCurrentUnitAP = null;
+      return;
+    }
+    
+    // Obtenir l'unité actuelle
+    const currentUnit = getCurrentUnit();
+    
+    if (!currentUnit || !currentUnit.isAlive) {
+      engineInstance.updateTurnIndicator(null);
+      previousCurrentUnitId = null;
+      previousCurrentUnitPosition = null;
+      previousCurrentUnitAP = null;
+      return;
+    }
+    
+    // Vérifier si c'est une nouvelle unité (nouveau tour)
+    const isNewUnit = currentUnit.id !== previousCurrentUnitId;
+    
+    // Vérifier si l'unité a effectué une action :
+    // - Position a changé (déplacement)
+    // - Action points ont diminué (sort ou déplacement)
+    const positionChanged = previousCurrentUnitPosition && 
+      (previousCurrentUnitPosition.x !== currentUnit.position.x || 
+       previousCurrentUnitPosition.z !== currentUnit.position.z);
+    const apDecreased = previousCurrentUnitAP !== null && 
+      currentUnit.stats.currentActionPoints < previousCurrentUnitAP;
+    
+    // Si c'est une nouvelle unité, afficher le ping
+    if (isNewUnit) {
+      engineInstance.updateTurnIndicator(currentUnit.id);
+      previousCurrentUnitId = currentUnit.id;
+      previousCurrentUnitPosition = { ...currentUnit.position };
+      previousCurrentUnitAP = currentUnit.stats.currentActionPoints;
+    } 
+    // Si l'unité a effectué une action, cacher le ping
+    else if (positionChanged || apDecreased) {
+      engineInstance.updateTurnIndicator(null);
+      // Garder les valeurs pour éviter de réafficher le ping
+      previousCurrentUnitPosition = { ...currentUnit.position };
+      previousCurrentUnitAP = currentUnit.stats.currentActionPoints;
+    }
+    // Sinon, mettre à jour les valeurs de suivi
+    else {
+      previousCurrentUnitPosition = { ...currentUnit.position };
+      previousCurrentUnitAP = currentUnit.stats.currentActionPoints;
+    }
+  });
+  
+  // Surveiller les changements de HP pour afficher les dégâts
+  const previousUnitHealth: Map<string, number> = new Map();
+  
+  createEffect(() => {
+    if (!engineInstance || !isEngineReady()) return;
+    
+    // Surveiller toutes les unités pour détecter les changements de HP
+    Object.keys(units).forEach(unitId => {
+      const unit = units[unitId];
+      if (!unit) return;
+      
+      const previousHP = previousUnitHealth.get(unitId);
+      const currentHP = unit.stats.currentHealth;
+      
+      // Si l'HP a diminué, afficher les dégâts
+      if (previousHP !== undefined && previousHP > currentHP && previousHP > 0) {
+        const damage = previousHP - currentHP;
+        if (damage > 0) {
+          engineInstance.showDamageNumber(unitId, damage);
+        }
+      }
+      
+      // Mettre à jour la valeur précédente
+      previousUnitHealth.set(unitId, currentHP);
+    });
+  });
+  
+  // En phase de préparation, s'assurer que toutes les cases alliées sont toujours visibles
+  createEffect(() => {
+    if (gameState.phase === GamePhase.COMBAT_PREPARATION && !gameState.selectedUnit) {
+      const allyPositions = getAllySpawnPositions(gameState.mapId);
+      if (allyPositions.length > 0 && JSON.stringify(gameState.highlightedTiles) !== JSON.stringify(allyPositions)) {
+        setGameState('highlightedTiles', allyPositions);
+      }
+    }
+  });
+
   // Update highlights when highlighted tiles change
   createEffect(() => {
     if (!engineInstance) return;
@@ -279,6 +422,21 @@ export const GameCanvas: Component = () => {
     
     const isFreeRoam = getIsFreeRoamMode();
     
+    // Phase de préparation : déplacer l'unité alliée sur une case alliée surlignée
+    if (gameState.phase === GamePhase.COMBAT_PREPARATION) {
+      if (gameState.selectedUnit && gameState.highlightedTiles.length > 0) {
+        const isHighlighted = gameState.highlightedTiles.some((t) => t.x === x && t.z === z);
+        if (isHighlighted) {
+          moveUnit(pos);
+          return;
+        }
+      }
+      if (tile.occupiedBy) {
+        handleUnitClick(tile.occupiedBy);
+      }
+      return;
+    }
+    
     // Free Roam Mode - simplified logic
     if (isFreeRoam) {
       // If unit is selected and tile is highlighted (movement available)
@@ -330,6 +488,10 @@ export const GameCanvas: Component = () => {
   
   function handleTileHover(x: number, z: number): void {
     const isFreeRoam = getIsFreeRoamMode();
+    const isPreparation = gameState.phase === GamePhase.COMBAT_PREPARATION;
+    
+    // Pas d'aperçu de chemin en phase de préparation (placement direct)
+    if (isPreparation) return;
     
     // Show path preview when hovering over valid movement tiles
     if (gameState.selectedUnit && gameState.highlightedTiles.length > 0) {
@@ -353,6 +515,15 @@ export const GameCanvas: Component = () => {
     if (!unit || !unit.isAlive) return;
     
     const isFreeRoam = getIsFreeRoamMode();
+    const isPreparation = gameState.phase === GamePhase.COMBAT_PREPARATION;
+    
+    // Phase de préparation : ne sélectionner que les unités alliées
+    if (isPreparation) {
+      if (unit.team === Team.PLAYER) {
+        selectUnit(unitId);
+      }
+      return;
+    }
     
     // Free Roam Mode - only allow selecting player units
     if (isFreeRoam) {
