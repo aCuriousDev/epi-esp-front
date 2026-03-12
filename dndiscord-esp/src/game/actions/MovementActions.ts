@@ -15,6 +15,7 @@ import { getAllySpawnPositions } from '../initialization/InitUnits';
 import { getTeleportPositions } from '../../services/mapStorage';
 import { transitionToNextRoom } from './TurnActions';
 import { playMovementDustEffect } from '../vfx/VFXIntegration';
+import { playFootstepSound, playSelectSound } from '../audio/SoundIntegration';
 
 // ============================================
 // UNIT SELECTION
@@ -23,6 +24,8 @@ import { playMovementDustEffect } from '../vfx/VFXIntegration';
 export function selectUnit(unitId: string): void {
   const unit = units[unitId];
   if (!unit || !unit.isAlive) return;
+  
+  playSelectSound();
   
   const isFreeRoam = getIsFreeRoamMode();
   const isPreparation = gameState.phase === GamePhase.COMBAT_PREPARATION;
@@ -165,8 +168,9 @@ export function moveUnit(targetPos: GridPosition): boolean {
   if (!isFreeRoam && unit.stats.currentActionPoints < movementCost) return false;
   
   batch(() => {
-    // Play movement dust trail VFX
+    // Play movement dust trail VFX + footstep sound
     playMovementDustEffect(unit.position, targetPos);
+    playFootstepSound();
     
     // Clear old tile
     setTiles(posToKey(unit.position), 'occupiedBy', null);

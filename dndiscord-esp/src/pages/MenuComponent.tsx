@@ -1,5 +1,5 @@
 import { useNavigate } from "@solidjs/router";
-import { createSignal, For, JSX, Show } from "solid-js";
+import { createSignal, For, JSX, onCleanup, onMount, Show } from "solid-js";
 import { Settings, ScrollText, Swords, Users, BookOpen } from "lucide-solid";
 
 import { GameIconsFoldedPaper } from "../components/common/GameIconsFoldedPaper";
@@ -10,9 +10,14 @@ import { AnimatedD20 } from "../components/common/AnimatedD20";
 import ButtonMenu from "../components/common/ButtonMenu";
 import { LoginButton, UserMenu } from "../components/auth";
 import { authStore } from "../stores/auth.store";
+import { playAmbientMusic, stopAmbientMusic, playMenuHoverSound, playMenuClickSound } from "../game/audio/SoundIntegration";
 
 export default function MenuComponent() {
 	const [hovered, setHovered] = createSignal<string | null>(null);
+
+	onMount(() => playAmbientMusic('menu'));
+	onCleanup(() => stopAmbientMusic());
+
 	const [menuItems, setMenuItems] = createSignal<
 		Array<{
 			label: string;
@@ -143,9 +148,9 @@ export default function MenuComponent() {
 								<ButtonMenu
 									label={item.label}
 									icon={item.icon}
-									onMouseEnter={() => setHovered(item.hoveringLabel)}
+									onMouseEnter={() => { setHovered(item.hoveringLabel); playMenuHoverSound(); }}
 									onMouseLeave={() => setHovered(null)}
-									onClick={() => navigate(item.route)}
+									onClick={() => { playMenuClickSound(); navigate(item.route); }}
 								/>
 							</div>
 						)}

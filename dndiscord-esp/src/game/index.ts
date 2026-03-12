@@ -104,3 +104,9 @@ export { initializeFreeRoam } from './initialization/InitFreeRoam';
 
 export * as TurnManager from './TurnManager';
 
+// ============================================
+// AUDIO
+// ============================================
+
+export { setSoundEngine, stopAmbientMusic } from './audio/SoundIntegration';
+
