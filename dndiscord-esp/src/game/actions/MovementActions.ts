@@ -12,6 +12,7 @@ import { units, setUnits } from '../stores/UnitsStore';
 import { tiles, setTiles, pathfinder, updatePathfinder } from '../stores/TilesStore';
 import { posToKey } from '../utils/GridUtils';
 import { playMovementDustEffect } from '../vfx/VFXIntegration';
+import { playFootstepSound, playSelectSound } from '../audio/SoundIntegration';
 
 // ============================================
 // UNIT SELECTION
@@ -20,6 +21,8 @@ import { playMovementDustEffect } from '../vfx/VFXIntegration';
 export function selectUnit(unitId: string): void {
   const unit = units[unitId];
   if (!unit || !unit.isAlive) return;
+  
+  playSelectSound();
   
   const isFreeRoam = getIsFreeRoamMode();
   const currentUnitId = gameState.turnOrder[gameState.currentUnitIndex];
@@ -118,8 +121,9 @@ export function moveUnit(targetPos: GridPosition): boolean {
   if (!isFreeRoam && unit.stats.currentActionPoints < movementCost) return false;
   
   batch(() => {
-    // Play movement dust trail VFX
+    // Play movement dust trail VFX + footstep sound
     playMovementDustEffect(unit.position, targetPos);
+    playFootstepSound();
     
     // Clear old tile
     setTiles(posToKey(unit.position), 'occupiedBy', null);

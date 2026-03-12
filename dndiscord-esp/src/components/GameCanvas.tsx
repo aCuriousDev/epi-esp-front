@@ -13,9 +13,13 @@ import {
   getIsFreeRoamMode,
 } from '../game';
 import { setVFXEngine } from '../game/vfx/VFXIntegration';
+import { SoundManager } from '../engine/audio/SoundManager';
+import { setSoundEngine } from '../game/audio/SoundIntegration';
+import { soundSettings } from '../stores/sound.store';
 import { GamePhase, TurnPhase, Team, Unit, GridPosition, GameMode } from '../types';
 
 let engineInstance: BabylonEngine | null = null;
+let soundInstance: SoundManager | null = null;
 let lastExecutedEnemyIndex: number | null = null;
 
 // Export loading state as a signal
@@ -57,6 +61,12 @@ export const GameCanvas: Component = () => {
     // Create Babylon engine
     engineInstance = new BabylonEngine(canvasRef);
     setVFXEngine(engineInstance);
+
+    // Create Sound engine
+    soundInstance = new SoundManager();
+    soundInstance.ambientVolume = soundSettings.musicVolume();
+    soundInstance.sfxVolume = soundSettings.sfxVolume();
+    setSoundEngine(soundInstance);
     
     // Setup click handlers
     engineInstance.setOnTileClick((pos) => {
@@ -96,9 +106,21 @@ export const GameCanvas: Component = () => {
       }
       engineInstance = null;
     }
+    if (soundInstance) {
+      setSoundEngine(null);
+      soundInstance.dispose();
+      soundInstance = null;
+    }
     setIsEngineReady(false);
     prevPositions.clear();
     console.log('[GameCanvas] ===== CLEANUP COMPLETE =====');
+  });
+
+  // Sync sound settings reactively
+  createEffect(() => {
+    if (!soundInstance) return;
+    soundInstance.ambientVolume = soundSettings.musicEnabled() ? soundSettings.musicVolume() : 0;
+    soundInstance.sfxVolume = soundSettings.sfxEnabled() ? soundSettings.sfxVolume() : 0;
   });
   
   // Create grid when tiles change (only after engine is ready)

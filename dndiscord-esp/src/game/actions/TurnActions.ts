@@ -16,6 +16,7 @@ import { initializeFreeRoam } from '../initialization/InitFreeRoam';
 import * as TurnManager from '../TurnManager';
 import { checkGameOver } from './CombatActions';
 import { playTurnStartEffect } from '../vfx/VFXIntegration';
+import { playTurnStartSound, playNewRoundSound, playAmbientMusic } from '../audio/SoundIntegration';
 
 // ============================================
 // GAME START
@@ -74,6 +75,9 @@ function initializeCombat(): void {
     
     addCombatLog('Battle begins!', 'system');
   });
+
+  // Start combat ambient music
+  playAmbientMusic('combat');
   
   console.log('[initializeCombat] Combat initialization complete');
 }
@@ -126,6 +130,7 @@ export function nextTurn(): void {
     
     // Log AFTER state is set (using the already-incremented value)
     addCombatLog(`Round ${gameState.currentTurn} begins!`, 'system');
+    playNewRoundSound();
     
     // Validate turn order
     const validation = TurnManager.validateTurnOrder(gameState.turnOrder, units);
@@ -150,10 +155,11 @@ export function nextTurn(): void {
   // Determine phase AFTER state is committed
   updateGamePhase();
   
-  // Play turn start VFX for the new active unit
+  // Play turn start VFX + sound for the new active unit
   const currentUnitAfter = getCurrentUnit();
   if (currentUnitAfter && currentUnitAfter.isAlive) {
     playTurnStartEffect(currentUnitAfter.position, currentUnitAfter.team as string);
+    playTurnStartSound();
   }
   
   console.log('[nextTurn] Current unit after advance:', currentUnitAfter?.name, 'team:', currentUnitAfter?.team);

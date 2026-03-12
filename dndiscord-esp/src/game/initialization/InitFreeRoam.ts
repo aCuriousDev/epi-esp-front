@@ -10,6 +10,7 @@ import { setTiles, tiles } from '../stores/TilesStore';
 import { posToKey } from '../utils/GridUtils';
 import { setGameState } from '../stores/GameStateStore';
 import { initializeGrid } from './InitGrid';
+import { playAmbientMusic } from '../audio/SoundIntegration';
 import {
   WARRIOR_ABILITIES,
   MAGE_ABILITIES,
@@ -131,5 +132,8 @@ export function initializeFreeRoam(): void {
   });
 
   console.log('[initializeFreeRoam] Free Roam mode initialized - Units:', Object.keys(newUnits).length, 'Tiles:', Object.keys(tiles).length);
+
+  // Start exploration ambient music
+  playAmbientMusic('exploration');
 }
 

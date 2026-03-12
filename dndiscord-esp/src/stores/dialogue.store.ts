@@ -1,4 +1,5 @@
 import { createStore, produce } from "solid-js/store";
+import { playBabbleSound } from "../game/audio/SoundIntegration";
 
 // ============================================
 // TYPES
@@ -74,6 +75,10 @@ export function showPlayerBubble(
     phase: "in",
   });
 
+  // Animal Crossing–style babble voice (random pitch per character)
+  const pitches: ('low' | 'mid' | 'high')[] = ['low', 'mid', 'high'];
+  playBabbleSound(text, pitches[Math.abs(unitId.charCodeAt(0)) % 3]);
+
   // Schedule fade-out → hidden
   const timer = window.setTimeout(() => {
     setState("bubbles", unitId, "phase", "out");
@@ -105,6 +110,9 @@ export function showDmMessage(text: string, duration = DEFAULT_DURATION): void {
   if (dmTimer != null) clearTimeout(dmTimer);
 
   setState("dm", { text, phase: "in" });
+
+  // DM babble (low-pitched, authoritative)
+  playBabbleSound(text, 'low');
 
   dmTimer = window.setTimeout(() => {
     setState("dm", "phase", "out");

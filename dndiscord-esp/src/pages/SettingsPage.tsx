@@ -7,13 +7,14 @@ import {
 } from "lucide-solid";
 import { authStore } from "../stores/auth.store";
 import { AuthService } from "../services/auth.service";
+import { soundSettings, setSfxEnabled, setMusicEnabled } from "../stores/sound.store";
 
 export default function SettingsPage() {
   const navigate = useNavigate();
   
-  // Settings state (would be persisted to localStorage in real app)
-  const [soundEnabled, setSoundEnabled] = createSignal(true);
-  const [musicEnabled, setMusicEnabled] = createSignal(true);
+  // Audio settings from persistent store
+  const soundEnabled = soundSettings.sfxEnabled;
+  const musicEnabled = soundSettings.musicEnabled;
   const [notificationsEnabled, setNotificationsEnabled] = createSignal(true);
   const [theme, setTheme] = createSignal<"dark" | "light" | "system">("dark");
   const [language, setLanguage] = createSignal("fr");
@@ -113,7 +114,7 @@ export default function SettingsPage() {
               label="Effets sonores"
               description="Sons d'interface et de combat"
               enabled={soundEnabled()}
-              onToggle={() => setSoundEnabled(!soundEnabled())}
+              onToggle={() => setSfxEnabled(!soundEnabled())}
             />
             <SettingToggle
               icon={<Gamepad2 class="w-5 h-5" />}
