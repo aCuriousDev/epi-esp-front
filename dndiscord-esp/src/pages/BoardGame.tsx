@@ -1,4 +1,4 @@
-import { Component, Show, onMount, createSignal } from "solid-js";
+import { Component, Show, onMount, onCleanup, createSignal } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { ArrowLeft, RotateCcw } from "lucide-solid";
 import {
@@ -12,6 +12,9 @@ import { CombatLog } from "../components/CombatLog";
 import { TurnOrderDisplay } from "../components/TurnOrderDisplay";
 import { GameOverScreen } from "../components/GameOverScreen";
 import { ModeSelectionScreen } from "../components/ModeSelectionScreen";
+import { DialogueOverlay } from "../components/dialogue/DialogueOverlay";
+import { DebugDialoguePanel } from "../components/dialogue/DebugDialoguePanel";
+import { clearAllDialogues } from "../stores/dialogue.store";
 import {
 	gameState,
 	startGame,
@@ -30,6 +33,10 @@ const BoardGame: Component = () => {
 
 	onMount(() => {
 		console.log("[BoardGame] Component mounted, showing mode selection");
+	});
+
+	onCleanup(() => {
+		clearAllDialogues();
 	});
 
 	// Functions to manage app phase
@@ -150,6 +157,12 @@ const BoardGame: Component = () => {
 					{/* Center - Game Canvas */}
 					<main class="flex-1 relative min-w-0">
 						<GameCanvas />
+
+						{/* Dialogue bubbles overlay (positioned above canvas) */}
+						<DialogueOverlay />
+
+						{/* Debug panel for testing without Discord */}
+						<DebugDialoguePanel />
 
 						{/* Loading Overlay */}
 						<Show when={!isEngineReady()}>
