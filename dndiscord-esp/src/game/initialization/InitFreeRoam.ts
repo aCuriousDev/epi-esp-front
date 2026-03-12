@@ -18,12 +18,12 @@ import {
   cloneAbilities,
 } from '../abilities/AbilityDefinitions';
 
-export function initializeFreeRoam(): void {
+export function initializeFreeRoam(mapId: string | null = null): void {
   console.log('[initializeFreeRoam] Starting Free Roam initialization...');
   
   // Initialize the grid (reuse existing logic)
   console.log('[initializeFreeRoam] Initializing grid...');
-  initializeGrid();
+  initializeGrid(mapId);
   console.log('[initializeFreeRoam] Grid initialized');
 
   const newUnits: Record<string, Unit> = {};
@@ -129,6 +129,7 @@ export function initializeFreeRoam(): void {
     pathPreview: [],
     targetableTiles: [],
     combatLog: [],
+    mapId,
   });
 
   console.log('[initializeFreeRoam] Free Roam mode initialized - Units:', Object.keys(newUnits).length, 'Tiles:', Object.keys(tiles).length);

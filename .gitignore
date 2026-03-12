@@ -6,6 +6,7 @@ Dnd/node_modules/
 dist/
 build/
 *.log
+*.tsbuildinfo
 
 # Environment variables
 .env
@@ -15,6 +16,7 @@ build/
 # IDE
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
 *~
@@ -25,4 +27,11 @@ Thumbs.db
 
 # Vite
 .vite/
+
+# BMAD tooling
+_bmad/
+_bmad-output/
+
+# Docs / Notion exports
+docs/
 

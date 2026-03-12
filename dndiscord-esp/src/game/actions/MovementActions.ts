@@ -6,11 +6,14 @@
 
 import { batch } from 'solid-js';
 import { produce } from 'solid-js/store';
-import { GridPosition, GamePhase, TurnPhase } from '../../types';
-import { gameState, setGameState, addCombatLog, getIsFreeRoamMode } from '../stores/GameStateStore';
+import { GridPosition, GamePhase, TurnPhase, Team, GameMode } from '../../types';
+import { gameState, setGameState, addCombatLog, getIsFreeRoamMode, getIsDungeonMode } from '../stores/GameStateStore';
 import { units, setUnits } from '../stores/UnitsStore';
 import { tiles, setTiles, pathfinder, updatePathfinder } from '../stores/TilesStore';
 import { posToKey } from '../utils/GridUtils';
+import { getAllySpawnPositions } from '../initialization/InitUnits';
+import { getTeleportPositions } from '../../services/mapStorage';
+import { transitionToNextRoom } from './TurnActions';
 import { playMovementDustEffect } from '../vfx/VFXIntegration';
 import { playFootstepSound, playSelectSound } from '../audio/SoundIntegration';
 
@@ -25,38 +28,43 @@ export function selectUnit(unitId: string): void {
   playSelectSound();
   
   const isFreeRoam = getIsFreeRoamMode();
+  const isPreparation = gameState.phase === GamePhase.COMBAT_PREPARATION;
   const currentUnitId = gameState.turnOrder[gameState.currentUnitIndex];
   const isCurrentUnit = unitId === currentUnitId;
   const isPlayerTurn = gameState.phase === GamePhase.PLAYER_TURN || isFreeRoam;
   
-  console.log('[selectUnit]', unit.name, '| mode:', isFreeRoam ? 'Free Roam' : 'Combat', '| currentUnit:', units[currentUnitId]?.name, '| isCurrentUnit:', isCurrentUnit, '| isPlayerTurn:', isPlayerTurn);
+  console.log('[selectUnit]', unit.name, '| mode:', isFreeRoam ? 'Free Roam' : isPreparation ? 'Preparation' : 'Combat', '| isCurrentUnit:', isCurrentUnit, '| isPlayerTurn:', isPlayerTurn);
   
-  // Allow selecting any unit to view stats
-  // But only show movement/action options for the current unit (or any player unit in Free Roam)
   batch(() => {
     setGameState({
       selectedUnit: unitId,
       selectedAbility: null,
-      turnPhase: (isCurrentUnit && isPlayerTurn) || isFreeRoam ? TurnPhase.MOVE : TurnPhase.SELECT_UNIT,
+      turnPhase: isPreparation || isFreeRoam || (isCurrentUnit && isPlayerTurn) ? TurnPhase.MOVE : TurnPhase.SELECT_UNIT,
     });
     
-    // Show movement range in Free Roam for any player unit, or in Combat for current unit
-    const shouldShowMovement = isFreeRoam ? true : (isCurrentUnit && isPlayerTurn && unit.stats.currentActionPoints >= 1);
-    
-    if (shouldShowMovement && pathfinder) {
-      // In Free Roam, use full movement range; in Combat, limit by AP
-      const effectiveRange = isFreeRoam 
-        ? unit.stats.movementRange 
-        : Math.min(unit.stats.movementRange, unit.stats.currentActionPoints);
-      
-      const reachable = pathfinder.getReachableTiles(
-        unit.position,
-        effectiveRange
-      );
-      const highlighted = Array.from(reachable.values()).map((r) => r.position);
-      setGameState('highlightedTiles', highlighted);
+    // Phase de préparation : afficher toutes les cases alliées (même occupées)
+    if (isPreparation && unit.team === Team.PLAYER) {
+      const allyPositions = getAllySpawnPositions(gameState.mapId);
+      // Afficher toutes les cases alliées, qu'elles soient occupées ou non
+      setGameState('highlightedTiles', allyPositions);
     } else {
-      setGameState('highlightedTiles', []);
+      // Show movement range in Free Roam for any player unit, or in Combat for current unit
+      const shouldShowMovement = isFreeRoam ? true : (isCurrentUnit && isPlayerTurn && unit.stats.currentActionPoints >= 1);
+      
+      if (shouldShowMovement && pathfinder) {
+        const effectiveRange = isFreeRoam 
+          ? unit.stats.movementRange 
+          : Math.min(unit.stats.movementRange, unit.stats.currentActionPoints);
+        
+        const reachable = pathfinder.getReachableTiles(
+          unit.position,
+          effectiveRange
+        );
+        const highlighted = Array.from(reachable.values()).map((r) => r.position);
+        setGameState('highlightedTiles', highlighted);
+      } else {
+        setGameState('highlightedTiles', []);
+      }
     }
     
     setGameState('pathPreview', []);
@@ -89,9 +97,37 @@ export function previewPath(targetPos: GridPosition): void {
 
 export function moveUnit(targetPos: GridPosition): boolean {
   const unit = gameState.selectedUnit ? units[gameState.selectedUnit] : null;
-  if (!unit || !pathfinder) return false;
+  if (!unit) return false;
   
   const isFreeRoam = getIsFreeRoamMode();
+  const isPreparation = gameState.phase === GamePhase.COMBAT_PREPARATION;
+  
+  // Phase de préparation : placement direct sur une case alliée (sans pathfinding)
+  if (isPreparation && unit.team === Team.PLAYER) {
+    const allyPositions = getAllySpawnPositions(gameState.mapId);
+    const isAllyCell = allyPositions.some((p) => p.x === targetPos.x && p.z === targetPos.z);
+    const tileKey = posToKey(targetPos);
+    const tile = tiles[tileKey];
+    if (!isAllyCell || !tile) return false;
+    if (tile.occupiedBy !== null && tile.occupiedBy !== unit.id) return false;
+    if (targetPos.x === unit.position.x && targetPos.z === unit.position.z) return false; // déjà sur la case
+    
+    batch(() => {
+      setTiles(posToKey(unit.position), 'occupiedBy', null);
+      setUnits(unit.id, produce((u) => {
+        u.position = targetPos;
+      }));
+      setTiles(tileKey, 'occupiedBy', unit.id);
+      setGameState('pathPreview', []);
+      // Afficher toutes les cases alliées après le déplacement (même occupées)
+      const allyPositions = getAllySpawnPositions(gameState.mapId);
+      setGameState('highlightedTiles', allyPositions);
+    });
+    updatePathfinder();
+    return true;
+  }
+  
+  if (!pathfinder) return false;
   
   // In Combat mode, only allow movement if it's the current unit's turn
   if (!isFreeRoam) {
@@ -114,8 +150,19 @@ export function moveUnit(targetPos: GridPosition): boolean {
   
   if (!path || path.length === 0) return false;
   
-  // Calculate movement cost
-  const movementCost = path.length - 1; // Don't count starting position
+  // Calculate movement cost by summing the movementCost of each tile in the path
+  // Skip the starting position (index 0)
+  let movementCost = 0;
+  for (let i = 1; i < path.length; i++) {
+    const tileKey = posToKey(path[i]);
+    const tile = tiles[tileKey];
+    if (tile) {
+      movementCost += tile.movementCost;
+    } else {
+      // Fallback to 1 if tile not found
+      movementCost += 1;
+    }
+  }
   
   // Check if unit has enough AP for this move (skip in Free Roam)
   if (!isFreeRoam && unit.stats.currentActionPoints < movementCost) return false;
@@ -172,6 +219,20 @@ export function moveUnit(targetPos: GridPosition): boolean {
   
   // Update pathfinder with new tile state
   updatePathfinder();
+  
+  // Check if the unit stepped on a teleport cell (dungeon mode only)
+  if (getIsDungeonMode() && gameState.dungeon && unit.team === Team.PLAYER) {
+    const teleportPositions = getTeleportPositions(gameState.mapId!);
+    const isOnTeleport = teleportPositions.some(
+      (p) => p.x === targetPos.x && p.z === targetPos.z
+    );
+    if (isOnTeleport) {
+      addCombatLog('Portail de téléportation activé ! Transition vers la salle suivante...', 'system');
+      setTimeout(() => {
+        transitionToNextRoom();
+      }, 500);
+    }
+  }
   
   return true;
 }

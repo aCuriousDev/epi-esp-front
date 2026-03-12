@@ -12,13 +12,18 @@ import { CombatLog } from "../components/CombatLog";
 import { TurnOrderDisplay } from "../components/TurnOrderDisplay";
 import { GameOverScreen } from "../components/GameOverScreen";
 import { ModeSelectionScreen } from "../components/ModeSelectionScreen";
+import { MapSelectionForGame } from "../components/MapSelectionForGame";
+import { DungeonSelectionForGame } from "../components/DungeonSelectionForGame";
 import { DialogueOverlay } from "../components/dialogue/DialogueOverlay";
 import { DebugDialoguePanel } from "../components/dialogue/DebugDialoguePanel";
 import { clearAllDialogues } from "../stores/dialogue.store";
 import {
 	gameState,
 	startGame,
+	startCombatFromPreparation,
 	getCurrentMode,
+	getIsDungeonMode,
+	getDungeonState,
 	resetGameState,
 	clearUnits,
 	clearTiles,
@@ -30,6 +35,9 @@ const BoardGame: Component = () => {
 	const [appPhase, setAppPhase] = createSignal<AppPhase>(
 		AppPhase.MODE_SELECTION
 	);
+	const [selectedMode, setSelectedMode] = createSignal<GameMode | null>(null);
+	const [selectedMapId, setSelectedMapId] = createSignal<string | null>(null);
+	const [selectedDungeonId, setSelectedDungeonId] = createSignal<string | null>(null);
 
 	onMount(() => {
 		console.log("[BoardGame] Component mounted, showing mode selection");
@@ -39,33 +47,55 @@ const BoardGame: Component = () => {
 		clearAllDialogues();
 	});
 
-	// Functions to manage app phase
 	const startMode = (mode: GameMode) => {
-		console.log("[BoardGame] ========== STARTING MODE:", mode, "==========");
-		console.log("[BoardGame] Setting appPhase to IN_GAME");
+		console.log("[BoardGame] ========== MODE SELECTED:", mode, "==========");
+		setSelectedMode(mode);
+		if (mode === GameMode.DUNGEON) {
+			setAppPhase(AppPhase.DUNGEON_SETUP);
+		} else {
+			setAppPhase(AppPhase.MAP_SELECTION);
+		}
+	};
+
+	const selectMap = (mapId: string | null) => {
+		console.log("[BoardGame] ========== MAP SELECTED:", mapId || "default", "==========");
+		setSelectedMapId(mapId);
 		setAppPhase(AppPhase.IN_GAME);
 
-		// Wait for engine to be ready before starting game
 		const checkEngine = () => {
 			if (isEngineReady()) {
-				console.log(
-					"[BoardGame] Engine is ready, starting game in",
-					mode,
-					"mode"
-				);
-				// Add a small delay to ensure the engine and render loop are fully settled
-				// This prevents the 3D models from being out of sync on first load
 				setTimeout(() => {
-					console.log("[BoardGame] Initializing game now...");
-					startGame(mode);
-					console.log("[BoardGame] Game initialization complete");
+					startGame(selectedMode()!, mapId);
 				}, 150);
 			} else {
-				console.log("[BoardGame] Engine not ready, checking again...");
 				setTimeout(checkEngine, 100);
 			}
 		};
 		checkEngine();
+	};
+
+	const selectDungeon = (dungeonId: string) => {
+		console.log("[BoardGame] ========== DUNGEON SELECTED:", dungeonId, "==========");
+		setSelectedDungeonId(dungeonId);
+		setAppPhase(AppPhase.IN_GAME);
+
+		const checkEngine = () => {
+			if (isEngineReady()) {
+				setTimeout(() => {
+					startGame(GameMode.DUNGEON, null, dungeonId);
+				}, 150);
+			} else {
+				setTimeout(checkEngine, 100);
+			}
+		};
+		checkEngine();
+	};
+
+	const backToModeSelection = () => {
+		setAppPhase(AppPhase.MODE_SELECTION);
+		setSelectedMode(null);
+		setSelectedMapId(null);
+		setSelectedDungeonId(null);
 	};
 
 	const returnToMenu = () => {
@@ -88,10 +118,13 @@ const BoardGame: Component = () => {
 
 	const restartGame = () => {
 		const currentMode = getCurrentMode();
+		const currentMapId = selectedMapId();
 		console.log(
 			"[BoardGame] ========== RESTARTING GAME IN",
 			currentMode,
-			"MODE =========="
+			"MODE WITH MAP:",
+			currentMapId || "default",
+			"=========="
 		);
 
 		// For restart, we DON'T dispose the engine - we just clear game objects and reinitialize
@@ -106,9 +139,10 @@ const BoardGame: Component = () => {
 			console.log(
 				"[BoardGame] Re-initializing game in",
 				currentMode,
-				"mode..."
+				"mode with map:",
+				currentMapId || "default"
 			);
-			startGame(currentMode);
+			startGame(currentMode, currentMapId);
 			console.log("[BoardGame] Game restart complete");
 		}, 100);
 	};
@@ -116,7 +150,27 @@ const BoardGame: Component = () => {
 	return (
 		<Show
 			when={appPhase() === AppPhase.IN_GAME}
-			fallback={<ModeSelectionScreen onSelectMode={startMode} />}
+			fallback={
+				<Show
+					when={appPhase() === AppPhase.MAP_SELECTION}
+					fallback={
+						<Show
+							when={appPhase() === AppPhase.DUNGEON_SETUP}
+							fallback={<ModeSelectionScreen onSelectMode={startMode} />}
+						>
+							<DungeonSelectionForGame
+								onSelectDungeon={selectDungeon}
+								onBack={backToModeSelection}
+							/>
+						</Show>
+					}
+				>
+					<MapSelectionForGame
+						onSelectMap={selectMap}
+						onBack={backToModeSelection}
+					/>
+				</Show>
+			}
 		>
 			<div class="w-full h-screen flex flex-col bg-game-darker overflow-hidden">
 				{/* Header */}
@@ -148,7 +202,7 @@ const BoardGame: Component = () => {
 				<div class="flex-1 flex overflow-hidden min-h-0">
 					{/* Left Panel - Unit Info */}
 					<aside class="w-80 min-w-[280px] max-w-[400px] p-4 flex flex-col gap-4 overflow-y-auto bg-game-darker/50">
-						<Show when={getCurrentMode() === GameMode.COMBAT}>
+						<Show when={getCurrentMode() === GameMode.COMBAT || getCurrentMode() === GameMode.DUNGEON}>
 							<TurnOrderDisplay />
 						</Show>
 						<UnitInfoPanel />
@@ -180,10 +234,17 @@ const BoardGame: Component = () => {
 						</Show>
 
 						{/* Game Phase Indicator */}
-						<div class="absolute top-4 left-1/2 -translate-x-1/2">
+						<div class="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3">
+							<Show when={gameState.dungeon}>
+								<div class="px-4 py-2 rounded-full text-sm font-semibold bg-purple-600/80 text-white">
+									🏰 Salle {(gameState.dungeon?.currentRoomIndex ?? 0) + 1}/{gameState.dungeon?.totalRooms}
+								</div>
+							</Show>
 							<div
 								class={`px-4 py-2 rounded-full text-sm font-semibold ${
-									gameState.phase === GamePhase.FREE_ROAM
+									gameState.phase === GamePhase.COMBAT_PREPARATION
+										? "bg-amber-600/80 text-white"
+										: gameState.phase === GamePhase.FREE_ROAM
 										? "bg-blue-600/80 text-white"
 										: gameState.phase === GamePhase.PLAYER_TURN
 										? "bg-green-600/80 text-white"
@@ -194,7 +255,25 @@ const BoardGame: Component = () => {
 							>
 								{getPhaseText(gameState.phase)}
 							</div>
+							{/* Bouton Prêt - Phase de préparation */}
+							<Show when={gameState.phase === GamePhase.COMBAT_PREPARATION}>
+								<button
+									class="px-5 py-2.5 rounded-full text-sm font-bold bg-game-gold text-game-darker hover:bg-amber-400 transition shadow-lg"
+									onClick={() => startCombatFromPreparation()}
+								>
+									Prêt
+								</button>
+							</Show>
 						</div>
+
+						{/* Panneau Phase de préparation */}
+						<Show when={gameState.phase === GamePhase.COMBAT_PREPARATION}>
+							<div class="absolute top-16 left-1/2 -translate-x-1/2 z-10 panel-game max-w-md text-center">
+								<p class="text-sm text-gray-300">
+									Placez vos personnages sur les cases alliées (bleues), puis cliquez sur <strong class="text-game-gold">Prêt</strong> pour lancer le combat.
+								</p>
+							</div>
+						</Show>
 
 						{/* Controls Help */}
 						<div class="absolute bottom-4 left-4 panel-game text-xs max-w-xs">
@@ -240,7 +319,7 @@ const BoardGame: Component = () => {
 					{/* Right Panel - Combat Log or Free Roam Info */}
 					<aside class="w-96 min-w-[320px] max-w-[480px] p-4 flex flex-col gap-4 overflow-y-auto bg-game-darker/50">
 						<Show
-							when={getCurrentMode() === GameMode.COMBAT}
+							when={getCurrentMode() === GameMode.COMBAT || getCurrentMode() === GameMode.DUNGEON}
 							fallback={
 								<div class="panel-game">
 									<h3 class="font-fantasy text-game-gold text-lg mb-4">
@@ -315,8 +394,8 @@ const BoardGame: Component = () => {
 							</div>
 						</div>
 
-						{/* Quick Stats - Only show in Combat mode */}
-						<Show when={getCurrentMode() === GameMode.COMBAT}>
+						{/* Quick Stats */}
+						<Show when={getCurrentMode() === GameMode.COMBAT || getCurrentMode() === GameMode.DUNGEON}>
 							<div class="panel-game">
 								<h4 class="font-fantasy text-game-gold text-sm mb-3">
 									Battle Stats
@@ -358,6 +437,8 @@ function getPhaseText(phase: GamePhase): string {
 	switch (phase) {
 		case GamePhase.SETUP:
 			return "⏳ Setting up...";
+		case GamePhase.COMBAT_PREPARATION:
+			return "⚔️ Phase de préparation";
 		case GamePhase.PLAYER_TURN:
 			return "🟢 Your Turn";
 		case GamePhase.ENEMY_TURN:

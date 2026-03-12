@@ -57,6 +57,8 @@ export class SoundManager {
   private ambientMisc: AudioNode[] = [];
   private ambientPlaying = false;
   private currentAmbient: 'menu' | 'exploration' | 'combat' | null = null;
+  private gestureHandler: (() => void) | null = null;
+  private pendingAmbient: (() => void) | null = null;
 
   private _ambientVol = 0.3;
   private _sfxVol = 0.5;
@@ -87,6 +89,34 @@ export class SoundManager {
 
     this.uiBus = this.gain(this._uiVol);
     this.uiBus.connect(this.dryGain);
+
+    this.installGestureHandler();
+  }
+
+  private installGestureHandler(): void {
+    if (this.ctx.state !== 'suspended') return;
+    const handler = () => {
+      this.ctx.resume().then(() => {
+        if (this.pendingAmbient) {
+          const fn = this.pendingAmbient;
+          this.pendingAmbient = null;
+          fn();
+        }
+      });
+      this.removeGestureHandler();
+    };
+    this.gestureHandler = handler;
+    document.addEventListener('click', handler, { once: false });
+    document.addEventListener('keydown', handler, { once: false });
+    document.addEventListener('touchstart', handler, { once: false });
+  }
+
+  private removeGestureHandler(): void {
+    if (!this.gestureHandler) return;
+    document.removeEventListener('click', this.gestureHandler);
+    document.removeEventListener('keydown', this.gestureHandler);
+    document.removeEventListener('touchstart', this.gestureHandler);
+    this.gestureHandler = null;
   }
 
   async resume(): Promise<void> {
@@ -96,18 +126,21 @@ export class SoundManager {
   // --- Volume ---
   set ambientVolume(v: number) {
     this._ambientVol = Math.max(0, Math.min(1, v));
+    this.ambientBus.gain.cancelScheduledValues(this.ctx.currentTime);
     this.ambientBus.gain.setTargetAtTime(this._ambientVol, this.ctx.currentTime, 0.1);
   }
   get ambientVolume() { return this._ambientVol; }
 
   set sfxVolume(v: number) {
     this._sfxVol = Math.max(0, Math.min(1, v));
+    this.sfxBus.gain.cancelScheduledValues(this.ctx.currentTime);
     this.sfxBus.gain.setTargetAtTime(this._sfxVol, this.ctx.currentTime, 0.1);
   }
   get sfxVolume() { return this._sfxVol; }
 
   set uiVolume(v: number) {
     this._uiVol = Math.max(0, Math.min(1, v));
+    this.uiBus.gain.cancelScheduledValues(this.ctx.currentTime);
     this.uiBus.gain.setTargetAtTime(this._uiVol, this.ctx.currentTime, 0.1);
   }
   get uiVolume() { return this._uiVol; }
@@ -219,6 +252,17 @@ export class SoundManager {
     this.stopAmbient();
     this.currentAmbient = mode;
     this.ambientPlaying = true;
+
+    if (this.ctx.state === 'suspended') {
+      // Defer start until AudioContext resumes via user gesture
+      this.pendingAmbient = () => this.beginAmbient(mode);
+      return;
+    }
+    this.beginAmbient(mode);
+  }
+
+  private beginAmbient(mode: 'menu' | 'exploration' | 'combat'): void {
+    if (!this.ambientPlaying || this.currentAmbient !== mode) return;
     const now = this.ctx.currentTime;
     this.ambientBus.gain.setValueAtTime(0, now);
     this.ambientBus.gain.linearRampToValueAtTime(this._ambientVol, now + 2.5);
@@ -230,12 +274,29 @@ export class SoundManager {
   stopAmbient(): void {
     this.ambientTimers.forEach(t => clearTimeout(t));
     this.ambientTimers = [];
-    this.ambientSources.forEach(s => { try { s.stop(); s.disconnect(); } catch { /* */ } });
-    this.ambientSources = [];
-    this.ambientMisc.forEach(n => { try { n.disconnect(); } catch { /* */ } });
-    this.ambientMisc = [];
     this.ambientPlaying = false;
     this.currentAmbient = null;
+    if (this.pendingAmbient) { this.pendingAmbient = null; }
+
+    // Capture current sources for deferred cleanup
+    const sources = this.ambientSources;
+    const misc = this.ambientMisc;
+    this.ambientSources = [];
+    this.ambientMisc = [];
+
+    if (sources.length === 0 && misc.length === 0) return;
+
+    // Fade out over 300ms to avoid audio pop
+    const now = this.ctx.currentTime;
+    this.ambientBus.gain.cancelScheduledValues(now);
+    this.ambientBus.gain.setValueAtTime(this.ambientBus.gain.value, now);
+    this.ambientBus.gain.linearRampToValueAtTime(0, now + 0.3);
+
+    // Stop/disconnect sources after fade completes
+    setTimeout(() => {
+      sources.forEach(s => { try { s.stop(); s.disconnect(); } catch { /* */ } });
+      misc.forEach(n => { try { n.disconnect(); } catch { /* */ } });
+    }, 320);
   }
 
   // ---------- MENU ----------
@@ -380,16 +441,21 @@ export class SoundManager {
     o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(28, t + 0.14);
     const g = this.gain(0); g.gain.setValueAtTime(0.32, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
     o.connect(g).connect(this.ambientBus); o.start(t); o.stop(t + 0.28);
-    this.noiseBurst(t, 0.01, 0.1, this.ambientBus, this.hp(3000));
+    this.ambientMisc.push(g);
+    const kf = this.hp(3000); this.ambientMisc.push(kf);
+    this.noiseBurst(t, 0.01, 0.1, this.ambientBus, kf);
   }
   private snare(t: number): void {
-    this.noiseBurst(t, 0.16, 0.16, this.ambientBus, this.hp(1800));
+    const sf = this.hp(1800); this.ambientMisc.push(sf);
+    this.noiseBurst(t, 0.16, 0.16, this.ambientBus, sf);
     const o = this.ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = 210;
     const g = this.gain(0); g.gain.setValueAtTime(0.12, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
     o.connect(g).connect(this.ambientBus); o.start(t); o.stop(t + 0.07);
+    this.ambientMisc.push(g);
   }
   private hihat(t: number, vol = 0.03): void {
-    this.noiseBurst(t, 0.04, vol, this.ambientBus, this.bp(9000, 1.5));
+    const hf = this.bp(9000, 1.5); this.ambientMisc.push(hf);
+    this.noiseBurst(t, 0.04, vol, this.ambientBus, hf);
   }
   private tom(t: number, f: number): void {
     const o = this.ctx.createOscillator(); o.type = 'sine';
@@ -1016,6 +1082,8 @@ export class SoundManager {
   // ============================================
   dispose(): void {
     this.stopAmbient();
+    this.removeGestureHandler();
+    this.pendingAmbient = null;
     this.ctx.close();
   }
 }

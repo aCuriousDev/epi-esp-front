@@ -12,6 +12,9 @@ let soundManager: SoundManager | null = null;
 
 /** Called by GameCanvas on mount to provide its instance */
 export function setSoundEngine(manager: SoundManager | null): void {
+  if (soundManager && soundManager !== manager) {
+    soundManager.dispose();
+  }
   soundManager = manager;
 }
 
