@@ -25,7 +25,7 @@ export const ModeSelectionScreen: Component<ModeSelectionScreenProps> = (props) 
         </div>
 
         {/* Mode Cards */}
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Free Roam Mode */}
           <button
             class="panel-game hover:border-blue-400 hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-300 cursor-pointer group p-8"
@@ -87,6 +87,39 @@ export const ModeSelectionScreen: Component<ModeSelectionScreenProps> = (props) 
                 <div class="flex items-center justify-center gap-2">
                   <span class="text-red-400">⚡</span>
                   <span>Use abilities & attacks</span>
+                </div>
+              </div>
+            </div>
+          </button>
+
+          {/* Dungeon Mode */}
+          <button
+            class="panel-game hover:border-purple-400 hover:shadow-lg hover:shadow-purple-500/20 transition-all duration-300 cursor-pointer group p-8"
+            onClick={() => props.onSelectMode(GameMode.DUNGEON)}
+          >
+            <div class="text-center">
+              <div class="text-6xl mb-4 group-hover:scale-110 transition-transform duration-300">
+                🏰
+              </div>
+              <h2 class="font-fantasy text-3xl text-game-gold mb-4">
+                Donjon
+              </h2>
+              <p class="text-gray-300 mb-6 leading-relaxed">
+                Parcourez un enchaînement de salles reliées par des portails. 
+                Combattez dans chaque salle et progressez jusqu'à la victoire finale.
+              </p>
+              <div class="space-y-2 text-sm text-gray-400">
+                <div class="flex items-center justify-center gap-2">
+                  <span class="text-purple-400">🏰</span>
+                  <span>Plusieurs salles</span>
+                </div>
+                <div class="flex items-center justify-center gap-2">
+                  <span class="text-purple-400">🏰</span>
+                  <span>Portails de téléportation</span>
+                </div>
+                <div class="flex items-center justify-center gap-2">
+                  <span class="text-purple-400">🏰</span>
+                  <span>Progression continue</span>
                 </div>
               </div>
             </div>
