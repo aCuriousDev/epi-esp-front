@@ -1,6 +1,7 @@
 import draw2d from 'draw2d';
 import { tokens } from "@/styles/design-tokens";
 import { CampaignNode, BaseNodeData } from './CampaignNode';
+import { ICON_COMBAT } from '../constants/nodeIcons';
 
 export interface VillainPlacement {
   characterId: string;
@@ -29,12 +30,14 @@ export class CombatNode extends CampaignNode {
     this.background.setColor(tokens.nodes.combat.stroke);
   }
 
+  protected getIconSvg(): string { return ICON_COMBAT; }
+
   override createBackground(): void {
     this.background = new draw2d.shape.basic.Rectangle({
       width: this.nodeWidth,
       height: this.nodeHeight,
-      bgColor: '#4a1a1a',
-      color: '#8b0000',
+      bgColor: '#2a0909',
+      color: '#dc2626',
       stroke: 2,
       radius: 8,
     });

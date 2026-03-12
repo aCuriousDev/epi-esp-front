@@ -1,5 +1,6 @@
 import draw2d from 'draw2d';
 import { CampaignNode, BaseNodeData } from './CampaignNode';
+import { ICON_SCENE } from '../constants/nodeIcons';
 
 export interface SceneNodeData extends BaseNodeData {
   type: 'scene';
@@ -12,7 +13,20 @@ export class SceneNode extends CampaignNode {
 
   constructor(x: number, y: number, data: SceneNodeData) {
     super(x, y, data);
-    // titleLabel est géré par la classe de base (CampaignNode)
+    // titleLabel + icône gérés par la classe de base (CampaignNode)
+  }
+
+  protected getIconSvg(): string { return ICON_SCENE; }
+
+  override createBackground(): void {
+    this.background = new draw2d.shape.basic.Rectangle({
+      width: this.nodeWidth,
+      height: this.nodeHeight,
+      bgColor: '#1c1333',
+      color: '#7c3aed',
+      stroke: 2,
+      radius: 8,
+    });
   }
 
   protected createPorts(): void {

@@ -40,6 +40,7 @@ const ChoicesNodeEditor: Component<ChoicesNodeEditorProps> = (props) => {
 
   const save = () => {
     props.node.updateText(text());
+    props.node.updateChoices(choices());
     props.handleUpdateNode(props.node);
   };
 

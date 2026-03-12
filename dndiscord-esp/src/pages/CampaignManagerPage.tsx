@@ -6,7 +6,6 @@ import { ChoicesNode } from '../components/campaign-tree-canvas/nodes/ChoicesNod
 import { MapNode } from '../components/campaign-tree-canvas/nodes/MapNode';
 import { Component, createSignal, createEffect, Show, For, onMount, onCleanup } from 'solid-js';
 import { ArrowLeft, Book, CheckCircle, Edit, GripHorizontal, Loader2, Map as MapIcon, Save, Sword, XCircle } from 'lucide-solid';
-import ButtonMenu from '@/components/common/ButtonMenu';
 import { CampaignService, mapCampaignResponse } from '@/services/campaign.service';
 import { Campaign } from '@/types/campaign';
 import { StartNode } from '@/components/campaign-tree-canvas/nodes/StartNode';
@@ -22,10 +21,22 @@ const CampaignManager: Component = () => {
   const navigate = useNavigate();
 
   const blocs = [
-    { label: 'Scène',   icon: <Book />,          blockName: 'scene'   },
-    { label: 'Choix',   icon: <GripHorizontal />, blockName: 'choices' },
-    { label: 'Combat',  icon: <Sword />,          blockName: 'combat'  },
-    { label: 'Carte',   icon: <MapIcon />,         blockName: 'map'     },
+    {
+      label: 'Scène', icon: <Book class="w-5 h-5" />, blockName: 'scene',
+      bgColor: '#1c1333', borderColor: '#7c3aed', accentColor: '#a78bfa',
+    },
+    {
+      label: 'Choix', icon: <GripHorizontal class="w-5 h-5" />, blockName: 'choices',
+      bgColor: '#0a2a24', borderColor: '#059669', accentColor: '#34d399',
+    },
+    {
+      label: 'Combat', icon: <Sword class="w-5 h-5" />, blockName: 'combat',
+      bgColor: '#2a0909', borderColor: '#dc2626', accentColor: '#f87171',
+    },
+    {
+      label: 'Carte', icon: <MapIcon class="w-5 h-5" />, blockName: 'map',
+      bgColor: '#0a1830', borderColor: '#1d4ed8', accentColor: '#60a5fa',
+    },
   ];
 
   // Canvas reference
@@ -256,17 +267,53 @@ const CampaignManager: Component = () => {
           </Show>
 
           <Show when={!selectedNode()}>
-            <h3 class="font-display text-xl text-white tracking-wide mb-2">Blocs disponibles</h3>
-            <For each={blocs}>
-              {(item) => (
-                <ButtonMenu
-                  label={item.label}
-                  icon={item.icon}
-                  className="m-4"
-                  onClick={() => handleAddNode(item.blockName)}
-                />
-              )}
-            </For>
+            <h3 class="font-display text-xl text-white tracking-wide mb-4">Blocs disponibles</h3>
+            <div style={{ display: 'flex', 'flex-direction': 'column', gap: '0.75rem' }}>
+              <For each={blocs}>
+                {(item) => (
+                  <button
+                    onClick={() => handleAddNode(item.blockName)}
+                    style={{
+                      display: 'flex',
+                      'align-items': 'center',
+                      gap: '0.875rem',
+                      width: '100%',
+                      padding: '0.75rem 1rem',
+                      background: item.bgColor,
+                      border: `2px solid ${item.borderColor}`,
+                      'border-radius': '0.75rem',
+                      color: '#ffffff',
+                      cursor: 'pointer',
+                      transition: 'filter 0.15s, transform 0.15s',
+                      'font-size': '1rem',
+                      'font-weight': '600',
+                      'letter-spacing': '0.01em',
+                      'text-align': 'left',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(1.18)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
+                  >
+                    {/* Icône colorée */}
+                    <span style={{
+                      display: 'flex',
+                      'align-items': 'center',
+                      'justify-content': 'center',
+                      width: '2.25rem',
+                      height: '2.25rem',
+                      background: `${item.accentColor}28`,
+                      border: `1.5px solid ${item.accentColor}80`,
+                      'border-radius': '0.5rem',
+                      color: item.accentColor,
+                      'flex-shrink': '0',
+                    }}>
+                      {item.icon}
+                    </span>
+                    <span style={{ flex: 1 }}>{item.label}</span>
+                    <span style={{ 'font-size': '1.25rem', opacity: '0.5', 'line-height': 1 }}>+</span>
+                  </button>
+                )}
+              </For>
+            </div>
           </Show>
         </aside>
 
