@@ -34,4 +34,8 @@ export default defineConfig({
       },
     },
   },
+  optimizeDeps: {
+    // Pre-bundle lucide-solid to avoid ad blockers blocking "fingerprint" icon requests
+    include: ['lucide-solid'],
+  },
 });

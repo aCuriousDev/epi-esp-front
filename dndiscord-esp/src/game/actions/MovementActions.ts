@@ -14,6 +14,7 @@ import { posToKey } from '../utils/GridUtils';
 import { getAllySpawnPositions } from '../initialization/InitUnits';
 import { getTeleportPositions } from '../../services/mapStorage';
 import { transitionToNextRoom } from './TurnActions';
+import { playMovementDustEffect } from '../vfx/VFXIntegration';
 
 // ============================================
 // UNIT SELECTION
@@ -164,6 +165,9 @@ export function moveUnit(targetPos: GridPosition): boolean {
   if (!isFreeRoam && unit.stats.currentActionPoints < movementCost) return false;
   
   batch(() => {
+    // Play movement dust trail VFX
+    playMovementDustEffect(unit.position, targetPos);
+    
     // Clear old tile
     setTiles(posToKey(unit.position), 'occupiedBy', null);
     

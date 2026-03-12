@@ -1,0 +1,29 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:5054
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    networks:
+      - dndiscord-network
+
+  # Cloudflare Tunnel - exposes frontend to the internet (optional)
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    profiles:
+      - tunnel  # Only starts with --profile tunnel
+    depends_on:
+      - frontend
+    command: tunnel --no-autoupdate --url http://frontend:80
+    networks:
+      - dndiscord-network
+
+networks:
+  dndiscord-network:
+    name: epi-esp-back_dndiscord-network
+    external: true

@@ -3,14 +3,35 @@ import { Router, Route } from "@solidjs/router";
 import "./index.css";
 import App from "./App";
 import CreateCharacter from "./pages/CreateCharacter";
+import CharacterView from "./pages/CharacterView";
 import Rules from "./pages/Rules";
-import Play from "./pages/Play";
 import BoardGame from "./pages/BoardGame";
 import MapEditor from "./pages/MapEditor";
 import MapSelectionScreen from "./pages/MapSelectionScreen";
+import LoginPage from "./pages/LoginPage";
+import ProfilePage from "./pages/ProfilePage";
+import CampaignsPage from "./pages/CampaignsPage";
+import CreateCampaign from "./pages/CreateCampaign";
+import CampaignView from "./pages/CampaignView";
+import SettingsPage from "./pages/SettingsPage";
 import type {} from "solid-styled-jsx";
 import CharactersComponent from "./pages/CharactersComponent";
+import { AuthCallback, ProtectedRoute } from "./components/auth";
+import { authStore } from "./stores/auth.store";
 import { initDiscordSDK } from "./services/discord";
+import CampaignManagerPage from "./pages/CampaignManagerPage";
+
+// Initialize auth state on app load
+authStore.init();
+
+// Protected route wrapper component
+function Protected(props: { children: any }) {
+	return (
+		<ProtectedRoute fallbackPath="/login">
+			{props.children}
+		</ProtectedRoute>
+	);
+}
 
 // Initialise le SDK Discord en arrière-plan (ne bloque pas le rendu)
 async function initDiscord() {
@@ -32,14 +53,25 @@ async function initDiscord() {
 render(
 	() => (
 		<Router>
-			<Route path="/" component={App} />
-			<Route path="/characters" component={CharactersComponent} />
-			<Route path="/characters/create" component={CreateCharacter} />
-			<Route path="/play" component={Play} />
+			{/* Public routes */}
+			<Route path="/login" component={LoginPage} />
+			<Route path="/auth/callback" component={AuthCallback} />
 			<Route path="/rules" component={Rules} />
-			<Route path="/board" component={BoardGame} />
-			<Route path="/map-editor" component={MapSelectionScreen} />
-			<Route path="/map-editor/:mapId" component={MapEditor} />
+
+			{/* Protected routes - require authentication */}
+			<Route path="/" component={() => <Protected><App /></Protected>} />
+			<Route path="/settings" component={() => <Protected><SettingsPage /></Protected>} />
+			<Route path="/profile" component={() => <Protected><ProfilePage /></Protected>} />
+			<Route path="/characters" component={() => <Protected><CharactersComponent /></Protected>} />
+			<Route path="/characters/create" component={() => <Protected><CreateCharacter /></Protected>} />
+			<Route path="/characters/:id" component={() => <Protected><CharacterView /></Protected>} />
+			<Route path="/campaigns" component={() => <Protected><CampaignsPage /></Protected>} />
+			<Route path="/campaigns/:id/manager" component={() => <Protected><CampaignManagerPage /></Protected>} />
+			<Route path="/campaigns/create" component={() => <Protected><CreateCampaign /></Protected>} />
+			<Route path="/campaigns/:id" component={() => <Protected><CampaignView /></Protected>} />
+			<Route path="/board" component={() => <Protected><BoardGame /></Protected>} />
+			<Route path="/map-editor" component={() => <Protected><MapSelectionScreen /></Protected>} />
+			<Route path="/map-editor/:mapId" component={() => <Protected><MapEditor /></Protected>} />
 		</Router>
 	),
 	document.getElementById("root") as HTMLElement

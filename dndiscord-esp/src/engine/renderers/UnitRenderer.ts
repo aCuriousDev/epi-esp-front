@@ -13,6 +13,10 @@ import {
   TransformNode,
   DynamicTexture,
   Texture,
+  EasingFunction,
+  SineEase,
+  BezierCurveEase,
+  QuadraticEase,
 } from '@babylonjs/core';
 import { Unit, UnitType, GridPosition, Team } from '../../types';
 import { gridToWorld } from '../../game';
@@ -358,7 +362,8 @@ export class UnitRenderer {
   }
 
   /**
-   * Animate unit movement
+   * Animate unit movement with hop/arc trajectory, body tilt, and squash/stretch
+   * Creates a dynamic RPG-style movement feel instead of flat linear sliding
    */
   private animateMovement(mesh: AbstractMesh, targetPos: Vector3, currentY: number): void {
     const startPos = mesh.position.clone();
@@ -368,55 +373,131 @@ export class UnitRenderer {
     console.log(`  - Start: (${startPos.x.toFixed(2)}, ${startPos.y.toFixed(2)}, ${startPos.z.toFixed(2)})`);
     console.log(`  - End: (${endPos.x.toFixed(2)}, ${endPos.y.toFixed(2)}, ${endPos.z.toFixed(2)})`);
     
-    Animation.CreateAndStartAnimation(
-      `unitMove_${mesh.name}`,
-      mesh,
-      'position',
-      30,
-      15,
-      startPos,
-      endPos,
+    const fps = 60;
+    const totalFrames = 30; // 0.5 seconds at 60fps
+    const hopHeight = 0.18; // 18cm hop arc
+    const midY = currentY + hopHeight;
+
+    // --- XZ position animation with easing ---
+    const posXAnim = new Animation(
+      `unitMoveX_${mesh.name}`, 'position.x', fps,
+      Animation.ANIMATIONTYPE_FLOAT,
       Animation.ANIMATIONLOOPMODE_CONSTANT
     );
+    const posZAnim = new Animation(
+      `unitMoveZ_${mesh.name}`, 'position.z', fps,
+      Animation.ANIMATIONTYPE_FLOAT,
+      Animation.ANIMATIONLOOPMODE_CONSTANT
+    );
+    
+    const moveEase = new BezierCurveEase(0.25, 0.1, 0.25, 1.0); // ease-in-out
+    posXAnim.setKeys([
+      { frame: 0, value: startPos.x },
+      { frame: totalFrames, value: endPos.x },
+    ]);
+    posXAnim.setEasingFunction(moveEase);
+    
+    posZAnim.setKeys([
+      { frame: 0, value: startPos.z },
+      { frame: totalFrames, value: endPos.z },
+    ]);
+    posZAnim.setEasingFunction(moveEase);
+
+    // --- Y position animation: parabolic hop arc ---
+    const posYAnim = new Animation(
+      `unitMoveY_${mesh.name}`, 'position.y', fps,
+      Animation.ANIMATIONTYPE_FLOAT,
+      Animation.ANIMATIONLOOPMODE_CONSTANT
+    );
+    const sineEase = new SineEase();
+    sineEase.setEasingMode(EasingFunction.EASINGMODE_EASEINOUT);
+    posYAnim.setKeys([
+      { frame: 0, value: currentY },
+      { frame: Math.round(totalFrames * 0.15), value: currentY + hopHeight * 0.4 },
+      { frame: Math.round(totalFrames * 0.45), value: midY },
+      { frame: Math.round(totalFrames * 0.75), value: midY * 0.7 + currentY * 0.3 },
+      { frame: totalFrames, value: currentY },
+    ]);
+    posYAnim.setEasingFunction(sineEase);
+
+    // --- Squash/stretch on root mesh scaling ---
+    const scaleAnim = new Animation(
+      `unitScale_${mesh.name}`, 'scaling', fps,
+      Animation.ANIMATIONTYPE_VECTOR3,
+      Animation.ANIMATIONLOOPMODE_CONSTANT
+    );
+    const baseScale = mesh.scaling.clone();
+    const s = baseScale.x; // uniform scale
+    scaleAnim.setKeys([
+      { frame: 0, value: new Vector3(s * 1.08, s * 0.92, s * 1.08) }, // squash on takeoff
+      { frame: Math.round(totalFrames * 0.2), value: new Vector3(s * 0.94, s * 1.08, s * 0.94) }, // stretch in air
+      { frame: Math.round(totalFrames * 0.5), value: new Vector3(s, s, s) }, // normal at apex
+      { frame: Math.round(totalFrames * 0.85), value: new Vector3(s * 0.95, s * 1.06, s * 0.95) }, // stretch before land
+      { frame: totalFrames, value: new Vector3(s * 1.06, s * 0.94, s * 1.06) }, // squash on land
+      { frame: totalFrames + 8, value: baseScale.clone() }, // settle back to normal
+    ]);
+
+    // --- Body tilt during movement (Rig node leans forward) ---
+    const descendants = mesh.getDescendants(false);
+    const rigNode = descendants.find(node => node.name.includes('Rig')) as TransformNode | undefined;
+    
+    let rigTiltAnim: Animation | null = null;
+    if (rigNode) {
+      if (rigNode.rotationQuaternion) {
+        rigNode.rotation = rigNode.rotationQuaternion.toEulerAngles();
+        rigNode.rotationQuaternion = null;
+      }
+      
+      const currentTiltX = rigNode.rotation.x;
+      const tiltAmount = 0.15; // ~8.5 degrees forward lean
+      
+      rigTiltAnim = new Animation(
+        `unitTilt_${mesh.name}`, 'rotation.x', fps,
+        Animation.ANIMATIONTYPE_FLOAT,
+        Animation.ANIMATIONLOOPMODE_CONSTANT
+      );
+      rigTiltAnim.setKeys([
+        { frame: 0, value: currentTiltX },
+        { frame: Math.round(totalFrames * 0.15), value: currentTiltX + tiltAmount },
+        { frame: Math.round(totalFrames * 0.7), value: currentTiltX + tiltAmount * 0.5 },
+        { frame: totalFrames, value: currentTiltX - tiltAmount * 0.3 }, // slight overshoot back
+        { frame: totalFrames + 8, value: currentTiltX }, // settle
+      ]);
+    }
+
+    // Apply all animations
+    mesh.animations = [posXAnim, posYAnim, posZAnim, scaleAnim];
+    this.scene.beginAnimation(mesh, 0, totalFrames + 8, false, 1);
+    
+    if (rigNode && rigTiltAnim) {
+      rigNode.animations = [...(rigNode.animations || []).filter(a => !a.name.includes('unitTilt')), rigTiltAnim];
+      this.scene.beginAnimation(rigNode, 0, totalFrames + 8, false, 1);
+    }
   }
 
   /**
-   * Animate unit rotation with smooth transition (used during movement)
-   * 
-   * This method applies the same Rig node rotation logic as initial rotation,
-   * but with smooth animation and shortest-path calculation.
+   * Animate unit rotation with smooth eased transition (used during movement)
    * 
    * Key features:
    * - Finds and rotates the Rig node (not root mesh)
    * - Converts quaternion to Euler angles (critical for GLB models)
    * - Normalizes angle difference for shortest rotation path
-   * - Animates over 8 frames (~0.27s) for smooth visual transition
-   * 
-   * @param mesh - The root mesh of the unit
-   * @param targetRotation - Target rotation in radians (Y-axis)
+   * - Smooth eased animation over 12 frames
    */
   private animateRotation(mesh: AbstractMesh, targetRotation: number): void {
-    // For GLB models with rigs, we need to find the actual rig node to rotate
-    // The root mesh is often just a container, and the actual model is in a child node
     const descendants = mesh.getDescendants(false);
     const rigNode = descendants.find(node => node.name.includes('Rig')) as TransformNode | undefined;
     const nodeToRotate = (rigNode || mesh) as TransformNode;
     
-    // CRITICAL: GLB models often use rotationQuaternion instead of rotation (Euler angles)
-    // When rotationQuaternion is set, changing rotation.y has NO EFFECT!
-    // We must convert to Euler angles first (same as in applyInitialRotation)
     if (nodeToRotate.rotationQuaternion) {
       console.log(`⚠️ ${nodeToRotate.name} has rotationQuaternion - converting to Euler angles`);
       nodeToRotate.rotation = nodeToRotate.rotationQuaternion.toEulerAngles();
       nodeToRotate.rotationQuaternion = null;
     }
     
-    // Normalize angles to prevent spinning the long way
-    // Example: rotating from 350° to 10° should go 20° forward, not 340° backward
     let currentRotation = nodeToRotate.rotation.y;
     let diff = targetRotation - currentRotation;
     
-    // Normalize to [-PI, PI] for shortest path rotation
     while (diff > Math.PI) diff -= 2 * Math.PI;
     while (diff < -Math.PI) diff += 2 * Math.PI;
     
@@ -424,32 +505,87 @@ export class UnitRenderer {
     
     console.log(`Rotating ${nodeToRotate.name} from ${currentRotation.toFixed(2)} to ${normalizedTarget.toFixed(2)} (diff: ${diff.toFixed(2)})`);
     
-    // Create smooth rotation animation
-    Animation.CreateAndStartAnimation(
+    const fps = 60;
+    const rotAnim = new Animation(
       `unitRotate_${nodeToRotate.name}`,
-      nodeToRotate,
-      'rotation.y',
-      30, // frames per second
-      8,  // total frames (duration) - 8 frames = ~0.27 seconds at 30fps
-      currentRotation,
-      normalizedTarget,
+      'rotation.y', fps,
+      Animation.ANIMATIONTYPE_FLOAT,
       Animation.ANIMATIONLOOPMODE_CONSTANT
     );
+    
+    // Slight overshoot for snappy feel
+    const overshoot = diff * 0.08;
+    rotAnim.setKeys([
+      { frame: 0, value: currentRotation },
+      { frame: 8, value: normalizedTarget + overshoot },
+      { frame: 12, value: normalizedTarget },
+    ]);
+    
+    const ease = new QuadraticEase();
+    ease.setEasingMode(EasingFunction.EASINGMODE_EASEOUT);
+    rotAnim.setEasingFunction(ease);
+    
+    nodeToRotate.animations = [...(nodeToRotate.animations || []).filter(a => !a.name.includes('unitRotate')), rotAnim];
+    this.scene.beginAnimation(nodeToRotate, 0, 12, false, 1);
   }
 
   /**
-   * Update visibility for mesh and children
+   * Update visibility with dramatic death fall animation
    */
   private updateVisibility(mesh: AbstractMesh, isAlive: boolean): void {
-    mesh.isVisible = isAlive;
-    if (!isAlive) {
-      mesh.setEnabled(false);
+    if (!isAlive && mesh.isVisible) {
+      // Death fall: tilt back and sink into ground
+      const descendants = mesh.getDescendants(false);
+      const rigNode = descendants.find(node => node.name.includes('Rig')) as TransformNode | undefined;
+      
+      if (rigNode) {
+        if (rigNode.rotationQuaternion) {
+          rigNode.rotation = rigNode.rotationQuaternion.toEulerAngles();
+          rigNode.rotationQuaternion = null;
+        }
+        
+        const fps = 30;
+        const fallAnim = new Animation(
+          'death_fall', 'rotation.x', fps,
+          Animation.ANIMATIONTYPE_FLOAT,
+          Animation.ANIMATIONLOOPMODE_CONSTANT
+        );
+        fallAnim.setKeys([
+          { frame: 0, value: rigNode.rotation.x },
+          { frame: 8, value: rigNode.rotation.x - 0.3 },
+          { frame: 20, value: rigNode.rotation.x + 1.4 }, // fall backward ~80deg
+        ]);
+        rigNode.animations = [...(rigNode.animations || []).filter(a => a.name !== 'death_fall'), fallAnim];
+        this.scene.beginAnimation(rigNode, 0, 20, false, 1);
+      }
+      
+      // Sink mesh into ground
+      const sinkAnim = new Animation(
+        'death_sink', 'position.y', 30,
+        Animation.ANIMATIONTYPE_FLOAT,
+        Animation.ANIMATIONLOOPMODE_CONSTANT
+      );
+      sinkAnim.setKeys([
+        { frame: 0, value: mesh.position.y },
+        { frame: 25, value: mesh.position.y - 0.3 },
+      ]);
+      mesh.animations = [...mesh.animations.filter(a => a.name !== 'death_sink'), sinkAnim];
+      this.scene.beginAnimation(mesh, 0, 25, false, 1, () => {
+        mesh.isVisible = false;
+        mesh.setEnabled(false);
+        const children = mesh.getChildMeshes(true);
+        children.forEach(child => { child.isVisible = false; });
+      });
+      
+      return;
     }
     
-    const children = mesh.getChildMeshes(true);
-    children.forEach(child => {
-      child.isVisible = isAlive;
-    });
+    if (!isAlive) {
+      mesh.isVisible = false;
+      mesh.setEnabled(false);
+      const children = mesh.getChildMeshes(true);
+      children.forEach(child => { child.isVisible = false; });
+    }
   }
 
   /**

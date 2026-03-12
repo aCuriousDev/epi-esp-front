@@ -1,6 +1,6 @@
-import { createMemo, createSignal } from "solid-js";
+import { createMemo, createSignal, Show } from "solid-js";
 import { A, useNavigate } from "@solidjs/router";
-import { addCharacter } from "../stores/charactersStore";
+import { CharacterService, CharacterClass, CharacterRace } from "../services/character.service";
 
 type DnDClass = {
 	key: string;
@@ -150,11 +150,40 @@ const RACES = [
 	"Gnome",
 ];
 
+// Map frontend class keys to backend CharacterClass enum
+const classKeyToEnum: Record<string, CharacterClass> = {
+	"barbarian": CharacterClass.Barbare,
+	"bard": CharacterClass.Barde,
+	"cleric": CharacterClass.Clerc,
+	"druid": CharacterClass.Druide,
+	"fighter": CharacterClass.Guerrier,
+	"monk": CharacterClass.Moine,
+	"paladin": CharacterClass.Paladin,
+	"ranger": CharacterClass.Rodeur,
+	"rogue": CharacterClass.Voleur,
+	"sorcerer": CharacterClass.Ensorceleur,
+	"warlock": CharacterClass.Sorcier,
+	"wizard": CharacterClass.Magicien,
+};
+
+// Map frontend race names to backend CharacterRace enum
+const raceNameToEnum: Record<string, CharacterRace> = {
+	"Humain": CharacterRace.Humain,
+	"Elfe": CharacterRace.Elfe,
+	"Nain": CharacterRace.Nain,
+	"Halfelin": CharacterRace.Halfelin,
+	"Demi-orc": CharacterRace.DemiOrc,
+	"Tieffelin": CharacterRace.Tieffelin,
+	"Gnome": CharacterRace.Gnome,
+};
+
 export default function CreateCharacter() {
 	const navigate = useNavigate();
 	const [selectedClass, setSelectedClass] = createSignal<string>("fighter");
 	const [selectedRace, setSelectedRace] = createSignal<string>("Humain");
 	const [name, setName] = createSignal<string>("");
+	const [isSubmitting, setIsSubmitting] = createSignal(false);
+	const [error, setError] = createSignal<string | null>(null);
 
 	const [prevClass, setPrevClass] = createSignal<string | null>(null);
 
@@ -162,21 +191,40 @@ export default function CreateCharacter() {
 		() => CLASSES.find((c) => c.key === selectedClass())!
 	);
 
-	const handleCreateCharacter = () => {
+	const handleCreate = async () => {
 		if (!name().trim()) {
-			alert("Veuillez entrer un nom pour votre personnage");
+			setError("Veuillez entrer un nom pour votre personnage.");
 			return;
 		}
 
-		addCharacter({
-			name: name().trim(),
-			race: selectedRace(),
-			class: klass().name,
-			classKey: selectedClass(),
-		});
+		setIsSubmitting(true);
+		setError(null);
 
-		// Rediriger vers la liste des personnages
-		navigate("/characters");
+		try {
+			const characterClass = classKeyToEnum[selectedClass()];
+			const characterRace = raceNameToEnum[selectedRace()];
+
+			await CharacterService.createCharacter({
+				name: name().trim(),
+				class: characterClass,
+				race: characterRace,
+				abilities: {
+					strength: 10,
+					dexterity: 10,
+					constitution: 10,
+					intelligence: 10,
+					wisdom: 10,
+					charisma: 10,
+				},
+			});
+
+			// Redirect to characters list
+			navigate("/characters");
+		} catch (err: any) {
+			console.error("Failed to create character:", err);
+			setError(err.response?.data?.message || "Impossible de créer le personnage. Veuillez réessayer.");
+			setIsSubmitting(false);
+		}
 	};
 
 	return (
@@ -282,13 +330,24 @@ export default function CreateCharacter() {
 							</div>
 						</section>
 
-						{/* Bouton de création sous le résumé de la classe */}
+						{/* Error message */}
+						<Show when={error()}>
+							<div class="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-center">
+								{error()}
+							</div>
+						</Show>
+
+						{/* Create button */}
 						<div class="flex justify-end">
-							<button 
-								class="menu-button px-6 py-3.5 w-auto"
-								onClick={handleCreateCharacter}
+							<button
+								class="px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl transition-all font-semibold flex items-center gap-2"
+								onClick={handleCreate}
+								disabled={isSubmitting() || !name().trim()}
 							>
-								Créer le personnage
+								<Show when={isSubmitting()} fallback="Créer le personnage">
+									<div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+									Création...
+								</Show>
 							</button>
 						</div>
 					</section>
@@ -303,7 +362,7 @@ export default function CreateCharacter() {
 								>
 									<img
 										class="w-20 h-20 object-contain mx-auto"
-										src={`/src/assets/classes/${prevClass()}.png`}
+										src={`/assets/classes/${prevClass()}.png`}
 										alt="Classe précédente"
 									/>
 								</div>
@@ -311,7 +370,7 @@ export default function CreateCharacter() {
 							<div class="class-art art-enter">
 								<img
 									class="w-20 h-20 object-contain mx-auto"
-									src={`/src/assets/classes/${selectedClass()}.png`}
+									src={`/assets/classes/${selectedClass()}.png`}
 									alt={klass().name}
 								/>
 							</div>

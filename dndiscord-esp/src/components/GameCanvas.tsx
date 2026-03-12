@@ -16,7 +16,8 @@ import {
   getCurrentUnit,
   getAllySpawnPositions,
 } from '../game';
-import { GamePhase, TurnPhase, Team, Unit, GridPosition } from '../types';
+import { setVFXEngine } from '../game/vfx/VFXIntegration';
+import { GamePhase, TurnPhase, Team, Unit, GridPosition, GameMode } from '../types';
 
 let engineInstance: BabylonEngine | null = null;
 let lastExecutedEnemyIndex: number | null = null;
@@ -59,6 +60,7 @@ export const GameCanvas: Component = () => {
     console.log('[GameCanvas] Creating new BabylonEngine...');
     // Create Babylon engine
     engineInstance = new BabylonEngine(canvasRef);
+    setVFXEngine(engineInstance);
     
     // Setup click handlers
     engineInstance.setOnTileClick((pos) => {
@@ -90,6 +92,7 @@ export const GameCanvas: Component = () => {
     if (engineInstance) {
       console.log('[GameCanvas] Disposing engine...');
       try {
+        setVFXEngine(null);
         engineInstance.dispose();
         console.log('[GameCanvas] Engine disposed successfully');
       } catch (e) {
@@ -381,6 +384,26 @@ export const GameCanvas: Component = () => {
     } else {
       engineInstance.clearPathPreview();
     }
+  });
+  
+  // Selection pulse VFX - pulsing ring under selected unit
+  createEffect(() => {
+    if (!engineInstance) return;
+    
+    const selectedId = gameState.selectedUnit;
+    if (selectedId && units[selectedId]) {
+      const unit = units[selectedId];
+      engineInstance.showSelectionPulse(unit.position, unit.team as string);
+    } else {
+      engineInstance.clearSelectionPulse();
+    }
+  });
+  
+  // Toggle post-processing combat mode based on game mode
+  createEffect(() => {
+    if (!engineInstance) return;
+    const isCombat = gameState.mode === GameMode.COMBAT;
+    engineInstance.setCombatMode(isCombat);
   });
   
   // Handle enemy turn
