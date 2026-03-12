@@ -9,7 +9,7 @@ import { TileType } from '../../types';
 import { GRID_SIZE } from '../constants';
 import { posToKey } from '../utils/GridUtils';
 import { setTiles, initializePathfinder } from '../stores/TilesStore';
-import { loadMap, type SavedMapData, type SavedCellData } from '../../services/mapStorage';
+import { loadMap, type SavedMapData, type SavedCellData, type SavedAssetData } from '../../services/mapStorage';
 import { getCollisionProperties } from '../utils/CollisionUtils';
 
 export function initializeGrid(mapId: string | null = null): void {
@@ -79,8 +79,44 @@ function createDefaultGrid(newTiles: Record<string, any>): void {
 }
 
 /**
+ * Applique les propriétés de collision d'un asset à une tile
+ * Retourne true si l'asset bloque le mouvement
+ */
+function applyCollisionToTile(tile: any, assetProps: ReturnType<typeof getCollisionProperties>): boolean {
+  if (assetProps.blocksMovement) {
+    tile.type = assetProps.tileType;
+    tile.walkable = assetProps.walkable;
+    tile.movementCost = assetProps.movementCost;
+    return true;
+  }
+  
+  if (assetProps.movementCost > tile.movementCost) {
+    tile.movementCost = assetProps.movementCost;
+  }
+  return false;
+}
+
+/**
+ * Applique les collisions d'un asset à toutes ses cellules affectées (multi-cases)
+ */
+function applyMultiTileCollision(asset: SavedAssetData, newTiles: Record<string, any>): void {
+  if (!asset.affectedCells || asset.affectedCells.length <= 1) return;
+  
+  const assetProps = getCollisionProperties(asset.assetType);
+  
+  for (const pos of asset.affectedCells) {
+    const key = posToKey(pos);
+    const tile = newTiles[key];
+    if (tile) {
+      applyCollisionToTile(tile, assetProps);
+    }
+  }
+}
+
+/**
  * Loads a saved map into the tiles
  * Maps saved assets to tile types based on asset type using collision utilities
+ * Supporte les assets multi-cases via affectedCells
  */
 function loadMapToTiles(savedMap: SavedMapData, newTiles: Record<string, any>): void {
   // First, initialize all tiles as FLOOR
@@ -99,6 +135,21 @@ function loadMapToTiles(savedMap: SavedMapData, newTiles: Record<string, any>): 
     }
   }
   
+  // Mark teleport cells as walkable with special handling
+  const teleportCells = new Set<string>();
+  if (savedMap.spawnZones) {
+    Object.entries(savedMap.spawnZones).forEach(([key, type]) => {
+      if (type === 'teleport') {
+        teleportCells.add(key);
+        const tile = newTiles[key];
+        if (tile) {
+          tile.walkable = true;
+          tile.movementCost = 1;
+        }
+      }
+    });
+  }
+
   // Then, process saved cells to update tile types based on assets
   savedMap.cells.forEach((cellData: SavedCellData) => {
     const key = posToKey({ x: cellData.x, z: cellData.z });
@@ -108,9 +159,10 @@ function loadMapToTiles(savedMap: SavedMapData, newTiles: Record<string, any>): 
     // Process ground (floor tiles) - ground determines base terrain
     if (cellData.ground) {
       const groundProps = getCollisionProperties(cellData.ground.assetType);
-      tile.type = groundProps.tileType;
-      tile.walkable = groundProps.walkable;
-      tile.movementCost = groundProps.movementCost;
+      applyCollisionToTile(tile, groundProps);
+      
+      // Appliquer la collision sur toutes les cellules affectées (sol multi-cases)
+      applyMultiTileCollision(cellData.ground, newTiles);
     }
     
     // Process stacked assets - the first blocking asset determines if the tile is blocked
@@ -118,20 +170,20 @@ function loadMapToTiles(savedMap: SavedMapData, newTiles: Record<string, any>): 
     for (const asset of cellData.stackedAssets) {
       const assetProps = getCollisionProperties(asset.assetType);
       
-      // If this asset blocks movement, update the tile accordingly
-      if (assetProps.blocksMovement) {
-        tile.type = assetProps.tileType;
-        tile.walkable = assetProps.walkable;
-        tile.movementCost = assetProps.movementCost;
-        // Once we find a blocking asset, we stop (first blocking asset wins)
-        break;
-      }
+      // Appliquer sur la cellule principale
+      const blocks = applyCollisionToTile(tile, assetProps);
       
-      // If the asset doesn't block but has a higher movement cost, use that
-      // (e.g., difficult terrain on top of floor)
-      if (assetProps.movementCost > tile.movementCost) {
-        tile.movementCost = assetProps.movementCost;
-      }
+      // Appliquer la collision sur toutes les cellules affectées (assets multi-cases)
+      applyMultiTileCollision(asset, newTiles);
+      
+      if (blocks) break;
+    }
+
+    // Ensure teleport cells remain walkable regardless of assets
+    const cellKey = posToKey({ x: cellData.x, z: cellData.z });
+    if (teleportCells.has(cellKey)) {
+      tile.walkable = true;
+      tile.movementCost = 1;
     }
   });
 }

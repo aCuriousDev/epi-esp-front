@@ -6,7 +6,7 @@
 
 import { batch } from 'solid-js';
 import { produce } from 'solid-js/store';
-import { GridPosition, TurnPhase, Unit, Ability } from '../../types';
+import { GridPosition, TurnPhase, Unit, Ability, GameMode, GamePhase } from '../../types';
 import { gameState, setGameState, addCombatLog } from '../stores/GameStateStore';
 import { units, setUnits, getPlayerUnits, getEnemyUnits } from '../stores/UnitsStore';
 import { tiles, setTiles, pathfinder, updatePathfinder } from '../stores/TilesStore';
@@ -183,11 +183,24 @@ export function checkGameOver(): void {
   const enemyUnits = getEnemyUnits();
   
   if (playerUnits.length === 0) {
-    setGameState('phase', 'game_over' as any);
+    setGameState('phase', GamePhase.GAME_OVER);
     addCombatLog('Defeat! All your units have fallen.', 'system');
-  } else if (enemyUnits.length === 0) {
-    setGameState('phase', 'game_over' as any);
-    addCombatLog('Victory! All enemies have been defeated!', 'system');
+    return;
+  }
+
+  if (enemyUnits.length === 0) {
+    if (gameState.mode === GameMode.DUNGEON && gameState.dungeon) {
+      const isLastRoom = gameState.dungeon.currentRoomIndex === gameState.dungeon.totalRooms - 1;
+      if (isLastRoom) {
+        setGameState('phase', GamePhase.GAME_OVER);
+        addCombatLog('Victoire ! Le donjon est terminé ! Tous les ennemis de la dernière salle sont vaincus !', 'system');
+      } else {
+        addCombatLog('Tous les ennemis de cette salle sont vaincus ! Avancez vers le portail de téléportation.', 'system');
+      }
+    } else {
+      setGameState('phase', GamePhase.GAME_OVER);
+      addCombatLog('Victory! All enemies have been defeated!', 'system');
+    }
   }
 }
 
