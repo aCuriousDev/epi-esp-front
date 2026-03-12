@@ -26,6 +26,7 @@ function createDefaultGameState(): GameState {
     targetableTiles: [],
     combatLog: [],
     mapId: null,
+    dungeon: null,
   };
 }
 
@@ -73,6 +74,14 @@ export function getIsFreeRoamMode(): boolean {
 
 export function getIsCombatMode(): boolean {
   return gameState.mode === GameMode.COMBAT;
+}
+
+export function getIsDungeonMode(): boolean {
+  return gameState.mode === GameMode.DUNGEON;
+}
+
+export function getDungeonState() {
+  return gameState.dungeon;
 }
 
 // ============================================

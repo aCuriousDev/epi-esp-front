@@ -159,16 +159,19 @@ export interface StatusEffect {
 export enum GameMode {
   FREE_ROAM = 'free_roam',
   COMBAT = 'combat',
+  DUNGEON = 'dungeon',
 }
 
 export enum AppPhase {
   MODE_SELECTION = 'mode_selection',
   MAP_SELECTION = 'map_selection',
+  DUNGEON_SETUP = 'dungeon_setup',
   IN_GAME = 'in_game',
 }
 
 export enum GamePhase {
   SETUP = 'setup',
+  COMBAT_PREPARATION = 'combat_preparation',
   PLAYER_TURN = 'player_turn',
   ENEMY_TURN = 'enemy_turn',
   ANIMATION = 'animation',
@@ -196,7 +199,15 @@ export interface GameState {
   pathPreview: GridPosition[];
   targetableTiles: GridPosition[];
   combatLog: CombatLogEntry[];
-  mapId: string | null; // ID of the selected map
+  mapId: string | null;
+  dungeon: DungeonState | null;
+}
+
+export interface DungeonState {
+  dungeonId: string;
+  roomIds: string[];
+  currentRoomIndex: number;
+  totalRooms: number;
 }
 
 export interface CombatLogEntry {
