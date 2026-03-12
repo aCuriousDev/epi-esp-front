@@ -902,7 +902,7 @@ export default function MapEditor() {
 			overlay.parent = cellNode;
 			overlay.isPickable = false;
 
-			const material = new StandardMaterial(`spawnZoneMat_${x}_${z}`, scene);
+			const material = new StandardMaterial(`spawnZoneMat_${x}_${z}`, scene!);
 			if (zoneType === "ally") {
 				material.diffuseColor = new Color3(0, 1, 0);
 				material.emissiveColor = new Color3(0, 0.5, 0);
@@ -1241,7 +1241,7 @@ export default function MapEditor() {
 			if (camera && canvasRef) {
 				if (isCameraLocked()) {
 					// Désactiver les contrôles de la caméra
-					camera.detachControl(canvasRef);
+					camera.detachControl();
 				} else {
 					// Réactiver les contrôles de la caméra
 					camera.attachControl(canvasRef, true);
@@ -2474,8 +2474,9 @@ export default function MapEditor() {
 						}
 						
 						// Nettoyer l'enregistrement de l'asset supprimé
-						if (deletedMesh) {
-							const meshName = deletedMesh.name;
+						const resolvedMesh = deletedMesh as AbstractMesh | null;
+						if (resolvedMesh) {
+							const meshName = resolvedMesh.name;
 							if (meshName) {
 								gridManager.unregisterAsset(meshName);
 							}

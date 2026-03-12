@@ -21,17 +21,14 @@ export async function initDiscordSDK(): Promise<DiscordSDK> {
   }
 
   try {
-    discordSdkInstance = new DiscordSDK({ clientId });
-    
+    discordSdkInstance = new DiscordSDK(clientId);
+
     // Attend la connexion au client Discord
     await discordSdkInstance.ready();
-    
+
     isInitialized = true;
-    
-    // Récupère les informations de l'utilisateur connecté
-    const user = discordSdkInstance.getCurrentUser();
+
     console.log('Discord SDK initialized successfully');
-    console.log('Connected user:', user);
     
     return discordSdkInstance;
   } catch (error) {
@@ -64,7 +61,7 @@ export function getCurrentDiscordUser() {
   if (!discordSdkInstance) {
     return null;
   }
-  return discordSdkInstance.getCurrentUser();
+  return (discordSdkInstance as any).user ?? null;
 }
 
 /**

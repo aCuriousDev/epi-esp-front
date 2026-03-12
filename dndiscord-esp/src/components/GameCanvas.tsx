@@ -326,20 +326,21 @@ export const GameCanvas: Component = () => {
   
   createEffect(() => {
     if (!engineInstance || !isEngineReady()) return;
-    
+    const engine = engineInstance;
+
     // Surveiller toutes les unités pour détecter les changements de HP
     Object.keys(units).forEach(unitId => {
       const unit = units[unitId];
       if (!unit) return;
-      
+
       const previousHP = previousUnitHealth.get(unitId);
       const currentHP = unit.stats.currentHealth;
-      
+
       // Si l'HP a diminué, afficher les dégâts
       if (previousHP !== undefined && previousHP > currentHP && previousHP > 0) {
         const damage = previousHP - currentHP;
         if (damage > 0) {
-          engineInstance.showDamageNumber(unitId, damage);
+          engine.showDamageNumber(unitId, damage);
         }
       }
       
