@@ -7,6 +7,7 @@ import {
   ActionManager,
   AbstractMesh,
   ShadowGenerator,
+  Animation,
 } from '@babylonjs/core';
 import { Tile, TileType } from '../../types';
 import { gridToWorld, TILE_SIZE, GRID_SIZE } from '../../game';
@@ -21,7 +22,8 @@ export class GridRenderer {
   private modelLoader: ModelLoader;
   private shadowGenerator: ShadowGenerator | null;
   private tileMeshes: Map<string, Mesh | AbstractMesh> = new Map();
-  private mapAssets: Map<string, SavedCellData> = new Map(); // Cache for map assets by cell key
+  private teleportOverlays: Mesh[] = [];
+  private mapAssets: Map<string, SavedCellData> = new Map();
   
   // Model paths for dungeon tiles
   private readonly FLOOR_MODEL = '/models/dungeon/floor_tile_small.gltf';
@@ -87,6 +89,11 @@ export class GridRenderer {
     
     // Create grid border
     this.createGridBorder();
+
+    // Create teleport cell overlays
+    if (mapId) {
+      this.createTeleportOverlays(mapId);
+    }
     
     console.log(`Grid created with ${this.tileMeshes.size} tiles`);
   }
@@ -361,6 +368,56 @@ export class GridRenderer {
   }
 
   /**
+   * Create glowing purple overlays on teleport cells so players can see portals
+   */
+  private createTeleportOverlays(mapId: string): void {
+    this.teleportOverlays.forEach(m => { if (!m.isDisposed()) m.dispose(); });
+    this.teleportOverlays = [];
+
+    const savedMap = loadMap(mapId);
+    if (!savedMap?.spawnZones) return;
+
+    const teleportMat = new StandardMaterial('teleportOverlayMat', this.scene);
+    teleportMat.diffuseColor = new Color3(0.6, 0, 1);
+    teleportMat.emissiveColor = new Color3(0.4, 0, 0.8);
+    teleportMat.alpha = 0.5;
+    teleportMat.disableLighting = true;
+
+    Object.entries(savedMap.spawnZones).forEach(([key, type]) => {
+      if (type !== 'teleport') return;
+      const [x, z] = key.split(',').map(Number);
+      const worldPos = gridToWorld({ x, z });
+
+      const overlay = MeshBuilder.CreatePlane(
+        `teleport_overlay_${x}_${z}`,
+        { width: TILE_SIZE * 0.85, height: TILE_SIZE * 0.85 },
+        this.scene
+      );
+      overlay.rotation.x = Math.PI / 2;
+      overlay.position.set(worldPos.x, 0.12, worldPos.z);
+      overlay.material = teleportMat;
+      overlay.isPickable = false;
+
+      const pulseAnim = new Animation(
+        `teleportPulse_${x}_${z}`,
+        'material.alpha',
+        30,
+        Animation.ANIMATIONTYPE_FLOAT,
+        Animation.ANIMATIONLOOPMODE_CYCLE
+      );
+      pulseAnim.setKeys([
+        { frame: 0, value: 0.3 },
+        { frame: 30, value: 0.6 },
+        { frame: 60, value: 0.3 },
+      ]);
+      overlay.animations.push(pulseAnim);
+      this.scene.beginAnimation(overlay, 0, 60, true);
+
+      this.teleportOverlays.push(overlay);
+    });
+  }
+
+  /**
    * Create decorative border around the grid
    */
   private createGridBorder(): void {
@@ -401,6 +458,9 @@ export class GridRenderer {
       }
     });
     this.tileMeshes.clear();
+
+    this.teleportOverlays.forEach(m => { if (!m.isDisposed()) m.dispose(); });
+    this.teleportOverlays = [];
     
     // Also clear border meshes
     const borderMeshes = this.scene.meshes.filter(m => m.name.startsWith('border_'));
