@@ -1,13 +1,33 @@
 import { A, useParams, useNavigate } from "@solidjs/router";
 import {
-  ArrowLeft, Crown, Users, Calendar, BookOpen, Settings,
-  Play, Pause, UserPlus, Trash2, Edit3, Clock, MapPin,
-  MessageSquare, ChevronRight, Plus, Check, X
+  ArrowLeft,
+  Crown,
+  Users,
+  Calendar,
+  BookOpen,
+  Settings,
+  Play,
+  Pause,
+  UserPlus,
+  Trash2,
+  Edit3,
+  Clock,
+  MapPin,
+  MessageSquare,
+  ChevronRight,
+  Plus,
+  Check,
+  X,
+  Loader2,
 } from "lucide-solid";
 import { createSignal, onMount, Show, For } from "solid-js";
 import {
-  Campaign, CampaignStatus, CampaignPlayer, CampaignSession,
-  getStatusColor, getStatusLabel
+  Campaign,
+  CampaignStatus,
+  CampaignPlayer,
+  CampaignSession,
+  getStatusColor,
+  getStatusLabel,
 } from "../types/campaign";
 import { authStore } from "../stores/auth.store";
 import { AuthService } from "../services/auth.service";
@@ -15,20 +35,31 @@ import {
   CampaignService,
   CampaignDetailResponse,
   CampaignMemberResponse,
-  CampaignStatus as APICampaignStatus
+  CampaignStatus as APICampaignStatus,
 } from "../services/campaign.service";
+import {
+  createSession,
+  ensureMultiplayerHandlersRegistered,
+} from "../services/signalr/multiplayer.service";
+import { signalRService } from "../services/signalr/SignalRService";
 
 /**
  * Map API campaign status (integer) to frontend status (string)
  */
 function mapCampaignStatus(apiStatus: number): CampaignStatus {
   switch (apiStatus) {
-    case 0: return CampaignStatus.Planning; // Draft
-    case 1: return CampaignStatus.Active;
-    case 2: return CampaignStatus.Paused;
-    case 3: return CampaignStatus.Completed;
-    case 4: return CampaignStatus.Archived;
-    default: return CampaignStatus.Planning;
+    case 0:
+      return CampaignStatus.Planning; // Draft
+    case 1:
+      return CampaignStatus.Active;
+    case 2:
+      return CampaignStatus.Paused;
+    case 3:
+      return CampaignStatus.Completed;
+    case 4:
+      return CampaignStatus.Archived;
+    default:
+      return CampaignStatus.Planning;
   }
 }
 
@@ -51,12 +82,18 @@ function mapMemberRole(apiRole: string): "dm" | "player" {
  */
 function mapToAPICampaignStatus(status: CampaignStatus): APICampaignStatus {
   switch (status) {
-    case CampaignStatus.Planning: return APICampaignStatus.Draft;
-    case CampaignStatus.Active: return APICampaignStatus.Active;
-    case CampaignStatus.Paused: return APICampaignStatus.Paused;
-    case CampaignStatus.Completed: return APICampaignStatus.Completed;
-    case CampaignStatus.Archived: return APICampaignStatus.Archived;
-    default: return APICampaignStatus.Draft;
+    case CampaignStatus.Planning:
+      return APICampaignStatus.Draft;
+    case CampaignStatus.Active:
+      return APICampaignStatus.Active;
+    case CampaignStatus.Paused:
+      return APICampaignStatus.Paused;
+    case CampaignStatus.Completed:
+      return APICampaignStatus.Completed;
+    case CampaignStatus.Archived:
+      return APICampaignStatus.Archived;
+    default:
+      return APICampaignStatus.Draft;
   }
 }
 
@@ -70,19 +107,21 @@ function mapCampaignResponse(apiCampaign: CampaignDetailResponse): Campaign {
     description: apiCampaign.description,
     coverImageUrl: apiCampaign.imageUrl,
     status: mapCampaignStatus(apiCampaign.status),
-    visibility: apiCampaign.isPublic ? "Public" as any : "Private" as any,
+    visibility: apiCampaign.isPublic ? ("Public" as any) : ("Private" as any),
     dungeonMasterId: apiCampaign.dungeonMasterId,
+    isDungeonMaster: apiCampaign.isDungeonMaster,
     dungeonMasterName: "Maître du Jeu", // API doesn't provide this
     dungeonMasterAvatar: "",
     maxPlayers: apiCampaign.maxPlayers,
     currentPlayers: apiCampaign.memberCount,
-    players: apiCampaign.members?.map(m => ({
-      id: m.id,
-      username: m.userId, // API doesn't provide username, using userId
-      role: mapMemberRole(m.role),
-      characterName: m.nickname,
-      joinedAt: m.joinedAt,
-    })) || [],
+    players:
+      apiCampaign.members?.map((m) => ({
+        id: m.id,
+        username: m.userId, // API doesn't provide username, using userId
+        role: mapMemberRole(m.role),
+        characterName: m.nickname,
+        joinedAt: m.joinedAt,
+      })) || [],
     sessions: [], // API doesn't provide sessions yet
     totalSessions: apiCampaign.snapshotCount || 0,
     setting: undefined,
@@ -100,15 +139,22 @@ export default function CampaignView() {
   const [campaign, setCampaign] = createSignal<Campaign | null>(null);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
-  const [activeTab, setActiveTab] = createSignal<"overview" | "players" | "sessions">("overview");
+  const [activeTab, setActiveTab] = createSignal<
+    "overview" | "players" | "sessions"
+  >("overview");
   const [showInviteModal, setShowInviteModal] = createSignal(false);
   const [inviteCode, setInviteCode] = createSignal<string | null>(null);
+  const [launchingSession, setLaunchingSession] = createSignal(false);
+  const [launchError, setLaunchError] = createSignal<string | null>(null);
 
   const user = () => authStore.user();
+  /** Le créateur/MJ peut lancer une session ; on s’appuie sur l’API (isDungeonMaster) pour éviter les écarts d’identifiants. */
   const isOwner = () => {
     const c = campaign();
+    if (!c) return false;
+    if (c.isDungeonMaster === true) return true;
     const u = user();
-    return c && u && c.dungeonMasterId === u.id;
+    return !!u && c.dungeonMasterId === u.id;
   };
 
   onMount(async () => {
@@ -146,13 +192,34 @@ export default function CampaignView() {
     });
   };
 
+  /** Créer une session GameHub pour cette campagne et aller au board (DM uniquement). */
+  const handleLaunchSession = async () => {
+    const c = campaign();
+    if (!c || !isOwner()) return;
+    setLaunchError(null);
+    setLaunchingSession(true);
+    try {
+      if (!signalRService.isConnected) {
+        await signalRService.connect();
+        ensureMultiplayerHandlersRegistered();
+      }
+      await createSession(c.id);
+      navigate("/board");
+    } catch (e: any) {
+      setLaunchError(e?.message ?? "Impossible de créer la session.");
+    } finally {
+      setLaunchingSession(false);
+    }
+  };
+
   const toggleStatus = async () => {
     const c = campaign();
     if (!c) return;
 
-    const newStatus = c.status === CampaignStatus.Active
-      ? CampaignStatus.Paused
-      : CampaignStatus.Active;
+    const newStatus =
+      c.status === CampaignStatus.Active
+        ? CampaignStatus.Paused
+        : CampaignStatus.Active;
 
     try {
       const apiStatus = mapToAPICampaignStatus(newStatus);
@@ -173,7 +240,11 @@ export default function CampaignView() {
     const c = campaign();
     if (!c) return;
 
-    if (!confirm(`Êtes-vous sûr de vouloir supprimer "${c.title}" ? Cette action est irréversible.`)) {
+    if (
+      !confirm(
+        `Êtes-vous sûr de vouloir supprimer "${c.title}" ? Cette action est irréversible.`,
+      )
+    ) {
       return;
     }
 
@@ -191,7 +262,9 @@ export default function CampaignView() {
     if (!c) return;
 
     try {
-      const response = await CampaignService.generateInviteCode(c.id, { expiresInHours: 24 });
+      const response = await CampaignService.generateInviteCode(c.id, {
+        expiresInHours: 24,
+      });
       setInviteCode(response.inviteCode);
       setShowInviteModal(true);
     } catch (err) {
@@ -204,7 +277,9 @@ export default function CampaignView() {
     const c = campaign();
     if (!c) return;
 
-    if (!confirm("Êtes-vous sûr de vouloir retirer ce joueur de la campagne ?")) {
+    if (
+      !confirm("Êtes-vous sûr de vouloir retirer ce joueur de la campagne ?")
+    ) {
       return;
     }
 
@@ -232,7 +307,11 @@ export default function CampaignView() {
       <div class="vignette absolute inset-0" />
 
       {/* Back button */}
-      <A href="/campaigns" class="settings-btn !left-4 !right-auto" aria-label="Retour">
+      <A
+        href="/campaigns"
+        class="settings-btn !left-4 !right-auto"
+        aria-label="Retour"
+      >
         <ArrowLeft class="settings-icon h-5 w-5" />
       </A>
 
@@ -252,10 +331,12 @@ export default function CampaignView() {
                 {/* Banner */}
                 <div class="h-32 bg-gradient-to-r from-purple-600/40 via-indigo-600/30 to-violet-600/40 relative">
                   <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.05%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-30" />
-                  
+
                   {/* Status badge */}
                   <div class="absolute top-4 right-4">
-                    <span class={`px-3 py-1.5 text-sm rounded-xl border ${getStatusColor(camp().status)}`}>
+                    <span
+                      class={`px-3 py-1.5 text-sm rounded-xl border ${getStatusColor(camp().status)}`}
+                    >
                       {getStatusLabel(camp().status)}
                     </span>
                   </div>
@@ -266,9 +347,16 @@ export default function CampaignView() {
                       <button
                         onClick={toggleStatus}
                         class="p-2 rounded-lg bg-black/30 backdrop-blur-sm border border-white/10 hover:bg-black/50 transition-colors"
-                        title={camp().status === CampaignStatus.Active ? "Mettre en pause" : "Reprendre"}
+                        title={
+                          camp().status === CampaignStatus.Active
+                            ? "Mettre en pause"
+                            : "Reprendre"
+                        }
                       >
-                        <Show when={camp().status === CampaignStatus.Active} fallback={<Play class="w-4 h-4 text-green-400" />}>
+                        <Show
+                          when={camp().status === CampaignStatus.Active}
+                          fallback={<Play class="w-4 h-4 text-green-400" />}
+                        >
                           <Pause class="w-4 h-4 text-yellow-400" />
                         </Show>
                       </button>
@@ -331,12 +419,21 @@ export default function CampaignView() {
                           <Crown class="w-6 h-6 text-white" />
                         </div>
                         <div>
-                          <p class="text-xs text-amber-400 uppercase tracking-wider">Maître du Jeu</p>
-                          <p class="text-white font-semibold">{camp().dungeonMasterName}</p>
+                          <p class="text-xs text-amber-400 uppercase tracking-wider">
+                            Maître du Jeu
+                          </p>
+                          <p class="text-white font-semibold">
+                            {camp().dungeonMasterName}
+                          </p>
                         </div>
                       </div>
                       <div class="text-sm text-slate-400">
-                        <p>Niveau actuel: <span class="text-purple-400 font-semibold">{camp().currentLevel || camp().startingLevel}</span></p>
+                        <p>
+                          Niveau actuel:{" "}
+                          <span class="text-purple-400 font-semibold">
+                            {camp().currentLevel || camp().startingLevel}
+                          </span>
+                        </p>
                         <p>Démarré le {formatDate(camp().createdAt)}</p>
                       </div>
                     </div>
@@ -350,13 +447,28 @@ export default function CampaignView() {
                           <Calendar class="w-5 h-5 text-green-400" />
                         </div>
                         <div>
-                          <p class="text-sm text-green-400 font-medium">Prochaine session</p>
-                          <p class="text-white">{formatDateTime(camp().nextSessionDate!)}</p>
+                          <p class="text-sm text-green-400 font-medium">
+                            Prochaine session
+                          </p>
+                          <p class="text-white">
+                            {formatDateTime(camp().nextSessionDate!)}
+                          </p>
                         </div>
                       </div>
-                      <button class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl transition-colors flex items-center gap-2">
-                        <Play class="w-4 h-4" />
-                        Lancer la session
+                      <button
+                        class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
+                        onClick={handleLaunchSession}
+                        disabled={launchingSession()}
+                      >
+                        <Show
+                          when={launchingSession()}
+                          fallback={<Play class="w-4 h-4" />}
+                        >
+                          <Loader2 class="w-4 h-4 animate-spin" />
+                        </Show>
+                        {launchingSession()
+                          ? "Création..."
+                          : "Lancer la session"}
                       </button>
                     </div>
                   </Show>
@@ -365,21 +477,21 @@ export default function CampaignView() {
 
               {/* Tabs */}
               <div class="flex gap-2 mb-6 overflow-x-auto pb-2">
-                <TabButton 
-                  active={activeTab() === "overview"} 
+                <TabButton
+                  active={activeTab() === "overview"}
                   onClick={() => setActiveTab("overview")}
                   icon={<BookOpen class="w-4 h-4" />}
                   label="Aperçu"
                 />
-                <TabButton 
-                  active={activeTab() === "players"} 
+                <TabButton
+                  active={activeTab() === "players"}
                   onClick={() => setActiveTab("players")}
                   icon={<Users class="w-4 h-4" />}
                   label="Joueurs"
                   count={camp().currentPlayers}
                 />
-                <TabButton 
-                  active={activeTab() === "sessions"} 
+                <TabButton
+                  active={activeTab() === "sessions"}
                   onClick={() => setActiveTab("sessions")}
                   icon={<Calendar class="w-4 h-4" />}
                   label="Sessions"
@@ -392,25 +504,27 @@ export default function CampaignView() {
                 {/* Overview Tab */}
                 <Show when={activeTab() === "overview"}>
                   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <StatCard 
+                    <StatCard
                       icon={<Users class="w-5 h-5" />}
                       label="Joueurs"
                       value={`${camp().currentPlayers}/${camp().maxPlayers}`}
                       color="purple"
                     />
-                    <StatCard 
+                    <StatCard
                       icon={<BookOpen class="w-5 h-5" />}
                       label="Sessions jouées"
                       value={camp().totalSessions.toString()}
                       color="blue"
                     />
-                    <StatCard 
+                    <StatCard
                       icon={<Crown class="w-5 h-5" />}
                       label="Niveau actuel"
-                      value={(camp().currentLevel || camp().startingLevel).toString()}
+                      value={(
+                        camp().currentLevel || camp().startingLevel
+                      ).toString()}
                       color="amber"
                     />
-                    <StatCard 
+                    <StatCard
                       icon={<Clock class="w-5 h-5" />}
                       label="Durée"
                       value={`${Math.ceil((Date.now() - new Date(camp().createdAt).getTime()) / (1000 * 60 * 60 * 24 * 30))} mois`}
@@ -425,17 +539,17 @@ export default function CampaignView() {
                       Activité récente
                     </h3>
                     <div class="space-y-3">
-                      <ActivityItem 
+                      <ActivityItem
                         icon="📜"
                         text="Session 12 terminée: Les Tours d'Argent"
                         time="Il y a 4 jours"
                       />
-                      <ActivityItem 
+                      <ActivityItem
                         icon="⚔️"
                         text="Le groupe a atteint le niveau 6"
                         time="Il y a 1 semaine"
                       />
-                      <ActivityItem 
+                      <ActivityItem
                         icon="👤"
                         text="DragonSlayer a rejoint la campagne"
                         time="Il y a 2 semaines"
@@ -448,8 +562,14 @@ export default function CampaignView() {
                 <Show when={activeTab() === "players"}>
                   <div class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
                     <div class="p-4 border-b border-white/10 flex items-center justify-between">
-                      <h3 class="font-display text-lg text-white">Joueurs ({camp().currentPlayers})</h3>
-                      <Show when={isOwner() && camp().currentPlayers < camp().maxPlayers}>
+                      <h3 class="font-display text-lg text-white">
+                        Joueurs ({camp().currentPlayers})
+                      </h3>
+                      <Show
+                        when={
+                          isOwner() && camp().currentPlayers < camp().maxPlayers
+                        }
+                      >
                         <button
                           onClick={handleGenerateInvite}
                           class="flex items-center gap-2 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded-lg transition-colors"
@@ -459,7 +579,7 @@ export default function CampaignView() {
                         </button>
                       </Show>
                     </div>
-                    
+
                     <div class="divide-y divide-white/5">
                       {/* DM */}
                       <div class="p-4 flex items-center gap-4 bg-amber-500/5">
@@ -467,7 +587,9 @@ export default function CampaignView() {
                           <Crown class="w-6 h-6 text-white" />
                         </div>
                         <div class="flex-1">
-                          <p class="text-white font-semibold">{camp().dungeonMasterName}</p>
+                          <p class="text-white font-semibold">
+                            {camp().dungeonMasterName}
+                          </p>
                           <p class="text-amber-400 text-sm">Maître du Jeu</p>
                         </div>
                       </div>
@@ -480,7 +602,9 @@ export default function CampaignView() {
                               <span class="text-lg">🎭</span>
                             </div>
                             <div class="flex-1 min-w-0">
-                              <p class="text-white font-semibold">{player.username}</p>
+                              <p class="text-white font-semibold">
+                                {player.username}
+                              </p>
                               <p class="text-slate-400 text-sm truncate">
                                 {player.characterName || "Pas de personnage"}
                               </p>
@@ -499,7 +623,11 @@ export default function CampaignView() {
                       </For>
 
                       {/* Empty slots */}
-                      <For each={Array(camp().maxPlayers - camp().currentPlayers).fill(0)}>
+                      <For
+                        each={Array(
+                          camp().maxPlayers - camp().currentPlayers,
+                        ).fill(0)}
+                      >
                         {() => (
                           <div class="p-4 flex items-center gap-4 opacity-50">
                             <div class="w-12 h-12 rounded-full border-2 border-dashed border-white/20 flex items-center justify-center">
@@ -529,23 +657,36 @@ export default function CampaignView() {
                       {(session) => (
                         <div class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-4 hover:border-white/20 transition-colors">
                           <div class="flex items-start gap-4">
-                            <div class={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                              session.completed 
-                                ? "bg-green-500/20 text-green-400" 
-                                : "bg-blue-500/20 text-blue-400"
-                            }`}>
-                              <Show when={session.completed} fallback={<Calendar class="w-5 h-5" />}>
+                            <div
+                              class={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                                session.completed
+                                  ? "bg-green-500/20 text-green-400"
+                                  : "bg-blue-500/20 text-blue-400"
+                              }`}
+                            >
+                              <Show
+                                when={session.completed}
+                                fallback={<Calendar class="w-5 h-5" />}
+                              >
                                 <Check class="w-5 h-5" />
                               </Show>
                             </div>
                             <div class="flex-1 min-w-0">
                               <div class="flex items-center gap-2 mb-1">
-                                <span class="text-purple-400 font-semibold">#{session.number}</span>
-                                <h4 class="text-white font-semibold truncate">{session.title}</h4>
+                                <span class="text-purple-400 font-semibold">
+                                  #{session.number}
+                                </span>
+                                <h4 class="text-white font-semibold truncate">
+                                  {session.title}
+                                </h4>
                               </div>
-                              <p class="text-slate-400 text-sm">{formatDate(session.date)}</p>
+                              <p class="text-slate-400 text-sm">
+                                {formatDate(session.date)}
+                              </p>
                               <Show when={session.summary}>
-                                <p class="text-slate-500 text-sm mt-2 line-clamp-2">{session.summary}</p>
+                                <p class="text-slate-500 text-sm mt-2 line-clamp-2">
+                                  {session.summary}
+                                </p>
                               </Show>
                             </div>
                             <ChevronRight class="w-5 h-5 text-slate-500" />
@@ -557,15 +698,40 @@ export default function CampaignView() {
                 </Show>
               </div>
 
+              {/* Erreur création de session */}
+              <Show when={launchError()}>
+                <p class="mt-4 text-red-400 text-sm">{launchError()}</p>
+              </Show>
+
               {/* Actions Footer */}
               <div class="mt-8 flex flex-col sm:flex-row gap-4">
-                <button
-                  class="flex-1 py-3 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold hover:from-purple-500 hover:to-indigo-500 transition-all shadow-lg flex items-center justify-center gap-2"
-                  onClick={() => navigate("/board")}
-                >
-                  <Play class="w-5 h-5" />
-                  Lancer une session
-                </button>
+                <Show when={isOwner()}>
+                  <button
+                    class="flex-1 py-3 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold hover:from-purple-500 hover:to-indigo-500 transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                    onClick={handleLaunchSession}
+                    disabled={launchingSession()}
+                  >
+                    <Show
+                      when={launchingSession()}
+                      fallback={<Play class="w-5 h-5" />}
+                    >
+                      <Loader2 class="w-5 h-5 animate-spin" />
+                    </Show>
+                    {launchingSession()
+                      ? "Création de la session..."
+                      : "Lancer une session"}
+                  </button>
+                </Show>
+                <Show when={!isOwner()}>
+                  <button
+                    class="flex-1 py-3 px-6 rounded-xl bg-game-dark/60 border border-white/10 text-slate-400 font-semibold flex items-center justify-center gap-2 cursor-default"
+                    disabled
+                    title="Seul le MJ peut créer une session"
+                  >
+                    <Play class="w-5 h-5" />
+                    Lancer une session (MJ uniquement)
+                  </button>
+                </Show>
                 <Show when={isOwner()}>
                   <button
                     onClick={handleUpdate}
@@ -598,12 +764,17 @@ export default function CampaignView() {
             class="bg-game-dark border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 class="text-xl font-display text-white mb-4">Code d'invitation</h3>
+            <h3 class="text-xl font-display text-white mb-4">
+              Code d'invitation
+            </h3>
             <p class="text-slate-400 mb-4">
-              Partagez ce code avec vos joueurs pour les inviter à rejoindre la campagne.
+              Partagez ce code avec vos joueurs pour les inviter à rejoindre la
+              campagne.
             </p>
             <div class="bg-white/5 border border-white/10 rounded-xl p-4 mb-4">
-              <code class="text-purple-400 text-lg font-mono">{inviteCode()}</code>
+              <code class="text-purple-400 text-lg font-mono">
+                {inviteCode()}
+              </code>
             </div>
             <button
               onClick={() => {
@@ -633,7 +804,12 @@ export default function CampaignView() {
 
       <style jsx>{`
         .campaign-view-page {
-          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1a 100%);
+          background: linear-gradient(
+            135deg,
+            #1a1a2e 0%,
+            #16213e 50%,
+            #0f0f1a 100%
+          );
         }
       `}</style>
     </div>
@@ -643,10 +819,10 @@ export default function CampaignView() {
 /**
  * Tab button component
  */
-function TabButton(props: { 
-  active: boolean; 
-  onClick: () => void; 
-  icon: any; 
+function TabButton(props: {
+  active: boolean;
+  onClick: () => void;
+  icon: any;
   label: string;
   count?: number;
 }) {
@@ -662,9 +838,11 @@ function TabButton(props: {
       {props.icon}
       <span>{props.label}</span>
       <Show when={props.count !== undefined}>
-        <span class={`text-xs px-1.5 py-0.5 rounded-full ${
-          props.active ? "bg-purple-500/50" : "bg-white/10"
-        }`}>
+        <span
+          class={`text-xs px-1.5 py-0.5 rounded-full ${
+            props.active ? "bg-purple-500/50" : "bg-white/10"
+          }`}
+        >
           {props.count}
         </span>
       </Show>
@@ -675,10 +853,10 @@ function TabButton(props: {
 /**
  * Stat card component
  */
-function StatCard(props: { 
-  icon: any; 
-  label: string; 
-  value: string; 
+function StatCard(props: {
+  icon: any;
+  label: string;
+  value: string;
   color: "purple" | "blue" | "amber" | "green";
 }) {
   const colorClasses = {
@@ -690,7 +868,9 @@ function StatCard(props: {
 
   return (
     <div class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-xl p-4">
-      <div class={`w-10 h-10 rounded-lg ${colorClasses[props.color]} flex items-center justify-center mb-3`}>
+      <div
+        class={`w-10 h-10 rounded-lg ${colorClasses[props.color]} flex items-center justify-center mb-3`}
+      >
         {props.icon}
       </div>
       <p class="text-2xl font-bold text-white">{props.value}</p>
@@ -713,4 +893,3 @@ function ActivityItem(props: { icon: string; text: string; time: string }) {
     </div>
   );
 }
-

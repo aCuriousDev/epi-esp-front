@@ -87,6 +87,7 @@ export interface Unit {
   isAlive: boolean;
   hasActed: boolean;
   hasMoved: boolean;
+  ownerUserId?: string;
 }
 
 // ============================================
@@ -167,6 +168,8 @@ export enum AppPhase {
   MAP_SELECTION = 'map_selection',
   DUNGEON_SETUP = 'dungeon_setup',
   IN_GAME = 'in_game',
+  ROOM_JOIN = 'room_join',
+  LOBBY = 'lobby',
 }
 
 export enum GamePhase {

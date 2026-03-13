@@ -6,6 +6,8 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5054';
 export class SignalRService {
   private connection: signalR.HubConnection | null = null;
   private token: string | null = null;
+  /** Hub userId (Guid) received from Connected event. */
+  public hubUserId: string | null = null;
 
   constructor() {}
 
@@ -25,9 +27,15 @@ export class SignalRService {
       .configureLogging(signalR.LogLevel.Information)
       .build();
 
-    // Handlers de base
-    this.connection.on('Connected', (data) => {
-      console.log('Connected to SignalR:', data);
+    // Promise that resolves when Connected event fires (with userId)
+    const connectedPromise = new Promise<void>((resolve) => {
+      this.connection!.on('Connected', (data) => {
+        console.log('Connected to SignalR:', data);
+        if (data?.userId) {
+          this.hubUserId = String(data.userId);
+        }
+        resolve();
+      });
     });
 
     this.connection.on('Pong', (timestamp) => {
@@ -48,6 +56,8 @@ export class SignalRService {
 
     try {
       await this.connection.start();
+      // Wait for the Connected event so hubUserId is available
+      await Promise.race([connectedPromise, new Promise(r => setTimeout(r, 3000))]);
       if (this.connection.connectionId) {
         console.log('SignalR Started. ConnectionId:', this.connection.connectionId);
       } else {

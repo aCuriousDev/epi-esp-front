@@ -23,12 +23,16 @@
     "axios": "^1.13.2",
     "draw2d": "^1.0.38",
     "jquery": "^4.0.0",
+    "jquery-ui-dist": "^1.13.3",
     "lucide-solid": "^0.548.0",
     "solid-js": "^1.9.3",
     "solid-styled-jsx": "^0.27.1",
     "styled-jsx": "^3.4.7"
   },
   "devDependencies": {
+    "@fontsource/cinzel": "^5.2.8",
+    "@fontsource/im-fell-english-sc": "^5.2.6",
+    "@fontsource/inter": "^5.2.8",
     "@iconify-json/game-icons": "^1.2.3",
     "@types/node": "^22.7.5",
     "autoprefixer": "^10.4.20",

@@ -1,6 +1,9 @@
 import { createSignal, createRoot } from "solid-js";
 import type { User } from "../types/auth";
 import { AuthService } from "../services/auth.service";
+import { setupDiscord, isDiscordActivityContext } from "../discord";
+
+const isDiscordActivity = isDiscordActivityContext() && !import.meta.env.DEV;
 
 /**
  * Global auth store using SolidJS signals
@@ -10,13 +13,48 @@ function createAuthStore() {
   const [user, setUser] = createSignal<User | null>(null);
   const [isLoading, setIsLoading] = createSignal(true);
   const [isAuthenticated, setIsAuthenticated] = createSignal(false);
+  const [activityError, setActivityError] = createSignal<string | null>(null);
 
   /**
-   * Initialize auth state from stored token
+   * Initialize auth state from stored token or Discord Activity (Embedded App SDK).
    */
   async function init() {
     setIsLoading(true);
-    
+
+    // Token renvoyé par le callback en mode redirection (popup bloquée)
+    const hash = window.location.hash;
+    const match = hash && /auth_token=([^&]+)/.exec(hash);
+    if (match) {
+      try {
+        const token = decodeURIComponent(match[1]);
+        AuthService.setToken(token);
+        window.history.replaceState(
+          null,
+          "",
+          window.location.pathname + window.location.search,
+        );
+      } catch (_) {}
+    }
+
+    const shouldUseDiscordActivity =
+      !AuthService.hasToken() &&
+      isDiscordActivity;
+
+    if (shouldUseDiscordActivity) {
+      try {
+        const { user: discordUser, token } = await setupDiscord();
+        AuthService.setToken(token);
+        setUser(discordUser);
+        setIsAuthenticated(true);
+        setIsLoading(false);
+        return;
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.warn("Discord Activity auth failed:", msg);
+        setActivityError(msg);
+      }
+    }
+
     if (AuthService.hasToken()) {
       try {
         const currentUser = await AuthService.getCurrentUser();
@@ -28,14 +66,17 @@ function createAuthStore() {
         localStorage.removeItem("token");
         setUser(null);
         setIsAuthenticated(false);
-        
+
         // Don't log the full error in production - it's expected when tokens expire
         if (import.meta.env.DEV) {
-          console.debug("Token validation failed:", error?.response?.status || error?.message);
+          console.debug(
+            "Token validation failed:",
+            error?.response?.status || error?.message,
+          );
         }
       }
     }
-    
+
     setIsLoading(false);
   }
 
@@ -44,7 +85,7 @@ function createAuthStore() {
    */
   async function loginWithCode(code: string) {
     setIsLoading(true);
-    
+
     try {
       const response = await AuthService.exchangeCode(code);
       AuthService.setToken(response.token);
@@ -73,7 +114,7 @@ function createAuthStore() {
    */
   async function logout() {
     setIsLoading(true);
-    
+
     try {
       await AuthService.logout();
     } catch (error) {
@@ -86,34 +127,58 @@ function createAuthStore() {
   }
 
   /**
-   * Open Discord OAuth popup
+   * Open Discord OAuth popup (ou redirection si iframe / popup impossible)
    */
   async function openDiscordLogin(): Promise<void> {
     try {
-      const authUrl = await AuthService.getDiscordAuthUrl();
-      
-      // Calculate popup position (center of screen)
+      // Dans le contexte Discord Activity, le flux OAuth redirect ne fonctionne pas
+      // (l'iframe ne peut pas naviguer vers des domaines externes).
+      // On utilise directement le SDK Discord.
+      if (isDiscordActivity) {
+        const { user: discordUser, token } = await setupDiscord();
+        AuthService.setToken(token);
+        setUser(discordUser);
+        setIsAuthenticated(true);
+        return;
+      }
+
+      const returnUrl = window.location.href;
+      const authUrl = AuthService.getDiscordRedirectUrl(returnUrl);
+
+      const inIframe = window !== window.top;
+      if (inIframe) {
+        window.location.href = authUrl;
+        return;
+      }
+
       const width = 500;
       const height = 700;
       const left = window.screenX + (window.outerWidth - width) / 2;
       const top = window.screenY + (window.outerHeight - height) / 2;
-      
+
       const popup = window.open(
         authUrl,
         "Discord Login",
-        `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
+        `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`,
       );
 
       if (!popup) {
-        throw new Error("Popup was blocked. Please allow popups for this site.");
+        // Popup bloquée par le navigateur → redirection de la fenêtre courante
+        window.location.href = authUrl;
+        return;
       }
 
-      // Listen for message from popup
       return new Promise((resolve, reject) => {
+        const appOrigin = import.meta.env.VITE_APP_URL
+          ? new URL(import.meta.env.VITE_APP_URL).origin
+          : new URL(AuthService.getDiscordRedirectUrl()).origin;
+
         const handleMessage = (event: MessageEvent) => {
-          // Verify origin
-          if (event.origin !== window.location.origin) return;
-          
+          const allowed =
+            event.origin === window.location.origin ||
+            event.origin === appOrigin;
+          if (!allowed) return;
+
           if (event.data?.type === "AUTH_SUCCESS") {
             window.removeEventListener("message", handleMessage);
             const { user, token } = event.data.payload;
@@ -147,8 +212,9 @@ function createAuthStore() {
     // State (getters)
     user,
     isLoading,
+    activityError,
     isAuthenticated,
-    
+
     // Actions
     init,
     loginWithCode,
@@ -160,4 +226,3 @@ function createAuthStore() {
 
 // Create singleton store instance
 export const authStore = createRoot(createAuthStore);
-
