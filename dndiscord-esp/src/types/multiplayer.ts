@@ -25,16 +25,41 @@ export interface PlayerInfo {
   userName: string;
   role: PlayerRole;
   status: ConnectionStatus;
+  selectedCharacterId?: string;
+  selectedCharacterName?: string;
 }
 
 export interface SessionInfo {
   sessionId: string;
-  campaignId: string;
-  campaignName: string;
+  campaignId?: string;
+  campaignName?: string;
   playerCount: number;
   maxPlayers: number;
   state: SessionState;
+  mapId?: string;
   players: PlayerInfo[];
+}
+
+export interface UnitAssignment {
+  userId: string;
+  unitId: string;
+  unitName: string;
+  characterClass: string;
+  maxHp: number;
+  currentHp: number;
+  armorClass: number;
+  speed: number;
+  initiative: number;
+  attackDamage: number;
+  defense: number;
+  movementRange: number;
+  attackRange: number;
+}
+
+export interface GameStartedPayload {
+  mapId: string;
+  mapData?: string;
+  unitAssignments: UnitAssignment[];
 }
 
 export interface JoinResult {

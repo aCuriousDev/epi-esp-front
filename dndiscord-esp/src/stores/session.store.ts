@@ -9,7 +9,9 @@ import type {
   JoinResult,
   KickResult,
   PlayerInfo,
+  GameStartedPayload,
 } from "../types/multiplayer";
+import { PlayerRole } from "../types/multiplayer";
 
 export interface SessionStoreState {
   /** Session courante (null si pas en session). */
@@ -18,12 +20,18 @@ export interface SessionStoreState {
   isLoading: boolean;
   /** Message d'erreur à afficher. */
   error: string | null;
+  /** Payload reçu quand le host lance la partie. */
+  gameStartedPayload: GameStartedPayload | null;
+  /** User ID (Guid) renvoyé par le hub SignalR (différent de authStore.user().id). */
+  hubUserId: string | null;
 }
 
 const initialState: SessionStoreState = {
   session: null,
   isLoading: false,
   error: null,
+  gameStartedPayload: null,
+  hubUserId: null,
 };
 
 export const [sessionState, setSessionState] = createStore<SessionStoreState>({
@@ -36,7 +44,19 @@ export function clearSession(): void {
     session: null,
     isLoading: false,
     error: null,
+    gameStartedPayload: null,
+    hubUserId: null,
   });
+}
+
+/** Stocker le userId (Guid) renvoyé par le hub SignalR à la connexion. */
+export function setHubUserId(userId: string): void {
+  setSessionState("hubUserId", userId);
+}
+
+/** Stocker le payload GameStarted reçu du serveur. */
+export function setGameStarted(payload: GameStartedPayload): void {
+  setSessionState("gameStartedPayload", payload);
 }
 
 /** Définir la session (après Create/Join réussi). */
@@ -105,3 +125,16 @@ export function upsertPlayerInSession(player: PlayerInfo): void {
 
 export const isInSession = (): boolean => !!sessionState.session;
 export const getCurrentSession = (): SessionInfo | null => sessionState.session;
+
+/** Vérifie si l'utilisateur courant est le host (DM) de la session. */
+export function isHost(): boolean {
+  const hubId = sessionState.hubUserId;
+  if (!hubId || !sessionState.session) return false;
+  const me = sessionState.session.players.find((p) => p.userId === hubId);
+  return me?.role === PlayerRole.DungeonMaster;
+}
+
+/** Retourne le userId (Guid) du hub pour comparaison avec les players. */
+export function getHubUserId(): string | null {
+  return sessionState.hubUserId;
+}

@@ -14,6 +14,8 @@ import { GameOverScreen } from "../components/GameOverScreen";
 import { ModeSelectionScreen } from "../components/ModeSelectionScreen";
 import { MapSelectionForGame } from "../components/MapSelectionForGame";
 import { DungeonSelectionForGame } from "../components/DungeonSelectionForGame";
+import { RoomJoinScreen } from "../components/RoomJoinScreen";
+import { LobbyScreen } from "../components/LobbyScreen";
 import { DialogueOverlay } from "../components/dialogue/DialogueOverlay";
 import { DebugDialoguePanel } from "../components/dialogue/DebugDialoguePanel";
 import { clearAllDialogues } from "../stores/dialogue.store";
@@ -29,8 +31,10 @@ import {
 	clearTiles,
 } from "../game";
 import { GamePhase, AppPhase, GameMode } from "../types";
-import { sessionState } from "../stores/session.store";
+import { sessionState, clearSession } from "../stores/session.store";
 import { leaveSession } from "../services/signalr/multiplayer.service";
+import type { GameStartedPayload } from "../types/multiplayer";
+import { saveMap, type SavedMapData } from "../services/mapStorage";
 import { LogOut } from "lucide-solid";
 
 const BoardGame: Component = () => {
@@ -41,6 +45,7 @@ const BoardGame: Component = () => {
 	const [selectedMode, setSelectedMode] = createSignal<GameMode | null>(null);
 	const [selectedMapId, setSelectedMapId] = createSignal<string | null>(null);
 	const [selectedDungeonId, setSelectedDungeonId] = createSignal<string | null>(null);
+	const [isMultiplayer, setIsMultiplayer] = createSignal(false);
 
 	onMount(() => {
 		console.log("[BoardGame] Component mounted, showing mode selection");
@@ -94,11 +99,51 @@ const BoardGame: Component = () => {
 		checkEngine();
 	};
 
+	const goToMultiplayer = () => {
+		setIsMultiplayer(true);
+		setAppPhase(AppPhase.ROOM_JOIN);
+	};
+
+	const onRoomReady = () => {
+		setAppPhase(AppPhase.LOBBY);
+	};
+
+	const onMultiplayerGameStart = (payload: GameStartedPayload) => {
+		console.log("[BoardGame] ========== MULTIPLAYER GAME STARTED ==========", payload);
+
+		// Save received map data to localStorage so loadMap() finds it
+		if (payload.mapData) {
+			try {
+				const parsedMap: SavedMapData = JSON.parse(payload.mapData);
+				saveMap(parsedMap);
+				console.log("[BoardGame] Saved remote map data to localStorage:", parsedMap.id);
+			} catch (e) {
+				console.error("[BoardGame] Failed to parse received mapData:", e);
+			}
+		}
+
+		setSelectedMapId(payload.mapId === 'default' ? null : payload.mapId);
+		setAppPhase(AppPhase.IN_GAME);
+
+		const checkEngine = () => {
+			if (isEngineReady()) {
+				setTimeout(() => {
+					startGame(GameMode.FREE_ROAM, payload.mapId === 'default' ? null : payload.mapId, undefined, payload.unitAssignments);
+				}, 150);
+			} else {
+				setTimeout(checkEngine, 100);
+			}
+		};
+		checkEngine();
+	};
+
 	const backToModeSelection = () => {
 		setAppPhase(AppPhase.MODE_SELECTION);
 		setSelectedMode(null);
 		setSelectedMapId(null);
 		setSelectedDungeonId(null);
+		setIsMultiplayer(false);
+		clearSession();
 	};
 
 	const returnToMenu = () => {
@@ -155,21 +200,41 @@ const BoardGame: Component = () => {
 			when={appPhase() === AppPhase.IN_GAME}
 			fallback={
 				<Show
-					when={appPhase() === AppPhase.MAP_SELECTION}
+					when={appPhase() === AppPhase.ROOM_JOIN}
 					fallback={
 						<Show
-							when={appPhase() === AppPhase.DUNGEON_SETUP}
-							fallback={<ModeSelectionScreen onSelectMode={startMode} />}
+							when={appPhase() === AppPhase.LOBBY}
+							fallback={
+								<Show
+									when={appPhase() === AppPhase.MAP_SELECTION}
+									fallback={
+										<Show
+											when={appPhase() === AppPhase.DUNGEON_SETUP}
+											fallback={<ModeSelectionScreen onSelectMode={startMode} onSelectMultiplayer={goToMultiplayer} />}
+										>
+											<DungeonSelectionForGame
+												onSelectDungeon={selectDungeon}
+												onBack={backToModeSelection}
+											/>
+										</Show>
+									}
+								>
+									<MapSelectionForGame
+										onSelectMap={selectMap}
+										onBack={backToModeSelection}
+									/>
+								</Show>
+							}
 						>
-							<DungeonSelectionForGame
-								onSelectDungeon={selectDungeon}
-								onBack={backToModeSelection}
+							<LobbyScreen
+								onGameStart={onMultiplayerGameStart}
+								onLeave={backToModeSelection}
 							/>
 						</Show>
 					}
 				>
-					<MapSelectionForGame
-						onSelectMap={selectMap}
+					<RoomJoinScreen
+						onRoomReady={onRoomReady}
 						onBack={backToModeSelection}
 					/>
 				</Show>

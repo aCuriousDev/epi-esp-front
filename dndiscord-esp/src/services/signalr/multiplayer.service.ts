@@ -3,20 +3,24 @@
  */
 
 import { signalRService } from "./SignalRService";
-import type {
-  SessionInfo,
-  JoinResult,
-  KickResult,
-  MoveRequest,
-  MoveResult,
-  AttackRequest,
-  AttackResult,
-  UseAbilityRequest,
-  UseAbilityResult,
-  TurnEndedPayload,
-  GameMessage,
-  GameStateSnapshotPayload,
-  PlayerInfo,
+import {
+  PlayerRole,
+  ConnectionStatus,
+  SessionState,
+  type SessionInfo,
+  type JoinResult,
+  type KickResult,
+  type MoveRequest,
+  type MoveResult,
+  type AttackRequest,
+  type AttackResult,
+  type UseAbilityRequest,
+  type UseAbilityResult,
+  type TurnEndedPayload,
+  type GameMessage,
+  type GameStateSnapshotPayload,
+  type PlayerInfo,
+  type GameStartedPayload,
 } from "../../types/multiplayer";
 import {
   setSession,
@@ -27,15 +31,21 @@ import {
   removePlayerFromSession,
   upsertPlayerInSession,
   updateSession,
+  setGameStarted,
+  setHubUserId,
 } from "../../stores/session.store";
 import { registerGameSyncHandlers } from "./gameSync";
 import { authStore } from "../../stores/auth.store";
+import { loadMap } from "../mapStorage";
 
 const HUB = {
   createSession: "CreateSession",
   joinSession: "JoinSession",
   leaveSession: "LeaveSession",
   kickPlayer: "KickPlayer",
+  createRoom: "CreateRoom",
+  selectCharacter: "SelectCharacter",
+  startGame: "StartGame",
   move: "Move",
   attack: "Attack",
   useAbility: "UseAbility",
@@ -49,20 +59,22 @@ const HUB = {
 
 /** Créer une session pour une campagne (DM). campaignId = GUID string. */
 export async function createSession(campaignId: string): Promise<SessionInfo> {
-  const result = (await signalRService.invoke(
-    HUB.createSession,
-    campaignId,
-  )) as SessionInfo;
+  const raw = await signalRService.invoke(HUB.createSession, campaignId);
+  const result = normalizeSession(raw as Record<string, unknown>);
   setSession(result);
   return result;
 }
 
 /** Rejoindre une session par son ID. */
 export async function joinSession(sessionId: string): Promise<JoinResult> {
-  const result = (await signalRService.invoke(
-    HUB.joinSession,
-    sessionId,
-  )) as JoinResult;
+  syncHubUserId();
+  const raw = (await signalRService.invoke(HUB.joinSession, sessionId)) as Record<string, unknown>;
+  syncHubUserId();
+  const result: JoinResult = {
+    success: !!raw.success,
+    message: raw.message as string | undefined,
+    session: raw.session ? normalizeSession(raw.session as Record<string, unknown>) : undefined,
+  };
   applyJoinResult(result);
   return result;
 }
@@ -81,6 +93,40 @@ export async function kickPlayer(targetUserId: string): Promise<KickResult> {
   )) as KickResult;
   applyKickResult(result);
   return result;
+}
+
+/** Sync hubUserId from SignalR service to session store. */
+function syncHubUserId(): void {
+  if (signalRService.hubUserId) {
+    setHubUserId(signalRService.hubUserId);
+  }
+}
+
+/** Créer une room standalone (multijoueur libre). */
+export async function createRoom(maxPlayers: number): Promise<SessionInfo> {
+  syncHubUserId();
+  const raw = await signalRService.invoke(HUB.createRoom, maxPlayers);
+  syncHubUserId();
+  const result = normalizeSession(raw as Record<string, unknown>);
+  setSession(result);
+  return result;
+}
+
+/** Sélectionner un personnage dans le lobby. null = personnage par défaut. */
+export async function selectCharacter(characterId: string | null): Promise<void> {
+  await signalRService.invoke(HUB.selectCharacter, characterId);
+}
+
+/** Lancer la partie (host uniquement). Envoie les données de la map pour les joueurs distants. */
+export async function startGame(mapId: string): Promise<void> {
+  let mapData: string | null = null;
+  if (mapId && mapId !== 'default') {
+    const map = loadMap(mapId);
+    if (map) {
+      mapData = JSON.stringify(map);
+    }
+  }
+  await signalRService.invoke(HUB.startGame, mapId, mapData);
 }
 
 // --- Actions de jeu (E2.3, server-authoritative) ---
@@ -146,12 +192,37 @@ export async function sendEndTurn(payload: TurnEndedPayload): Promise<void> {
 
 // --- Enregistrement des handlers d'événements ---
 
+/** Map backend integer enum to frontend enum. Backend: 0=Player, 1=DungeonMaster */
+const ROLE_MAP: Record<number, PlayerRole> = { 0: PlayerRole.Player, 1: PlayerRole.DungeonMaster };
+const STATUS_MAP: Record<number, ConnectionStatus> = { 0: ConnectionStatus.Connected, 1: ConnectionStatus.Disconnected, 2: ConnectionStatus.Reconnecting };
+const STATE_MAP: Record<number, SessionState> = { 0: SessionState.Lobby, 1: SessionState.InProgress, 2: SessionState.Paused, 3: SessionState.Ended };
+
+function normalizeRole(v: unknown): PlayerRole {
+  if (typeof v === "number") return ROLE_MAP[v] ?? PlayerRole.Player;
+  if (v === PlayerRole.Player || v === PlayerRole.DungeonMaster) return v;
+  return PlayerRole.Player;
+}
+
+function normalizeStatus(v: unknown): ConnectionStatus {
+  if (typeof v === "number") return STATUS_MAP[v] ?? ConnectionStatus.Connected;
+  if (v === ConnectionStatus.Connected || v === ConnectionStatus.Disconnected || v === ConnectionStatus.Reconnecting) return v;
+  return ConnectionStatus.Connected;
+}
+
+function normalizeState(v: unknown): SessionState {
+  if (typeof v === "number") return STATE_MAP[v] ?? SessionState.Lobby;
+  if (v === SessionState.Lobby || v === SessionState.InProgress || v === SessionState.Paused || v === SessionState.Ended) return v;
+  return SessionState.Lobby;
+}
+
 function normalizePlayer(raw: Record<string, unknown>): PlayerInfo {
   return {
     userId: String(raw.userId ?? raw.UserId ?? ""),
     userName: String(raw.userName ?? raw.UserName ?? "?"),
-    role: (raw.role ?? raw.Role ?? "Player") as PlayerInfo["role"],
-    status: (raw.status ?? raw.Status ?? "Connected") as PlayerInfo["status"],
+    role: normalizeRole(raw.role ?? raw.Role),
+    status: normalizeStatus(raw.status ?? raw.Status),
+    selectedCharacterId: (raw.selectedCharacterId ?? raw.SelectedCharacterId) as string | undefined,
+    selectedCharacterName: (raw.selectedCharacterName ?? raw.SelectedCharacterName) as string | undefined,
   };
 }
 
@@ -161,11 +232,12 @@ function normalizeSession(raw: Record<string, unknown>): SessionInfo {
     : [];
   return {
     sessionId: String(raw.sessionId ?? raw.SessionId ?? ""),
-    campaignId: String(raw.campaignId ?? raw.CampaignId ?? ""),
-    campaignName: String(raw.campaignName ?? raw.CampaignName ?? ""),
+    campaignId: (raw.campaignId ?? raw.CampaignId) as string | undefined,
+    campaignName: (raw.campaignName ?? raw.CampaignName) as string | undefined,
     playerCount: Number(raw.playerCount ?? raw.PlayerCount ?? 0),
     maxPlayers: Number(raw.maxPlayers ?? raw.MaxPlayers ?? 6),
-    state: (raw.state ?? raw.State ?? "Lobby") as SessionInfo["state"],
+    state: normalizeState(raw.state ?? raw.State),
+    mapId: (raw.mapId ?? raw.MapId) as string | undefined,
     players,
   };
 }
@@ -210,6 +282,16 @@ export function registerMultiplayerHandlers(): void {
     }
   });
 
+  // PlayerUpdated (character selection in lobby)
+  signalRService.on("PlayerUpdated", (data: Record<string, unknown>) => {
+    updateSession(normalizeSession(data));
+  });
+
+  // GameStarted (host started the game)
+  signalRService.on("GameStarted", (data: GameStartedPayload) => {
+    setGameStarted(data);
+  });
+
   // Session mise à jour (si le backend envoie SessionUpdated)
   signalRService.on("SessionUpdated", (data: Record<string, unknown>) => {
     updateSession(normalizeSession(data));
@@ -233,4 +315,5 @@ export function ensureMultiplayerHandlersRegistered(): void {
   _handlersRegistered = true;
   registerMultiplayerHandlers();
   registerGameSyncHandlers();
+  syncHubUserId();
 }

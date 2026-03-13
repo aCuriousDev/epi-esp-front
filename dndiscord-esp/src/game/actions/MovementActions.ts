@@ -11,7 +11,7 @@ import { gameState, setGameState, addCombatLog, getIsFreeRoamMode, getIsDungeonM
 import { units, setUnits } from '../stores/UnitsStore';
 import { tiles, setTiles, pathfinder, updatePathfinder } from '../stores/TilesStore';
 import { posToKey } from '../utils/GridUtils';
-import { getCurrentSession } from '../../stores/session.store';
+import { getCurrentSession, getHubUserId } from '../../stores/session.store';
 import { sendUnitMove } from '../../services/signalr/multiplayer.service';
 import { getAllySpawnPositions } from '../initialization/InitUnits';
 import { getTeleportPositions } from '../../services/mapStorage';
@@ -26,22 +26,29 @@ import { playFootstepSound, playSelectSound } from '../audio/SoundIntegration';
 export function selectUnit(unitId: string): void {
   const unit = units[unitId];
   if (!unit || !unit.isAlive) return;
-  
+
   playSelectSound();
-  
+
   const isFreeRoam = getIsFreeRoamMode();
   const isPreparation = gameState.phase === GamePhase.COMBAT_PREPARATION;
   const currentUnitId = gameState.turnOrder[gameState.currentUnitIndex];
   const isCurrentUnit = unitId === currentUnitId;
   const isPlayerTurn = gameState.phase === GamePhase.PLAYER_TURN || isFreeRoam;
-  
-  console.log('[selectUnit]', unit.name, '| mode:', isFreeRoam ? 'Free Roam' : isPreparation ? 'Preparation' : 'Combat', '| isCurrentUnit:', isCurrentUnit, '| isPlayerTurn:', isPlayerTurn);
-  
+
+  // Multiplayer ownership check: if the unit has an owner, only its owner can control it
+  const session = getCurrentSession();
+  const myUserId = getHubUserId();
+  const isOwned = !!unit.ownerUserId;
+  const isMine = !isOwned || unit.ownerUserId === myUserId;
+  const canControl = !session || isMine; // Solo mode: always controllable
+
+  console.log('[selectUnit]', unit.name, '| mode:', isFreeRoam ? 'Free Roam' : isPreparation ? 'Preparation' : 'Combat', '| isCurrentUnit:', isCurrentUnit, '| isPlayerTurn:', isPlayerTurn, '| canControl:', canControl);
+
   batch(() => {
     setGameState({
       selectedUnit: unitId,
       selectedAbility: null,
-      turnPhase: isPreparation || isFreeRoam || (isCurrentUnit && isPlayerTurn) ? TurnPhase.MOVE : TurnPhase.SELECT_UNIT,
+      turnPhase: canControl && (isPreparation || isFreeRoam || (isCurrentUnit && isPlayerTurn)) ? TurnPhase.MOVE : TurnPhase.SELECT_UNIT,
     });
     
     // Phase de préparation : afficher toutes les cases alliées (même occupées)
@@ -50,8 +57,8 @@ export function selectUnit(unitId: string): void {
       // Afficher toutes les cases alliées, qu'elles soient occupées ou non
       setGameState('highlightedTiles', allyPositions);
     } else {
-      // Show movement range in Free Roam for any player unit, or in Combat for current unit
-      const shouldShowMovement = isFreeRoam ? true : (isCurrentUnit && isPlayerTurn && unit.stats.currentActionPoints >= 1);
+      // Show movement range in Free Roam for any player unit the current user owns, or in Combat for current unit
+      const shouldShowMovement = canControl && (isFreeRoam ? true : (isCurrentUnit && isPlayerTurn && unit.stats.currentActionPoints >= 1));
       
       if (shouldShowMovement && pathfinder) {
         const effectiveRange = isFreeRoam 
@@ -100,7 +107,13 @@ export function previewPath(targetPos: GridPosition): void {
 export function moveUnit(targetPos: GridPosition): boolean {
   const unit = gameState.selectedUnit ? units[gameState.selectedUnit] : null;
   if (!unit) return false;
-  
+
+  // Multiplayer ownership check
+  if (unit.ownerUserId) {
+    const myUserId = getHubUserId();
+    if (myUserId && unit.ownerUserId !== myUserId) return false;
+  }
+
   const isFreeRoam = getIsFreeRoamMode();
   const isPreparation = gameState.phase === GamePhase.COMBAT_PREPARATION;
   

@@ -7,6 +7,7 @@
 import { batch } from 'solid-js';
 import { produce } from 'solid-js/store';
 import { GamePhase, TurnPhase, GameMode, DungeonState, Team } from '../../types';
+import type { UnitAssignment } from '../../types/multiplayer';
 import { gameState, setGameState, addCombatLog } from '../stores/GameStateStore';
 import { units, setUnits, getCurrentUnit, clearUnits } from '../stores/UnitsStore';
 import { tiles, clearTiles } from '../stores/TilesStore';
@@ -23,14 +24,15 @@ import { playTurnStartSound, playNewRoundSound, playAmbientMusic } from '../audi
 // GAME START
 // ============================================
 
-export function startGame(mode: GameMode = GameMode.COMBAT, mapId: string | null = null, dungeonId: string | null = null): void {
+export function startGame(mode: GameMode = GameMode.COMBAT, mapId: string | null = null, dungeonId: string | null = null, unitAssignments?: UnitAssignment[]): void {
   console.log('[startGame] ===== STARTING GAME =====');
   console.log('[startGame] Mode:', mode);
   console.log('[startGame] Map ID:', mapId || 'default');
   console.log('[startGame] Dungeon ID:', dungeonId || 'none');
-  
+  if (unitAssignments) console.log('[startGame] Unit assignments:', unitAssignments.length);
+
   if (mode === GameMode.FREE_ROAM) {
-    initializeFreeRoam(mapId);
+    initializeFreeRoam(mapId, unitAssignments);
   } else if (mode === GameMode.DUNGEON && dungeonId) {
     initializeDungeon(dungeonId);
   } else {
