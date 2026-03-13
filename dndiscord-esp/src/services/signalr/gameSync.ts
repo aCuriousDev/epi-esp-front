@@ -6,12 +6,13 @@
 import { signalRService } from "./SignalRService";
 import type { GameMessage, MoveResult, TurnEndedPayload, GameStateSnapshotPayload } from "../../types/multiplayer";
 import type { GridPosition } from "../../types";
-import { setUnits } from "../../game/stores/UnitsStore";
+import { units, setUnits } from "../../game/stores/UnitsStore";
 import { setTiles } from "../../game/stores/TilesStore";
 import { setGameState } from "../../game/stores/GameStateStore";
 import { updatePathfinder } from "../../game/stores/TilesStore";
 import { posToKey } from "../../game/utils/GridUtils";
 import { produce } from "solid-js/store";
+import { sessionState } from "../../stores/session.store";
 
 /** Backend envoie (x, y), le jeu utilise (x, z). */
 function toFrontendPos(p: { x: number; y: number }): GridPosition {
@@ -27,6 +28,10 @@ export function registerGameSyncHandlers(): void {
     const payload = message?.payload ?? message;
     if (!payload.unitId || !payload.path?.length) return;
     const unitId = payload.unitId;
+
+    // Skip own unit moves — already applied locally by MovementActions
+    const unitData = units[unitId];
+    if (unitData?.ownerUserId && unitData.ownerUserId === sessionState.hubUserId) return;
     const path = payload.path.map((pos) => toFrontendPos(pos as { x: number; y: number }));
     const dest = path[path.length - 1];
     const start = path[0];
