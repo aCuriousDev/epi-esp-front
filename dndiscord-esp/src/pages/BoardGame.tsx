@@ -70,7 +70,13 @@ const BoardGame: Component = () => {
 		setSelectedMapId(mapId);
 		setAppPhase(AppPhase.IN_GAME);
 
+		let attempts = 0;
 		const checkEngine = () => {
+			if (++attempts > 50) {
+				console.error("[BoardGame] Engine failed to initialize");
+				backToModeSelection();
+				return;
+			}
 			if (isEngineReady()) {
 				setTimeout(() => {
 					startGame(selectedMode()!, mapId);
@@ -87,7 +93,13 @@ const BoardGame: Component = () => {
 		setSelectedDungeonId(dungeonId);
 		setAppPhase(AppPhase.IN_GAME);
 
+		let attempts = 0;
 		const checkEngine = () => {
+			if (++attempts > 50) {
+				console.error("[BoardGame] Engine failed to initialize");
+				backToModeSelection();
+				return;
+			}
 			if (isEngineReady()) {
 				setTimeout(() => {
 					startGame(GameMode.DUNGEON, null, dungeonId);
@@ -125,7 +137,13 @@ const BoardGame: Component = () => {
 		setSelectedMapId(payload.mapId === 'default' ? null : payload.mapId);
 		setAppPhase(AppPhase.IN_GAME);
 
+		let attempts = 0;
 		const checkEngine = () => {
+			if (++attempts > 50) {
+				console.error("[BoardGame] Engine failed to initialize");
+				backToModeSelection();
+				return;
+			}
 			if (isEngineReady()) {
 				setTimeout(() => {
 					startGame(GameMode.FREE_ROAM, payload.mapId === 'default' ? null : payload.mapId, undefined, payload.unitAssignments);
