@@ -6,6 +6,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5054';
 export class SignalRService {
   private connection: signalR.HubConnection | null = null;
   private token: string | null = null;
+  private _closeCallbacks: Array<() => void> = [];
   /** Hub userId (Guid) received from Connected event. */
   public hubUserId: string | null = null;
 
@@ -52,6 +53,7 @@ export class SignalRService {
 
     this.connection.onclose((error) => {
       console.error('Connection closed:', error);
+      this._closeCallbacks.forEach(cb => cb());
     });
 
     try {
@@ -98,6 +100,13 @@ export class SignalRService {
 
   get connectionId(): string | undefined {
     return this.connection?.connectionId ?? undefined;
+  }
+
+  /**
+   * Register a callback invoked when the connection closes.
+   */
+  onClose(callback: () => void): void {
+    this._closeCallbacks.push(callback);
   }
 
   /**

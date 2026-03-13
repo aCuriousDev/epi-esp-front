@@ -83,6 +83,7 @@ export async function joinSession(sessionId: string): Promise<JoinResult> {
 export async function leaveSession(): Promise<void> {
   await signalRService.invoke(HUB.leaveSession);
   clearSession();
+  resetHandlersRegistered();
 }
 
 /** Exclure un joueur (DM uniquement). */
@@ -300,6 +301,7 @@ export function registerMultiplayerHandlers(): void {
   // Optionnel: SessionEnded
   signalRService.on("SessionEnded", (_reason: string) => {
     clearSession();
+    resetHandlersRegistered();
     setSessionError("La session a été terminée.");
   });
 }
@@ -310,10 +312,19 @@ export function registerMultiplayerHandlers(): void {
  */
 let _handlersRegistered = false;
 
+export function resetHandlersRegistered(): void {
+  _handlersRegistered = false;
+}
+
 export function ensureMultiplayerHandlersRegistered(): void {
   if (_handlersRegistered) return;
   _handlersRegistered = true;
   registerMultiplayerHandlers();
   registerGameSyncHandlers();
   syncHubUserId();
+
+  // Reset flag on connection close so handlers re-register after reconnect
+  signalRService.onClose(() => {
+    _handlersRegistered = false;
+  });
 }
