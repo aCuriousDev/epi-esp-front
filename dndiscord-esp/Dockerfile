@@ -3,8 +3,8 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Build argument for API URL
-ARG VITE_API_URL=http://localhost:5054
+# Build argument for API URL (set via Dokploy build args in production)
+ARG VITE_API_URL=""
 ENV VITE_API_URL=$VITE_API_URL
 
 # Copy package files
