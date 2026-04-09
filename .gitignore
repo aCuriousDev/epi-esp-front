@@ -35,3 +35,8 @@ _bmad-output/
 # Docs / Notion exports
 docs/
 
+# code-review-graph (strict ignore)
+.code-review-graph/
+.code-review-graphignore
+.code-review-graph*
+

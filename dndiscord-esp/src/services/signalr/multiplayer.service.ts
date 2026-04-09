@@ -26,6 +26,7 @@ import {
   setSession,
   clearSession,
   setSessionError,
+  setSessionLoading,
   applyJoinResult,
   applyKickResult,
   removePlayerFromSession,
@@ -33,9 +34,12 @@ import {
   updateSession,
   setGameStarted,
   setHubUserId,
+  getPersistedSession,
+  sessionState,
 } from "../../stores/session.store";
 import { registerGameSyncHandlers } from "./gameSync";
 import { authStore } from "../../stores/auth.store";
+import { AuthService } from "../auth.service";
 import { loadMap } from "../mapStorage";
 
 const HUB = {
@@ -306,10 +310,68 @@ export function registerMultiplayerHandlers(): void {
   });
 }
 
+// --- Reconnection ---
+
 /**
- * Désinscrit les handlers (à appeler avant disconnect si besoin).
- * SignalR ne propose pas off(methodName) sans callback, donc on garde les refs.
+ * Rejoin an existing session after a reconnect (automatic or page refresh).
+ * Re-calls JoinSession on the hub so the new ConnectionId is added to the
+ * SignalR group, then requests the latest game state if a game is in progress.
  */
+export async function rejoinSession(sessionId: string): Promise<boolean> {
+  syncHubUserId();
+  const raw = (await signalRService.invoke(HUB.joinSession, sessionId)) as Record<string, unknown>;
+  syncHubUserId();
+  const result: JoinResult = {
+    success: !!raw.success,
+    message: raw.message as string | undefined,
+    session: raw.session ? normalizeSession(raw.session as Record<string, unknown>) : undefined,
+  };
+  applyJoinResult(result);
+
+  if (!result.success) return false;
+
+  if (result.session?.state === SessionState.InProgress) {
+    try {
+      await signalRService.invoke(HUB.requestFullState);
+    } catch (e) {
+      console.warn("RequestFullState failed after rejoin:", e);
+    }
+  }
+  return true;
+}
+
+/**
+ * Attempt to recover a session from sessionStorage after page refresh.
+ * Returns true if the session was successfully rejoined.
+ */
+export async function tryRecoverSession(): Promise<boolean> {
+  const persisted = getPersistedSession();
+  if (!persisted) return false;
+  if (!AuthService.hasToken()) return false;
+
+  setSessionLoading(true);
+  try {
+    if (!signalRService.isConnected) {
+      await signalRService.connect();
+      resetHandlersRegistered();
+    }
+    ensureMultiplayerHandlersRegistered();
+    const ok = await rejoinSession(persisted.sessionId);
+    if (!ok) {
+      clearSession();
+    }
+    return ok;
+  } catch (err: any) {
+    console.warn("Session recovery failed:", err?.message);
+    clearSession();
+    return false;
+  } finally {
+    setSessionLoading(false);
+  }
+}
+
+// --- Handler registration ---
+
 let _handlersRegistered = false;
 
 export function resetHandlersRegistered(): void {
@@ -323,8 +385,17 @@ export function ensureMultiplayerHandlersRegistered(): void {
   registerGameSyncHandlers();
   syncHubUserId();
 
-  // Reset flag on connection close so handlers re-register after reconnect
   signalRService.onClose(() => {
     _handlersRegistered = false;
+  });
+
+  signalRService.onReconnected(async () => {
+    const sid = sessionState.session?.sessionId ?? getPersistedSession()?.sessionId;
+    if (!sid) return;
+    try {
+      await rejoinSession(sid);
+    } catch (err) {
+      console.warn("Auto-rejoin after reconnect failed:", err);
+    }
   });
 }

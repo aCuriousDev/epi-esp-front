@@ -38,8 +38,65 @@ export const [sessionState, setSessionState] = createStore<SessionStoreState>({
   ...initialState,
 });
 
+// --- sessionStorage persistence (survives refresh, clears on tab close) ---
+
+const STORAGE_KEY = "dndiscord_session";
+const GAME_STARTED_KEY = "dndiscord_game_started";
+
+interface PersistedSession {
+  sessionId: string;
+  hubUserId: string;
+}
+
+function persistSession(sessionId: string, hubUserId: string): void {
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ sessionId, hubUserId }));
+  } catch { /* quota or private mode */ }
+}
+
+function clearPersistedSession(): void {
+  try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
+}
+
+export function getPersistedSession(): PersistedSession | null {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed?.sessionId && parsed?.hubUserId) return parsed as PersistedSession;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function persistGameStarted(payload: GameStartedPayload): void {
+  try {
+    const { mapData: _, ...rest } = payload;
+    sessionStorage.setItem(GAME_STARTED_KEY, JSON.stringify(rest));
+  } catch { /* quota or private mode */ }
+}
+
+function clearPersistedGameStarted(): void {
+  try { sessionStorage.removeItem(GAME_STARTED_KEY); } catch { /* noop */ }
+}
+
+export function getPersistedGameStarted(): GameStartedPayload | null {
+  try {
+    const raw = sessionStorage.getItem(GAME_STARTED_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as GameStartedPayload;
+  } catch {
+    return null;
+  }
+}
+
+// --- Store mutations ---
+
 /** Réinitialiser l'état session (ex. après Leave). */
 export function clearSession(): void {
+  clearPersistedSession();
+  clearPersistedGameStarted();
   setSessionState({
     session: null,
     isLoading: false,
@@ -52,17 +109,26 @@ export function clearSession(): void {
 /** Stocker le userId (Guid) renvoyé par le hub SignalR à la connexion. */
 export function setHubUserId(userId: string): void {
   setSessionState("hubUserId", userId);
+  if (sessionState.session?.sessionId) {
+    persistSession(sessionState.session.sessionId, userId);
+  }
 }
 
 /** Stocker le payload GameStarted reçu du serveur. */
 export function setGameStarted(payload: GameStartedPayload): void {
   setSessionState("gameStartedPayload", payload);
+  persistGameStarted(payload);
 }
 
 /** Définir la session (après Create/Join réussi). */
 export function setSession(session: SessionInfo | null): void {
   setSessionState("session", session);
   setSessionState("error", null);
+  if (session && sessionState.hubUserId) {
+    persistSession(session.sessionId, sessionState.hubUserId);
+  } else if (!session) {
+    clearPersistedSession();
+  }
 }
 
 /** Mettre à jour la liste des joueurs (événements PlayerJoined / PlayerLeft). */
@@ -94,6 +160,9 @@ export function applyJoinResult(result: JoinResult): void {
   setSessionState("error", result.success ? null : result.message ?? null);
   if (result.success && result.session) {
     setSessionState("session", result.session);
+    if (sessionState.hubUserId) {
+      persistSession(result.session.sessionId, sessionState.hubUserId);
+    }
   }
 }
 
