@@ -36,6 +36,7 @@ import { leaveSession } from "../services/signalr/multiplayer.service";
 import type { GameStartedPayload } from "../types/multiplayer";
 import { saveMap, type SavedMapData } from "../services/mapStorage";
 import { LogOut } from "lucide-solid";
+import { PartyChatPanel } from "../components/PartyChatPanel";
 
 const BoardGame: Component = () => {
 	const navigate = useNavigate();
@@ -274,6 +275,9 @@ const BoardGame: Component = () => {
 
 	const renderRightPanelContent = () => (
 		<>
+			<Show when={sessionState.session}>
+				<PartyChatPanel />
+			</Show>
 			<Show
 				when={
 					getCurrentMode() === GameMode.COMBAT ||
