@@ -353,6 +353,7 @@ export async function tryRecoverSession(): Promise<boolean> {
   try {
     if (!signalRService.isConnected) {
       await signalRService.connect();
+      resetHandlersRegistered();
     }
     ensureMultiplayerHandlersRegistered();
     const ok = await rejoinSession(persisted.sessionId);
@@ -392,7 +393,6 @@ export function ensureMultiplayerHandlersRegistered(): void {
     const sid = sessionState.session?.sessionId ?? getPersistedSession()?.sessionId;
     if (!sid) return;
     try {
-      ensureMultiplayerHandlersRegistered();
       await rejoinSession(sid);
     } catch (err) {
       console.warn("Auto-rejoin after reconnect failed:", err);

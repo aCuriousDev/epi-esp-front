@@ -7,7 +7,7 @@ import { signalRService } from "./SignalRService";
 import type { GameMessage, MoveResult, TurnEndedPayload, GameStateSnapshotPayload } from "../../types/multiplayer";
 import type { GridPosition } from "../../types";
 import { units, setUnits } from "../../game/stores/UnitsStore";
-import { setTiles } from "../../game/stores/TilesStore";
+import { tiles, setTiles } from "../../game/stores/TilesStore";
 import { setGameState } from "../../game/stores/GameStateStore";
 import { updatePathfinder } from "../../game/stores/TilesStore";
 import { posToKey } from "../../game/utils/GridUtils";
@@ -29,18 +29,28 @@ export function registerGameSyncHandlers(): void {
     if (!payload.unitId || !payload.path?.length) return;
     const unitId = payload.unitId;
 
-    // Skip own unit moves — already applied locally by MovementActions
     const unitData = units[unitId];
     if (unitData?.ownerUserId && unitData.ownerUserId === sessionState.hubUserId) return;
+
     const path = payload.path.map((pos) => toFrontendPos(pos as { x: number; y: number }));
     const dest = path[path.length - 1];
     const start = path[0];
     if (!dest) return;
 
+    // Tile grid may not be initialized yet (reconnection before game board mounts).
+    // FullStateSync will reconcile once the board is ready.
+    const destTile = tiles[posToKey(dest)];
+    if (!destTile) return;
+
     if (start && (start.x !== dest.x || start.z !== dest.z)) {
-      setTiles(posToKey(start), "occupiedBy", null);
+      const startTile = tiles[posToKey(start)];
+      if (startTile) {
+        setTiles(posToKey(start), "occupiedBy", null);
+      }
     }
     setTiles(posToKey(dest), "occupiedBy", unitId);
+
+    if (!unitData) return;
 
     setUnits(unitId, produce((u) => {
       u.position = dest;
@@ -48,7 +58,6 @@ export function registerGameSyncHandlers(): void {
       u.hasMoved = true;
     }));
 
-    setTiles(posToKey(dest), "occupiedBy", unitId);
     setGameState("pathPreview", []);
     setGameState("highlightedTiles", []);
     updatePathfinder();
@@ -68,14 +77,21 @@ export function registerGameSyncHandlers(): void {
   signalRService.on("FullStateSync", (message: GameMessage<GameStateSnapshotPayload>) => {
     const payload = message?.payload ?? message;
     if (!payload?.units?.length) return;
-    // Réappliquer les positions et HP des unités depuis le snapshot
+
     for (const u of payload.units) {
       const pos = toFrontendPos(u.position as { x: number; y: number });
+      if (!units[u.unitId]) continue;
+
       setUnits(u.unitId, produce((unit) => {
         unit.position = pos;
         unit.stats.currentHealth = u.hp;
         unit.stats.maxHealth = u.maxHp;
       }));
+
+      const tileKey = posToKey(pos);
+      if (tiles[tileKey]) {
+        setTiles(tileKey, "occupiedBy", u.unitId);
+      }
     }
     updatePathfinder();
   });

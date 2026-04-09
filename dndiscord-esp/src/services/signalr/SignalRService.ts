@@ -25,6 +25,11 @@ export class SignalRService {
       throw new Error('No token available. Please login first.');
     }
 
+    // Clear lifecycle callbacks from previous connection to prevent stacking
+    this._closeCallbacks = [];
+    this._reconnectedCallbacks = [];
+    this._reconnectingCallbacks = [];
+
     this.connection = new signalR.HubConnectionBuilder()
       .withUrl(`${API_URL}/hubs/game`, {
         accessTokenFactory: () => AuthService.getToken() ?? ""
