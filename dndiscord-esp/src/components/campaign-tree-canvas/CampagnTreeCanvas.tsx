@@ -1,8 +1,9 @@
-import { onMount, onCleanup } from 'solid-js';
-import draw2d from 'draw2d';
-import { CampaignNode } from './nodes/CampaignNode';
-import { StoryNode } from './nodes/StoryNode';
-import { CombatNode } from './nodes/CombatNode';
+import { onMount, onCleanup } from "solid-js";
+import draw2d from "draw2d";
+import { CampaignNode } from "./nodes/CampaignNode";
+import { StoryNode } from "./nodes/StoryNode";
+import { CombatNode } from "./nodes/CombatNode";
+import { safeConfirm } from "../../services/ui/confirm";
 
 interface CampaignTreeCanvasProps {
   onNodeSelect?: (node: CampaignNode | null) => void;
@@ -23,7 +24,7 @@ export interface CampaignTreeCanvasRef {
 }
 
 interface AddNodeData {
-  type: 'story' | 'combat' | 'npc' | 'condition';
+  type: "story" | "combat" | "npc" | "condition";
   x?: number;
   y?: number;
   data?: any;
@@ -39,7 +40,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
    * Créer un node en fonction du type
    */
   const createNode = (nodeData: AddNodeData): CampaignNode => {
-    if (!canvas) throw new Error('Canvas not initialized');
+    if (!canvas) throw new Error("Canvas not initialized");
 
     const x = nodeData.x || 100;
     const y = nodeData.y || 100;
@@ -47,23 +48,23 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
 
     // Créer le node selon son type
     switch (nodeData.type) {
-      case 'story':
+      case "story":
         node = new StoryNode(x, y, {
-          id: generateId('story'),
-          type: 'story',
-          text: nodeData.data?.text || 'Nouvelle scène...',
+          id: generateId("story"),
+          type: "story",
+          text: nodeData.data?.text || "Nouvelle scène...",
           choices: nodeData.data?.choices || [],
-          ...nodeData.data
+          ...nodeData.data,
         });
         break;
 
-      case 'combat':
+      case "combat":
         node = new CombatNode(x, y, {
-          id: generateId('combat'),
-          type: 'combat',
+          id: generateId("combat"),
+          type: "combat",
           enemies: nodeData.data?.enemies || [],
-          difficulty: nodeData.data?.difficulty || 'medium',
-          ...nodeData.data
+          difficulty: nodeData.data?.difficulty || "medium",
+          ...nodeData.data,
         });
         break;
 
@@ -74,7 +75,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
 
     // Ajouter le node au canvas
     canvas.add(node, node.x, node.y);
-    
+
     return node;
   };
 
@@ -90,15 +91,15 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
    */
   const exportData = () => {
     if (!canvas) return null;
-    
+
     const writer = new draw2d.io.json.Writer();
     const canvasData = writer.marshal(canvas);
-    
+
     return {
-      version: '1.0',
+      version: "1.0",
       timestamp: new Date().toISOString(),
       zoom: currentZoom,
-      canvas: canvasData
+      canvas: canvasData,
     };
   };
 
@@ -107,16 +108,16 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
    */
   const importData = (data: any) => {
     if (!canvas) return;
-    
+
     // Effacer le canvas
     canvas.clear();
-    
+
     // Restaurer le zoom si présent
     if (data.zoom) {
       currentZoom = data.zoom;
       canvas.setZoom(currentZoom);
     }
-    
+
     // Charger les données
     const reader = new draw2d.io.json.Reader();
     reader.unmarshal(canvas, data.canvas || data);
@@ -127,14 +128,14 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
    */
   const clearCanvas = () => {
     if (!canvas) return;
-    
+
     // Confirmation avant d'effacer
     if (canvas.getFigures().getSize() > 0) {
-      if (!confirm('Êtes-vous sûr de vouloir effacer tous les nœuds ?')) {
+      if (!safeConfirm("Êtes-vous sûr de vouloir effacer tous les nœuds ?")) {
         return;
       }
     }
-    
+
     canvas.clear();
     selectedNode = null;
     props.onNodeSelect?.(null);
@@ -172,13 +173,15 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
    */
   const fitToPage = () => {
     if (!canvas) return;
-    
+
     const figures = canvas.getFigures();
     if (figures.getSize() === 0) return;
-    
-    let minX = Infinity, minY = Infinity;
-    let maxX = -Infinity, maxY = -Infinity;
-    
+
+    let minX = Infinity,
+      minY = Infinity;
+    let maxX = -Infinity,
+      maxY = -Infinity;
+
     figures.each((i: number, figure: any) => {
       const bounds = figure.getBoundingBox();
       minX = Math.min(minX, bounds.x);
@@ -186,16 +189,16 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
       maxX = Math.max(maxX, bounds.x + bounds.w);
       maxY = Math.max(maxY, bounds.y + bounds.h);
     });
-    
+
     const width = maxX - minX;
     const height = maxY - minY;
     const canvasWidth = canvasRef?.clientWidth || 800;
     const canvasHeight = canvasRef?.clientHeight || 600;
-    
+
     const zoomX = canvasWidth / width;
     const zoomY = canvasHeight / height;
     currentZoom = Math.min(zoomX, zoomY, 1.0) * 0.9; // 90% pour laisser de la marge
-    
+
     canvas.setZoom(currentZoom);
   };
 
@@ -208,15 +211,15 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     // Créer le canvas draw2d
     canvas = new draw2d.Canvas(canvasRef.id);
     if (canvas.paper && canvas.paper.canvas) {
-        canvas.paper.canvas.style.backgroundColor = 'transparent';
-      }
+      canvas.paper.canvas.style.backgroundColor = "transparent";
+    }
     // Installer les politiques
     canvas.installEditPolicy(new draw2d.policy.canvas.SnapToGridEditPolicy(20));
     canvas.installEditPolicy(new draw2d.policy.canvas.WheelZoomPolicy());
     canvas.installEditPolicy(new draw2d.policy.canvas.PanningSelectionPolicy());
 
     // Événement : Sélection d'un node
-    canvas.on('select', (emitter: any, event: any) => {
+    canvas.on("select", (emitter: any, event: any) => {
       if (event.figure instanceof CampaignNode) {
         selectedNode = event.figure;
         props.onNodeSelect?.(event.figure);
@@ -224,7 +227,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     });
 
     // Événement : Désélection d'un node
-    canvas.on('unselect', (emitter: any, event: any) => {
+    canvas.on("unselect", (emitter: any, event: any) => {
       if (event.figure instanceof CampaignNode) {
         selectedNode = null;
         props.onNodeSelect?.(null);
@@ -232,22 +235,25 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     });
 
     // Événement : Création d'une connexion
-    canvas.on('connect', (emitter: any, event: any) => {
+    canvas.on("connect", (emitter: any, event: any) => {
       const connection = event.connection;
-      
+
       // Personnaliser l'apparence de la connexion
-      connection.setColor('#888888');
+      connection.setColor("#888888");
       connection.setStroke(2);
-      
+
       // Ajouter une flèche
-      connection.setTargetDecorator(new draw2d.decoration.connection.ArrowDecorator());
-      
+      connection.setTargetDecorator(
+        new draw2d.decoration.connection.ArrowDecorator(),
+      );
+
       // Utiliser un routeur Manhattan (angles droits)
-      connection.setRouter(new draw2d.layout.connection.ManhattanConnectionRouter());
-      
+      connection.setRouter(
+        new draw2d.layout.connection.ManhattanConnectionRouter(),
+      );
+
       props.onConnectionCreate?.(connection);
     });
-
 
     // Exposer les méthodes via ref
     if (props.ref) {
@@ -260,7 +266,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
         zoomIn,
         zoomOut,
         zoomReset,
-        fitToPage
+        fitToPage,
       });
     }
   });
@@ -276,140 +282,144 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
   });
 
   return (
-    <div 
-      class="campaign-tree-canvas-container" 
-      style={{ 
-        width: '100%', 
-        height: '100%',
-        position: 'relative',
-        overflow: 'hidden'
+    <div
+      class="campaign-tree-canvas-container"
+      style={{
+        width: "100%",
+        height: "100%",
+        position: "relative",
+        overflow: "hidden",
       }}
     >
       {/* Canvas draw2d */}
       <div
-      class='campaign-view-page'
+        class="campaign-view-page"
         ref={canvasRef}
         id="campaign-tree-canvas"
-         style={{
-          width: '100%',
-          height: '100%',
-          'background-image': `
+        style={{
+          width: "100%",
+          height: "100%",
+          "background-image": `
             linear-gradient(#151d39 1px, transparent 1px),
             linear-gradient(90deg, #151d39 1px, transparent 1px)
           `,
-          'background-size': '20px 20px'
+          "background-size": "20px 20px",
         }}
       />
 
       {/* Contrôles du canvas (en bas à droite) */}
-      <div style={{
-        position: 'absolute',
-        bottom: '1rem',
-        right: '1rem',
-        display: 'flex',
-        'flex-direction': 'column',
-        gap: '0.5rem',
-        background: 'rgba(0, 0, 0, 0.7)',
-        padding: '0.5rem',
-        'border-radius': '8px',
-        border: '1px solid #444'
-      }}>
+      <div
+        style={{
+          position: "absolute",
+          bottom: "1rem",
+          right: "1rem",
+          display: "flex",
+          "flex-direction": "column",
+          gap: "0.5rem",
+          background: "rgba(0, 0, 0, 0.7)",
+          padding: "0.5rem",
+          "border-radius": "8px",
+          border: "1px solid #444",
+        }}
+      >
         {/* Zoom controls */}
-        <div style={{
-          display: 'flex',
-          gap: '0.5rem',
-          'align-items': 'center'
-        }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "0.5rem",
+            "align-items": "center",
+          }}
+        >
           <button
             onClick={zoomOut}
             style={{
-              padding: '0.5rem',
-              background: '#3c3c3f',
-              border: '1px solid #555',
-              'border-radius': '4px',
-              color: '#d4d4d4',
-              cursor: 'pointer',
-              'font-size': '1rem',
-              'line-height': 1,
-              width: '32px',
-              height: '32px'
+              padding: "0.5rem",
+              background: "#3c3c3f",
+              border: "1px solid #555",
+              "border-radius": "4px",
+              color: "#d4d4d4",
+              cursor: "pointer",
+              "font-size": "1rem",
+              "line-height": 1,
+              width: "32px",
+              height: "32px",
             }}
             title="Zoom arrière"
           >
             −
           </button>
-          
+
           <button
             onClick={zoomReset}
             style={{
-              padding: '0.5rem',
-              background: '#3c3c3f',
-              border: '1px solid #555',
-              'border-radius': '4px',
-              color: '#d4d4d4',
-              cursor: 'pointer',
-              'font-size': '0.75rem',
-              'line-height': 1,
-              'min-width': '40px'
+              padding: "0.5rem",
+              background: "#3c3c3f",
+              border: "1px solid #555",
+              "border-radius": "4px",
+              color: "#d4d4d4",
+              cursor: "pointer",
+              "font-size": "0.75rem",
+              "line-height": 1,
+              "min-width": "40px",
             }}
             title="Réinitialiser le zoom"
           >
             {Math.round(currentZoom * 100)}%
           </button>
-          
+
           <button
             onClick={zoomIn}
             class="p-2 rounded-lg bg-black/30 backdrop-blur-sm border border-white/10 hover:bg-black/50 transition-colors"
             style={{
-              padding: '0.5rem',
-              background: '#3c3c3f',
-              border: '1px solid #555',
-              'border-radius': '4px',
-              color: '#d4d4d4',
-              cursor: 'pointer',
-              'font-size': '1rem',
-              'line-height': 1,
-              width: '32px',
-              height: '32px'
+              padding: "0.5rem",
+              background: "#3c3c3f",
+              border: "1px solid #555",
+              "border-radius": "4px",
+              color: "#d4d4d4",
+              cursor: "pointer",
+              "font-size": "1rem",
+              "line-height": 1,
+              width: "32px",
+              height: "32px",
             }}
             title="Zoom avant"
           >
             +
           </button>
         </div>
-        
+
         {/* Fit to page */}
         <button
           onClick={fitToPage}
           style={{
-            padding: '0.5rem 0.75rem',
-            background: '#3c3c3f',
-            border: '1px solid #555',
-            'border-radius': '4px',
-            color: '#d4d4d4',
-            cursor: 'pointer',
-            'font-size': '0.85rem',
-            'font-weight': '500',
-            'white-space': 'nowrap'
+            padding: "0.5rem 0.75rem",
+            background: "#3c3c3f",
+            border: "1px solid #555",
+            "border-radius": "4px",
+            color: "#d4d4d4",
+            cursor: "pointer",
+            "font-size": "0.85rem",
+            "font-weight": "500",
+            "white-space": "nowrap",
           }}
           title="Adapter à la page"
         >
           📐 Adapter
         </button>
-        
+
         {/* Clear all */}
         <button
           onClick={clearCanvas}
           style={{
-            padding: '0.5rem 0.75rem',
-            background: '#5a1d1d',
-            border: '1px solid #8b0000',
-            'border-radius': '4px',
-            color: '#f48771',
-            cursor: 'pointer',
-            'font-size': '0.85rem',
-            'font-weight': '500',
-            'white-space': 'nowrap'
+            padding: "0.5rem 0.75rem",
+            background: "#5a1d1d",
+            border: "1px solid #8b0000",
+            "border-radius": "4px",
+            color: "#f48771",
+            cursor: "pointer",
+            "font-size": "0.85rem",
+            "font-weight": "500",
+            "white-space": "nowrap",
           }}
           title="Effacer tous les nœuds"
         >
@@ -418,39 +428,61 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
       </div>
 
       {/* Légende des types de nodes (en haut à gauche) */}
-      <div style={{
-        position: 'absolute',
-        top: '1rem',
-        left: '1rem',
-        background: 'rgba(0, 0, 0, 0.7)',
-        padding: '0.75rem',
-        'border-radius': '8px',
-        border: '1px solid #444',
-        'font-size': '0.85rem'
-      }}>
-        <div style={{ 'margin-bottom': '0.5rem', 'font-weight': 'bold', color: '#d4d4d4' }}>
+      <div
+        style={{
+          position: "absolute",
+          top: "1rem",
+          left: "1rem",
+          background: "rgba(0, 0, 0, 0.7)",
+          padding: "0.75rem",
+          "border-radius": "8px",
+          border: "1px solid #444",
+          "font-size": "0.85rem",
+        }}
+      >
+        <div
+          style={{
+            "margin-bottom": "0.5rem",
+            "font-weight": "bold",
+            color: "#d4d4d4",
+          }}
+        >
           Types de nœuds
         </div>
-        <div style={{ display: 'flex', 'flex-direction': 'column', gap: '0.25rem' }}>
-          <div style={{ display: 'flex', 'align-items': 'center', gap: '0.5rem' }}>
-            <div style={{ 
-              width: '16px', 
-              height: '16px', 
-              background: '#2d2d30', 
-              border: '2px solid #3c3c3f',
-              'border-radius': '3px'
-            }} />
-            <span style={{ color: '#d4d4d4' }}>Story (Scène)</span>
+        <div
+          style={{
+            display: "flex",
+            "flex-direction": "column",
+            gap: "0.25rem",
+          }}
+        >
+          <div
+            style={{ display: "flex", "align-items": "center", gap: "0.5rem" }}
+          >
+            <div
+              style={{
+                width: "16px",
+                height: "16px",
+                background: "#2d2d30",
+                border: "2px solid #3c3c3f",
+                "border-radius": "3px",
+              }}
+            />
+            <span style={{ color: "#d4d4d4" }}>Story (Scène)</span>
           </div>
-          <div style={{ display: 'flex', 'align-items': 'center', gap: '0.5rem' }}>
-            <div style={{ 
-              width: '16px', 
-              height: '16px', 
-              background: '#4a1a1a', 
-              border: '2px solid #8b0000',
-              'border-radius': '3px'
-            }} />
-            <span style={{ color: '#d4d4d4' }}>Combat</span>
+          <div
+            style={{ display: "flex", "align-items": "center", gap: "0.5rem" }}
+          >
+            <div
+              style={{
+                width: "16px",
+                height: "16px",
+                background: "#4a1a1a",
+                border: "2px solid #8b0000",
+                "border-radius": "3px",
+              }}
+            />
+            <span style={{ color: "#d4d4d4" }}>Combat</span>
           </div>
         </div>
       </div>

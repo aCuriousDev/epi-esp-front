@@ -31,6 +31,7 @@ import {
 } from "../types/campaign";
 import { authStore } from "../stores/auth.store";
 import { AuthService } from "../services/auth.service";
+import { safeConfirm } from "../services/ui/confirm";
 import {
   CampaignService,
   CampaignDetailResponse,
@@ -241,7 +242,7 @@ export default function CampaignView() {
     if (!c) return;
 
     if (
-      !confirm(
+      !safeConfirm(
         `Êtes-vous sûr de vouloir supprimer "${c.title}" ? Cette action est irréversible.`,
       )
     ) {
@@ -278,7 +279,7 @@ export default function CampaignView() {
     if (!c) return;
 
     if (
-      !confirm("Êtes-vous sûr de vouloir retirer ce joueur de la campagne ?")
+      !safeConfirm("Êtes-vous sûr de vouloir retirer ce joueur de la campagne ?")
     ) {
       return;
     }

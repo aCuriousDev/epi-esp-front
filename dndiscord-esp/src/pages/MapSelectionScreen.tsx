@@ -3,6 +3,7 @@ import { useNavigate, A } from "@solidjs/router";
 import { ArrowLeft, Plus, Trash2, Edit2 } from "lucide-solid";
 import { getAllMaps, deleteMap, getAllDungeons, deleteDungeon, loadDungeon } from "../services/mapStorage";
 import { DungeonCreationWizard } from "../components/DungeonCreationWizard";
+import { safeConfirm } from "../services/ui/confirm";
 
 export default function MapSelectionScreen() {
 	const navigate = useNavigate();
@@ -50,7 +51,7 @@ export default function MapSelectionScreen() {
 
 	const handleDelete = (e: Event, mapId: string) => {
 		e.stopPropagation();
-		if (confirm("Êtes-vous sûr de vouloir supprimer cette map ?")) {
+		if (safeConfirm("Êtes-vous sûr de vouloir supprimer cette map ?")) {
 			setDeletingId(mapId);
 			deleteMap(mapId);
 			loadData();
@@ -60,7 +61,7 @@ export default function MapSelectionScreen() {
 
 	const handleDeleteDungeon = (e: Event, dungeonId: string) => {
 		e.stopPropagation();
-		if (confirm("Êtes-vous sûr de vouloir supprimer ce donjon et toutes ses salles ?")) {
+		if (safeConfirm("Êtes-vous sûr de vouloir supprimer ce donjon et toutes ses salles ?")) {
 			setDeletingId(dungeonId);
 			deleteDungeon(dungeonId);
 			loadData();
