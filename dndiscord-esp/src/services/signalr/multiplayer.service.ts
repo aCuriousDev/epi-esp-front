@@ -41,6 +41,9 @@ import { registerGameSyncHandlers } from "./gameSync";
 import { authStore } from "../../stores/auth.store";
 import { AuthService } from "../auth.service";
 import { loadMap } from "../mapStorage";
+import { getApiUrl } from "../config";
+import { getDiscordContextIds } from "../discord";
+import { addPartyChatMessage, clearPartyChat, type PartyChatMessage } from "../../stores/partyChat.store";
 
 const HUB = {
   createSession: "CreateSession",
@@ -61,11 +64,38 @@ const HUB = {
   sendEndTurn: "SendEndTurn",
 } as const;
 
+async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
+  const ctx = getDiscordContextIds();
+  if (!ctx) return;
+  const token = AuthService.getToken();
+  if (!token) return;
+
+  try {
+    await fetch(`${getApiUrl().replace(/\/$/, "")}/api/party-chat/bind`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        sessionId,
+        guildId: ctx.guildId,
+        voiceChannelId: ctx.channelId,
+      }),
+      credentials: "include",
+    });
+  } catch (e) {
+    console.warn("party-chat bind failed:", e);
+  }
+}
+
 /** Créer une session pour une campagne (DM). campaignId = GUID string. */
 export async function createSession(campaignId: string): Promise<SessionInfo> {
   const raw = await signalRService.invoke(HUB.createSession, campaignId);
   const result = normalizeSession(raw as Record<string, unknown>);
   setSession(result);
+  clearPartyChat();
+  await tryBindDiscordVoiceToSession(result.sessionId);
   return result;
 }
 
@@ -80,6 +110,10 @@ export async function joinSession(sessionId: string): Promise<JoinResult> {
     session: raw.session ? normalizeSession(raw.session as Record<string, unknown>) : undefined,
   };
   applyJoinResult(result);
+  if (result.success && result.session) {
+    clearPartyChat();
+    await tryBindDiscordVoiceToSession(result.session.sessionId);
+  }
   return result;
 }
 
@@ -87,6 +121,7 @@ export async function joinSession(sessionId: string): Promise<JoinResult> {
 export async function leaveSession(): Promise<void> {
   await signalRService.invoke(HUB.leaveSession);
   clearSession();
+  clearPartyChat();
   resetHandlersRegistered();
 }
 
@@ -295,6 +330,20 @@ export function registerMultiplayerHandlers(): void {
   // GameStarted (host started the game)
   signalRService.on("GameStarted", (data: GameStartedPayload) => {
     setGameStarted(data);
+  });
+
+  // Discord voice channel chat (filtered server-side to players in session)
+  signalRService.on("PartyChatMessage", (data: PartyChatMessage) => {
+    addPartyChatMessage({
+      sessionId: String((data as any).sessionId ?? ""),
+      content: String((data as any).content ?? ""),
+      authorName: String((data as any).authorName ?? ""),
+      authorDiscordId: String((data as any).authorDiscordId ?? ""),
+      authorAvatar: ((data as any).authorAvatar ?? null) as string | null,
+      authorRole: ((data as any).authorRole ?? "Player") as any,
+      timestamp: Number((data as any).timestamp ?? Date.now()),
+      messageId: String((data as any).messageId ?? ""),
+    });
   });
 
   // Session mise à jour (si le backend envoie SessionUpdated)

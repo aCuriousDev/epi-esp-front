@@ -1,4 +1,4 @@
-import { DiscordSDK } from '@discord/embedded-app-sdk';
+import { DiscordSDK } from "@discord/embedded-app-sdk";
 
 // Instance singleton du SDK Discord
 let discordSdkInstance: DiscordSDK | null = null;
@@ -16,8 +16,10 @@ export async function initDiscordSDK(): Promise<DiscordSDK> {
   const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID;
 
   if (!clientId) {
-    console.warn('VITE_DISCORD_CLIENT_ID is not set. Discord SDK will not be initialized.');
-    throw new Error('Discord Client ID is required');
+    console.warn(
+      "VITE_DISCORD_CLIENT_ID is not set. Discord SDK will not be initialized.",
+    );
+    throw new Error("Discord Client ID is required");
   }
 
   try {
@@ -28,11 +30,11 @@ export async function initDiscordSDK(): Promise<DiscordSDK> {
 
     isInitialized = true;
 
-    console.log('Discord SDK initialized successfully');
-    
+    console.log("Discord SDK initialized successfully");
+
     return discordSdkInstance;
   } catch (error) {
-    console.error('Failed to initialize Discord SDK:', error);
+    console.error("Failed to initialize Discord SDK:", error);
     throw error;
   }
 }
@@ -65,21 +67,39 @@ export function getCurrentDiscordUser() {
 }
 
 /**
+ * Récupère les IDs du contexte Discord (guildId / channelId)
+ * @returns { guildId: string; channelId: string } | null
+ */
+export function getDiscordContextIds(): {
+  guildId: string;
+  channelId: string;
+} | null {
+  if (!discordSdkInstance) return null;
+  const anySdk = discordSdkInstance as any;
+  const guildId = String(anySdk.guildId ?? anySdk?.guild_id ?? "");
+  const channelId = String(anySdk.channelId ?? anySdk?.channel_id ?? "");
+  if (!guildId || !channelId) return null;
+  return { guildId, channelId };
+}
+
+/**
  * Envoie un événement de présence Discord (ex: "Joue à DnDiscord")
  * @param activity - Activité à afficher
  */
-export async function setDiscordActivity(activity: { details?: string; state?: string }) {
+export async function setDiscordActivity(activity: {
+  details?: string;
+  state?: string;
+}) {
   if (!discordSdkInstance || !isInitialized) {
-    console.warn('Discord SDK not initialized. Cannot set activity.');
+    console.warn("Discord SDK not initialized. Cannot set activity.");
     return;
   }
 
   try {
     // Le SDK Discord gère automatiquement la présence via l'iframe
     // Vous pouvez utiliser les commandes Discord pour définir des activités personnalisées
-    console.log('Discord activity:', activity);
+    console.log("Discord activity:", activity);
   } catch (error) {
-    console.error('Failed to set Discord activity:', error);
+    console.error("Failed to set Discord activity:", error);
   }
 }
-
