@@ -3,10 +3,13 @@ import { ArrowLeft, Loader2 } from 'lucide-solid';
 import { createRoom, joinSession, tryRecoverSession } from '../services/signalr/multiplayer.service';
 import { signalRService } from '../services/signalr/SignalRService';
 import { ensureMultiplayerHandlersRegistered } from '../services/signalr/multiplayer.service';
-import { sessionState, setSessionLoading, setSessionError, getPersistedSession } from '../stores/session.store';
+import { sessionState, setSessionLoading, setSessionError, getPersistedSession, getPersistedGameStarted } from '../stores/session.store';
+import { SessionState } from '../types/multiplayer';
+import type { GameStartedPayload } from '../types/multiplayer';
 
 interface RoomJoinScreenProps {
   onRoomReady: () => void;
+  onGameRecover: (payload: GameStartedPayload) => void;
   onBack: () => void;
 }
 
@@ -21,7 +24,12 @@ export const RoomJoinScreen: Component<RoomJoinScreenProps> = (props) => {
     try {
       const ok = await tryRecoverSession();
       if (ok) {
-        props.onRoomReady();
+        const gamePayload = getPersistedGameStarted();
+        if (sessionState.session?.state === SessionState.InProgress && gamePayload) {
+          props.onGameRecover(gamePayload);
+        } else {
+          props.onRoomReady();
+        }
         return;
       }
     } catch { /* recovery failed, show normal UI */ }

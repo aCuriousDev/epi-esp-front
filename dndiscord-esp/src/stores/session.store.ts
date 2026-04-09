@@ -41,6 +41,7 @@ export const [sessionState, setSessionState] = createStore<SessionStoreState>({
 // --- sessionStorage persistence (survives refresh, clears on tab close) ---
 
 const STORAGE_KEY = "dndiscord_session";
+const GAME_STARTED_KEY = "dndiscord_game_started";
 
 interface PersistedSession {
   sessionId: string;
@@ -69,11 +70,33 @@ export function getPersistedSession(): PersistedSession | null {
   }
 }
 
+function persistGameStarted(payload: GameStartedPayload): void {
+  try {
+    const { mapData: _, ...rest } = payload;
+    sessionStorage.setItem(GAME_STARTED_KEY, JSON.stringify(rest));
+  } catch { /* quota or private mode */ }
+}
+
+function clearPersistedGameStarted(): void {
+  try { sessionStorage.removeItem(GAME_STARTED_KEY); } catch { /* noop */ }
+}
+
+export function getPersistedGameStarted(): GameStartedPayload | null {
+  try {
+    const raw = sessionStorage.getItem(GAME_STARTED_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as GameStartedPayload;
+  } catch {
+    return null;
+  }
+}
+
 // --- Store mutations ---
 
 /** Réinitialiser l'état session (ex. après Leave). */
 export function clearSession(): void {
   clearPersistedSession();
+  clearPersistedGameStarted();
   setSessionState({
     session: null,
     isLoading: false,
@@ -94,6 +117,7 @@ export function setHubUserId(userId: string): void {
 /** Stocker le payload GameStarted reçu du serveur. */
 export function setGameStarted(payload: GameStartedPayload): void {
   setSessionState("gameStartedPayload", payload);
+  persistGameStarted(payload);
 }
 
 /** Définir la session (après Create/Join réussi). */

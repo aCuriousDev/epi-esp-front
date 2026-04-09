@@ -416,6 +416,7 @@ const BoardGame: Component = () => {
 				>
 					<RoomJoinScreen
 						onRoomReady={onRoomReady}
+						onGameRecover={onMultiplayerGameStart}
 						onBack={backToModeSelection}
 					/>
 				</Show>
