@@ -22,6 +22,7 @@ import {
 } from "../types/character";
 import { CharacterService, CharacterDto } from "../services/character.service";
 import { GetCharacterProfilPic } from "../utils/characterProfilPic";
+import { safeConfirm } from "../services/ui/confirm";
 
 /**
  * Map API character response to frontend Character type
@@ -87,7 +88,7 @@ export default function CharacterView() {
     const char = character();
     if (!char) return;
 
-    if (!confirm(`Faire monter ${char.name} au niveau ${char.level + 1} ?`)) {
+    if (!safeConfirm(`Faire monter ${char.name} au niveau ${char.level + 1} ?`)) {
       return;
     }
 

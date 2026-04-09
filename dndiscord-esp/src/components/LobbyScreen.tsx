@@ -6,6 +6,7 @@ import { selectCharacter, startGame as startGameHub, leaveSession } from '../ser
 import { CharacterService, type CharacterDto } from '../services/character.service';
 import { getAllMaps } from '../services/mapStorage';
 import type { GameStartedPayload } from '../types/multiplayer';
+import { safeConfirm } from "../services/ui/confirm";
 
 interface LobbyScreenProps {
   onGameStart: (payload: GameStartedPayload) => void;
@@ -64,7 +65,7 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
 
   const handleStartGame = async () => {
     const mapId = selectedMapId();
-    if (!mapId && !confirm('Aucune carte s\u00e9lectionn\u00e9e. Utiliser la carte par d\u00e9faut ?')) return;
+    if (!mapId && !safeConfirm('Aucune carte s\u00e9lectionn\u00e9e. Utiliser la carte par d\u00e9faut ?')) return;
     setStarting(true);
     try {
       await startGameHub(mapId ?? 'default');
