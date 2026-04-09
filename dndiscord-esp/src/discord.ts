@@ -1,5 +1,6 @@
 import { DiscordSDK } from "@discord/embedded-app-sdk";
 import type { User } from "./types/auth";
+import { getApiUrl } from "./services/config";
 
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID;
 if (!clientId) {
@@ -39,8 +40,7 @@ export async function setupDiscord(): Promise<DiscordAuthResult> {
     scope: ["identify", "guilds"],
   });
 
-  // Appel direct vers le backend (CORS autorise *.discordsays.com)
-  const apiBase = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+  const apiBase = getApiUrl().replace(/\/$/, "");
   const response = await fetch(`${apiBase}/api/auth/discord/callback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

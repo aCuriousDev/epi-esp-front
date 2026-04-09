@@ -4,8 +4,9 @@ import type {
   DiscordAuthUrlResponse,
   User,
 } from "../types/auth";
+import { getApiUrl } from "./config";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5054";
+const API_URL = getApiUrl();
 
 /**
  * Auth Service - handles all authentication API calls

@@ -1,6 +1,7 @@
 import axios from "axios";
+import { getApiUrl } from "./config";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5054";
+const API_URL = getApiUrl();
 
 /**
  * Campaign Status enum matching backend (integers)
