@@ -22,6 +22,7 @@ import { initDiscordSDK } from "./services/discord";
 import CampaignManagerPage from "./pages/CampaignManagerPage";
 import SessionInviteListener from "./components/SessionInviteListener";
 import EditCampaign from "./pages/EditCampaign";
+import TutorialOverlay from "./components/TutorialOverlay";
 
 // Initialize auth state on app load
 authStore.init();
@@ -31,6 +32,7 @@ function Protected(props: { children: any }) {
   return (
     <ProtectedRoute fallbackPath="/login">
       <SessionInviteListener />
+      <TutorialOverlay />
       {props.children}
     </ProtectedRoute>
   );
