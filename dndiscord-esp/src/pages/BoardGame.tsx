@@ -1,5 +1,5 @@
 import { Component, Show, onMount, onCleanup, createSignal } from "solid-js";
-import { useNavigate } from "@solidjs/router";
+import { useNavigate, useLocation } from "@solidjs/router";
 import { ArrowLeft, RotateCcw } from "lucide-solid";
 import {
   GameCanvas,
@@ -42,6 +42,7 @@ import { randomizePreparationPlacement } from "../game/actions/PreparationAction
 
 const BoardGame: Component = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [appPhase, setAppPhase] = createSignal<AppPhase>(
     AppPhase.MODE_SELECTION,
   );
@@ -53,6 +54,24 @@ const BoardGame: Component = () => {
   const [isMultiplayer, setIsMultiplayer] = createSignal(false);
 
   onMount(() => {
+    if (new URLSearchParams(location.search).get("demo") === "1") {
+      setSelectedMode(GameMode.COMBAT);
+      setSelectedMapId(null);
+      setAppPhase(AppPhase.IN_GAME);
+
+      let attempts = 0;
+      const checkEngine = () => {
+        if (++attempts > 50) return;
+        if (isEngineReady()) {
+          setTimeout(() => startGame(GameMode.COMBAT, null), 150);
+        } else {
+          setTimeout(checkEngine, 100);
+        }
+      };
+      checkEngine();
+      return;
+    }
+
     const s = sessionState.session;
     if (s) {
       setIsMultiplayer(true);
@@ -320,7 +339,9 @@ const BoardGame: Component = () => {
   const renderRightPanelContent = () => (
     <>
       <Show when={sessionState.session}>
-        <PartyChatPanel />
+        <div data-tutorial="chat-panel">
+          <PartyChatPanel />
+        </div>
       </Show>
       <Show
         when={
@@ -558,6 +579,7 @@ const BoardGame: Component = () => {
               {/* Bouton Prêt - Phase de préparation */}
               <Show when={gameState.phase === GamePhase.COMBAT_PREPARATION}>
                 <button
+                  data-tutorial="prep-ready"
                   class="px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold bg-game-gold text-game-darker hover:bg-amber-400 transition shadow-lg whitespace-nowrap"
                   onClick={() => startCombatFromPreparation()}
                 >

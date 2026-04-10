@@ -141,7 +141,7 @@ export default function MenuComponent() {
 				</header>
 
 				{/* Menu Buttons */}
-				<section class="flex w-full flex-col items-center gap-4 menu-section">
+				<section class="flex w-full flex-col items-center gap-4 menu-section" data-tutorial="menu">
 					<For each={menuItems()}>
 						{(item, index) => (
 							<div class="menu-item" style={`animation-delay: ${index() * 100}ms`}>
@@ -151,6 +151,13 @@ export default function MenuComponent() {
 									onMouseEnter={() => { setHovered(item.hoveringLabel); playMenuHoverSound(); }}
 									onMouseLeave={() => setHovered(null)}
 									onClick={() => { playMenuClickSound(); navigate(item.route); }}
+									data-tutorial={
+										item.route === "/characters"
+											? "nav-characters"
+											: item.route === "/campaigns" || item.route === "/campaigns-manager"
+											? "nav-campaigns"
+											: undefined
+									}
 								/>
 							</div>
 						)}
