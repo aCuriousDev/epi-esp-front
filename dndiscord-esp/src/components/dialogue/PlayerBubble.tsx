@@ -9,7 +9,7 @@ export interface PlayerBubbleProps {
 }
 
 export const PlayerBubble: Component<PlayerBubbleProps> = (props) => {
-  const accent = () => props.color ?? "#8b5cf6";
+  const accent = () => props.color ?? "var(--plum-500)";
   const displayText = () =>
     props.text.length > 80 ? props.text.slice(0, 77) + "…" : props.text;
   const isVisible = () => (props.phase ?? "in") === "in";

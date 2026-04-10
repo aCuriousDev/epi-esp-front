@@ -4,7 +4,7 @@ import { getPlayerUnits } from "../../game/stores/UnitsStore";
 import { showPlayerBubble, showDmMessage } from "../../stores/dialogue.store";
 
 // Couleurs assignées aux joueurs pour les bulles
-const PLAYER_COLORS = ["#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#ec4899", "#06b6d4"];
+const PLAYER_COLORS = ["var(--arcindigo-300)", "var(--status-danger)", "var(--status-success)", "var(--status-warning)", "var(--plum-300)", "var(--status-info)"];
 
 export const DebugDialoguePanel: Component = () => {
   const [collapsed, setCollapsed] = createSignal(true);
