@@ -251,7 +251,7 @@ export default function TutorialOverlay() {
           ref={(el) => {
             cardRef = el;
           }}
-          class="tutorial-floating-card pointer-events-auto fixed z-[101] rounded-2xl overflow-hidden border border-purple-500/30 bg-gradient-to-br from-[#1a1528]/95 via-[#12101c]/98 to-[#0f0d18]/95 shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_25px_50px_-12px_rgba(0,0,0,0.65),0_0_80px_-20px_rgba(139,92,246,0.35)]"
+          class="tutorial-floating-card pointer-events-auto fixed z-[101] rounded-2xl overflow-hidden border border-purple-500/30 bg-gradient-to-br from-[var(--ink-800)]/95 via-[var(--ink-900)]/98 to-[var(--ink-950)]/95 shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_25px_50px_-12px_rgba(0,0,0,0.65),0_0_80px_-20px_rgba(139,92,246,0.35)]"
           style={cardStyle()}
         >
           {/* Top glow */}
