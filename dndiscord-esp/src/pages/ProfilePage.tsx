@@ -103,7 +103,7 @@ export default function ProfilePage() {
                   <h2 class="text-2xl font-bold text-white flex items-center gap-2">
                     {user()?.username}
                     <Show when={user()?.discordId}>
-                      <span class="px-2 py-0.5 text-xs bg-[#5865F2]/20 text-[#5865F2] rounded-full border border-[#5865F2]/30">
+                      <span class="px-2 py-0.5 text-xs bg-discord-blurple/20 text-discord-blurple rounded-full border border-discord-blurple/30">
                         Discord
                       </span>
                     </Show>
@@ -194,7 +194,7 @@ export default function ProfilePage() {
 
       <style jsx>{`
         .profile-page {
-          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1a 100%);
+          background: linear-gradient(135deg, var(--ink-700) 0%, var(--ink-800) 50%, var(--ink-900) 100%);
         }
         
         .profile-card {

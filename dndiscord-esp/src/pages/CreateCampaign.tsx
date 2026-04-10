@@ -453,9 +453,9 @@ export default function CreateCampaign() {
         .create-campaign-page {
           background: linear-gradient(
             135deg,
-            #1a1a2e 0%,
-            #16213e 50%,
-            #0f0f1a 100%
+            var(--ink-700) 0%,
+            var(--ink-800) 50%,
+            var(--ink-900) 100%
           );
         }
 
@@ -478,7 +478,7 @@ export default function CreateCampaign() {
           -webkit-appearance: none;
           width: 20px;
           height: 20px;
-          background: #8b5cf6;
+          background: var(--plum-500);
           border-radius: 50%;
           cursor: pointer;
           box-shadow: 0 2px 6px rgba(139, 92, 246, 0.4);

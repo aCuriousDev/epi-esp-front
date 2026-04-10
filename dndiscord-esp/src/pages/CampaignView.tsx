@@ -937,9 +937,9 @@ export default function CampaignView() {
         .campaign-view-page {
           background: linear-gradient(
             135deg,
-            #1a1a2e 0%,
-            #16213e 50%,
-            #0f0f1a 100%
+            var(--ink-700) 0%,
+            var(--ink-800) 50%,
+            var(--ink-900) 100%
           );
         }
       `}</style>
