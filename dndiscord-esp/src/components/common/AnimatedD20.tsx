@@ -92,8 +92,8 @@ export function AnimatedD20(props: AnimatedD20Props) {
 	// Color based on roll value (critical hits/fails)
 	const getValueColor = () => {
 		const val = currentValue();
-		if (val === 20) return "#FFD700"; // Gold for nat 20
-		if (val === 1) return "#FF4444"; // Red for nat 1
+		if (val === 20) return "var(--gold-300)";
+		if (val === 1) return "var(--status-danger)";
 		return "white";
 	};
 
@@ -126,9 +126,9 @@ export function AnimatedD20(props: AnimatedD20Props) {
 				<defs>
 					{/* Main gradient */}
 					<linearGradient id={`d20Gradient-${uniqueId}`} x1="0%" y1="0%" x2="100%" y2="100%">
-						<stop offset="0%" style="stop-color:#9333EA" />
-						<stop offset="50%" style="stop-color:#7C3AED" />
-						<stop offset="100%" style="stop-color:#4F46E5" />
+						<stop offset="0%" style="stop-color:var(--plum-500)" />
+						<stop offset="50%" style="stop-color:var(--plum-500)" />
+						<stop offset="100%" style="stop-color:var(--arcindigo-500)" />
 					</linearGradient>
 					
 					{/* Highlight gradient for 3D effect */}
