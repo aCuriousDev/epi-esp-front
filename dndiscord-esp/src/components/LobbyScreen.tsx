@@ -1,11 +1,25 @@
-import { Component, createSignal, createEffect, onMount, For, Show } from 'solid-js';
-import { ArrowLeft, Copy, Check } from 'lucide-solid';
-import { sessionState, isHost } from '../stores/session.store';
-import { PlayerRole } from '../types/multiplayer';
-import { selectCharacter, startGame as startGameHub, leaveSession } from '../services/signalr/multiplayer.service';
-import { CharacterService, type CharacterDto } from '../services/character.service';
-import { getAllMaps } from '../services/mapStorage';
-import type { GameStartedPayload } from '../types/multiplayer';
+import {
+  Component,
+  createSignal,
+  createEffect,
+  onMount,
+  For,
+  Show,
+} from "solid-js";
+import { ArrowLeft, Copy, Check } from "lucide-solid";
+import { sessionState, isHost } from "../stores/session.store";
+import { PlayerRole } from "../types/multiplayer";
+import {
+  selectCharacter,
+  startGame as startGameHub,
+  leaveSession,
+} from "../services/signalr/multiplayer.service";
+import {
+  CharacterService,
+  type CharacterDto,
+} from "../services/character.service";
+import { getAllMaps } from "../services/mapStorage";
+import type { GameStartedPayload } from "../types/multiplayer";
 import { safeConfirm } from "../services/ui/confirm";
 
 interface LobbyScreenProps {
@@ -46,7 +60,7 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
   const amHost = () => isHost();
 
   const copyCode = () => {
-    const code = session()?.sessionId;
+    const code = session()?.joinCode ?? session()?.sessionId;
     if (code) {
       navigator.clipboard.writeText(code);
       setCopied(true);
@@ -59,18 +73,24 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
     try {
       await selectCharacter(charId);
     } catch (err) {
-      console.warn('[Lobby] selectCharacter failed:', err);
+      console.warn("[Lobby] selectCharacter failed:", err);
     }
   };
 
   const handleStartGame = async () => {
     const mapId = selectedMapId();
-    if (!mapId && !safeConfirm('Aucune carte s\u00e9lectionn\u00e9e. Utiliser la carte par d\u00e9faut ?')) return;
+    if (
+      !mapId &&
+      !safeConfirm(
+        "Aucune carte s\u00e9lectionn\u00e9e. Utiliser la carte par d\u00e9faut ?",
+      )
+    )
+      return;
     setStarting(true);
     try {
-      await startGameHub(mapId ?? 'default');
+      await startGameHub(mapId ?? "default");
     } catch (err: any) {
-      console.error('[Lobby] startGame failed:', err);
+      console.error("[Lobby] startGame failed:", err);
       setStarting(false);
     }
   };
@@ -104,7 +124,7 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
             <p class="text-slate-200/70 text-sm mb-2">Code de la salle</p>
             <div class="inline-flex items-center gap-3 bg-black/30 backdrop-blur-sm rounded-xl px-6 py-3 border border-white/10">
               <span class="font-mono text-3xl sm:text-4xl tracking-[0.3em] text-white font-bold">
-                {session()?.sessionId ?? '...'}
+                {session()?.joinCode ?? session()?.sessionId ?? "..."}
               </span>
               <button
                 onClick={copyCode}
@@ -121,15 +141,19 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
           {/* Player List */}
           <div class="rounded-2xl border border-white/10 bg-gradient-to-br from-brandStart/80 to-brandEnd/80 backdrop-blur-sm p-6">
             <h3 class="font-display text-xl text-white mb-4">
-              Joueurs ({playerCount()}/{session()?.maxPlayers ?? '?'})
+              Joueurs ({playerCount()}/{session()?.maxPlayers ?? "?"})
             </h3>
             <div class="space-y-2">
               <For each={session()?.players ?? []}>
                 {(player) => (
                   <div class="flex items-center justify-between bg-white/5 rounded-lg px-4 py-3 border border-white/5">
                     <div class="flex items-center gap-3">
-                      <div class={`w-2.5 h-2.5 rounded-full ${player.status === 'Connected' ? 'bg-green-400' : 'bg-gray-500'}`} />
-                      <span class="text-white font-medium">{player.userName}</span>
+                      <div
+                        class={`w-2.5 h-2.5 rounded-full ${player.status === "Connected" ? "bg-green-400" : "bg-gray-500"}`}
+                      />
+                      <span class="text-white font-medium">
+                        {player.userName}
+                      </span>
                       <Show when={player.role === PlayerRole.DungeonMaster}>
                         <span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
                           Host
@@ -137,7 +161,9 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                       </Show>
                     </div>
                     <span class="text-sm text-slate-300/70">
-                      {player.selectedCharacterName ?? player.selectedCharacterId ?? 'Par d\u00e9faut'}
+                      {player.selectedCharacterName ??
+                        player.selectedCharacterId ??
+                        "Par d\u00e9faut"}
                     </span>
                   </div>
                 )}
@@ -147,14 +173,16 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
 
           {/* Character Selection */}
           <div class="rounded-2xl border border-white/10 bg-gradient-to-br from-brandStart/80 to-brandEnd/80 backdrop-blur-sm p-6">
-            <h3 class="font-display text-xl text-white mb-4">Votre personnage</h3>
+            <h3 class="font-display text-xl text-white mb-4">
+              Votre personnage
+            </h3>
             <div class="space-y-2">
               <button
                 onClick={() => handleCharacterSelect(null)}
                 class={`w-full text-left px-4 py-3 rounded-lg border transition ${
                   selectedCharId() === null
-                    ? 'border-blue-400 bg-blue-500/20 text-white'
-                    : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+                    ? "border-blue-400 bg-blue-500/20 text-white"
+                    : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
                 }`}
               >
                 Guerrier par d&eacute;faut
@@ -165,8 +193,8 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                     onClick={() => handleCharacterSelect(char.id)}
                     class={`w-full text-left px-4 py-3 rounded-lg border transition ${
                       selectedCharId() === char.id
-                        ? 'border-blue-400 bg-blue-500/20 text-white'
-                        : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+                        ? "border-blue-400 bg-blue-500/20 text-white"
+                        : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
                     }`}
                   >
                     <div class="flex justify-between items-center">
@@ -190,8 +218,8 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                   onClick={() => setSelectedMapId(null)}
                   class={`w-full text-left px-4 py-2 rounded-lg border transition text-sm ${
                     selectedMapId() === null
-                      ? 'border-amber-400 bg-amber-500/20 text-white'
-                      : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+                      ? "border-amber-400 bg-amber-500/20 text-white"
+                      : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
                   }`}
                 >
                   Carte par d&eacute;faut
@@ -202,8 +230,8 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                       onClick={() => setSelectedMapId(map.id)}
                       class={`w-full text-left px-4 py-2 rounded-lg border transition text-sm ${
                         selectedMapId() === map.id
-                          ? 'border-amber-400 bg-amber-500/20 text-white'
-                          : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+                          ? "border-amber-400 bg-amber-500/20 text-white"
+                          : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
                       }`}
                     >
                       {map.name}
@@ -216,7 +244,9 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                 disabled={!canStart()}
                 class="w-full px-6 py-3 rounded-xl bg-game-gold hover:bg-amber-400 text-game-darker font-bold text-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {starting() ? 'Lancement...' : `Lancer la partie (${playerCount()} joueurs)`}
+                {starting()
+                  ? "Lancement..."
+                  : `Lancer la partie (${playerCount()} joueurs)`}
               </button>
               <Show when={playerCount() < 2}>
                 <p class="text-center text-sm text-slate-400 mt-2">

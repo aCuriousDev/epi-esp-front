@@ -31,6 +31,7 @@ export interface PlayerInfo {
 
 export interface SessionInfo {
   sessionId: string;
+  joinCode?: string;
   campaignId?: string;
   campaignName?: string;
   playerCount: number;

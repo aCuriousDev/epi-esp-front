@@ -365,6 +365,7 @@ function normalizeSession(raw: Record<string, unknown>): SessionInfo {
     : [];
   return {
     sessionId: String(raw.sessionId ?? raw.SessionId ?? ""),
+    joinCode: (raw.joinCode ?? raw.JoinCode) as string | undefined,
     campaignId: (raw.campaignId ?? raw.CampaignId) as string | undefined,
     campaignName: (raw.campaignName ?? raw.CampaignName) as string | undefined,
     playerCount: Number(raw.playerCount ?? raw.PlayerCount ?? 0),

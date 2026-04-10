@@ -21,6 +21,7 @@ import { authStore } from "./stores/auth.store";
 import { initDiscordSDK } from "./services/discord";
 import CampaignManagerPage from "./pages/CampaignManagerPage";
 import SessionInviteListener from "./components/SessionInviteListener";
+import EditCampaign from "./pages/EditCampaign";
 
 // Initialize auth state on app load
 authStore.init();
@@ -144,6 +145,14 @@ render(
         component={() => (
           <Protected>
             <CampaignView />
+          </Protected>
+        )}
+      />
+      <Route
+        path="/campaigns/:id/edit"
+        component={() => (
+          <Protected>
+            <EditCampaign />
           </Protected>
         )}
       />
