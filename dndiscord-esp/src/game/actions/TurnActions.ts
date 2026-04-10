@@ -1,35 +1,67 @@
 /**
  * Turn Actions
- * 
+ *
  * Manages game start, turn progression, and phase transitions
  */
 
-import { batch } from 'solid-js';
-import { produce } from 'solid-js/store';
-import { GamePhase, TurnPhase, GameMode, DungeonState, Team } from '../../types';
-import type { UnitAssignment } from '../../types/multiplayer';
-import { gameState, setGameState, addCombatLog } from '../stores/GameStateStore';
-import { units, setUnits, getCurrentUnit, clearUnits } from '../stores/UnitsStore';
-import { tiles, clearTiles } from '../stores/TilesStore';
-import { initializeGrid } from '../initialization/InitGrid';
-import { initializeUnits, initializeUnitsMultiplayer, getAllySpawnPositions } from '../initialization/InitUnits';
-import { initializeFreeRoam } from '../initialization/InitFreeRoam';
-import * as TurnManager from '../TurnManager';
-import { checkGameOver } from './CombatActions';
-import { loadDungeon } from '../../services/mapStorage';
-import { playTurnStartEffect } from '../vfx/VFXIntegration';
-import { playTurnStartSound, playNewRoundSound, playAmbientMusic } from '../audio/SoundIntegration';
+import { batch } from "solid-js";
+import { produce } from "solid-js/store";
+import {
+  GamePhase,
+  TurnPhase,
+  GameMode,
+  DungeonState,
+  Team,
+} from "../../types";
+import type { UnitAssignment } from "../../types/multiplayer";
+import {
+  gameState,
+  setGameState,
+  addCombatLog,
+} from "../stores/GameStateStore";
+import {
+  units,
+  setUnits,
+  getCurrentUnit,
+  clearUnits,
+} from "../stores/UnitsStore";
+import { tiles, clearTiles } from "../stores/TilesStore";
+import { initializeGrid } from "../initialization/InitGrid";
+import {
+  initializeUnits,
+  initializeUnitsMultiplayer,
+  getAllySpawnPositions,
+} from "../initialization/InitUnits";
+import { initializeFreeRoam } from "../initialization/InitFreeRoam";
+import * as TurnManager from "../TurnManager";
+import { checkGameOver } from "./CombatActions";
+import { loadDungeon } from "../../services/mapStorage";
+import { playTurnStartEffect } from "../vfx/VFXIntegration";
+import {
+  playTurnStartSound,
+  playNewRoundSound,
+  playAmbientMusic,
+} from "../audio/SoundIntegration";
 
 // ============================================
 // GAME START
 // ============================================
 
-export function startGame(mode: GameMode = GameMode.COMBAT, mapId: string | null = null, dungeonId: string | null = null, unitAssignments?: UnitAssignment[]): void {
-  console.log('[startGame] ===== STARTING GAME =====');
-  console.log('[startGame] Mode:', mode);
-  console.log('[startGame] Map ID:', mapId || 'default');
-  console.log('[startGame] Dungeon ID:', dungeonId || 'none');
-  if (unitAssignments) console.log('[startGame] Unit assignments:', unitAssignments.length);
+export function startGame(
+  mode: GameMode = GameMode.COMBAT,
+  mapId: string | null = null,
+  dungeonId: string | null = null,
+  unitAssignments?: UnitAssignment[],
+): void {
+  console.log("[startGame] ===== STARTING GAME =====");
+  console.log("[startGame] Mode:", mode);
+  console.log("[startGame] Map ID:", mapId || "default");
+  console.log("[startGame] Dungeon ID:", dungeonId || "none");
+  if (unitAssignments)
+    console.log("[startGame] Unit assignments:", unitAssignments.length);
+
+  clearUnits();
+  clearTiles();
 
   if (mode === GameMode.FREE_ROAM) {
     initializeFreeRoam(mapId, unitAssignments);
@@ -38,31 +70,47 @@ export function startGame(mode: GameMode = GameMode.COMBAT, mapId: string | null
   } else {
     initializeCombat(mapId, unitAssignments);
   }
-  
-  console.log('[startGame] After init - Units:', Object.keys(units).length, 'Tiles:', Object.keys(tiles).length);
-  console.log('[startGame] ===== GAME START COMPLETE =====');
+
+  console.log(
+    "[startGame] After init - Units:",
+    Object.keys(units).length,
+    "Tiles:",
+    Object.keys(tiles).length,
+  );
+  console.log("[startGame] ===== GAME START COMPLETE =====");
 }
 
 // ============================================
 // COMBAT INITIALIZATION
 // ============================================
 
-function initializeCombat(mapId: string | null = null, unitAssignments?: UnitAssignment[]): void {
-  console.log('[initializeCombat] Initializing grid...');
+function initializeCombat(
+  mapId: string | null = null,
+  unitAssignments?: UnitAssignment[],
+): void {
+  console.log("[initializeCombat] Initializing grid...");
   initializeGrid(mapId);
-  console.log('[initializeCombat] Grid initialized, tiles:', Object.keys(tiles).length);
-  
-  console.log('[initializeCombat] Initializing all units (allies + enemies)...');
+  console.log(
+    "[initializeCombat] Grid initialized, tiles:",
+    Object.keys(tiles).length,
+  );
+
+  console.log(
+    "[initializeCombat] Initializing all units (allies + enemies)...",
+  );
   if (unitAssignments && unitAssignments.length > 0) {
     initializeUnitsMultiplayer(mapId, unitAssignments);
   } else {
     initializeUnits(mapId);
   }
-  console.log('[initializeCombat] All units initialized, count:', Object.keys(units).length);
-  
+  console.log(
+    "[initializeCombat] All units initialized, count:",
+    Object.keys(units).length,
+  );
+
   // Phase de préparation : afficher les cases alliées pour le placement
   const allyPositions = getAllySpawnPositions(mapId);
-  
+
   batch(() => {
     setGameState({
       mode: GameMode.COMBAT,
@@ -78,11 +126,14 @@ function initializeCombat(mapId: string | null = null, unitAssignments?: UnitAss
       targetableTiles: [],
       mapId,
     });
-    
-    addCombatLog('Placez vos personnages sur les cases alliées, puis cliquez sur Prêt.', 'system');
+
+    addCombatLog(
+      "Placez vos personnages sur les cases alliées, puis cliquez sur Prêt.",
+      "system",
+    );
   });
-  
-  console.log('[initializeCombat] Combat preparation phase started');
+
+  console.log("[initializeCombat] Combat preparation phase started");
 }
 
 /**
@@ -90,9 +141,12 @@ function initializeCombat(mapId: string | null = null, unitAssignments?: UnitAss
  */
 export function startCombatFromPreparation(): void {
   const turnOrder = TurnManager.calculateTurnOrder(units);
-  
-  console.log('[startCombatFromPreparation] Turn order:', TurnManager.debugTurnOrder(turnOrder, units));
-  
+
+  console.log(
+    "[startCombatFromPreparation] Turn order:",
+    TurnManager.debugTurnOrder(turnOrder, units),
+  );
+
   batch(() => {
     setGameState({
       phase: GamePhase.PLAYER_TURN,
@@ -106,14 +160,14 @@ export function startCombatFromPreparation(): void {
       pathPreview: [],
       targetableTiles: [],
     });
-    
-    addCombatLog('Battle begins!', 'system');
+
+    addCombatLog("Battle begins!", "system");
   });
 
   // Start combat ambient music
-  playAmbientMusic('combat');
-  
-  console.log('[startCombatFromPreparation] Combat started');
+  playAmbientMusic("combat");
+
+  console.log("[startCombatFromPreparation] Combat started");
 }
 
 // ============================================
@@ -121,61 +175,102 @@ export function startCombatFromPreparation(): void {
 // ============================================
 
 export function nextTurn(): void {
-  console.log('=== nextTurn START ===');
-  console.log('[nextTurn] Current index:', gameState.currentUnitIndex);
-  console.log('[nextTurn] Current turn order:', TurnManager.debugTurnOrder(gameState.turnOrder, units));
-  
+  console.log("=== nextTurn START ===");
+  console.log("[nextTurn] Current index:", gameState.currentUnitIndex);
+  console.log(
+    "[nextTurn] Current turn order:",
+    TurnManager.debugTurnOrder(gameState.turnOrder, units),
+  );
+
   const currentUnitBefore = getCurrentUnit();
-  console.log('[nextTurn] Current unit before advance:', currentUnitBefore?.name);
-  
+  console.log(
+    "[nextTurn] Current unit before advance:",
+    currentUnitBefore?.name,
+  );
+
   // Reset all units for new round if needed
   let nextIndex = gameState.currentUnitIndex + 1;
-  console.log('[nextTurn] Next index (before skip):', nextIndex);
-  
+  console.log("[nextTurn] Next index (before skip):", nextIndex);
+
   // Skip dead units
   while (nextIndex < gameState.turnOrder.length) {
     const unit = units[gameState.turnOrder[nextIndex]];
-    console.log('[nextTurn] Checking index', nextIndex, ':', unit?.name, 'alive:', unit?.isAlive);
+    console.log(
+      "[nextTurn] Checking index",
+      nextIndex,
+      ":",
+      unit?.name,
+      "alive:",
+      unit?.isAlive,
+    );
     if (unit && unit.isAlive) break;
     nextIndex++;
   }
-  
-  console.log('[nextTurn] Next index (after skip):', nextIndex, '/', gameState.turnOrder.length);
-  
+
+  console.log(
+    "[nextTurn] Next index (after skip):",
+    nextIndex,
+    "/",
+    gameState.turnOrder.length,
+  );
+
   if (nextIndex >= gameState.turnOrder.length) {
     // Start new round - delegate to TurnManager
-    const newRoundData = TurnManager.prepareNewRound(units, gameState.currentTurn);
-    
-    console.log('[nextTurn] Starting new round');
-    console.log('[nextTurn] Old turn order:', TurnManager.debugTurnOrder(gameState.turnOrder, units));
-    console.log('[nextTurn] New turn order:', TurnManager.debugTurnOrder(newRoundData.turnOrder, units));
-    
+    const newRoundData = TurnManager.prepareNewRound(
+      units,
+      gameState.currentTurn,
+    );
+
+    console.log("[nextTurn] Starting new round");
+    console.log(
+      "[nextTurn] Old turn order:",
+      TurnManager.debugTurnOrder(gameState.turnOrder, units),
+    );
+    console.log(
+      "[nextTurn] New turn order:",
+      TurnManager.debugTurnOrder(newRoundData.turnOrder, units),
+    );
+
     batch(() => {
       // Reset all units using TurnManager
       Object.keys(units).forEach((unitId) => {
-        setUnits(unitId, produce((u) => {
-          TurnManager.resetUnitForNewRound(u);
-        }));
+        setUnits(
+          unitId,
+          produce((u) => {
+            TurnManager.resetUnitForNewRound(u);
+          }),
+        );
       });
-      
+
       // Apply new state from TurnManager
       setGameState(newRoundData.stateUpdates);
     });
-    
+
     // Log AFTER state is set (using the already-incremented value)
-    addCombatLog(`Round ${gameState.currentTurn} begins!`, 'system');
+    addCombatLog(`Round ${gameState.currentTurn} begins!`, "system");
     playNewRoundSound();
-    
+
     // Validate turn order
-    const validation = TurnManager.validateTurnOrder(gameState.turnOrder, units);
+    const validation = TurnManager.validateTurnOrder(
+      gameState.turnOrder,
+      units,
+    );
     if (!validation.valid) {
-      console.error('[nextTurn] Turn order validation failed:', validation.issues);
+      console.error(
+        "[nextTurn] Turn order validation failed:",
+        validation.issues,
+      );
     }
   } else {
     // Normal turn advance
     const nextUnit = units[gameState.turnOrder[nextIndex]];
-    console.log('[nextTurn] Normal turn advance to:', nextUnit?.name, 'at index', nextIndex);
-    
+    console.log(
+      "[nextTurn] Normal turn advance to:",
+      nextUnit?.name,
+      "at index",
+      nextIndex,
+    );
+
     setGameState({
       currentUnitIndex: nextIndex,
       selectedUnit: null,
@@ -185,21 +280,29 @@ export function nextTurn(): void {
       targetableTiles: [],
     });
   }
-  
+
   // Determine phase AFTER state is committed
   updateGamePhase();
-  
+
   // Play turn start VFX + sound for the new active unit
   const currentUnitAfter = getCurrentUnit();
   if (currentUnitAfter && currentUnitAfter.isAlive) {
-    playTurnStartEffect(currentUnitAfter.position, currentUnitAfter.team as string);
+    playTurnStartEffect(
+      currentUnitAfter.position,
+      currentUnitAfter.team as string,
+    );
     playTurnStartSound();
   }
-  
-  console.log('[nextTurn] Current unit after advance:', currentUnitAfter?.name, 'team:', currentUnitAfter?.team);
-  console.log('[nextTurn] Game phase:', gameState.phase);
-  console.log('=== nextTurn END ===\n');
-  
+
+  console.log(
+    "[nextTurn] Current unit after advance:",
+    currentUnitAfter?.name,
+    "team:",
+    currentUnitAfter?.team,
+  );
+  console.log("[nextTurn] Game phase:", gameState.phase);
+  console.log("=== nextTurn END ===\n");
+
   // Check for game over
   checkGameOver();
 }
@@ -211,11 +314,11 @@ export function nextTurn(): void {
 function updateGamePhase(): void {
   const currentUnit = getCurrentUnit();
   const newPhase = TurnManager.determinePhase(currentUnit);
-  
-  setGameState('phase', newPhase);
-  
+
+  setGameState("phase", newPhase);
+
   if (newPhase === GamePhase.PLAYER_TURN) {
-    setGameState('turnPhase', TurnPhase.SELECT_UNIT);
+    setGameState("turnPhase", TurnPhase.SELECT_UNIT);
   }
 }
 
@@ -225,21 +328,29 @@ function updateGamePhase(): void {
 
 export function endUnitTurn(): void {
   const unit = gameState.selectedUnit ? units[gameState.selectedUnit] : null;
-  
-  console.log('[endUnitTurn] Called for unit:', unit?.name, 'Current index:', gameState.currentUnitIndex);
-  
+
+  console.log(
+    "[endUnitTurn] Called for unit:",
+    unit?.name,
+    "Current index:",
+    gameState.currentUnitIndex,
+  );
+
   // If no unit is selected, still proceed to next turn (handles edge cases)
   if (!unit) {
-    console.log('[endUnitTurn] No unit selected, advancing turn anyway');
+    console.log("[endUnitTurn] No unit selected, advancing turn anyway");
     nextTurn();
     return;
   }
-  
+
   batch(() => {
-    setUnits(unit.id, produce((u) => {
-      u.hasActed = true;
-    }));
-    
+    setUnits(
+      unit.id,
+      produce((u) => {
+        u.hasActed = true;
+      }),
+    );
+
     setGameState({
       selectedUnit: null,
       selectedAbility: null,
@@ -248,10 +359,10 @@ export function endUnitTurn(): void {
       targetableTiles: [],
       turnPhase: TurnPhase.END_TURN,
     });
-    
-    addCombatLog(`${unit.name} ends their turn.`, 'system');
+
+    addCombatLog(`${unit.name} ends their turn.`, "system");
   });
-  
+
   nextTurn();
 }
 
@@ -262,12 +373,17 @@ export function endUnitTurn(): void {
 function initializeDungeon(dungeonId: string): void {
   const dungeon = loadDungeon(dungeonId);
   if (!dungeon || dungeon.roomIds.length === 0) {
-    console.error('[initializeDungeon] Dungeon not found or empty:', dungeonId);
+    console.error("[initializeDungeon] Dungeon not found or empty:", dungeonId);
     return;
   }
 
   const firstRoomId = dungeon.roomIds[0];
-  console.log('[initializeDungeon] Starting dungeon:', dungeon.name, '- Room 1 /', dungeon.totalRooms);
+  console.log(
+    "[initializeDungeon] Starting dungeon:",
+    dungeon.name,
+    "- Room 1 /",
+    dungeon.totalRooms,
+  );
 
   initializeGrid(firstRoomId);
   initializeUnits(firstRoomId);
@@ -298,8 +414,14 @@ function initializeDungeon(dungeonId: string): void {
       dungeon: dungeonState,
     });
 
-    addCombatLog(`Donjon: ${dungeon.name} - Salle 1/${dungeon.totalRooms}`, 'system');
-    addCombatLog('Placez vos personnages sur les cases alliées, puis cliquez sur Prêt.', 'system');
+    addCombatLog(
+      `Donjon: ${dungeon.name} - Salle 1/${dungeon.totalRooms}`,
+      "system",
+    );
+    addCombatLog(
+      "Placez vos personnages sur les cases alliées, puis cliquez sur Prêt.",
+      "system",
+    );
   });
 }
 
@@ -315,18 +437,23 @@ export function transitionToNextRoom(): void {
   const nextRoomIndex = dungeon.currentRoomIndex + 1;
   if (nextRoomIndex >= dungeon.totalRooms) {
     // Last room: win the dungeon
-    setGameState('phase', GamePhase.GAME_OVER);
-    addCombatLog('Victoire ! Le donjon est terminé !', 'system');
+    setGameState("phase", GamePhase.GAME_OVER);
+    addCombatLog("Victoire ! Le donjon est terminé !", "system");
     return;
   }
 
   const nextRoomId = dungeon.roomIds[nextRoomIndex];
-  console.log('[transitionToNextRoom] Moving to room', nextRoomIndex + 1, '/', dungeon.totalRooms);
+  console.log(
+    "[transitionToNextRoom] Moving to room",
+    nextRoomIndex + 1,
+    "/",
+    dungeon.totalRooms,
+  );
 
   // Save current player units' state (HP, abilities, etc.) before clearing
   const playerUnitSnapshots = Object.values(units)
-    .filter(u => u.team === Team.PLAYER && u.isAlive)
-    .map(u => ({ ...u }));
+    .filter((u) => u.team === Team.PLAYER && u.isAlive)
+    .map((u) => ({ ...u }));
 
   // Clear current state
   clearUnits();
@@ -345,14 +472,17 @@ export function transitionToNextRoom(): void {
       let spawnPos = availablePositions.shift();
       if (!spawnPos) spawnPos = snapshot.position;
 
-      setUnits(snapshot.id, produce((u) => {
-        u.stats.currentHealth = snapshot.stats.currentHealth;
-        u.stats.currentActionPoints = u.stats.maxActionPoints;
-        u.position = spawnPos!;
-        u.hasActed = false;
-        u.hasMoved = false;
-        u.statusEffects = snapshot.statusEffects;
-      }));
+      setUnits(
+        snapshot.id,
+        produce((u) => {
+          u.stats.currentHealth = snapshot.stats.currentHealth;
+          u.stats.currentActionPoints = u.stats.maxActionPoints;
+          u.position = spawnPos!;
+          u.hasActed = false;
+          u.hasMoved = false;
+          u.statusEffects = snapshot.statusEffects;
+        }),
+      );
     }
   });
 
@@ -377,7 +507,9 @@ export function transitionToNextRoom(): void {
       },
     });
 
-    addCombatLog(`Salle ${nextRoomIndex + 1}/${dungeon.totalRooms} !`, 'system');
+    addCombatLog(
+      `Salle ${nextRoomIndex + 1}/${dungeon.totalRooms} !`,
+      "system",
+    );
   });
 }
-
