@@ -43,7 +43,11 @@ import { AuthService } from "../auth.service";
 import { loadMap } from "../mapStorage";
 import { getApiUrl } from "../config";
 import { getDiscordContextIds } from "../discord";
-import { addPartyChatMessage, clearPartyChat, type PartyChatMessage } from "../../stores/partyChat.store";
+import {
+  addPartyChatMessage,
+  clearPartyChat,
+  type PartyChatMessage,
+} from "../../stores/partyChat.store";
 
 const HUB = {
   createSession: "CreateSession",
@@ -51,6 +55,10 @@ const HUB = {
   leaveSession: "LeaveSession",
   kickPlayer: "KickPlayer",
   createRoom: "CreateRoom",
+  subscribeCampaign: "SubscribeCampaign",
+  unsubscribeCampaign: "UnsubscribeCampaign",
+  subscribeActivity: "SubscribeActivity",
+  unsubscribeActivity: "UnsubscribeActivity",
   selectCharacter: "SelectCharacter",
   startGame: "StartGame",
   move: "Move",
@@ -72,19 +80,22 @@ async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
 
   try {
     const voiceChannelId = ctx.voiceChannelId || ctx.channelId;
-    const res = await fetch(`${getApiUrl().replace(/\/$/, "")}/api/party-chat/bind`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+    const res = await fetch(
+      `${getApiUrl().replace(/\/$/, "")}/api/party-chat/bind`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          sessionId,
+          guildId: ctx.guildId,
+          voiceChannelId,
+        }),
+        credentials: "include",
       },
-      body: JSON.stringify({
-        sessionId,
-        guildId: ctx.guildId,
-        voiceChannelId,
-      }),
-      credentials: "include",
-    });
+    );
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
@@ -105,7 +116,14 @@ async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
 
 /** Créer une session pour une campagne (DM). campaignId = GUID string. */
 export async function createSession(campaignId: string): Promise<SessionInfo> {
-  const raw = await signalRService.invoke(HUB.createSession, campaignId);
+  const ctx = getDiscordContextIds();
+  const voiceChannelId = ctx?.voiceChannelId || ctx?.channelId || null;
+  const raw = await signalRService.invoke(
+    HUB.createSession,
+    campaignId,
+    ctx?.guildId ?? null,
+    voiceChannelId,
+  );
   const result = normalizeSession(raw as Record<string, unknown>);
   setSession(result);
   clearPartyChat();
@@ -113,15 +131,46 @@ export async function createSession(campaignId: string): Promise<SessionInfo> {
   return result;
 }
 
+/** S'abonner aux notifications d'une campagne (ex: SessionStarted). */
+export async function subscribeCampaign(campaignId: string): Promise<void> {
+  await signalRService.invoke(HUB.subscribeCampaign, campaignId);
+}
+
+/** Se désabonner des notifications d'une campagne. */
+export async function unsubscribeCampaign(campaignId: string): Promise<void> {
+  await signalRService.invoke(HUB.unsubscribeCampaign, campaignId);
+}
+
+/** S'abonner aux notifications d'une activité Discord (guild + salon vocal). */
+export async function subscribeActivity(
+  guildId: string,
+  voiceChannelId: string,
+): Promise<void> {
+  await signalRService.invoke(HUB.subscribeActivity, guildId, voiceChannelId);
+}
+
+/** Se désabonner des notifications d'une activité Discord. */
+export async function unsubscribeActivity(
+  guildId: string,
+  voiceChannelId: string,
+): Promise<void> {
+  await signalRService.invoke(HUB.unsubscribeActivity, guildId, voiceChannelId);
+}
+
 /** Rejoindre une session par son ID. */
 export async function joinSession(sessionId: string): Promise<JoinResult> {
   syncHubUserId();
-  const raw = (await signalRService.invoke(HUB.joinSession, sessionId)) as Record<string, unknown>;
+  const raw = (await signalRService.invoke(
+    HUB.joinSession,
+    sessionId,
+  )) as Record<string, unknown>;
   syncHubUserId();
   const result: JoinResult = {
     success: !!raw.success,
     message: raw.message as string | undefined,
-    session: raw.session ? normalizeSession(raw.session as Record<string, unknown>) : undefined,
+    session: raw.session
+      ? normalizeSession(raw.session as Record<string, unknown>)
+      : undefined,
   };
   applyJoinResult(result);
   if (result.success && result.session) {
@@ -167,14 +216,16 @@ export async function createRoom(maxPlayers: number): Promise<SessionInfo> {
 }
 
 /** Sélectionner un personnage dans le lobby. null = personnage par défaut. */
-export async function selectCharacter(characterId: string | null): Promise<void> {
+export async function selectCharacter(
+  characterId: string | null,
+): Promise<void> {
   await signalRService.invoke(HUB.selectCharacter, characterId);
 }
 
 /** Lancer la partie (host uniquement). Envoie les données de la map pour les joueurs distants. */
 export async function startGame(mapId: string): Promise<void> {
   let mapData: string | null = null;
-  if (mapId && mapId !== 'default') {
+  if (mapId && mapId !== "default") {
     const map = loadMap(mapId);
     if (map) {
       mapData = JSON.stringify(map);
@@ -196,7 +247,10 @@ export async function attack(request: AttackRequest): Promise<AttackResult> {
 export async function useAbility(
   request: UseAbilityRequest,
 ): Promise<UseAbilityResult> {
-  return signalRService.invoke(HUB.useAbility, request) as Promise<UseAbilityResult>;
+  return signalRService.invoke(
+    HUB.useAbility,
+    request,
+  ) as Promise<UseAbilityResult>;
 }
 
 export async function endTurn(payload: TurnEndedPayload): Promise<void> {
@@ -247,9 +301,21 @@ export async function sendEndTurn(payload: TurnEndedPayload): Promise<void> {
 // --- Enregistrement des handlers d'événements ---
 
 /** Map backend integer enum to frontend enum. Backend: 0=Player, 1=DungeonMaster */
-const ROLE_MAP: Record<number, PlayerRole> = { 0: PlayerRole.Player, 1: PlayerRole.DungeonMaster };
-const STATUS_MAP: Record<number, ConnectionStatus> = { 0: ConnectionStatus.Connected, 1: ConnectionStatus.Disconnected, 2: ConnectionStatus.Reconnecting };
-const STATE_MAP: Record<number, SessionState> = { 0: SessionState.Lobby, 1: SessionState.InProgress, 2: SessionState.Paused, 3: SessionState.Ended };
+const ROLE_MAP: Record<number, PlayerRole> = {
+  0: PlayerRole.Player,
+  1: PlayerRole.DungeonMaster,
+};
+const STATUS_MAP: Record<number, ConnectionStatus> = {
+  0: ConnectionStatus.Connected,
+  1: ConnectionStatus.Disconnected,
+  2: ConnectionStatus.Reconnecting,
+};
+const STATE_MAP: Record<number, SessionState> = {
+  0: SessionState.Lobby,
+  1: SessionState.InProgress,
+  2: SessionState.Paused,
+  3: SessionState.Ended,
+};
 
 function normalizeRole(v: unknown): PlayerRole {
   if (typeof v === "number") return ROLE_MAP[v] ?? PlayerRole.Player;
@@ -259,13 +325,24 @@ function normalizeRole(v: unknown): PlayerRole {
 
 function normalizeStatus(v: unknown): ConnectionStatus {
   if (typeof v === "number") return STATUS_MAP[v] ?? ConnectionStatus.Connected;
-  if (v === ConnectionStatus.Connected || v === ConnectionStatus.Disconnected || v === ConnectionStatus.Reconnecting) return v;
+  if (
+    v === ConnectionStatus.Connected ||
+    v === ConnectionStatus.Disconnected ||
+    v === ConnectionStatus.Reconnecting
+  )
+    return v;
   return ConnectionStatus.Connected;
 }
 
 function normalizeState(v: unknown): SessionState {
   if (typeof v === "number") return STATE_MAP[v] ?? SessionState.Lobby;
-  if (v === SessionState.Lobby || v === SessionState.InProgress || v === SessionState.Paused || v === SessionState.Ended) return v;
+  if (
+    v === SessionState.Lobby ||
+    v === SessionState.InProgress ||
+    v === SessionState.Paused ||
+    v === SessionState.Ended
+  )
+    return v;
   return SessionState.Lobby;
 }
 
@@ -275,8 +352,10 @@ function normalizePlayer(raw: Record<string, unknown>): PlayerInfo {
     userName: String(raw.userName ?? raw.UserName ?? "?"),
     role: normalizeRole(raw.role ?? raw.Role),
     status: normalizeStatus(raw.status ?? raw.Status),
-    selectedCharacterId: (raw.selectedCharacterId ?? raw.SelectedCharacterId) as string | undefined,
-    selectedCharacterName: (raw.selectedCharacterName ?? raw.SelectedCharacterName) as string | undefined,
+    selectedCharacterId: (raw.selectedCharacterId ??
+      raw.SelectedCharacterId) as string | undefined,
+    selectedCharacterName: (raw.selectedCharacterName ??
+      raw.SelectedCharacterName) as string | undefined,
   };
 }
 
@@ -382,12 +461,17 @@ export function registerMultiplayerHandlers(): void {
  */
 export async function rejoinSession(sessionId: string): Promise<boolean> {
   syncHubUserId();
-  const raw = (await signalRService.invoke(HUB.joinSession, sessionId)) as Record<string, unknown>;
+  const raw = (await signalRService.invoke(
+    HUB.joinSession,
+    sessionId,
+  )) as Record<string, unknown>;
   syncHubUserId();
   const result: JoinResult = {
     success: !!raw.success,
     message: raw.message as string | undefined,
-    session: raw.session ? normalizeSession(raw.session as Record<string, unknown>) : undefined,
+    session: raw.session
+      ? normalizeSession(raw.session as Record<string, unknown>)
+      : undefined,
   };
   applyJoinResult(result);
 
@@ -453,7 +537,8 @@ export function ensureMultiplayerHandlersRegistered(): void {
   });
 
   signalRService.onReconnected(async () => {
-    const sid = sessionState.session?.sessionId ?? getPersistedSession()?.sessionId;
+    const sid =
+      sessionState.session?.sessionId ?? getPersistedSession()?.sessionId;
     if (!sid) return;
     try {
       await rejoinSession(sid);

@@ -20,7 +20,7 @@ import {
   X,
   Loader2,
 } from "lucide-solid";
-import { createSignal, onMount, Show, For } from "solid-js";
+import { createSignal, onCleanup, onMount, Show, For } from "solid-js";
 import {
   Campaign,
   CampaignStatus,
@@ -41,6 +41,9 @@ import {
 import {
   createSession,
   ensureMultiplayerHandlersRegistered,
+  joinSession,
+  subscribeCampaign,
+  unsubscribeCampaign,
 } from "../services/signalr/multiplayer.service";
 import { signalRService } from "../services/signalr/SignalRService";
 
@@ -147,6 +150,15 @@ export default function CampaignView() {
   const [inviteCode, setInviteCode] = createSignal<string | null>(null);
   const [launchingSession, setLaunchingSession] = createSignal(false);
   const [launchError, setLaunchError] = createSignal<string | null>(null);
+  const [sessionInvite, setSessionInvite] = createSignal<{
+    sessionId: string;
+    campaignId: string;
+    startedByUserId?: string;
+    startedByUserName?: string;
+    timestamp?: string;
+  } | null>(null);
+  const [joiningInvite, setJoiningInvite] = createSignal(false);
+  const [inviteError, setInviteError] = createSignal<string | null>(null);
 
   const user = () => authStore.user();
   /** Le créateur/MJ peut lancer une session ; on s’appuie sur l’API (isDungeonMaster) pour éviter les écarts d’identifiants. */
@@ -164,6 +176,54 @@ export default function CampaignView() {
       const response = await CampaignService.getCampaign(params.id);
       const mappedCampaign = mapCampaignResponse(response);
       setCampaign(mappedCampaign);
+
+      // S'abonner aux notifications de la campagne (ex: "SessionStarted").
+      // Permet de proposer "Rejoindre" sans code quand le MJ lance une session.
+      if (!signalRService.isConnected) {
+        await signalRService.connect();
+        ensureMultiplayerHandlersRegistered();
+      }
+
+      const handler = (data: Record<string, unknown>) => {
+        const payload = {
+          sessionId: String(data.sessionId ?? data.SessionId ?? ""),
+          campaignId: String(data.campaignId ?? data.CampaignId ?? ""),
+          startedByUserId: (data.startedByUserId ?? data.StartedByUserId) as
+            | string
+            | undefined,
+          startedByUserName: (data.startedByUserName ??
+            data.StartedByUserName) as string | undefined,
+          timestamp: (data.timestamp ?? data.Timestamp) as string | undefined,
+        };
+
+        if (!payload.sessionId) return;
+
+        // Ne pas afficher la modale au joueur qui a démarré la session.
+        const me = authStore.user()?.id;
+        if (
+          me &&
+          payload.startedByUserId &&
+          String(payload.startedByUserId) === String(me)
+        ) {
+          return;
+        }
+
+        setInviteError(null);
+        setSessionInvite(payload);
+      };
+
+      signalRService.on("SessionStarted", handler);
+      await subscribeCampaign(mappedCampaign.id);
+
+      onCleanup(() => {
+        try {
+          signalRService.off("SessionStarted", handler);
+        } catch {}
+        // Best-effort: si la connexion est encore active, on se désabonne du groupe.
+        if (signalRService.isConnected) {
+          unsubscribeCampaign(mappedCampaign.id).catch(() => undefined);
+        }
+      });
     } catch (err: any) {
       console.error("Failed to load campaign:", err);
       setError("Impossible de charger la campagne.");
@@ -210,6 +270,30 @@ export default function CampaignView() {
       setLaunchError(e?.message ?? "Impossible de créer la session.");
     } finally {
       setLaunchingSession(false);
+    }
+  };
+
+  const handleJoinInvite = async () => {
+    const invite = sessionInvite();
+    if (!invite) return;
+    setInviteError(null);
+    setJoiningInvite(true);
+    try {
+      if (!signalRService.isConnected) {
+        await signalRService.connect();
+        ensureMultiplayerHandlersRegistered();
+      }
+      const res = await joinSession(invite.sessionId);
+      if (!res.success) {
+        setInviteError(res.message ?? "Impossible de rejoindre la session.");
+        return;
+      }
+      setSessionInvite(null);
+      navigate("/board");
+    } catch (e: any) {
+      setInviteError(e?.message ?? "Impossible de rejoindre la session.");
+    } finally {
+      setJoiningInvite(false);
     }
   };
 
@@ -279,7 +363,9 @@ export default function CampaignView() {
     if (!c) return;
 
     if (
-      !safeConfirm("Êtes-vous sûr de vouloir retirer ce joueur de la campagne ?")
+      !safeConfirm(
+        "Êtes-vous sûr de vouloir retirer ce joueur de la campagne ?",
+      )
     ) {
       return;
     }
@@ -800,6 +886,50 @@ export default function CampaignView() {
           >
             ✕
           </button>
+        </div>
+      </Show>
+
+      {/* Session invite modal (SessionStarted) */}
+      <Show when={sessionInvite()}>
+        <div
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setSessionInvite(null)}
+        >
+          <div
+            class="bg-game-dark border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 class="text-xl font-display text-white mb-3">
+              Session de jeu démarrée
+            </h3>
+            <p class="text-slate-300 mb-4">
+              <span class="text-purple-300 font-semibold">
+                {sessionInvite()?.startedByUserName || "Un joueur"}
+              </span>{" "}
+              a démarré une session de jeu. Souhaitez-vous la rejoindre ?
+            </p>
+            <Show when={inviteError()}>
+              <p class="mb-3 text-red-400 text-sm">{inviteError()}</p>
+            </Show>
+            <div class="flex gap-3">
+              <button
+                onClick={() => setSessionInvite(null)}
+                class="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white transition-all"
+                disabled={joiningInvite()}
+              >
+                Plus tard
+              </button>
+              <button
+                onClick={handleJoinInvite}
+                class="flex-1 px-4 py-2.5 bg-purple-600 hover:bg-purple-500 rounded-xl text-white transition-all disabled:opacity-50"
+                disabled={joiningInvite()}
+              >
+                <Show when={joiningInvite()} fallback={"Rejoindre"}>
+                  Rejoindre...
+                </Show>
+              </button>
+            </div>
+          </div>
         </div>
       </Show>
 
