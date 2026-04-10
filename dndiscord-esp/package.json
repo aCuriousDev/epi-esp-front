@@ -16,6 +16,7 @@
     "@babylonjs/loaders": "^7.34.1",
     "@babylonjs/materials": "^7.34.1",
     "@discord/embedded-app-sdk": "^2.4.0",
+    "@fontsource/jetbrains-mono": "^5.2.8",
     "@iconify-icon/solid": "^3.0.3",
     "@microsoft/signalr": "^10.0.0",
     "@solidjs/router": "^0.14.5",
