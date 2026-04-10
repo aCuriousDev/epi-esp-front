@@ -49,7 +49,10 @@ import {
   type PartyChatMessage,
 } from "../../stores/partyChat.store";
 import { showDmMessage, showPlayerBubble } from "../../stores/dialogue.store";
-import { getPlayerUnits, removeUnitsByOwnerUserId } from "../../game/stores/UnitsStore";
+import {
+  getPlayerUnits,
+  removeUnitsByOwnerUserId,
+} from "../../game/stores/UnitsStore";
 
 const HUB = {
   createSession: "CreateSession",
@@ -118,6 +121,7 @@ async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
 
 /** Créer une session pour une campagne (DM). campaignId = GUID string. */
 export async function createSession(campaignId: string): Promise<SessionInfo> {
+  syncHubUserId();
   const ctx = getDiscordContextIds();
   const voiceChannelId = ctx?.voiceChannelId || ctx?.channelId || null;
   const raw = await signalRService.invoke(
@@ -126,6 +130,7 @@ export async function createSession(campaignId: string): Promise<SessionInfo> {
     ctx?.guildId ?? null,
     voiceChannelId,
   );
+  syncHubUserId();
   const result = normalizeSession(raw as Record<string, unknown>);
   setSession(result);
   clearPartyChat();
@@ -466,13 +471,23 @@ export function registerMultiplayerHandlers(): void {
 
     const unit =
       (authorUserId
-        ? players.find((u) => String(u.ownerUserId ?? "").toLowerCase() === authorUserId)
+        ? players.find(
+            (u) => String(u.ownerUserId ?? "").toLowerCase() === authorUserId,
+          )
         : undefined) ?? players[0];
 
     // Deterministic-ish color per author
-    const palette = ["#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#ec4899", "#06b6d4"];
+    const palette = [
+      "#3b82f6",
+      "#ef4444",
+      "#22c55e",
+      "#f59e0b",
+      "#ec4899",
+      "#06b6d4",
+    ];
     let hash = 0;
-    for (let i = 0; i < authorUserId.length; i++) hash = (hash * 31 + authorUserId.charCodeAt(i)) >>> 0;
+    for (let i = 0; i < authorUserId.length; i++)
+      hash = (hash * 31 + authorUserId.charCodeAt(i)) >>> 0;
     const color = palette[hash % palette.length];
 
     showPlayerBubble(unit.id, text, authorName, color);
