@@ -16,6 +16,7 @@ import {
   User,
   Palette,
   Gamepad2,
+  BookOpen,
 } from "lucide-solid";
 import { authStore } from "../stores/auth.store";
 import { AuthService } from "../services/auth.service";
