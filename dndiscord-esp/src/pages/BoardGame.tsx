@@ -37,6 +37,8 @@ import { saveMap, type SavedMapData } from "../services/mapStorage";
 import { LogOut } from "lucide-solid";
 import { PartyChatPanel } from "../components/PartyChatPanel";
 import { SessionState } from "../types/multiplayer";
+import { isHost as isSessionHost } from "../stores/session.store";
+import { randomizePreparationPlacement } from "../game/actions/PreparationActions";
 
 const BoardGame: Component = () => {
   const navigate = useNavigate();
@@ -171,6 +173,11 @@ const BoardGame: Component = () => {
     setSelectedMapId(payload.mapId === "default" ? null : payload.mapId);
     setAppPhase(AppPhase.IN_GAME);
 
+    const modeForSession = () => {
+      const s = sessionState.session;
+      return s?.campaignId ? GameMode.COMBAT : GameMode.FREE_ROAM;
+    };
+
     let attempts = 0;
     const checkEngine = () => {
       if (++attempts > 50) {
@@ -181,7 +188,7 @@ const BoardGame: Component = () => {
       if (isEngineReady()) {
         setTimeout(() => {
           startGame(
-            GameMode.FREE_ROAM,
+            modeForSession(),
             payload.mapId === "default" ? null : payload.mapId,
             undefined,
             payload.unitAssignments,
@@ -556,6 +563,17 @@ const BoardGame: Component = () => {
                 >
                   Prêt
                 </button>
+                <Show when={isSessionHost()}>
+                  <button
+                    class="px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold bg-white/10 border border-white/20 text-white hover:bg-white/15 transition shadow-lg whitespace-nowrap"
+                    onClick={() =>
+                      randomizePreparationPlacement(gameState.mapId ?? null)
+                    }
+                    title="Place aléatoirement joueurs et ennemis sur les zones de spawn"
+                  >
+                    Placement aléatoire
+                  </button>
+                </Show>
               </Show>
             </div>
 

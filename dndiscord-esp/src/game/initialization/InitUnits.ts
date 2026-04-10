@@ -5,6 +5,7 @@
  */
 
 import { Unit, UnitType, Team, GridPosition } from '../../types';
+import type { UnitAssignment } from '../../types/multiplayer';
 import { units, setUnits } from '../stores/UnitsStore';
 import { setTiles } from '../stores/TilesStore';
 import { posToKey } from '../utils/GridUtils';
@@ -16,6 +17,7 @@ import {
   cloneAbilities,
 } from '../abilities/AbilityDefinitions';
 import { loadMap } from '../../services/mapStorage';
+import { mapAssignmentToUnit } from '../utils/CharacterToUnit';
 
 /**
  * Obtient une position aléatoire depuis une liste de positions disponibles
@@ -60,6 +62,129 @@ function getSpawnZones(mapId: string | null): { ally: { x: number; z: number }[]
  */
 export function getAllySpawnPositions(mapId: string | null): GridPosition[] {
   return getSpawnZones(mapId).ally;
+}
+
+/** Retourne les positions des cellules de spawn ennemies (pour la phase de préparation MJ). */
+export function getEnemySpawnPositions(mapId: string | null): GridPosition[] {
+  return getSpawnZones(mapId).enemy;
+}
+
+const DEFAULT_ENEMIES: Array<{
+  id: string;
+  name: string;
+  type: UnitType;
+  stats: Unit["stats"];
+}> = [
+  {
+    id: "enemy_skeleton_1",
+    name: "Skeleton Warrior",
+    type: UnitType.ENEMY_SKELETON,
+    stats: {
+      maxHealth: 60,
+      currentHealth: 60,
+      maxActionPoints: 5,
+      currentActionPoints: 5,
+      movementRange: 3,
+      attackRange: 1,
+      attackDamage: 12,
+      defense: 5,
+      initiative: 10,
+    },
+  },
+  {
+    id: "enemy_skeleton_2",
+    name: "Skeleton Archer",
+    type: UnitType.ENEMY_SKELETON,
+    stats: {
+      maxHealth: 50,
+      currentHealth: 50,
+      maxActionPoints: 5,
+      currentActionPoints: 5,
+      movementRange: 2,
+      attackRange: 4,
+      attackDamage: 10,
+      defense: 3,
+      initiative: 14,
+    },
+  },
+  {
+    id: "enemy_mage_1",
+    name: "Skeleton Mage",
+    type: UnitType.ENEMY_MAGE,
+    stats: {
+      maxHealth: 70,
+      currentHealth: 70,
+      maxActionPoints: 6,
+      currentActionPoints: 6,
+      movementRange: 2,
+      attackRange: 5,
+      attackDamage: 16,
+      defense: 5,
+      initiative: 12,
+    },
+  },
+];
+
+/**
+ * Initialise les unités en multijoueur (combat) à partir des UnitAssignments backend,
+ * puis ajoute un set d'ennemis par défaut.
+ *
+ * Les positions initiales sont choisies sur les zones de spawn (ally/enemy) si disponibles.
+ * La phase COMBAT_PREPARATION permettra ensuite au MJ/joueurs d'ajuster le placement.
+ */
+export function initializeUnitsMultiplayer(
+  mapId: string | null,
+  unitAssignments: UnitAssignment[],
+): void {
+  const newUnits: Record<string, Unit> = {};
+
+  const spawnZones = getSpawnZones(mapId);
+  const availableAllyPositions = [...spawnZones.ally];
+  const availableEnemyPositions = [...spawnZones.enemy];
+
+  // Players from assignments
+  unitAssignments.forEach((assignment, i) => {
+    const spawn =
+      getRandomPosition(availableAllyPositions) ??
+      assignment.userId
+        ? { x: 1 + (i % 3) * 2, z: 1 + Math.floor(i / 3) * 2 }
+        : { x: 1, z: 1 };
+
+    // Remove chosen spawn to avoid duplicates
+    const idx = availableAllyPositions.findIndex((p) => p.x === spawn.x && p.z === spawn.z);
+    if (idx >= 0) availableAllyPositions.splice(idx, 1);
+
+    const unit = mapAssignmentToUnit(assignment, spawn);
+    newUnits[unit.id] = unit;
+    setTiles(posToKey(unit.position), "occupiedBy", unit.id);
+  });
+
+  // Default enemies
+  DEFAULT_ENEMIES.forEach((e, i) => {
+    const spawn =
+      getRandomPosition(availableEnemyPositions) ??
+      { x: 8 + (i % 2), z: 8 + Math.floor(i / 2) };
+    const idx = availableEnemyPositions.findIndex((p) => p.x === spawn.x && p.z === spawn.z);
+    if (idx >= 0) availableEnemyPositions.splice(idx, 1);
+
+    const unit: Unit = {
+      id: e.id,
+      name: e.name,
+      type: e.type,
+      team: Team.ENEMY,
+      position: spawn,
+      stats: e.stats,
+      abilities: cloneAbilities(ENEMY_ABILITIES),
+      statusEffects: [],
+      isAlive: true,
+      hasActed: false,
+      hasMoved: false,
+    };
+    newUnits[unit.id] = unit;
+    setTiles(posToKey(unit.position), "occupiedBy", unit.id);
+  });
+
+  setUnits(newUnits);
 }
 
 export function initializeUnits(mapId: string | null = null): void {
