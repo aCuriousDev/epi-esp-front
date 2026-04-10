@@ -1,17 +1,34 @@
 import { useNavigate } from "@solidjs/router";
 import { createSignal, Show } from "solid-js";
-import { 
-  ArrowLeft, Settings, Volume2, VolumeX, Moon, Sun, 
-  Monitor, Bell, BellOff, Globe, Trash2, LogOut,
-  User, Palette, Gamepad2
+import {
+  ArrowLeft,
+  Settings,
+  Volume2,
+  VolumeX,
+  Moon,
+  Sun,
+  Monitor,
+  Bell,
+  BellOff,
+  Globe,
+  Trash2,
+  LogOut,
+  User,
+  Palette,
+  Gamepad2,
 } from "lucide-solid";
 import { authStore } from "../stores/auth.store";
 import { AuthService } from "../services/auth.service";
-import { soundSettings, setSfxEnabled, setMusicEnabled } from "../stores/sound.store";
+import {
+  soundSettings,
+  setSfxEnabled,
+  setMusicEnabled,
+} from "../stores/sound.store";
+import { restartTutorialTest } from "../stores/tutorial.store";
 
 export default function SettingsPage() {
   const navigate = useNavigate();
-  
+
   // Audio settings from persistent store
   const soundEnabled = soundSettings.sfxEnabled;
   const musicEnabled = soundSettings.musicEnabled;
@@ -35,6 +52,12 @@ export default function SettingsPage() {
     } finally {
       setIsLoggingOut(false);
     }
+  }
+
+  function handleReplayTutorial() {
+    restartTutorialTest();
+    // Revenir au menu pour démarrer proprement le flow du tuto
+    navigate("/", { replace: true });
   }
 
   return (
@@ -79,15 +102,19 @@ export default function SettingsPage() {
             <div class="p-5">
               <div class="flex items-center gap-4">
                 <div class="w-16 h-16 rounded-full overflow-hidden border-2 border-purple-500/30">
-                  <img 
-                    src={avatarUrl()} 
+                  <img
+                    src={avatarUrl()}
                     alt={user()?.username || "Avatar"}
                     class="w-full h-full object-cover"
                   />
                 </div>
                 <div class="flex-1">
-                  <p class="text-white font-semibold text-lg">{user()?.username}</p>
-                  <p class="text-slate-400 text-sm">{user()?.email || "Email non renseigné"}</p>
+                  <p class="text-white font-semibold text-lg">
+                    {user()?.username}
+                  </p>
+                  <p class="text-slate-400 text-sm">
+                    {user()?.email || "Email non renseigné"}
+                  </p>
                 </div>
                 <button
                   onClick={() => navigate("/profile")}
@@ -142,25 +169,27 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <p class="text-white font-medium">Thème</p>
-                  <p class="text-slate-400 text-sm">Choisissez l'apparence de l'interface</p>
+                  <p class="text-slate-400 text-sm">
+                    Choisissez l'apparence de l'interface
+                  </p>
                 </div>
               </div>
               <div class="flex gap-1 bg-white/5 rounded-xl p-1">
-                <ThemeButton 
-                  icon={<Moon class="w-4 h-4" />} 
-                  active={theme() === "dark"} 
+                <ThemeButton
+                  icon={<Moon class="w-4 h-4" />}
+                  active={theme() === "dark"}
                   onClick={() => setTheme("dark")}
                   label="Sombre"
                 />
-                <ThemeButton 
-                  icon={<Sun class="w-4 h-4" />} 
-                  active={theme() === "light"} 
+                <ThemeButton
+                  icon={<Sun class="w-4 h-4" />}
+                  active={theme() === "light"}
                   onClick={() => setTheme("light")}
                   label="Clair"
                 />
-                <ThemeButton 
-                  icon={<Monitor class="w-4 h-4" />} 
-                  active={theme() === "system"} 
+                <ThemeButton
+                  icon={<Monitor class="w-4 h-4" />}
+                  active={theme() === "system"}
                   onClick={() => setTheme("system")}
                   label="Auto"
                 />
@@ -188,6 +217,32 @@ export default function SettingsPage() {
           </div>
         </section>
 
+        {/* Tutorial (test mode) */}
+        <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
+          <div class="p-5 border-b border-white/10">
+            <h2 class="font-display text-lg text-white flex items-center gap-2">
+              <BookOpen class="w-5 h-5 text-purple-400" />
+              Tutoriel
+            </h2>
+          </div>
+          <div class="p-5">
+            <div class="flex items-center justify-between gap-4">
+              <div class="min-w-0">
+                <p class="text-white font-medium">Rejouer le tutoriel</p>
+                <p class="text-slate-400 text-sm">
+                  Relance l’onboarding pour tester ou revoir les étapes.
+                </p>
+              </div>
+              <button
+                onClick={handleReplayTutorial}
+                class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-xl text-white transition-all text-sm whitespace-nowrap"
+              >
+                Lancer
+              </button>
+            </div>
+          </div>
+        </section>
+
         {/* Language Settings */}
         <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
           <div class="p-5 border-b border-white/10">
@@ -204,7 +259,9 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <p class="text-white font-medium">Langue de l'interface</p>
-                  <p class="text-slate-400 text-sm">Choisissez votre langue préférée</p>
+                  <p class="text-slate-400 text-sm">
+                    Choisissez votre langue préférée
+                  </p>
                 </div>
               </div>
               <select
@@ -212,10 +269,18 @@ export default function SettingsPage() {
                 onChange={(e) => setLanguage(e.currentTarget.value)}
                 class="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50 cursor-pointer"
               >
-                <option value="fr" class="bg-game-dark">🇫🇷 Français</option>
-                <option value="en" class="bg-game-dark">🇬🇧 English</option>
-                <option value="es" class="bg-game-dark">🇪🇸 Español</option>
-                <option value="de" class="bg-game-dark">🇩🇪 Deutsch</option>
+                <option value="fr" class="bg-game-dark">
+                  🇫🇷 Français
+                </option>
+                <option value="en" class="bg-game-dark">
+                  🇬🇧 English
+                </option>
+                <option value="es" class="bg-game-dark">
+                  🇪🇸 Español
+                </option>
+                <option value="de" class="bg-game-dark">
+                  🇩🇪 Deutsch
+                </option>
               </select>
             </div>
           </div>
@@ -259,7 +324,9 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <p class="text-white font-medium">Supprimer le compte</p>
-                    <p class="text-slate-400 text-sm">Cette action est irréversible</p>
+                    <p class="text-slate-400 text-sm">
+                      Cette action est irréversible
+                    </p>
                   </div>
                 </div>
                 <button
@@ -288,9 +355,13 @@ export default function SettingsPage() {
               <div class="mx-auto w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
                 <Trash2 class="w-8 h-8 text-red-400" />
               </div>
-              <h3 class="text-xl font-semibold text-white mb-2">Supprimer votre compte ?</h3>
+              <h3 class="text-xl font-semibold text-white mb-2">
+                Supprimer votre compte ?
+              </h3>
               <p class="text-slate-400 text-sm">
-                Cette action supprimera définitivement votre compte, vos personnages et toutes vos données. Cette action est irréversible.
+                Cette action supprimera définitivement votre compte, vos
+                personnages et toutes vos données. Cette action est
+                irréversible.
               </p>
             </div>
             <div class="flex gap-3">
@@ -300,9 +371,7 @@ export default function SettingsPage() {
               >
                 Annuler
               </button>
-              <button
-                class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-500 rounded-xl text-white transition-all"
-              >
+              <button class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-500 rounded-xl text-white transition-all">
                 Supprimer
               </button>
             </div>
@@ -312,7 +381,12 @@ export default function SettingsPage() {
 
       <style jsx>{`
         .settings-page {
-          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1a 100%);
+          background: linear-gradient(
+            135deg,
+            #1a1a2e 0%,
+            #16213e 50%,
+            #0f0f1a 100%
+          );
         }
 
         .settings-card {
@@ -320,12 +394,24 @@ export default function SettingsPage() {
           animation-fill-mode: both;
         }
 
-        .settings-card:nth-child(1) { animation-delay: 0ms; }
-        .settings-card:nth-child(2) { animation-delay: 50ms; }
-        .settings-card:nth-child(3) { animation-delay: 100ms; }
-        .settings-card:nth-child(4) { animation-delay: 150ms; }
-        .settings-card:nth-child(5) { animation-delay: 200ms; }
-        .settings-card:nth-child(6) { animation-delay: 250ms; }
+        .settings-card:nth-child(1) {
+          animation-delay: 0ms;
+        }
+        .settings-card:nth-child(2) {
+          animation-delay: 50ms;
+        }
+        .settings-card:nth-child(3) {
+          animation-delay: 100ms;
+        }
+        .settings-card:nth-child(4) {
+          animation-delay: 150ms;
+        }
+        .settings-card:nth-child(5) {
+          animation-delay: 200ms;
+        }
+        .settings-card:nth-child(6) {
+          animation-delay: 250ms;
+        }
 
         @keyframes cardFadeIn {
           from {
@@ -355,9 +441,13 @@ function SettingToggle(props: {
   return (
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <div class={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
-          props.enabled ? "bg-purple-500/20 text-purple-400" : "bg-white/5 text-slate-500"
-        }`}>
+        <div
+          class={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+            props.enabled
+              ? "bg-purple-500/20 text-purple-400"
+              : "bg-white/5 text-slate-500"
+          }`}
+        >
           {props.icon}
         </div>
         <div>
@@ -371,9 +461,11 @@ function SettingToggle(props: {
           props.enabled ? "bg-purple-600" : "bg-white/10"
         }`}
       >
-        <div class={`w-6 h-6 rounded-full bg-white shadow-md transition-transform ${
-          props.enabled ? "translate-x-6" : "translate-x-0"
-        }`} />
+        <div
+          class={`w-6 h-6 rounded-full bg-white shadow-md transition-transform ${
+            props.enabled ? "translate-x-6" : "translate-x-0"
+          }`}
+        />
       </button>
     </div>
   );
@@ -392,8 +484,8 @@ function ThemeButton(props: {
     <button
       onClick={props.onClick}
       class={`p-2 rounded-lg transition-all ${
-        props.active 
-          ? "bg-purple-600 text-white" 
+        props.active
+          ? "bg-purple-600 text-white"
           : "text-slate-400 hover:text-white hover:bg-white/10"
       }`}
       title={props.label}
@@ -402,4 +494,3 @@ function ThemeButton(props: {
     </button>
   );
 }
-
