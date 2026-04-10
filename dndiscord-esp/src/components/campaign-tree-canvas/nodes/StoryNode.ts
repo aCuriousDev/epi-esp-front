@@ -1,4 +1,5 @@
 import draw2d from 'draw2d';
+import { tokens } from "@/styles/design-tokens";
 import { CampaignNode, BaseNodeData } from './CampaignNode';
 
 export interface StoryNodeData extends BaseNodeData {
@@ -16,8 +17,8 @@ export class StoryNode extends CampaignNode {
   private textLabel: draw2d.shape.basic.Label = new draw2d.shape.basic.Label({
     text: '',
     fontSize: 12,
-    fontColor: '#d4d4d4',
-    color: '#d4d4d4'
+    fontColor: tokens.nodes.story.text,
+    color: tokens.nodes.story.text
   });
   
   constructor(x: number, y: number, data: StoryNodeData) {
@@ -36,8 +37,8 @@ export class StoryNode extends CampaignNode {
     this.textLabel = new draw2d.shape.basic.Label({
       text: this.truncateText(storyData?.text ?? "", 35),
       fontSize: 12,
-      fontColor: '#d4d4d4',
-      color: '#d4d4d4'
+      fontColor: tokens.nodes.story.text,
+      color: tokens.nodes.story.text
     });
     
     // Ajouter le label au groupe (centré)

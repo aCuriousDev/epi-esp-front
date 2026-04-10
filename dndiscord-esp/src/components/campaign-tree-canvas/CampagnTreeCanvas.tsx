@@ -4,6 +4,7 @@ import { CampaignNode } from "./nodes/CampaignNode";
 import { StoryNode } from "./nodes/StoryNode";
 import { CombatNode } from "./nodes/CombatNode";
 import { safeConfirm } from "../../services/ui/confirm";
+import { tokens } from "@/styles/design-tokens";
 
 interface CampaignTreeCanvasProps {
   onNodeSelect?: (node: CampaignNode | null) => void;
@@ -239,7 +240,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
       const connection = event.connection;
 
       // Personnaliser l'apparence de la connexion
-      connection.setColor("#888888");
+      connection.setColor(tokens.text.low);
       connection.setStroke(2);
 
       // Ajouter une flèche
@@ -300,8 +301,8 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           width: "100%",
           height: "100%",
           "background-image": `
-            linear-gradient(#151d39 1px, transparent 1px),
-            linear-gradient(90deg, #151d39 1px, transparent 1px)
+            linear-gradient(${tokens.ink[800]} 1px, transparent 1px),
+            linear-gradient(90deg, ${tokens.ink[800]} 1px, transparent 1px)
           `,
           "background-size": "20px 20px",
         }}
@@ -319,7 +320,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           background: "rgba(0, 0, 0, 0.7)",
           padding: "0.5rem",
           "border-radius": "8px",
-          border: "1px solid #444",
+          border: `1px solid ${tokens.ink[600]}`,
         }}
       >
         {/* Zoom controls */}
@@ -334,10 +335,10 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
             onClick={zoomOut}
             style={{
               padding: "0.5rem",
-              background: "#3c3c3f",
-              border: "1px solid #555",
+              background: tokens.ink[500],
+              border: `1px solid ${tokens.ink[500]}`,
               "border-radius": "4px",
-              color: "#d4d4d4",
+              color: tokens.text.high,
               cursor: "pointer",
               "font-size": "1rem",
               "line-height": 1,
@@ -353,10 +354,10 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
             onClick={zoomReset}
             style={{
               padding: "0.5rem",
-              background: "#3c3c3f",
-              border: "1px solid #555",
+              background: tokens.ink[500],
+              border: `1px solid ${tokens.ink[500]}`,
               "border-radius": "4px",
-              color: "#d4d4d4",
+              color: tokens.text.high,
               cursor: "pointer",
               "font-size": "0.75rem",
               "line-height": 1,
@@ -372,10 +373,10 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
             class="p-2 rounded-lg bg-black/30 backdrop-blur-sm border border-white/10 hover:bg-black/50 transition-colors"
             style={{
               padding: "0.5rem",
-              background: "#3c3c3f",
-              border: "1px solid #555",
+              background: tokens.ink[500],
+              border: `1px solid ${tokens.ink[500]}`,
               "border-radius": "4px",
-              color: "#d4d4d4",
+              color: tokens.text.high,
               cursor: "pointer",
               "font-size": "1rem",
               "line-height": 1,
@@ -393,10 +394,10 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           onClick={fitToPage}
           style={{
             padding: "0.5rem 0.75rem",
-            background: "#3c3c3f",
-            border: "1px solid #555",
+            background: tokens.ink[500],
+            border: `1px solid ${tokens.ink[500]}`,
             "border-radius": "4px",
-            color: "#d4d4d4",
+            color: tokens.text.high,
             cursor: "pointer",
             "font-size": "0.85rem",
             "font-weight": "500",
@@ -412,10 +413,10 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           onClick={clearCanvas}
           style={{
             padding: "0.5rem 0.75rem",
-            background: "#5a1d1d",
-            border: "1px solid #8b0000",
+            background: "rgba(239,68,68,0.22)",
+            border: `1px solid ${tokens.status.danger}`,
             "border-radius": "4px",
-            color: "#f48771",
+            color: tokens.status.danger,
             cursor: "pointer",
             "font-size": "0.85rem",
             "font-weight": "500",
@@ -436,7 +437,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           background: "rgba(0, 0, 0, 0.7)",
           padding: "0.75rem",
           "border-radius": "8px",
-          border: "1px solid #444",
+          border: `1px solid ${tokens.ink[600]}`,
           "font-size": "0.85rem",
         }}
       >
@@ -444,7 +445,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           style={{
             "margin-bottom": "0.5rem",
             "font-weight": "bold",
-            color: "#d4d4d4",
+            color: tokens.text.high,
           }}
         >
           Types de nœuds
@@ -463,12 +464,12 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
               style={{
                 width: "16px",
                 height: "16px",
-                background: "#2d2d30",
-                border: "2px solid #3c3c3f",
+                background: tokens.ink[600],
+                border: `2px solid ${tokens.ink[500]}`,
                 "border-radius": "3px",
               }}
             />
-            <span style={{ color: "#d4d4d4" }}>Story (Scène)</span>
+            <span style={{ color: tokens.text.high }}>Story (Scène)</span>
           </div>
           <div
             style={{ display: "flex", "align-items": "center", gap: "0.5rem" }}
@@ -477,12 +478,12 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
               style={{
                 width: "16px",
                 height: "16px",
-                background: "#4a1a1a",
-                border: "2px solid #8b0000",
+                background: "rgba(239,68,68,0.22)",
+                border: `2px solid ${tokens.status.danger}`,
                 "border-radius": "3px",
               }}
             />
-            <span style={{ color: "#d4d4d4" }}>Combat</span>
+            <span style={{ color: tokens.text.high }}>Combat</span>
           </div>
         </div>
       </div>
