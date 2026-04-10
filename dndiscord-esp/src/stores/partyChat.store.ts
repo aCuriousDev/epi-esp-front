@@ -6,6 +6,7 @@ export interface PartyChatMessage {
   sessionId: string;
   content: string;
   authorName: string;
+  authorUserId?: string;
   authorDiscordId: string;
   authorAvatar?: string | null;
   authorRole: PartyChatAuthorRole;

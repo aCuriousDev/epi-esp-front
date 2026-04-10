@@ -48,6 +48,8 @@ import {
   clearPartyChat,
   type PartyChatMessage,
 } from "../../stores/partyChat.store";
+import { showDmMessage, showPlayerBubble } from "../../stores/dialogue.store";
+import { getPlayerUnits } from "../../game/stores/UnitsStore";
 
 const HUB = {
   createSession: "CreateSession",
@@ -428,16 +430,47 @@ export function registerMultiplayerHandlers(): void {
 
   // Discord voice channel chat (filtered server-side to players in session)
   signalRService.on("PartyChatMessage", (data: PartyChatMessage) => {
+    // Always keep chat history
     addPartyChatMessage({
       sessionId: String((data as any).sessionId ?? ""),
       content: String((data as any).content ?? ""),
       authorName: String((data as any).authorName ?? ""),
+      authorUserId: String((data as any).authorUserId ?? ""),
       authorDiscordId: String((data as any).authorDiscordId ?? ""),
       authorAvatar: ((data as any).authorAvatar ?? null) as string | null,
       authorRole: ((data as any).authorRole ?? "Player") as any,
       timestamp: Number((data as any).timestamp ?? Date.now()),
       messageId: String((data as any).messageId ?? ""),
     });
+
+    // Show in-game dialogue UI (bubbles / DM overlay) when possible.
+    const text = String((data as any).content ?? "").trim();
+    if (!text) return;
+
+    const role = String((data as any).authorRole ?? "Player");
+    const authorName = String((data as any).authorName ?? "Joueur");
+    const authorUserId = String((data as any).authorUserId ?? "").toLowerCase();
+
+    if (role === "DM") {
+      showDmMessage(text);
+      return;
+    }
+
+    const players = getPlayerUnits();
+    if (players.length === 0) return;
+
+    const unit =
+      (authorUserId
+        ? players.find((u) => String(u.ownerUserId ?? "").toLowerCase() === authorUserId)
+        : undefined) ?? players[0];
+
+    // Deterministic-ish color per author
+    const palette = ["#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#ec4899", "#06b6d4"];
+    let hash = 0;
+    for (let i = 0; i < authorUserId.length; i++) hash = (hash * 31 + authorUserId.charCodeAt(i)) >>> 0;
+    const color = palette[hash % palette.length];
+
+    showPlayerBubble(unit.id, text, authorName, color);
   });
 
   // Session mise à jour (si le backend envoie SessionUpdated)
