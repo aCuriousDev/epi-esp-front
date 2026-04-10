@@ -12,8 +12,9 @@ import { units, setUnits } from '../stores/UnitsStore';
 import { tiles, setTiles, pathfinder, updatePathfinder } from '../stores/TilesStore';
 import { posToKey } from '../utils/GridUtils';
 import { getCurrentSession, getHubUserId } from '../../stores/session.store';
+import { isHost as getIsHost } from '../../stores/session.store';
 import { sendUnitMove } from '../../services/signalr/multiplayer.service';
-import { getAllySpawnPositions } from '../initialization/InitUnits';
+import { getAllySpawnPositions, getEnemySpawnPositions } from '../initialization/InitUnits';
 import { getTeleportPositions } from '../../services/mapStorage';
 import { transitionToNextRoom } from './TurnActions';
 import { playMovementDustEffect } from '../vfx/VFXIntegration';
@@ -38,9 +39,10 @@ export function selectUnit(unitId: string): void {
   // Multiplayer ownership check: if the unit has an owner, only its owner can control it
   const session = getCurrentSession();
   const myUserId = getHubUserId();
+  const isHost = getIsHost();
   const isOwned = !!unit.ownerUserId;
   const isMine = !isOwned || unit.ownerUserId === myUserId;
-  const canControl = !session || isMine; // Solo mode: always controllable
+  const canControl = !session || isMine || (isPreparation && isHost); // Host can place during preparation
 
   console.log('[selectUnit]', unit.name, '| mode:', isFreeRoam ? 'Free Roam' : isPreparation ? 'Preparation' : 'Combat', '| isCurrentUnit:', isCurrentUnit, '| isPlayerTurn:', isPlayerTurn, '| canControl:', canControl);
 
@@ -51,11 +53,17 @@ export function selectUnit(unitId: string): void {
       turnPhase: canControl && (isPreparation || isFreeRoam || (isCurrentUnit && isPlayerTurn)) ? TurnPhase.MOVE : TurnPhase.SELECT_UNIT,
     });
     
-    // Phase de préparation : afficher toutes les cases alliées (même occupées)
-    if (isPreparation && unit.team === Team.PLAYER) {
-      const allyPositions = getAllySpawnPositions(gameState.mapId);
-      // Afficher toutes les cases alliées, qu'elles soient occupées ou non
-      setGameState('highlightedTiles', allyPositions);
+    // Phase de préparation : afficher les cases de spawn correspondant à l'équipe sélectionnée.
+    if (isPreparation) {
+      if (unit.team === Team.PLAYER) {
+        const allyPositions = getAllySpawnPositions(gameState.mapId);
+        setGameState('highlightedTiles', allyPositions);
+      } else if (unit.team === Team.ENEMY && isHost) {
+        const enemyPositions = getEnemySpawnPositions(gameState.mapId);
+        setGameState('highlightedTiles', enemyPositions);
+      } else {
+        setGameState('highlightedTiles', []);
+      }
     } else {
       // Show movement range in Free Roam for any player unit the current user owns, or in Combat for current unit
       const shouldShowMovement = canControl && (isFreeRoam ? true : (isCurrentUnit && isPlayerTurn && unit.stats.currentActionPoints >= 1));
@@ -111,19 +119,27 @@ export function moveUnit(targetPos: GridPosition): boolean {
   // Multiplayer ownership check
   if (unit.ownerUserId) {
     const myUserId = getHubUserId();
-    if (myUserId && unit.ownerUserId !== myUserId) return false;
+    const isHost = getIsHost();
+    if (myUserId && unit.ownerUserId !== myUserId && !(gameState.phase === GamePhase.COMBAT_PREPARATION && isHost)) return false;
   }
 
   const isFreeRoam = getIsFreeRoamMode();
   const isPreparation = gameState.phase === GamePhase.COMBAT_PREPARATION;
   
-  // Phase de préparation : placement direct sur une case alliée (sans pathfinding)
-  if (isPreparation && unit.team === Team.PLAYER) {
-    const allyPositions = getAllySpawnPositions(gameState.mapId);
-    const isAllyCell = allyPositions.some((p) => p.x === targetPos.x && p.z === targetPos.z);
+  // Phase de préparation : placement direct sur une case de spawn (sans pathfinding)
+  if (isPreparation && (unit.team === Team.PLAYER || unit.team === Team.ENEMY)) {
+    const isHost = getIsHost();
+    if (unit.team === Team.ENEMY && !isHost) return false;
+
+    const allowedPositions =
+      unit.team === Team.PLAYER
+        ? getAllySpawnPositions(gameState.mapId)
+        : getEnemySpawnPositions(gameState.mapId);
+
+    const isAllowedCell = allowedPositions.some((p) => p.x === targetPos.x && p.z === targetPos.z);
     const tileKey = posToKey(targetPos);
     const tile = tiles[tileKey];
-    if (!isAllyCell || !tile) return false;
+    if (!isAllowedCell || !tile) return false;
     if (tile.occupiedBy !== null && tile.occupiedBy !== unit.id) return false;
     if (targetPos.x === unit.position.x && targetPos.z === unit.position.z) return false; // déjà sur la case
     
@@ -134,9 +150,8 @@ export function moveUnit(targetPos: GridPosition): boolean {
       }));
       setTiles(tileKey, 'occupiedBy', unit.id);
       setGameState('pathPreview', []);
-      // Afficher toutes les cases alliées après le déplacement (même occupées)
-      const allyPositions = getAllySpawnPositions(gameState.mapId);
-      setGameState('highlightedTiles', allyPositions);
+      // Réafficher les cases correspondantes après le déplacement
+      setGameState('highlightedTiles', allowedPositions);
     });
     updatePathfinder();
     return true;

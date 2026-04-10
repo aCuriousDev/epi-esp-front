@@ -12,7 +12,7 @@ import { gameState, setGameState, addCombatLog } from '../stores/GameStateStore'
 import { units, setUnits, getCurrentUnit, clearUnits } from '../stores/UnitsStore';
 import { tiles, clearTiles } from '../stores/TilesStore';
 import { initializeGrid } from '../initialization/InitGrid';
-import { initializeUnits, getAllySpawnPositions } from '../initialization/InitUnits';
+import { initializeUnits, initializeUnitsMultiplayer, getAllySpawnPositions } from '../initialization/InitUnits';
 import { initializeFreeRoam } from '../initialization/InitFreeRoam';
 import * as TurnManager from '../TurnManager';
 import { checkGameOver } from './CombatActions';
@@ -36,7 +36,7 @@ export function startGame(mode: GameMode = GameMode.COMBAT, mapId: string | null
   } else if (mode === GameMode.DUNGEON && dungeonId) {
     initializeDungeon(dungeonId);
   } else {
-    initializeCombat(mapId);
+    initializeCombat(mapId, unitAssignments);
   }
   
   console.log('[startGame] After init - Units:', Object.keys(units).length, 'Tiles:', Object.keys(tiles).length);
@@ -47,13 +47,17 @@ export function startGame(mode: GameMode = GameMode.COMBAT, mapId: string | null
 // COMBAT INITIALIZATION
 // ============================================
 
-function initializeCombat(mapId: string | null = null): void {
+function initializeCombat(mapId: string | null = null, unitAssignments?: UnitAssignment[]): void {
   console.log('[initializeCombat] Initializing grid...');
   initializeGrid(mapId);
   console.log('[initializeCombat] Grid initialized, tiles:', Object.keys(tiles).length);
   
   console.log('[initializeCombat] Initializing all units (allies + enemies)...');
-  initializeUnits(mapId);
+  if (unitAssignments && unitAssignments.length > 0) {
+    initializeUnitsMultiplayer(mapId, unitAssignments);
+  } else {
+    initializeUnits(mapId);
+  }
   console.log('[initializeCombat] All units initialized, count:', Object.keys(units).length);
   
   // Phase de préparation : afficher les cases alliées pour le placement
