@@ -40,3 +40,8 @@ docs/
 .code-review-graphignore
 .code-review-graph*
 
+# graphify
+graphify-out/
+.graphify_*
+.graphifyignore
+
