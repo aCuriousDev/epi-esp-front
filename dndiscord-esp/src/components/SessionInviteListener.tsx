@@ -26,6 +26,9 @@ export default function SessionInviteListener() {
   const [joining, setJoining] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
 
+  let cleanupFn: (() => void) | null = null;
+  onCleanup(() => cleanupFn?.());
+
   onMount(async () => {
     // On ne force pas la connexion si l'utilisateur n'est pas auth
     if (!authStore.isAuthenticated()) return;
@@ -36,21 +39,30 @@ export default function SessionInviteListener() {
         ensureMultiplayerHandlersRegistered();
       }
 
-      const ctx = getDiscordContextIds();
-      const voiceChannelId = ctx?.voiceChannelId || ctx?.channelId || "";
-      const guildId = ctx?.guildId || "";
+      let ctx = getDiscordContextIds();
+      let guildId = ctx?.guildId || "";
+      let voiceChannelId = ctx?.voiceChannelId || ctx?.channelId || "";
+
+      if (!guildId || !voiceChannelId) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 2500));
+        ctx = getDiscordContextIds();
+        guildId = ctx?.guildId || "";
+        voiceChannelId = ctx?.voiceChannelId || ctx?.channelId || "";
+      }
 
       const handler = (data: Record<string, unknown>) => {
         const payload: SessionStartedPayload = {
           sessionId: String(data.sessionId ?? data.SessionId ?? ""),
           campaignId: String(data.campaignId ?? data.CampaignId ?? ""),
-          startedByUserId: (data.startedByUserId ??
-            data.StartedByUserId) as string | undefined,
+          startedByUserId: (data.startedByUserId ?? data.StartedByUserId) as
+            | string
+            | undefined,
           startedByUserName: (data.startedByUserName ??
             data.StartedByUserName) as string | undefined,
           guildId: (data.guildId ?? data.GuildId) as string | undefined,
-          voiceChannelId: (data.voiceChannelId ??
-            data.VoiceChannelId) as string | undefined,
+          voiceChannelId: (data.voiceChannelId ?? data.VoiceChannelId) as
+            | string
+            | undefined,
           timestamp: (data.timestamp ?? data.Timestamp) as string | undefined,
         };
 
@@ -70,22 +82,22 @@ export default function SessionInviteListener() {
         setInvite(payload);
       };
 
-      signalRService.on("SessionStarted", handler);
+      signalRService.on("ActivitySessionStarted", handler);
 
       // Abonnement "activité" (si on est bien dans Discord)
       if (guildId && voiceChannelId) {
         await subscribeActivity(guildId, voiceChannelId);
       }
 
-      onCleanup(() => {
+      cleanupFn = () => {
         try {
-          signalRService.off("SessionStarted", handler);
+          signalRService.off("ActivitySessionStarted", handler);
         } catch {}
 
         if (signalRService.isConnected && guildId && voiceChannelId) {
           unsubscribeActivity(guildId, voiceChannelId).catch(() => undefined);
         }
-      });
+      };
     } catch (e) {
       // Best-effort: pas bloquant pour le reste de l'app
       console.warn("SessionInviteListener init failed:", e);
@@ -162,4 +174,3 @@ export default function SessionInviteListener() {
     </Show>
   );
 }
-
