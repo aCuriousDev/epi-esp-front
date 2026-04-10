@@ -1,17 +1,33 @@
 import { A, useNavigate } from "@solidjs/router";
-import { ArrowLeft, Plus, Users, Calendar, Crown, BookOpen } from "lucide-solid";
+import {
+  ArrowLeft,
+  Plus,
+  Users,
+  Calendar,
+  Crown,
+  BookOpen,
+} from "lucide-solid";
 import { createSignal, For, Show, onMount, createResource } from "solid-js";
-import { Campaign, CampaignStatus, getStatusColor, getStatusLabel, CampaignVisibility } from "../types/campaign";
+import {
+  Campaign,
+  CampaignStatus,
+  getStatusColor,
+  getStatusLabel,
+  CampaignVisibility,
+} from "../types/campaign";
 import { authStore } from "../stores/auth.store";
 import { AuthService } from "../services/auth.service";
-import { CampaignService, CampaignResponse } from "../services/campaign.service";
+import {
+  CampaignService,
+  CampaignResponse,
+} from "../services/campaign.service";
 
 /**
  * Map backend campaign status to frontend status
  */
 function mapCampaignStatus(status: number | string): CampaignStatus {
   // Backend sends integers (or as strings in JSON)
-  const statusNum = typeof status === 'number' ? status : parseInt(status);
+  const statusNum = typeof status === "number" ? status : parseInt(status);
 
   switch (statusNum) {
     case 0: // Draft
@@ -38,8 +54,11 @@ function mapCampaignResponse(response: CampaignResponse): Campaign {
     title: response.name,
     description: response.description,
     coverImageUrl: response.imageUrl,
+    campaignTreeDefinition: response.campaignTreeDefinition,
     status: mapCampaignStatus(response.status),
-    visibility: response.isPublic ? CampaignVisibility.Public : CampaignVisibility.Private,
+    visibility: response.isPublic
+      ? CampaignVisibility.Public
+      : CampaignVisibility.Private,
     dungeonMasterId: response.dungeonMasterId,
     dungeonMasterName: "Maître du Jeu", // TODO: Get from user data
     maxPlayers: response.maxPlayers,
@@ -97,7 +116,10 @@ export default function CampaignsPage() {
       {/* Background effects */}
       <div class="absolute inset-0 overflow-hidden pointer-events-none">
         <div class="absolute top-1/4 -left-32 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
-        <div class="absolute bottom-1/4 -right-32 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl animate-pulse" style="animation-delay: 1s" />
+        <div
+          class="absolute bottom-1/4 -right-32 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl animate-pulse"
+          style="animation-delay: 1s"
+        />
         <div class="absolute top-3/4 left-1/3 w-64 h-64 bg-violet-500/8 rounded-full blur-3xl" />
       </div>
 
@@ -133,27 +155,28 @@ export default function CampaignsPage() {
             Mes Campagnes
           </h2>
           <p class="mt-3 text-slate-300 max-w-xl mx-auto">
-            Gérez vos aventures, rejoignez de nouvelles quêtes et créez des mondes épiques.
+            Gérez vos aventures, rejoignez de nouvelles quêtes et créez des
+            mondes épiques.
           </p>
           <div class="mt-6 mx-auto decorative-divider" />
         </div>
 
         {/* Filter tabs */}
         <div class="flex justify-center gap-2 mb-8">
-          <FilterTab 
-            active={filter() === "all"} 
+          <FilterTab
+            active={filter() === "all"}
             onClick={() => setFilter("all")}
             label="Toutes"
             count={campaigns().length}
           />
-          <FilterTab 
-            active={filter() === "dm"} 
+          <FilterTab
+            active={filter() === "dm"}
             onClick={() => setFilter("dm")}
             label="Maître du Jeu"
             icon={<Crown class="w-4 h-4" />}
           />
-          <FilterTab 
-            active={filter() === "player"} 
+          <FilterTab
+            active={filter() === "player"}
             onClick={() => setFilter("player")}
             label="Joueur"
             icon={<Users class="w-4 h-4" />}
@@ -184,8 +207,12 @@ export default function CampaignsPage() {
                 <div class="w-20 h-20 mx-auto mb-4 rounded-2xl bg-white/5 flex items-center justify-center">
                   <BookOpen class="w-10 h-10 text-slate-500" />
                 </div>
-                <h3 class="text-xl font-semibold text-white mb-2">Aucune campagne</h3>
-                <p class="text-slate-400 mb-6">Créez votre première campagne ou rejoignez-en une existante.</p>
+                <h3 class="text-xl font-semibold text-white mb-2">
+                  Aucune campagne
+                </h3>
+                <p class="text-slate-400 mb-6">
+                  Créez votre première campagne ou rejoignez-en une existante.
+                </p>
                 <button
                   onClick={() => navigate("/campaigns/create")}
                   class="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-colors inline-flex items-center gap-2"
@@ -200,9 +227,9 @@ export default function CampaignsPage() {
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <For each={filteredCampaigns()}>
               {(campaign) => (
-                <CampaignCard 
-                  campaign={campaign} 
-                  onClick={() => navigate(`/campaigns/${campaign.id}`)} 
+                <CampaignCard
+                  campaign={campaign}
+                  onClick={() => navigate(`/campaigns/${campaign.id}`)}
                 />
               )}
             </For>
@@ -222,7 +249,9 @@ export default function CampaignsPage() {
               <p class="font-semibold text-white group-hover:text-purple-200 transition-colors">
                 Nouvelle Campagne
               </p>
-              <p class="text-sm text-slate-400">Créez et gérez votre propre aventure</p>
+              <p class="text-sm text-slate-400">
+                Créez et gérez votre propre aventure
+              </p>
             </div>
           </button>
         </div>
@@ -230,13 +259,18 @@ export default function CampaignsPage() {
 
       <style jsx>{`
         .campaigns-page {
-          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1a 100%);
+          background: linear-gradient(
+            135deg,
+            #1a1a2e 0%,
+            #16213e 50%,
+            #0f0f1a 100%
+          );
         }
-        
+
         .campaign-card {
           animation: cardFadeIn 0.4s ease-out;
         }
-        
+
         @keyframes cardFadeIn {
           from {
             opacity: 0;
@@ -247,13 +281,25 @@ export default function CampaignsPage() {
             transform: translateY(0);
           }
         }
-        
-        .campaign-card:nth-child(1) { animation-delay: 0ms; }
-        .campaign-card:nth-child(2) { animation-delay: 80ms; }
-        .campaign-card:nth-child(3) { animation-delay: 160ms; }
-        .campaign-card:nth-child(4) { animation-delay: 240ms; }
-        .campaign-card:nth-child(5) { animation-delay: 320ms; }
-        .campaign-card:nth-child(6) { animation-delay: 400ms; }
+
+        .campaign-card:nth-child(1) {
+          animation-delay: 0ms;
+        }
+        .campaign-card:nth-child(2) {
+          animation-delay: 80ms;
+        }
+        .campaign-card:nth-child(3) {
+          animation-delay: 160ms;
+        }
+        .campaign-card:nth-child(4) {
+          animation-delay: 240ms;
+        }
+        .campaign-card:nth-child(5) {
+          animation-delay: 320ms;
+        }
+        .campaign-card:nth-child(6) {
+          animation-delay: 400ms;
+        }
       `}</style>
     </div>
   );
@@ -262,10 +308,10 @@ export default function CampaignsPage() {
 /**
  * Filter tab component
  */
-function FilterTab(props: { 
-  active: boolean; 
-  onClick: () => void; 
-  label: string; 
+function FilterTab(props: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
   icon?: any;
   count?: number;
 }) {
@@ -281,9 +327,13 @@ function FilterTab(props: {
       {props.icon}
       <span>{props.label}</span>
       <Show when={props.count !== undefined}>
-        <span class={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-          props.active ? "bg-purple-500/60 text-white" : "bg-white/10 text-slate-300"
-        }`}>
+        <span
+          class={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+            props.active
+              ? "bg-purple-500/60 text-white"
+              : "bg-white/10 text-slate-300"
+          }`}
+        >
           {props.count}
         </span>
       </Show>
@@ -317,14 +367,16 @@ function CampaignCard(props: { campaign: Campaign; onClick: () => void }) {
       {/* Cover gradient */}
       <div class="h-28 bg-gradient-to-br from-purple-800/50 via-indigo-800/40 to-violet-800/50 relative">
         <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.08%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-50" />
-        
+
         {/* Status badge */}
         <div class="absolute top-3 right-3">
-          <span class={`px-2.5 py-1 text-xs font-medium rounded-lg border backdrop-blur-sm ${getStatusColor(campaign().status)}`}>
+          <span
+            class={`px-2.5 py-1 text-xs font-medium rounded-lg border backdrop-blur-sm ${getStatusColor(campaign().status)}`}
+          >
             {getStatusLabel(campaign().status)}
           </span>
         </div>
-        
+
         {/* Gradient overlay at bottom - matches card bg color */}
         <div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#1a1a2e] to-transparent" />
       </div>
@@ -347,14 +399,18 @@ function CampaignCard(props: { campaign: Campaign; onClick: () => void }) {
         <div class="flex items-center gap-3 text-sm text-slate-300 mb-3">
           <div class="flex items-center gap-1.5">
             <Users class="w-4 h-4 text-slate-400" />
-            <span>{campaign().currentPlayers}/{campaign().maxPlayers}</span>
+            <span>
+              {campaign().currentPlayers}/{campaign().maxPlayers}
+            </span>
           </div>
           <div class="flex items-center gap-1.5">
             <BookOpen class="w-4 h-4 text-slate-400" />
             <span>{campaign().totalSessions} sessions</span>
           </div>
           <Show when={campaign().currentLevel}>
-            <span class="text-purple-400 font-medium">Niv. {campaign().currentLevel}</span>
+            <span class="text-purple-400 font-medium">
+              Niv. {campaign().currentLevel}
+            </span>
           </Show>
         </div>
 
@@ -375,7 +431,9 @@ function CampaignCard(props: { campaign: Campaign; onClick: () => void }) {
         <Show when={formatNextSession()}>
           <div class="flex items-center gap-2 p-2.5 bg-green-500/15 border border-green-500/30 rounded-xl text-sm mb-3">
             <Calendar class="w-4 h-4 text-green-400 flex-shrink-0" />
-            <span class="text-green-300 text-xs">Prochaine session: {formatNextSession()}</span>
+            <span class="text-green-300 text-xs">
+              Prochaine session: {formatNextSession()}
+            </span>
           </div>
         </Show>
 
@@ -383,7 +441,9 @@ function CampaignCard(props: { campaign: Campaign; onClick: () => void }) {
         <div class="pt-3 border-t border-white/10 flex items-center gap-2">
           <Crown class="w-4 h-4 text-amber-400" />
           <span class="text-sm text-slate-500">MJ:</span>
-          <span class="text-sm text-white font-medium">{campaign().dungeonMasterName}</span>
+          <span class="text-sm text-white font-medium">
+            {campaign().dungeonMasterName}
+          </span>
         </div>
       </div>
 
@@ -392,4 +452,3 @@ function CampaignCard(props: { campaign: Campaign; onClick: () => void }) {
     </button>
   );
 }
-

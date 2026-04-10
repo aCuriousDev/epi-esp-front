@@ -3,11 +3,12 @@ import axios, {
 } from "axios";
 // import { useToast } from "../../hook/useToast";
 import { PaginatedResponseModel } from "./model/PaginatedResponseModel";
+import { getApiUrl } from "./config";
 
 export abstract class ApiCall {
 
     private static config = {
-        apiUrl : import.meta.env.VITE_API_URL || "http://localhost:5054"
+        apiUrl : getApiUrl()
     }
 
   private static setAuthHeader() {

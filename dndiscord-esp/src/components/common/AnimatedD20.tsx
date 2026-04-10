@@ -1,4 +1,5 @@
 import { createSignal, onMount, onCleanup } from "solid-js";
+import { playDiceRollSound } from "../../game/audio/SoundIntegration";
 
 interface AnimatedD20Props {
 	size?: number;
@@ -31,6 +32,7 @@ export function AnimatedD20(props: AnimatedD20Props) {
 		if (isRolling()) return;
 		
 		setIsRolling(true);
+		playDiceRollSound();
 		
 		// Number of value changes during roll
 		const rollDuration = 1500;

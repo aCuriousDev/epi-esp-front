@@ -1,33 +1,51 @@
 import * as signalR from '@microsoft/signalr';
 import { AuthService } from '../auth.service';
+import { getApiUrl } from '../config';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5054';
+const API_URL = getApiUrl();
+
+const RECONNECT_DELAYS = [0, 1_000, 5_000, 10_000, 30_000];
 
 export class SignalRService {
   private connection: signalR.HubConnection | null = null;
-  private token: string | null = null;
+  private _closeCallbacks: Array<() => void> = [];
+  private _reconnectedCallbacks: Array<(connectionId?: string) => void> = [];
+  private _reconnectingCallbacks: Array<() => void> = [];
+  /** Hub userId (Guid) received from Connected event. */
+  public hubUserId: string | null = null;
 
   constructor() {}
 
   async connect(token?: string): Promise<void> {
-    // Use provided token or get from AuthService
-    this.token = token || AuthService.getToken();
+    if (token) {
+      AuthService.setToken(token);
+    }
 
-    if (!this.token) {
+    if (!AuthService.getToken()) {
       throw new Error('No token available. Please login first.');
     }
 
+    // Clear lifecycle callbacks from previous connection to prevent stacking
+    this._closeCallbacks = [];
+    this._reconnectedCallbacks = [];
+    this._reconnectingCallbacks = [];
+
     this.connection = new signalR.HubConnectionBuilder()
       .withUrl(`${API_URL}/hubs/game`, {
-        accessTokenFactory: () => this.token!
+        accessTokenFactory: () => AuthService.getToken() ?? ""
       })
-      .withAutomaticReconnect()
+      .withAutomaticReconnect(RECONNECT_DELAYS)
       .configureLogging(signalR.LogLevel.Information)
       .build();
 
-    // Handlers de base
-    this.connection.on('Connected', (data) => {
-      console.log('Connected to SignalR:', data);
+    const connectedPromise = new Promise<void>((resolve) => {
+      this.connection!.on('Connected', (data) => {
+        console.log('Connected to SignalR:', data);
+        if (data?.userId) {
+          this.hubUserId = String(data.userId);
+        }
+        resolve();
+      });
     });
 
     this.connection.on('Pong', (timestamp) => {
@@ -36,18 +54,22 @@ export class SignalRService {
 
     this.connection.onreconnecting((error) => {
       console.warn('Reconnecting...', error);
+      this._reconnectingCallbacks.forEach(cb => cb());
     });
 
     this.connection.onreconnected((connectionId) => {
       console.log('Reconnected! New ConnectionId:', connectionId);
+      this._reconnectedCallbacks.forEach(cb => cb(connectionId ?? undefined));
     });
 
     this.connection.onclose((error) => {
       console.error('Connection closed:', error);
+      this._closeCallbacks.forEach(cb => cb());
     });
 
     try {
       await this.connection.start();
+      await Promise.race([connectedPromise, new Promise(r => setTimeout(r, 3000))]);
       if (this.connection.connectionId) {
         console.log('SignalR Started. ConnectionId:', this.connection.connectionId);
       } else {
@@ -61,7 +83,6 @@ export class SignalRService {
         response: err?.response,
         stack: err?.stack
       });
-      // Clean up on failure
       this.connection = null;
       throw err;
     }
@@ -86,13 +107,26 @@ export class SignalRService {
     return this.connection?.state === signalR.HubConnectionState.Connected;
   }
 
+  get isReconnecting(): boolean {
+    return this.connection?.state === signalR.HubConnectionState.Reconnecting;
+  }
+
   get connectionId(): string | undefined {
     return this.connection?.connectionId ?? undefined;
   }
 
-  /**
-   * Register a handler for a specific hub method
-   */
+  onClose(callback: () => void): void {
+    this._closeCallbacks.push(callback);
+  }
+
+  onReconnected(callback: (connectionId?: string) => void): void {
+    this._reconnectedCallbacks.push(callback);
+  }
+
+  onReconnecting(callback: () => void): void {
+    this._reconnectingCallbacks.push(callback);
+  }
+
   on(methodName: string, callback: (...args: any[]) => void): void {
     if (!this.connection) {
       throw new Error('Not connected');
@@ -100,9 +134,6 @@ export class SignalRService {
     this.connection.on(methodName, callback);
   }
 
-  /**
-   * Remove a handler for a specific hub method
-   */
   off(methodName: string, callback?: (...args: any[]) => void): void {
     if (!this.connection) {
       throw new Error('Not connected');
@@ -114,9 +145,6 @@ export class SignalRService {
     }
   }
 
-  /**
-   * Invoke a hub method
-   */
   async invoke(methodName: string, ...args: any[]): Promise<any> {
     if (!this.connection) {
       throw new Error('Not connected');

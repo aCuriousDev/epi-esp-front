@@ -51,3 +51,17 @@ export function clearTiles(): void {
   pathfinder = null;
 }
 
+/**
+ * Clear occupancy for any tile occupied by one of unitIds.
+ * This keeps the grid consistent when a unit is removed (disconnect/leave).
+ */
+export function clearOccupancyByUnitIds(unitIds: string[]): void {
+  if (unitIds.length === 0) return;
+  const set = new Set(unitIds);
+  for (const [key, tile] of Object.entries(tiles)) {
+    if (tile.occupiedBy && set.has(tile.occupiedBy)) {
+      setTiles(key, "occupiedBy", null);
+    }
+  }
+}
+

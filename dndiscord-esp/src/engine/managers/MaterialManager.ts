@@ -50,7 +50,7 @@ export class MaterialManager {
     const mat = new StandardMaterial('waterMat', scene);
     mat.diffuseColor = new Color3(0.2, 0.5, 0.9); // Bright blue
     mat.specularColor = new Color3(0.4, 0.4, 0.6);
-    mat.emissiveColor = new Color3(0.05, 0.1, 0.2); // Slight glow
+    mat.emissiveColor = new Color3(0.08, 0.15, 0.35); // Stronger glow for bloom
     mat.alpha = 0.7; // More transparent
     this.materials.set('water', mat);
   }
@@ -79,7 +79,7 @@ export class MaterialManager {
   private createHighlightMaterial(scene: Scene): void {
     const mat = new StandardMaterial('highlightMat', scene);
     mat.diffuseColor = new Color3(0.2, 0.6, 1);
-    mat.emissiveColor = new Color3(0.1, 0.3, 0.5);
+    mat.emissiveColor = new Color3(0.15, 0.4, 0.7); // Stronger glow
     mat.alpha = 0.4;
     this.materials.set('highlight', mat);
   }
@@ -87,7 +87,7 @@ export class MaterialManager {
   private createTargetMaterial(scene: Scene): void {
     const mat = new StandardMaterial('targetMat', scene);
     mat.diffuseColor = new Color3(1, 0.3, 0.2);
-    mat.emissiveColor = new Color3(0.5, 0.15, 0.1);
+    mat.emissiveColor = new Color3(0.6, 0.15, 0.1); // Stronger red glow
     mat.alpha = 0.4;
     this.materials.set('target', mat);
   }
@@ -95,7 +95,7 @@ export class MaterialManager {
   private createPathMaterial(scene: Scene): void {
     const mat = new StandardMaterial('pathMat', scene);
     mat.diffuseColor = new Color3(0.3, 0.8, 0.3);
-    mat.emissiveColor = new Color3(0.15, 0.4, 0.15);
+    mat.emissiveColor = new Color3(0.2, 0.5, 0.2); // Stronger green glow
     mat.alpha = 0.6;
     this.materials.set('path', mat);
   }
@@ -117,7 +117,7 @@ export class MaterialManager {
   private createSelectedMaterial(scene: Scene): void {
     const mat = new StandardMaterial('selectedMat', scene);
     mat.diffuseColor = new Color3(1, 0.8, 0.2);
-    mat.emissiveColor = new Color3(0.3, 0.24, 0.06);
+    mat.emissiveColor = new Color3(0.5, 0.4, 0.1); // Stronger golden glow
     this.materials.set('selected', mat);
   }
 

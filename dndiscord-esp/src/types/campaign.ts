@@ -44,6 +44,8 @@ export interface Campaign {
   status: CampaignStatus;
   visibility: CampaignVisibility;
   dungeonMasterId: string;
+  /** When true, the current user is the DM (from API); use this for "Lancer la session". */
+  isDungeonMaster?: boolean;
   dungeonMasterName: string;
   dungeonMasterAvatar?: string;
   maxPlayers: number;

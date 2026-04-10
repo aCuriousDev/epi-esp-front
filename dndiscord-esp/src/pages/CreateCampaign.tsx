@@ -1,5 +1,16 @@
 import { A, useNavigate } from "@solidjs/router";
-import { ArrowLeft, Crown, Users, Globe, Lock, Mail, Sparkles, BookOpen, Map, Wand2 } from "lucide-solid";
+import {
+  ArrowLeft,
+  Crown,
+  Users,
+  Globe,
+  Lock,
+  Mail,
+  Sparkles,
+  BookOpen,
+  Map,
+  Wand2,
+} from "lucide-solid";
 import { createSignal, For, Show } from "solid-js";
 import { CampaignVisibility, getVisibilityLabel } from "../types/campaign";
 import { CampaignService,  APICampaignStatus } from "../services/campaign.service";
@@ -15,18 +26,29 @@ const SETTINGS_PRESETS = [
 ];
 
 const CAMPAIGN_TAGS = [
-  "Aventure", "Horreur", "Mystère", "Combat", "RP Intense", 
-  "Exploration", "Intrigue", "Humour", "Sombre", "Épique",
-  "Débutants bienvenus", "Joueurs expérimentés"
+  "Aventure",
+  "Horreur",
+  "Mystère",
+  "Combat",
+  "RP Intense",
+  "Exploration",
+  "Intrigue",
+  "Humour",
+  "Sombre",
+  "Épique",
+  "Débutants bienvenus",
+  "Joueurs expérimentés",
 ];
 
 export default function CreateCampaign() {
   const navigate = useNavigate();
-  
+
   // Form state
   const [title, setTitle] = createSignal("");
   const [description, setDescription] = createSignal("");
-  const [visibility, setVisibility] = createSignal<CampaignVisibility>(CampaignVisibility.Private);
+  const [visibility, setVisibility] = createSignal<CampaignVisibility>(
+    CampaignVisibility.Private,
+  );
   const [maxPlayers, setMaxPlayers] = createSignal(5);
   const [setting, setSetting] = createSignal("forgotten_realms");
   const [startingLevel, setStartingLevel] = createSignal(1);
@@ -36,10 +58,12 @@ export default function CreateCampaign() {
   const [error, setError] = createSignal<string | null>(null);
 
   const toggleTag = (tag: string) => {
-    setSelectedTags(prev =>
+    setSelectedTags((prev) =>
       prev.includes(tag)
-        ? prev.filter(t => t !== tag)
-        : prev.length < 5 ? [...prev, tag] : prev
+        ? prev.filter((t) => t !== tag)
+        : prev.length < 5
+          ? [...prev, tag]
+          : prev,
     );
   };
 
@@ -63,7 +87,10 @@ export default function CreateCampaign() {
       navigate(`/campaigns/${response.id}`);
     } catch (err: any) {
       console.error("Failed to create campaign:", err);
-      setError(err.response?.data?.message || "Impossible de créer la campagne. Veuillez réessayer.");
+      setError(
+        err.response?.data?.message ||
+          "Impossible de créer la campagne. Veuillez réessayer.",
+      );
       setIsSubmitting(false);
     }
   };
@@ -79,14 +106,21 @@ export default function CreateCampaign() {
       {/* Background effects */}
       <div class="absolute inset-0 overflow-hidden pointer-events-none">
         <div class="absolute top-1/4 -left-32 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
-        <div class="absolute bottom-1/4 -right-32 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl animate-pulse" style="animation-delay: 1s" />
+        <div
+          class="absolute bottom-1/4 -right-32 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl animate-pulse"
+          style="animation-delay: 1s"
+        />
       </div>
 
       {/* Vignette */}
       <div class="vignette absolute inset-0" />
 
       {/* Back button */}
-      <A href="/campaigns" class="settings-btn !left-4 !right-auto" aria-label="Retour">
+      <A
+        href="/campaigns"
+        class="settings-btn !left-4 !right-auto"
+        aria-label="Retour"
+      >
         <ArrowLeft class="settings-icon h-5 w-5" />
       </A>
 
@@ -108,12 +142,12 @@ export default function CreateCampaign() {
         <div class="flex justify-center gap-2 mb-8">
           <For each={[1, 2, 3]}>
             {(s) => (
-              <div 
+              <div
                 class={`w-3 h-3 rounded-full transition-all ${
-                  s === step() 
-                    ? "bg-purple-500 scale-125" 
-                    : s < step() 
-                      ? "bg-purple-500/50" 
+                  s === step()
+                    ? "bg-purple-500 scale-125"
+                    : s < step()
+                      ? "bg-purple-500/50"
                       : "bg-white/20"
                 }`}
               />
@@ -129,7 +163,10 @@ export default function CreateCampaign() {
         </Show>
 
         {/* Form Card */}
-        <form onSubmit={handleSubmit} class="campaign-form bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
+        <form
+          onSubmit={handleSubmit}
+          class="campaign-form bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl"
+        >
           {/* Step 1: Basic Info */}
           <Show when={step() === 1}>
             <div class="p-6 space-y-6">
@@ -153,7 +190,9 @@ export default function CreateCampaign() {
                   class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all"
                   maxLength={100}
                 />
-                <p class="text-xs text-slate-500">{title().length}/100 caractères</p>
+                <p class="text-xs text-slate-500">
+                  {title().length}/100 caractères
+                </p>
               </div>
 
               {/* Description */}
@@ -169,7 +208,9 @@ export default function CreateCampaign() {
                   class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all resize-none"
                   maxLength={500}
                 />
-                <p class="text-xs text-slate-500">{description().length}/500 caractères</p>
+                <p class="text-xs text-slate-500">
+                  {description().length}/500 caractères
+                </p>
               </div>
 
               {/* Visibility */}
@@ -249,9 +290,11 @@ export default function CreateCampaign() {
                   <input
                     type="range"
                     min={2}
-                    max={8}
+                    max={6}
                     value={maxPlayers()}
-                    onInput={(e) => setMaxPlayers(parseInt(e.currentTarget.value))}
+                    onInput={(e) =>
+                      setMaxPlayers(parseInt(e.currentTarget.value))
+                    }
                     class="flex-1 h-2 bg-white/10 rounded-full appearance-none cursor-pointer accent-purple-500"
                   />
                   <span class="w-12 h-12 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-xl font-bold text-white">
@@ -272,7 +315,9 @@ export default function CreateCampaign() {
                     min={1}
                     max={20}
                     value={startingLevel()}
-                    onInput={(e) => setStartingLevel(parseInt(e.currentTarget.value))}
+                    onInput={(e) =>
+                      setStartingLevel(parseInt(e.currentTarget.value))
+                    }
                     class="flex-1 h-2 bg-white/10 rounded-full appearance-none cursor-pointer accent-purple-500"
                   />
                   <span class="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-xl font-bold text-amber-400">
@@ -327,12 +372,14 @@ export default function CreateCampaign() {
                   </div>
                   <div>
                     <span class="text-slate-400">Visibilité:</span>
-                    <span class="text-white ml-2">{getVisibilityLabel(visibility())}</span>
+                    <span class="text-white ml-2">
+                      {getVisibilityLabel(visibility())}
+                    </span>
                   </div>
                   <div>
                     <span class="text-slate-400">Univers:</span>
                     <span class="text-white ml-2">
-                      {SETTINGS_PRESETS.find(s => s.id === setting())?.name}
+                      {SETTINGS_PRESETS.find((s) => s.id === setting())?.name}
                     </span>
                   </div>
                   <div>
@@ -357,17 +404,17 @@ export default function CreateCampaign() {
             <Show when={step() > 1}>
               <button
                 type="button"
-                onClick={() => setStep(s => s - 1)}
+                onClick={() => setStep((s) => s - 1)}
                 class="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors"
               >
                 Retour
               </button>
             </Show>
-            
+
             <Show when={step() < 3}>
               <button
                 type="button"
-                onClick={() => setStep(s => s + 1)}
+                onClick={() => setStep((s) => s + 1)}
                 disabled={!canProceed()}
                 class="flex-1 px-6 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:bg-purple-600/50 disabled:cursor-not-allowed text-white rounded-xl transition-colors"
               >
@@ -381,12 +428,15 @@ export default function CreateCampaign() {
                 disabled={isSubmitting() || !canProceed()}
                 class="flex-1 px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl transition-all font-semibold flex items-center justify-center gap-2"
               >
-                <Show when={isSubmitting()} fallback={
-                  <>
-                    <Crown class="w-5 h-5" />
-                    Créer la campagne
-                  </>
-                }>
+                <Show
+                  when={isSubmitting()}
+                  fallback={
+                    <>
+                      <Crown class="w-5 h-5" />
+                      Créer la campagne
+                    </>
+                  }
+                >
                   <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   Création...
                 </Show>
@@ -398,7 +448,12 @@ export default function CreateCampaign() {
 
       <style jsx>{`
         .create-campaign-page {
-          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1a 100%);
+          background: linear-gradient(
+            135deg,
+            #1a1a2e 0%,
+            #16213e 50%,
+            #0f0f1a 100%
+          );
         }
 
         .campaign-form {
@@ -420,7 +475,7 @@ export default function CreateCampaign() {
           -webkit-appearance: none;
           width: 20px;
           height: 20px;
-          background: #8B5CF6;
+          background: #8b5cf6;
           border-radius: 50%;
           cursor: pointer;
           box-shadow: 0 2px 6px rgba(139, 92, 246, 0.4);
@@ -457,4 +512,3 @@ function VisibilityOption(props: {
     </button>
   );
 }
-

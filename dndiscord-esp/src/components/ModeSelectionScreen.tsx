@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-solid';
 
 interface ModeSelectionScreenProps {
   onSelectMode: (mode: GameMode) => void;
+  onSelectMultiplayer?: () => void;
 }
 
 export const ModeSelectionScreen: Component<ModeSelectionScreenProps> = (props) => {
@@ -26,7 +27,7 @@ export const ModeSelectionScreen: Component<ModeSelectionScreenProps> = (props) 
 
       {/* Main content */}
       <main class="relative z-10 flex min-h-screen items-center justify-center p-6 sm:p-10">
-        <div class="max-w-5xl w-full">
+        <div class="max-w-6xl w-full">
           {/* Title */}
           <header class="text-center mb-10">
             <h1 class="font-display text-5xl sm:text-6xl tracking-wide text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
@@ -39,7 +40,7 @@ export const ModeSelectionScreen: Component<ModeSelectionScreenProps> = (props) 
           </header>
 
           {/* Mode Cards */}
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
             {/* Free Roam Mode */}
             <button
               class="group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-brandStart/80 to-brandEnd/80 backdrop-blur-sm p-8 transition-all duration-300 hover:border-blue-400/50 hover:shadow-lg hover:shadow-blue-500/20 hover:-translate-y-1"
@@ -106,6 +107,74 @@ export const ModeSelectionScreen: Component<ModeSelectionScreenProps> = (props) 
               </div>
               {/* Hover glow effect */}
               <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-t from-red-500/10 to-transparent pointer-events-none" />
+            </button>
+
+            {/* Dungeon Mode */}
+            <button
+              class="group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-brandStart/80 to-brandEnd/80 backdrop-blur-sm p-8 transition-all duration-300 hover:border-purple-400/50 hover:shadow-lg hover:shadow-purple-500/20 hover:-translate-y-1"
+              onClick={() => props.onSelectMode(GameMode.DUNGEON)}
+            >
+              <div class="text-center">
+                <div class="text-6xl mb-4 group-hover:scale-110 transition-transform duration-300">
+                  🏰
+                </div>
+                <h2 class="font-display text-2xl sm:text-3xl text-white mb-4">
+                  Donjon
+                </h2>
+                <p class="text-slate-200/80 mb-6 leading-relaxed text-sm sm:text-base">
+                  Parcourez un enchaînement de salles reliées par des portails. Combattez et progressez jusqu'à la victoire.
+                </p>
+                <div class="space-y-2 text-sm text-slate-300/70">
+                  <div class="flex items-center justify-center gap-2">
+                    <span class="text-purple-400">🏰</span>
+                    <span>Plusieurs salles</span>
+                  </div>
+                  <div class="flex items-center justify-center gap-2">
+                    <span class="text-purple-400">🏰</span>
+                    <span>Portails de téléportation</span>
+                  </div>
+                  <div class="flex items-center justify-center gap-2">
+                    <span class="text-purple-400">🏰</span>
+                    <span>Progression continue</span>
+                  </div>
+                </div>
+              </div>
+              {/* Hover glow effect */}
+              <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-t from-purple-500/10 to-transparent pointer-events-none" />
+            </button>
+
+            {/* Multiplayer Mode */}
+            <button
+              class="group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-brandStart/80 to-brandEnd/80 backdrop-blur-sm p-8 transition-all duration-300 hover:border-emerald-400/50 hover:shadow-lg hover:shadow-emerald-500/20 hover:-translate-y-1"
+              onClick={() => props.onSelectMultiplayer?.()}
+            >
+              <div class="text-center">
+                <div class="text-6xl mb-4 group-hover:scale-110 transition-transform duration-300">
+                  &#x1F91D;
+                </div>
+                <h2 class="font-display text-2xl sm:text-3xl text-white mb-4">
+                  Multijoueur
+                </h2>
+                <p class="text-slate-200/80 mb-6 leading-relaxed text-sm sm:text-base">
+                  Cr&eacute;ez ou rejoignez une salle pour explorer une carte avec d'autres joueurs en temps r&eacute;el.
+                </p>
+                <div class="space-y-2 text-sm text-slate-300/70">
+                  <div class="flex items-center justify-center gap-2">
+                    <span class="text-emerald-400">&#x2713;</span>
+                    <span>2-6 joueurs</span>
+                  </div>
+                  <div class="flex items-center justify-center gap-2">
+                    <span class="text-emerald-400">&#x2713;</span>
+                    <span>Code de salle</span>
+                  </div>
+                  <div class="flex items-center justify-center gap-2">
+                    <span class="text-emerald-400">&#x2713;</span>
+                    <span>Synchronisation temps r&eacute;el</span>
+                  </div>
+                </div>
+              </div>
+              {/* Hover glow effect */}
+              <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-t from-emerald-500/10 to-transparent pointer-events-none" />
             </button>
           </div>
 
