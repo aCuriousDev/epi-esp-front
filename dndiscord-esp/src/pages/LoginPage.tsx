@@ -116,11 +116,11 @@ export default function LoginPage() {
 
       <style jsx>{`
         .login-page {
-          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1a 100%);
+          background: linear-gradient(135deg, var(--ink-700) 0%, var(--ink-800) 50%, var(--ink-900) 100%);
         }
 
         .login-title {
-          background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 25%, #8b5cf6 50%, #7c3aed 75%, #a78bfa 100%);
+          background: linear-gradient(135deg, var(--plum-300) 0%, var(--plum-300) 25%, var(--plum-500) 50%, var(--plum-500) 75%, var(--plum-300) 100%);
           background-size: 200% 200%;
           -webkit-background-clip: text;
           background-clip: text;
