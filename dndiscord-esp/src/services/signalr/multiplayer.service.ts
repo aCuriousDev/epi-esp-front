@@ -71,7 +71,8 @@ async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
   if (!token) return;
 
   try {
-    await fetch(`${getApiUrl().replace(/\/$/, "")}/api/party-chat/bind`, {
+    const voiceChannelId = ctx.voiceChannelId || ctx.channelId;
+    const res = await fetch(`${getApiUrl().replace(/\/$/, "")}/api/party-chat/bind`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -80,10 +81,23 @@ async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
       body: JSON.stringify({
         sessionId,
         guildId: ctx.guildId,
-        voiceChannelId: ctx.channelId,
+        voiceChannelId,
       }),
       credentials: "include",
     });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.warn("party-chat bind failed:", res.status, text);
+    } else {
+      console.log("party-chat bind ok", {
+        sessionId,
+        guildId: ctx.guildId,
+        channelId: ctx.channelId,
+        voiceChannelId: ctx.voiceChannelId,
+        boundVoiceChannelId: voiceChannelId,
+      });
+    }
   } catch (e) {
     console.warn("party-chat bind failed:", e);
   }

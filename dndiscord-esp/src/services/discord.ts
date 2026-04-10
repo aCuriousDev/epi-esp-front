@@ -73,13 +73,23 @@ export function getCurrentDiscordUser() {
 export function getDiscordContextIds(): {
   guildId: string;
   channelId: string;
+  voiceChannelId: string;
 } | null {
   if (!discordSdkInstance) return null;
   const anySdk = discordSdkInstance as any;
   const guildId = String(anySdk.guildId ?? anySdk?.guild_id ?? "");
   const channelId = String(anySdk.channelId ?? anySdk?.channel_id ?? "");
+
+  const voiceChannelId = String(
+    anySdk.voiceChannelId ??
+      anySdk?.voice_channel_id ??
+      anySdk?.voice?.channelId ??
+      anySdk?.voice?.channel_id ??
+      "",
+  );
+
   if (!guildId || !channelId) return null;
-  return { guildId, channelId };
+  return { guildId, channelId, voiceChannelId };
 }
 
 /**
