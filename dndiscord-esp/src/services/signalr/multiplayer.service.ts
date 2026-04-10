@@ -49,7 +49,7 @@ import {
   type PartyChatMessage,
 } from "../../stores/partyChat.store";
 import { showDmMessage, showPlayerBubble } from "../../stores/dialogue.store";
-import { getPlayerUnits } from "../../game/stores/UnitsStore";
+import { getPlayerUnits, removeUnitsByOwnerUserId } from "../../game/stores/UnitsStore";
 
 const HUB = {
   createSession: "CreateSession",
@@ -395,13 +395,17 @@ export function registerMultiplayerHandlers(): void {
 
   signalRService.on("PlayerLeft", (data: Record<string, unknown>) => {
     const userId = data.userId ?? data.UserId;
-    if (userId != null) removePlayerFromSession(String(userId));
+    if (userId != null) {
+      removePlayerFromSession(String(userId));
+      removeUnitsByOwnerUserId(String(userId));
+    }
   });
 
   signalRService.on("PlayerKicked", (data: Record<string, unknown>) => {
     const userId = data.userId ?? data.UserId;
     if (userId != null) {
       removePlayerFromSession(String(userId));
+      removeUnitsByOwnerUserId(String(userId));
       const me = authStore.user()?.id;
       if (me && String(userId) === String(me)) {
         clearSession();
@@ -415,6 +419,7 @@ export function registerMultiplayerHandlers(): void {
     if (userId != null) {
       // Option: marquer le joueur comme Disconnected au lieu de le retirer
       removePlayerFromSession(String(userId));
+      removeUnitsByOwnerUserId(String(userId));
     }
   });
 

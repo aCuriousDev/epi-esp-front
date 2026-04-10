@@ -44,7 +44,7 @@ export default function EditCampaign() {
       setTitle(c.name ?? "");
       setDescription(c.description ?? "");
       setVisibility(toVisibility(!!c.isPublic));
-      setMaxPlayers(Number(c.maxPlayers ?? 5));
+      setMaxPlayers(Math.min(6, Math.max(2, Number(c.maxPlayers ?? 5))));
     } catch (err: any) {
       console.error("Failed to load campaign for edit:", err);
       setError("Impossible de charger la campagne.");
@@ -251,7 +251,7 @@ export default function EditCampaign() {
                   <input
                     type="range"
                     min={2}
-                    max={8}
+                    max={6}
                     value={maxPlayers()}
                     onInput={(e) =>
                       setMaxPlayers(parseInt(e.currentTarget.value))

@@ -36,6 +36,7 @@ import type { GameStartedPayload } from "../types/multiplayer";
 import { saveMap, type SavedMapData } from "../services/mapStorage";
 import { LogOut } from "lucide-solid";
 import { PartyChatPanel } from "../components/PartyChatPanel";
+import { SessionState } from "../types/multiplayer";
 
 const BoardGame: Component = () => {
   const navigate = useNavigate();
@@ -50,6 +51,23 @@ const BoardGame: Component = () => {
   const [isMultiplayer, setIsMultiplayer] = createSignal(false);
 
   onMount(() => {
+    const s = sessionState.session;
+    if (s) {
+      setIsMultiplayer(true);
+      if (s.state === SessionState.Lobby) {
+        setAppPhase(AppPhase.LOBBY);
+      } else if (s.state === SessionState.InProgress) {
+        setAppPhase(AppPhase.IN_GAME);
+      } else {
+        setAppPhase(AppPhase.LOBBY);
+      }
+      console.log(
+        "[BoardGame] Existing session detected, redirecting to lobby:",
+        s.sessionId,
+      );
+      return;
+    }
+
     console.log("[BoardGame] Component mounted, showing mode selection");
   });
 
@@ -214,8 +232,6 @@ const BoardGame: Component = () => {
       "==========",
     );
 
-    // For restart, we DON'T dispose the engine - we just clear game objects and reinitialize
-    // The GameCanvas effects will handle creating new meshes when the stores are repopulated
     console.log("[BoardGame] Clearing game state stores...");
     clearUnits();
     clearTiles();
@@ -274,6 +290,7 @@ const BoardGame: Component = () => {
               try {
                 await leaveSession();
               } catch (_) {}
+              returnToMenu();
             }}
           >
             <LogOut class="w-4 h-4" />
