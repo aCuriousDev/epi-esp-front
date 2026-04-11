@@ -98,7 +98,7 @@ export default function MapSelectionScreen() {
 							<p class="text-slate-300">Sélectionnez une map à modifier ou créez-en une nouvelle</p>
 						</div>
 
-						<div class="flex gap-3 mb-6">
+						<div class="flex flex-col sm:flex-row gap-3 mb-6">
 							<button
 								onClick={handleCreateNew}
 								class="flex-1 px-6 py-4 bg-gradient-to-r from-brandStart to-brandEnd hover:from-brandStart/90 hover:to-brandEnd/90 text-white font-medium rounded-xl transition shadow-lg flex items-center justify-center gap-2"
@@ -179,24 +179,29 @@ export default function MapSelectionScreen() {
 							<div class="space-y-3">
 								<For each={maps()}>
 									{(map) => (
-										<div
-											class="bg-black/60 backdrop-blur-sm rounded-xl p-4 border border-white/10 hover:border-white/20 transition cursor-pointer group"
-											onClick={() => handleEdit(map.id)}
-										>
+									<div
+										class="w-full text-left bg-black/60 backdrop-blur-sm rounded-xl p-4 border border-white/10 hover:border-white/20 transition cursor-pointer group"
+										role="group"
+										aria-label={map.name}
+									>
 											<div class="flex items-center justify-between">
-												<div class="flex-1">
+												<button
+													class="flex-1 text-left"
+													onClick={() => handleEdit(map.id)}
+												>
 													<h3 class="text-white font-medium text-lg mb-1">{map.name}</h3>
 													<div class="flex gap-4 text-sm text-slate-400">
 														<span>Créée le {formatDate(map.createdAt)}</span>
 														<span>•</span>
 														<span>Modifiée le {formatDate(map.updatedAt)}</span>
 													</div>
-												</div>
+												</button>
 												<div class="flex items-center gap-2">
 													<button
 														onClick={() => handleEdit(map.id)}
 														class="p-2 rounded-lg bg-blue-600/80 hover:bg-blue-600 text-white transition opacity-0 group-hover:opacity-100"
 														title="Modifier"
+														aria-label={`Modifier ${map.name}`}
 													>
 														<Edit2 class="h-4 w-4" />
 													</button>
@@ -204,6 +209,7 @@ export default function MapSelectionScreen() {
 														onClick={(e) => handleDelete(e, map.id)}
 														class="p-2 rounded-lg bg-red-600/80 hover:bg-red-600 text-white transition opacity-0 group-hover:opacity-100"
 														title="Supprimer"
+														aria-label={`Supprimer ${map.name}`}
 														disabled={deletingId() === map.id}
 													>
 														<Trash2 class="h-4 w-4" />
