@@ -8,6 +8,7 @@ import {
   getCurrentUnit,
 } from '../game';
 import { GamePhase } from '../types';
+import { getUnitIcon } from './common/icons';
 
 export const UnitInfoPanel: Component = () => {
   const unit = () => getSelectedUnit();
@@ -31,11 +32,9 @@ export const UnitInfoPanel: Component = () => {
             {/* Unit Header */}
             <div class="flex items-center gap-3">
               <div class={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                u().team === 'player' ? 'bg-blue-600' : 'bg-red-600'
+                u().team === 'player' ? 'bg-arcindigo-500' : 'bg-danger/80'
               }`}>
-                <span class="text-2xl">
-                  {getUnitIcon(u().type)}
-                </span>
+                {getUnitIcon(u().type, { class: "w-6 h-6 text-white" })}
               </div>
               <div class="min-w-0 flex-1">
                 <h3 class="font-fantasy text-lg text-game-gold truncate">{u().name}</h3>
@@ -47,11 +46,18 @@ export const UnitInfoPanel: Component = () => {
             <div>
               <div class="flex justify-between text-sm mb-1">
                 <span>Health</span>
-                <span class="text-game-green">
+                <span class="text-game-green font-mono text-ds-dice">
                   {u().stats.currentHealth} / {u().stats.maxHealth}
                 </span>
               </div>
-              <div class="stat-bar">
+              <div
+                class="stat-bar"
+                role="progressbar"
+                aria-valuenow={u().stats.currentHealth}
+                aria-valuemin={0}
+                aria-valuemax={u().stats.maxHealth}
+                aria-label="Health"
+              >
                 <div 
                   class="stat-bar-fill bg-game-green"
                   style={{ 
@@ -65,13 +71,20 @@ export const UnitInfoPanel: Component = () => {
             <div>
               <div class="flex justify-between text-sm mb-1">
                 <span>Action Points</span>
-                <span class="text-blue-400">
+                <span class="text-arcindigo-300 font-mono text-ds-dice">
                   {u().stats.currentActionPoints} / {u().stats.maxActionPoints}
                 </span>
               </div>
-              <div class="stat-bar">
+              <div
+                class="stat-bar"
+                role="progressbar"
+                aria-valuenow={u().stats.currentActionPoints}
+                aria-valuemin={0}
+                aria-valuemax={u().stats.maxActionPoints}
+                aria-label="Action Points"
+              >
                 <div 
-                  class="stat-bar-fill bg-blue-500"
+                  class="stat-bar-fill bg-arcindigo-500"
                   style={{ 
                     width: `${(u().stats.currentActionPoints / u().stats.maxActionPoints) * 100}%` 
                   }}
@@ -141,6 +154,7 @@ export const UnitInfoPanel: Component = () => {
                           }
                         }}
                         disabled={isDisabled()}
+                        aria-pressed={gameState.selectedAbility === ability.id}
                       >
                         <div class="flex justify-between items-start gap-2">
                           <div class="min-w-0 flex-1">
@@ -192,15 +206,3 @@ const StatItem: Component<{ label: string; value: number }> = (props) => {
   );
 };
 
-function getUnitIcon(type: string): string {
-  switch (type) {
-    case 'warrior': return '⚔️';
-    case 'mage': return '🔮';
-    case 'archer': return '🏹';
-    case 'rogue': return '🗡️';
-    case 'healer': return '✨';
-    case 'enemy_skeleton': return '💀';
-    case 'enemy_mage': return '🧙';
-    default: return '👤';
-  }
-}

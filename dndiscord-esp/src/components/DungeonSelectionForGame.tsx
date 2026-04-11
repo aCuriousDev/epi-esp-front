@@ -1,5 +1,5 @@
 import { Component, createSignal, onMount, For, Show } from "solid-js";
-import { ArrowLeft } from "lucide-solid";
+import { ArrowLeft, Castle } from "lucide-solid";
 import { getAllDungeons, loadDungeon, type DungeonData } from "../services/mapStorage";
 
 interface DungeonSelectionForGameProps {
@@ -35,9 +35,12 @@ export const DungeonSelectionForGame: Component<DungeonSelectionForGameProps> = 
 				<ArrowLeft class="settings-icon h-5 w-5" />
 			</button>
 
-			<div class="max-w-4xl w-full px-8">
+			<div class="max-w-4xl w-full px-4 sm:px-8">
 				<div class="text-center mb-12">
-					<h1 class="font-fantasy text-5xl text-game-gold mb-4">🏰 Sélectionner un Donjon</h1>
+					<h1 class="font-fantasy text-3xl sm:text-4xl md:text-5xl text-game-gold mb-4 flex items-center justify-center gap-3">
+					<Castle class="w-8 h-8 sm:w-10 sm:h-10" />
+					Sélectionner un Donjon
+				</h1>
 					<p class="text-xl text-gray-300">Choisissez le donjon à explorer</p>
 				</div>
 

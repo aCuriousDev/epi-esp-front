@@ -274,7 +274,7 @@ const CampaignManager: Component = () => {
                     'font-weight': '500',
                     'font-size': '0.9rem'
                   }}>
-                    📖 Texte narratif :
+                    Texte narratif :
                   </label>
                   <textarea
                     value={storyText()}
@@ -405,7 +405,7 @@ const CampaignManager: Component = () => {
                       'font-weight': '500',
                       'font-size': '0.9rem'
                     }}>
-                      ⚔️ Ennemis :
+                      Ennemis :
                     </label>
                     <button
                       onClick={handleAddEnemy}

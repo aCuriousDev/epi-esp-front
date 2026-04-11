@@ -271,16 +271,16 @@ export default function SettingsPage() {
                 class="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50 cursor-pointer"
               >
                 <option value="fr" class="bg-game-dark">
-                  🇫🇷 Français
+                  FR — Français
                 </option>
                 <option value="en" class="bg-game-dark">
-                  🇬🇧 English
+                  EN — English
                 </option>
                 <option value="es" class="bg-game-dark">
-                  🇪🇸 Español
+                  ES — Español
                 </option>
                 <option value="de" class="bg-game-dark">
-                  🇩🇪 Deutsch
+                  DE — Deutsch
                 </option>
               </select>
             </div>
@@ -344,7 +344,7 @@ export default function SettingsPage() {
         {/* App Info */}
         <footer class="text-center pt-8 text-slate-500 text-sm">
           <p>DnDiscord v1.0.0</p>
-          <p class="mt-1">Fait avec ❤️ pour les joueurs de D&D</p>
+          <p class="mt-1">Fait avec passion pour les joueurs de D&D</p>
         </footer>
       </main>
 

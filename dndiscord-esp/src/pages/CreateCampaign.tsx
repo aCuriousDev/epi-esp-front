@@ -20,12 +20,12 @@ import {
 
 // Preset campaign settings
 const SETTINGS_PRESETS = [
-  { id: "forgotten_realms", name: "Royaumes Oubliés", icon: "🏰" },
-  { id: "eberron", name: "Eberron", icon: "⚙️" },
-  { id: "ravenloft", name: "Ravenloft", icon: "🦇" },
-  { id: "greyhawk", name: "Faucongris", icon: "⚔️" },
-  { id: "homebrew", name: "Homebrew", icon: "✨" },
-  { id: "other", name: "Autre", icon: "📜" },
+  { id: "forgotten_realms", name: "Royaumes Oubliés", icon: "FG" },
+  { id: "eberron", name: "Eberron", icon: "EB" },
+  { id: "ravenloft", name: "Ravenloft", icon: "RV" },
+  { id: "greyhawk", name: "Faucongris", icon: "GH" },
+  { id: "homebrew", name: "Homebrew", icon: "HB" },
+  { id: "other", name: "Autre", icon: "AU" },
 ];
 
 const CAMPAIGN_TAGS = [

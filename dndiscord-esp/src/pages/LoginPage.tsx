@@ -1,5 +1,6 @@
-import { Show, createEffect } from "solid-js";
+import { Show, createEffect, type JSX } from "solid-js";
 import { useNavigate } from "@solidjs/router";
+import { Swords, Drama, ScrollText } from "lucide-solid";
 import { authStore } from "../stores/auth.store";
 import { LoginButton } from "../components/auth";
 import { AnimatedD20 } from "../components/common/AnimatedD20";
@@ -87,15 +88,15 @@ export default function LoginPage() {
                     </p>
                     <div class="grid grid-cols-3 gap-4">
                       <FeaturePreview 
-                        icon="⚔️" 
+                        icon={<Swords class="w-6 h-6 text-red-300" />} 
                         label="Combats tactiques" 
                       />
                       <FeaturePreview 
-                        icon="🎭" 
+                        icon={<Drama class="w-6 h-6 text-purple-300" />} 
                         label="Personnages" 
                       />
                       <FeaturePreview 
-                        icon="📜" 
+                        icon={<ScrollText class="w-6 h-6 text-amber-300" />} 
                         label="Campagnes" 
                       />
                     </div>
@@ -165,10 +166,10 @@ export default function LoginPage() {
 /**
  * Feature preview item component
  */
-function FeaturePreview(props: { icon: string; label: string }) {
+function FeaturePreview(props: { icon: JSX.Element; label: string }) {
   return (
     <div class="flex flex-col items-center gap-2 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors">
-      <span class="text-2xl">{props.icon}</span>
+      <span>{props.icon}</span>
       <span class="text-xs text-slate-300/80 text-center leading-tight">
         {props.label}
       </span>

@@ -25,7 +25,6 @@ export default function MenuComponent() {
 			hoveringLabel: string;
 			route: string;
 			hoveringDescription?: string;
-			emoji?: string;
 		}>
 	>([
 		{
@@ -34,7 +33,6 @@ export default function MenuComponent() {
 			hoveringLabel: "play",
 			route: "/board",
 			hoveringDescription: "Lancez une partie et explorez le système de combat tactique.",
-			emoji: "⚔️",
 		},
 		{
 			label: "Personnages",
@@ -42,7 +40,6 @@ export default function MenuComponent() {
 			hoveringLabel: "characters",
 			route: "/characters",
 			hoveringDescription: "Forgez un héros pour vos quêtes.",
-			emoji: "🎭",
 		},
 		{
 			label: "Campagnes",
@@ -50,7 +47,6 @@ export default function MenuComponent() {
 			hoveringLabel: "campaigns",
 			route: "/campaigns",
 			hoveringDescription: "Gérez vos campagnes et sessions de jeu.",
-			emoji: "📜",
 		},
 		{
 			label: "Campagnes Manager",
@@ -58,7 +54,6 @@ export default function MenuComponent() {
 			hoveringLabel: "campaigns",
 			route: "/campaigns-manager",
 			hoveringDescription: "Gérez vos campagnes",
-			emoji: "📜",
 		},
 		{
 			label: "Règles du jeu",
@@ -66,7 +61,6 @@ export default function MenuComponent() {
 			hoveringLabel: "rules",
 			route: "/rules",
 			hoveringDescription: "Consultez les règles du jeu.",
-			emoji: "📖",
 		},
 		{
 			label: "Map Editor",
@@ -167,12 +161,9 @@ export default function MenuComponent() {
 				{/* Context hint area with animation */}
 				<div class="h-8 flex items-center justify-center">
 					<Show when={hovered()}>
-						<p class="text-center text-sm text-slate-300/90 animate-fadeIn flex items-center gap-2">
-							<span class="text-lg">
-								{menuItems().find((x) => x.hoveringLabel === hovered())?.emoji}
-							</span>
-							{menuItems().find((x) => x.hoveringLabel === hovered())?.hoveringDescription}
-						</p>
+					<p class="text-center text-sm text-slate-300/90 animate-fadeIn">
+						{menuItems().find((x) => x.hoveringLabel === hovered())?.hoveringDescription}
+					</p>
 					</Show>
 				</div>
 

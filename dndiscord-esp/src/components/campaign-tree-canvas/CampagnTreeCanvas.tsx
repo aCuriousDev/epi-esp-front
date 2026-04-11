@@ -424,7 +424,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           }}
           title="Effacer tous les nœuds"
         >
-          🗑️ Effacer
+          Effacer
         </button>
       </div>
 

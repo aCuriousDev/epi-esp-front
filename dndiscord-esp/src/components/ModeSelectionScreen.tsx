@@ -1,7 +1,7 @@
 import { Component } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { GameMode } from '../types';
-import { ArrowLeft } from 'lucide-solid';
+import { ArrowLeft, Map, Swords, Castle, Users, Check, Zap } from 'lucide-solid';
 
 interface ModeSelectionScreenProps {
   onSelectMode: (mode: GameMode) => void;
@@ -47,8 +47,8 @@ export const ModeSelectionScreen: Component<ModeSelectionScreenProps> = (props) 
               onClick={() => props.onSelectMode(GameMode.FREE_ROAM)}
             >
               <div class="text-center">
-                <div class="text-6xl mb-4 group-hover:scale-110 transition-transform duration-300">
-                  🗺️
+                <div class="mb-4 group-hover:scale-110 transition-transform duration-300 flex justify-center">
+                  <Map class="w-14 h-14 text-blue-300" />
                 </div>
                 <h2 class="font-display text-2xl sm:text-3xl text-white mb-4">
                   Exploration Libre
@@ -58,15 +58,15 @@ export const ModeSelectionScreen: Component<ModeSelectionScreenProps> = (props) 
                 </p>
                 <div class="space-y-2 text-sm text-slate-300/70">
                   <div class="flex items-center justify-center gap-2">
-                    <span class="text-green-400">✓</span>
+                    <Check class="w-4 h-4 text-green-400 flex-shrink-0" />
                     <span>Aucun ennemi</span>
                   </div>
                   <div class="flex items-center justify-center gap-2">
-                    <span class="text-green-400">✓</span>
+                    <Check class="w-4 h-4 text-green-400 flex-shrink-0" />
                     <span>Déplacement illimité</span>
                   </div>
                   <div class="flex items-center justify-center gap-2">
-                    <span class="text-green-400">✓</span>
+                    <Check class="w-4 h-4 text-green-400 flex-shrink-0" />
                     <span>Sans restriction de tour</span>
                   </div>
                 </div>
@@ -81,8 +81,8 @@ export const ModeSelectionScreen: Component<ModeSelectionScreenProps> = (props) 
               onClick={() => props.onSelectMode(GameMode.COMBAT)}
             >
               <div class="text-center">
-                <div class="text-6xl mb-4 group-hover:scale-110 transition-transform duration-300">
-                  ⚔️
+                <div class="mb-4 group-hover:scale-110 transition-transform duration-300 flex justify-center">
+                  <Swords class="w-14 h-14 text-red-300" />
                 </div>
                 <h2 class="font-display text-2xl sm:text-3xl text-white mb-4">
                   Combat Tactique
@@ -92,15 +92,15 @@ export const ModeSelectionScreen: Component<ModeSelectionScreenProps> = (props) 
                 </p>
                 <div class="space-y-2 text-sm text-slate-300/70">
                   <div class="flex items-center justify-center gap-2">
-                    <span class="text-red-400">⚡</span>
+                    <Zap class="w-4 h-4 text-red-400 flex-shrink-0" />
                     <span>Ennemis à affronter</span>
                   </div>
                   <div class="flex items-center justify-center gap-2">
-                    <span class="text-red-400">⚡</span>
+                    <Zap class="w-4 h-4 text-red-400 flex-shrink-0" />
                     <span>Stratégie au tour par tour</span>
                   </div>
                   <div class="flex items-center justify-center gap-2">
-                    <span class="text-red-400">⚡</span>
+                    <Zap class="w-4 h-4 text-red-400 flex-shrink-0" />
                     <span>Capacités & attaques</span>
                   </div>
                 </div>
@@ -115,8 +115,8 @@ export const ModeSelectionScreen: Component<ModeSelectionScreenProps> = (props) 
               onClick={() => props.onSelectMode(GameMode.DUNGEON)}
             >
               <div class="text-center">
-                <div class="text-6xl mb-4 group-hover:scale-110 transition-transform duration-300">
-                  🏰
+                <div class="mb-4 group-hover:scale-110 transition-transform duration-300 flex justify-center">
+                  <Castle class="w-14 h-14 text-purple-300" />
                 </div>
                 <h2 class="font-display text-2xl sm:text-3xl text-white mb-4">
                   Donjon
@@ -126,15 +126,15 @@ export const ModeSelectionScreen: Component<ModeSelectionScreenProps> = (props) 
                 </p>
                 <div class="space-y-2 text-sm text-slate-300/70">
                   <div class="flex items-center justify-center gap-2">
-                    <span class="text-purple-400">🏰</span>
+                    <Castle class="w-4 h-4 text-purple-400 flex-shrink-0" />
                     <span>Plusieurs salles</span>
                   </div>
                   <div class="flex items-center justify-center gap-2">
-                    <span class="text-purple-400">🏰</span>
+                    <Castle class="w-4 h-4 text-purple-400 flex-shrink-0" />
                     <span>Portails de téléportation</span>
                   </div>
                   <div class="flex items-center justify-center gap-2">
-                    <span class="text-purple-400">🏰</span>
+                    <Castle class="w-4 h-4 text-purple-400 flex-shrink-0" />
                     <span>Progression continue</span>
                   </div>
                 </div>
@@ -149,8 +149,8 @@ export const ModeSelectionScreen: Component<ModeSelectionScreenProps> = (props) 
               onClick={() => props.onSelectMultiplayer?.()}
             >
               <div class="text-center">
-                <div class="text-6xl mb-4 group-hover:scale-110 transition-transform duration-300">
-                  &#x1F91D;
+                <div class="mb-4 group-hover:scale-110 transition-transform duration-300 flex justify-center">
+                  <Users class="w-14 h-14 text-emerald-300" />
                 </div>
                 <h2 class="font-display text-2xl sm:text-3xl text-white mb-4">
                   Multijoueur
@@ -160,15 +160,15 @@ export const ModeSelectionScreen: Component<ModeSelectionScreenProps> = (props) 
                 </p>
                 <div class="space-y-2 text-sm text-slate-300/70">
                   <div class="flex items-center justify-center gap-2">
-                    <span class="text-emerald-400">&#x2713;</span>
+                    <Check class="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>2-6 joueurs</span>
                   </div>
                   <div class="flex items-center justify-center gap-2">
-                    <span class="text-emerald-400">&#x2713;</span>
+                    <Check class="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>Code de salle</span>
                   </div>
                   <div class="flex items-center justify-center gap-2">
-                    <span class="text-emerald-400">&#x2713;</span>
+                    <Check class="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>Synchronisation temps r&eacute;el</span>
                   </div>
                 </div>

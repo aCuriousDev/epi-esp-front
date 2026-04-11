@@ -18,9 +18,13 @@ import {
   Plus,
   Check,
   X,
+  ScrollText,
+  Swords,
+  User,
+  Drama,
   Loader2,
 } from "lucide-solid";
-import { createSignal, onCleanup, onMount, Show, For } from "solid-js";
+import { createSignal, onCleanup, onMount, Show, For, type JSX } from "solid-js";
 import {
   Campaign,
   CampaignStatus,
@@ -627,17 +631,17 @@ export default function CampaignView() {
                     </h3>
                     <div class="space-y-3">
                       <ActivityItem
-                        icon="📜"
+                        icon={<ScrollText class="w-5 h-5 text-amber-300" />}
                         text="Session 12 terminée: Les Tours d'Argent"
                         time="Il y a 4 jours"
                       />
                       <ActivityItem
-                        icon="⚔️"
+                        icon={<Swords class="w-5 h-5 text-red-300" />}
                         text="Le groupe a atteint le niveau 6"
                         time="Il y a 1 semaine"
                       />
                       <ActivityItem
-                        icon="👤"
+                        icon={<User class="w-5 h-5 text-purple-300" />}
                         text="DragonSlayer a rejoint la campagne"
                         time="Il y a 2 semaines"
                       />
@@ -686,7 +690,7 @@ export default function CampaignView() {
                         {(player) => (
                           <div class="p-4 flex items-center gap-4 hover:bg-white/5 transition-colors">
                             <div class="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center">
-                              <span class="text-lg">🎭</span>
+                              <Drama class="w-6 h-6 text-purple-300" />
                             </div>
                             <div class="flex-1 min-w-0">
                               <p class="text-white font-semibold">
@@ -1013,10 +1017,10 @@ function StatCard(props: {
 /**
  * Activity item component
  */
-function ActivityItem(props: { icon: string; text: string; time: string }) {
+function ActivityItem(props: { icon: JSX.Element; text: string; time: string }) {
   return (
     <div class="flex items-start gap-3 p-3 bg-white/5 rounded-xl">
-      <span class="text-lg">{props.icon}</span>
+      <span>{props.icon}</span>
       <div class="flex-1 min-w-0">
         <p class="text-white text-sm">{props.text}</p>
         <p class="text-slate-500 text-xs mt-0.5">{props.time}</p>

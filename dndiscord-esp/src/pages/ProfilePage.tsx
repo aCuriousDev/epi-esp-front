@@ -1,6 +1,6 @@
-import { Show, createSignal } from "solid-js";
+import { Show, createSignal, type JSX } from "solid-js";
 import { useNavigate } from "@solidjs/router";
-import { ArrowLeft, LogOut, User, Mail, Calendar, Shield, Edit3 } from "lucide-solid";
+import { ArrowLeft, LogOut, User, Mail, Calendar, Shield, Edit3, Drama, Swords, ScrollText, Trophy, Dices } from "lucide-solid";
 import { authStore } from "../stores/auth.store";
 import { AuthService } from "../services/auth.service";
 
@@ -116,10 +116,10 @@ export default function ProfilePage() {
 
               {/* Stats Grid */}
               <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-                <StatCard icon="🎭" label="Personnages" value="0" />
-                <StatCard icon="⚔️" label="Combats" value="0" />
-                <StatCard icon="📜" label="Campagnes" value="0" />
-                <StatCard icon="🏆" label="Victoires" value="0" />
+                <StatCard icon={<Drama class="w-6 h-6 text-purple-300" />} label="Personnages" value="0" />
+                <StatCard icon={<Swords class="w-6 h-6 text-red-300" />} label="Combats" value="0" />
+                <StatCard icon={<ScrollText class="w-6 h-6 text-amber-300" />} label="Campagnes" value="0" />
+                <StatCard icon={<Trophy class="w-6 h-6 text-game-gold" />} label="Victoires" value="0" />
               </div>
 
               {/* Details Section */}
@@ -177,13 +177,13 @@ export default function ProfilePage() {
           {/* Quick Actions */}
           <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <QuickActionCard
-              icon="🎲"
+              icon={<Dices class="w-6 h-6 text-blue-300" />}
               title="Lancer une partie"
               description="Rejoignez une session ou créez-en une"
               onClick={() => navigate("/board")}
             />
             <QuickActionCard
-              icon="📜"
+              icon={<ScrollText class="w-6 h-6 text-amber-300" />}
               title="Mes Campagnes"
               description="Gérez vos aventures épiques"
               onClick={() => navigate("/campaigns")}
@@ -219,10 +219,10 @@ export default function ProfilePage() {
 /**
  * Stat card component
  */
-function StatCard(props: { icon: string; label: string; value: string }) {
+function StatCard(props: { icon: JSX.Element; label: string; value: string }) {
   return (
     <div class="flex flex-col items-center p-4 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors">
-      <span class="text-2xl mb-1">{props.icon}</span>
+      <span class="mb-1">{props.icon}</span>
       <span class="text-xl font-bold text-white">{props.value}</span>
       <span class="text-xs text-slate-400">{props.label}</span>
     </div>
@@ -249,13 +249,13 @@ function InfoRow(props: { icon: JSX.Element; label: string; value: string }) {
 /**
  * Quick action card component
  */
-function QuickActionCard(props: { icon: string; title: string; description: string; onClick: () => void }) {
+function QuickActionCard(props: { icon: JSX.Element; title: string; description: string; onClick: () => void }) {
   return (
     <button
       onClick={props.onClick}
       class="flex items-center gap-4 p-4 bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-xl hover:bg-white/10 hover:border-white/20 transition-all text-left group"
     >
-      <div class="flex-shrink-0 w-12 h-12 flex items-center justify-center bg-white/10 rounded-xl text-2xl group-hover:scale-110 transition-transform">
+      <div class="flex-shrink-0 w-12 h-12 flex items-center justify-center bg-white/10 rounded-xl group-hover:scale-110 transition-transform">
         {props.icon}
       </div>
       <div>
@@ -268,6 +268,4 @@ function QuickActionCard(props: { icon: string; title: string; description: stri
   );
 }
 
-// JSX type for InfoRow icon
-import type { JSX } from "solid-js";
 
