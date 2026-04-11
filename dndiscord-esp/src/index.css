@@ -317,7 +317,8 @@ body {
 }
 
 .menu-badge-icon {
-	@apply text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.35)];
+	@apply drop-shadow-[0_2px_6px_rgba(0,0,0,0.35)];
+	color: var(--gold-300);
 }
 
 /* Hover linkage: when hovering the row/button, animate the badge */
@@ -345,7 +346,8 @@ body {
 
 .menu-row:hover .menu-badge-icon {
 	transform: scale(1.06);
-	filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.35));
+	filter: drop-shadow(0 0 8px rgba(244, 197, 66, 0.5));
+	color: var(--gold-200);
 }
 
 .menu-badge:hover {

@@ -1,10 +1,12 @@
 import { useNavigate } from "@solidjs/router";
 import { createSignal, For, JSX, onCleanup, onMount, Show } from "solid-js";
-import { Settings, ScrollText, Swords, Users, BookOpen } from "lucide-solid";
+import { Settings, ScrollText, Swords, Users } from "lucide-solid";
 
-import { GameIconsFoldedPaper } from "../components/common/GameIconsFoldedPaper";
-import { GameIconsPencilBrush } from "../components/common/GameIconsPencilBrush";
 import { GameIconsCrossedSwords } from "../components/common/GameIconsCrossedSwords";
+import { GameIconsFoldedPaper } from "../components/common/GameIconsFoldedPaper";
+import { GameIconsOpenBook } from "../components/common/GameIconsOpenBook";
+import { GameIconsPencilBrush } from "../components/common/GameIconsPencilBrush";
+import { GameIconsQuillInk } from "../components/common/GameIconsQuillInk";
 import { GameIconsTreasureMap } from "../components/common/GameIconsTreasureMap";
 import { AnimatedD20 } from "../components/common/AnimatedD20";
 import ButtonMenu from "../components/common/ButtonMenu";
@@ -29,42 +31,42 @@ export default function MenuComponent() {
 	>([
 		{
 			label: "Jouer",
-			icon: <GameIconsCrossedSwords class="menu-badge-icon h-12 w-12" />,
+			icon: <GameIconsCrossedSwords class="menu-badge-icon h-8 w-8" />,
 			hoveringLabel: "play",
 			route: "/board",
 			hoveringDescription: "Lancez une partie et explorez le système de combat tactique.",
 		},
 		{
 			label: "Personnages",
-			icon: <GameIconsPencilBrush class="menu-badge-icon h-10 w-10" />,
+			icon: <GameIconsPencilBrush class="menu-badge-icon h-8 w-8" />,
 			hoveringLabel: "characters",
 			route: "/characters",
 			hoveringDescription: "Forgez un héros pour vos quêtes.",
 		},
 		{
 			label: "Campagnes",
-			icon: <ScrollText class="menu-badge-icon h-10 w-10" />,
+			icon: <GameIconsOpenBook class="menu-badge-icon h-8 w-8" />,
 			hoveringLabel: "campaigns",
 			route: "/campaigns",
 			hoveringDescription: "Gérez vos campagnes et sessions de jeu.",
 		},
 		{
 			label: "Campagnes Manager",
-			icon: <ScrollText class="menu-badge-icon h-10 w-10" />,
-			hoveringLabel: "campaigns",
+			icon: <GameIconsQuillInk class="menu-badge-icon h-8 w-8" />,
+			hoveringLabel: "campaigns-manager",
 			route: "/campaigns-manager",
 			hoveringDescription: "Gérez vos campagnes",
 		},
 		{
 			label: "Règles du jeu",
-			icon: <GameIconsFoldedPaper class="menu-badge-icon h-10 w-10" />,
+			icon: <GameIconsFoldedPaper class="menu-badge-icon h-8 w-8" />,
 			hoveringLabel: "rules",
 			route: "/rules",
 			hoveringDescription: "Consultez les règles du jeu.",
 		},
 		{
 			label: "Map Editor",
-			icon: <GameIconsTreasureMap class="menu-badge-icon h-10 w-10" />,
+			icon: <GameIconsTreasureMap class="menu-badge-icon h-8 w-8" />,
 			hoveringLabel: "map-editor",
 			route: "/map-editor",
 			hoveringDescription: "Créez et éditez vos propres cartes de jeu.",
