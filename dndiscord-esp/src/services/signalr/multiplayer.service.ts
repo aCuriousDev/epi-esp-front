@@ -478,6 +478,7 @@ export function registerMultiplayerHandlers(): void {
 
     // Deterministic-ish color per author
     const palette = [
+      // brand-literal – multiplayer player-identification colors
       "#3b82f6",
       "#ef4444",
       "#22c55e",
