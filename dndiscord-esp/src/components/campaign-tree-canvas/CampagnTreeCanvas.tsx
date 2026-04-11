@@ -38,12 +38,6 @@ interface AddNodeData {
   y?: number;
   data?: any;
 }
-(window as any).choices = ChoicesNode;
-(window as any).CombatNode = CombatNode;
-(window as any).StartNode = StartNode;
-(window as any).scene = SceneNode;
-(window as any).MapNode = MapNode;
-(window as any).draw2d = draw2d;
 
 export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
   let canvasRef: HTMLDivElement | undefined;
@@ -253,7 +247,10 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           targetNode.getPort(targetPortName) ??
           targetNode.getInputPort?.(targetPortName);
 
-        if (!sourcePort || !targetPort) return;
+        if (!sourcePort || !targetPort) {
+          console.warn(`[importData] Skipping connection: port not found (source="${sourcePortName}" on "${sourceNodeId}", target="${targetPortName}" on "${targetNodeId}")`);
+          return;
+        }
 
         const connection = new draw2d.Connection();
         connection.setSource(sourcePort);
@@ -428,7 +425,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     }
     // Installer les politiques
     canvas.installEditPolicy(new draw2d.policy.canvas.SnapToGridEditPolicy(20));
-    canvas.installEditPolicy(new draw2d.policy.canvas.WheelZoomPolicy());
+    // WheelZoomPolicy retiré : le zoom Ctrl+Wheel est géré par handleWheelZoom pour éviter le double-zoom
     canvas.installEditPolicy(new draw2d.policy.canvas.PanningSelectionPolicy());
     canvas.installEditPolicy(new draw2d.policy.canvas.KeyboardPolicy());
 

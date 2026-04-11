@@ -19,6 +19,7 @@ import {
   Check,
   X,
   Loader2,
+  Map,
 } from "lucide-solid";
 import { createSignal, onCleanup, onMount, Show, For } from "solid-js";
 import {
@@ -309,6 +310,14 @@ export default function CampaignView() {
   const handleUpdate = () => {
     // TODO: Implement edit campaign modal or navigate to edit page
     navigate(`/campaigns/${params.id}/edit`);
+  };
+
+  const handleCampagnManager = () => {
+    navigate(`/campaigns/${params.id}/manager`);
+  };
+
+  const handleLaunchCampaignSession = () => {
+    navigate(`/campaigns/${params.id}/session`);
   };
 
   const handleDelete = async () => {
@@ -816,6 +825,20 @@ export default function CampaignView() {
                   >
                     <Edit3 class="w-5 h-5" />
                     Modifier
+                  </button>
+                  <button
+                    onClick={handleCampagnManager}
+                    class="py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-white font-semibold hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Map class="w-5 h-5" />
+                    Campagn Manager
+                  </button>
+                  <button
+                    onClick={handleLaunchCampaignSession}
+                    class="py-3 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold transition-all shadow-lg shadow-purple-500/20 flex items-center justify-center gap-2"
+                  >
+                    <Play class="w-5 h-5" />
+                    Lancer la session
                   </button>
                   <button
                     onClick={handleDelete}

@@ -48,6 +48,7 @@ const CampaignManager: Component = () => {
   const [selectedNode, setSelectedNode] = createSignal<CampaignNode | null>(null);
   const [nodeType, setNodeType] = createSignal<string>('');
 
+  const [loadError, setLoadError] = createSignal<string | null>(null);
   const [modalOpen, setModalOpen] = createSignal(false);
 
   // Save state & toast
@@ -65,8 +66,9 @@ const CampaignManager: Component = () => {
 
   // ─── Export / Import ─────────────────────────────────────────────────────
   const handleExport = async () => {
-    const data = await canvasRef()?.exportData();
-    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const data = canvasRef()?.exportData(); // already a JSON string
+    if (!data) return;
+    const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -89,6 +91,7 @@ const CampaignManager: Component = () => {
       handleImport(mappedCampaign.campaignTreeDefinition ?? undefined);
     } catch (err: any) {
       console.error('Failed to load campaign:', err);
+      setLoadError(err?.response?.status === 404 ? 'Campagne introuvable.' : 'Erreur lors du chargement de la campagne.');
     } finally {
       setLoading(false);
     }
@@ -165,7 +168,7 @@ const CampaignManager: Component = () => {
   // ─── Save campaign ────────────────────────────────────────────────────────
   const handleSaveCampaign = async () => {
     const canvas = canvasRef();
-    if (!canvas || isSaving()) return;
+    if (!canvas || isSaving() || loadError()) return;
 
     setIsSaving(true);
     try {
@@ -212,9 +215,13 @@ const CampaignManager: Component = () => {
             <Edit class="w-4 h-4" />
             <span class="hidden sm:inline">Export / Import</span>
           </button>
+          <Show when={loadError()}>
+            <span class="text-red-400 text-sm px-2">{loadError()}</span>
+          </Show>
           <button
             onClick={() => handleSaveCampaign()}
-            disabled={isSaving()}
+            disabled={isSaving() || !!loadError()}
+            title={loadError() ? 'Sauvegarde désactivée : le chargement a échoué' : undefined}
             class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all shadow-lg shadow-purple-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Show when={isSaving()} fallback={<Save class="w-4 h-4" />}>

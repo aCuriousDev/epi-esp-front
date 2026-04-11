@@ -20,6 +20,7 @@ import { AuthCallback, ProtectedRoute } from "./components/auth";
 import { authStore } from "./stores/auth.store";
 import { initDiscordSDK } from "./services/discord";
 import CampaignManagerPage from "./pages/CampaignManagerPage";
+import CampaignSessionPage from "./pages/CampaignSessionPage";
 import SessionInviteListener from "./components/SessionInviteListener";
 import EditCampaign from "./pages/EditCampaign";
 
@@ -129,6 +130,14 @@ render(
         component={() => (
           <Protected>
             <CampaignManagerPage />
+          </Protected>
+        )}
+      />
+      <Route
+        path="/campaigns/:id/session"
+        component={() => (
+          <Protected>
+            <CampaignSessionPage />
           </Protected>
         )}
       />
