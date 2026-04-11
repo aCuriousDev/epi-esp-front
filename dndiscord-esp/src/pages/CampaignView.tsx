@@ -320,6 +320,10 @@ export default function CampaignView() {
     navigate(`/campaigns/${params.id}/session`);
   };
 
+  const handleViewSessions = () => {
+    navigate(`/campaigns/${params.id}/sessions`);
+  };
+
   const handleDelete = async () => {
     const c = campaign();
     if (!c) return;
@@ -839,6 +843,13 @@ export default function CampaignView() {
                   >
                     <Play class="w-5 h-5" />
                     Lancer la session
+                  </button>
+                  <button
+                    onClick={handleViewSessions}
+                    class="py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-white font-semibold hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                  >
+                    <BookOpen class="w-5 h-5" />
+                    Voir les sessions
                   </button>
                   <button
                     onClick={handleDelete}

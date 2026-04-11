@@ -12,6 +12,7 @@ interface CampaignTreeCanvasProps {
   onNodeSelect?: (node: CampaignNode | null) => void;
   onConnectionCreate?: (connection: draw2d.Connection) => void;
   ref?: (methods: CampaignTreeCanvasRef) => void;
+  readOnly?: boolean;
 }
 
 export interface CampaignTreeCanvasRef {
@@ -30,6 +31,7 @@ export interface CampaignTreeCanvasRef {
   undo: () => void;
   redo: () => void;
   refreshCanvas: () => void;
+  highlightVisited?: (visitedNodeIds: string[], traversedEdges: Array<{sourceId: string; port: string}>) => void;
 }
 
 interface AddNodeData {
@@ -415,6 +417,46 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     canvas.setZoom(currentZoom);
   };
 
+  const highlightVisited = (
+    visitedNodeIds: string[],
+    traversedEdges: Array<{ sourceId: string; port: string }>
+  ) => {
+    if (!canvas) return;
+
+    const visitedSet = new Set(visitedNodeIds);
+    const traversedSet = new Set(traversedEdges.map(e => `${e.sourceId}::${e.port}`));
+
+    // Highlight visited nodes — change border color to green
+    canvas.getFigures().each((_: number, fig: any) => {
+      const nodeId = fig.nodeData?.id;
+      if (!nodeId) return;
+      if (visitedSet.has(nodeId)) {
+        // Change the figure's background border color to green
+        fig.getChildren().each((_: number, child: any) => {
+          if (child.setColor) child.setColor('#22c55e'); // green-500
+          if (child.setBgColor && child.bgColor && child.bgColor !== 'none') {
+            // lighten slightly — add green tint
+          }
+        });
+        // Also try direct color change on the figure itself
+        if (fig.background?.setColor) fig.background.setColor('#22c55e');
+        fig.repaint();
+      }
+    });
+
+    // Highlight traversed connections — change stroke color to green
+    canvas.getLines().each((_: number, conn: any) => {
+      const sourceParent = conn.getSource()?.getParent?.();
+      const sourceId = sourceParent?.nodeData?.id ?? sourceParent?.getId?.();
+      const portName = conn.getSource()?.getName?.();
+      if (sourceId && portName && traversedSet.has(`${sourceId}::${portName}`)) {
+        conn.setColor('#22c55e');
+        conn.setStroke(3);
+        conn.repaint();
+      }
+    });
+  };
+
   onMount(() => {
     if (!canvasRef) return;
 
@@ -433,6 +475,11 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     canvasRef.addEventListener('wheel', handleWheelZoom, { passive: false });
 
     addStartNode();
+
+    // Apply read-only policies if needed
+    if (props.readOnly) {
+      canvas.installEditPolicy(new draw2d.policy.canvas.ReadOnlySelectionPolicy());
+    }
 
     // Bloquer explicitement la suppression via commande
     canvas.on('contextmenu', (emitter: any, event: any) => {
@@ -491,7 +538,8 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
         getTreeBoundingBox,
         undo,
         redo,
-        refreshCanvas
+        refreshCanvas,
+        highlightVisited,
       });
     }
   });

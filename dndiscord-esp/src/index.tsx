@@ -21,6 +21,8 @@ import { authStore } from "./stores/auth.store";
 import { initDiscordSDK } from "./services/discord";
 import CampaignManagerPage from "./pages/CampaignManagerPage";
 import CampaignSessionPage from "./pages/CampaignSessionPage";
+import CampaignSessionsListPage from "./pages/CampaignSessionsListPage";
+import CampaignSessionReplayPage from "./pages/CampaignSessionReplayPage";
 import SessionInviteListener from "./components/SessionInviteListener";
 import EditCampaign from "./pages/EditCampaign";
 
@@ -138,6 +140,22 @@ render(
         component={() => (
           <Protected>
             <CampaignSessionPage />
+          </Protected>
+        )}
+      />
+      <Route
+        path="/campaigns/:id/sessions"
+        component={() => (
+          <Protected>
+            <CampaignSessionsListPage />
+          </Protected>
+        )}
+      />
+      <Route
+        path="/campaigns/:id/sessions/:sessionId"
+        component={() => (
+          <Protected>
+            <CampaignSessionReplayPage />
           </Protected>
         )}
       />
