@@ -31,6 +31,9 @@ export const CombatLog: Component = () => {
       <div 
         ref={logContainerRef}
         class="flex-1 overflow-y-auto overflow-x-hidden space-y-1 text-xs pr-2 min-h-0"
+        role="log"
+        aria-live="polite"
+        aria-label="Combat log"
       >
         <For each={gameState.combatLog}>
           {(entry) => (

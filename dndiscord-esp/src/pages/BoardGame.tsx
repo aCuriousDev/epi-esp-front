@@ -1,6 +1,7 @@
 import { Component, Show, onMount, onCleanup, createSignal } from "solid-js";
 import { useNavigate, useLocation } from "@solidjs/router";
-import { ArrowLeft, RotateCcw } from "lucide-solid";
+import { ArrowLeft, RotateCcw, Check, Hand, MousePointer, Move as MoveIcon } from "lucide-solid";
+import { getPhaseIcon } from "../components/common/icons";
 import {
   GameCanvas,
   isEngineReady,
@@ -364,19 +365,19 @@ const BoardGame: Component = () => {
                   <h4 class="text-game-gold font-semibold mb-2">Features:</h4>
                   <ul class="space-y-2 text-gray-400">
                     <li class="flex gap-2">
-                      <span class="text-green-400">✓</span>
+                      <Check class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
                       <span>No enemy units</span>
                     </li>
                     <li class="flex gap-2">
-                      <span class="text-green-400">✓</span>
+                      <Check class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
                       <span>Unlimited movement</span>
                     </li>
                     <li class="flex gap-2">
-                      <span class="text-green-400">✓</span>
+                      <Check class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
                       <span>No action point costs</span>
                     </li>
                     <li class="flex gap-2">
-                      <span class="text-green-400">✓</span>
+                      <Check class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
                       <span>No turn restrictions</span>
                     </li>
                   </ul>
@@ -556,13 +557,14 @@ const BoardGame: Component = () => {
             {/* Game Phase Indicator */}
             <div class="absolute top-3 sm:top-4 left-1/2 -translate-x-1/2 z-10 flex flex-wrap items-center justify-center gap-2 sm:gap-3 px-3 max-w-[calc(100%-1rem)] sm:max-w-[calc(100%-2rem)]">
               <Show when={gameState.dungeon}>
-                <div class="px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold bg-purple-600/80 text-white whitespace-nowrap">
-                  🏰 Salle {(gameState.dungeon?.currentRoomIndex ?? 0) + 1}/
+                <div class="px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold bg-purple-600/80 text-white whitespace-nowrap flex items-center gap-1.5">
+                  {getPhaseIcon("dungeon")}
+                  Salle {(gameState.dungeon?.currentRoomIndex ?? 0) + 1}/
                   {gameState.dungeon?.totalRooms}
                 </div>
               </Show>
               <div
-                class={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap ${
+                class={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap flex items-center gap-1.5 ${
                   gameState.phase === GamePhase.COMBAT_PREPARATION
                     ? "bg-amber-600/80 text-white"
                     : gameState.phase === GamePhase.FREE_ROAM
@@ -574,6 +576,7 @@ const BoardGame: Component = () => {
                           : "bg-gray-600/80 text-white"
                 }`}
               >
+                {getPhaseIcon(gameState.phase)}
                 {getPhaseText(gameState.phase)}
               </div>
               {/* Bouton Prêt - Phase de préparation */}
@@ -613,14 +616,18 @@ const BoardGame: Component = () => {
             {/* Mobile Drawer Toggles */}
             <div class="lg:hidden absolute top-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
               <button
-                class="pointer-events-auto px-3 py-2 rounded-lg border border-white/20 bg-game-dark/85 backdrop-blur text-xs text-white font-medium shadow-lg"
+                class="pointer-events-auto px-3 py-2 rounded-lg border border-white/20 bg-game-dark/85 backdrop-blur text-xs text-white font-medium shadow-lg focus-ring-gold"
                 onClick={toggleLeftDrawer}
+                aria-expanded={leftDrawerOpen()}
+                aria-controls="left-drawer"
               >
                 {leftDrawerOpen() ? "Fermer infos" : "Infos"}
               </button>
               <button
-                class="pointer-events-auto px-3 py-2 rounded-lg border border-white/20 bg-game-dark/85 backdrop-blur text-xs text-white font-medium shadow-lg"
+                class="pointer-events-auto px-3 py-2 rounded-lg border border-white/20 bg-game-dark/85 backdrop-blur text-xs text-white font-medium shadow-lg focus-ring-gold"
                 onClick={toggleRightDrawer}
+                aria-expanded={rightDrawerOpen()}
+                aria-controls="right-drawer"
               >
                 {rightDrawerOpen() ? "Fermer journal" : "Journal"}
               </button>
@@ -631,21 +638,21 @@ const BoardGame: Component = () => {
               <h4 class="font-semibold text-game-gold mb-3">Controls</h4>
               <ul class="space-y-1.5 text-gray-400 lg:hidden">
                 <li class="flex items-start gap-2">
-                  <span class="flex-shrink-0">👆</span>
+                  <Hand class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
                   <span>
                     <span class="text-gray-300 font-medium">Tap</span> - Select
                     unit / Move / Attack
                   </span>
                 </li>
                 <li class="flex items-start gap-2">
-                  <span class="flex-shrink-0">✌️</span>
+                  <MoveIcon class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
                   <span>
                     <span class="text-gray-300 font-medium">Drag</span> - Rotate
                     / pan camera
                   </span>
                 </li>
                 <li class="flex items-start gap-2">
-                  <span class="flex-shrink-0">🤏</span>
+                  <MoveIcon class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
                   <span>
                     <span class="text-gray-300 font-medium">Pinch</span> - Zoom
                     in/out
@@ -654,21 +661,21 @@ const BoardGame: Component = () => {
               </ul>
               <ul class="space-y-1.5 text-gray-400 hidden lg:block">
                 <li class="flex items-start gap-2">
-                  <span class="flex-shrink-0">🖱️</span>
+                  <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
                   <span>
                     <span class="text-gray-300 font-medium">Left Click</span> -
                     Select unit / Move / Attack
                   </span>
                 </li>
                 <li class="flex items-start gap-2">
-                  <span class="flex-shrink-0">🖱️</span>
+                  <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
                   <span>
                     <span class="text-gray-300 font-medium">Right Drag</span> -
                     Rotate camera
                   </span>
                 </li>
                 <li class="flex items-start gap-2">
-                  <span class="flex-shrink-0">🖱️</span>
+                  <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
                   <span>
                     <span class="text-gray-300 font-medium">Scroll</span> - Zoom
                     in/out
@@ -684,7 +691,7 @@ const BoardGame: Component = () => {
                 onClick={() => resetCamera()}
                 title="Reset camera to default view"
               >
-                <span>🔄</span>
+                <RotateCcw class="w-4 h-4" />
                 <span>Reset View</span>
               </button>
             </div>
@@ -706,6 +713,7 @@ const BoardGame: Component = () => {
             </Show>
 
             <div
+              id="left-drawer"
               class={`absolute inset-y-0 left-0 w-[min(86vw,360px)] bg-game-darker/95 backdrop-blur border-r border-white/10 p-3 flex flex-col gap-3 overflow-y-auto transition-transform duration-300 pointer-events-auto ${
                 leftDrawerOpen() ? "translate-x-0" : "-translate-x-full"
               }`}
@@ -725,6 +733,7 @@ const BoardGame: Component = () => {
             </div>
 
             <div
+              id="right-drawer"
               class={`absolute inset-y-0 right-0 w-[min(88vw,400px)] bg-game-darker/95 backdrop-blur border-l border-white/10 p-3 flex flex-col gap-3 overflow-y-auto transition-transform duration-300 pointer-events-auto ${
                 rightDrawerOpen() ? "translate-x-0" : "translate-x-full"
               }`}
@@ -753,19 +762,19 @@ const BoardGame: Component = () => {
 function getPhaseText(phase: GamePhase): string {
   switch (phase) {
     case GamePhase.SETUP:
-      return "⏳ Setting up...";
+      return "Setting up...";
     case GamePhase.COMBAT_PREPARATION:
-      return "⚔️ Phase de préparation";
+      return "Phase de pr\u00e9paration";
     case GamePhase.PLAYER_TURN:
-      return "🟢 Your Turn";
+      return "Your Turn";
     case GamePhase.ENEMY_TURN:
-      return "🔴 Enemy Turn";
+      return "Enemy Turn";
     case GamePhase.ANIMATION:
-      return "⌛ Animating...";
+      return "Animating...";
     case GamePhase.GAME_OVER:
-      return "🏁 Game Over";
+      return "Game Over";
     case GamePhase.FREE_ROAM:
-      return "🗺️ Free Roam Mode";
+      return "Free Roam Mode";
     default:
       return phase;
   }

@@ -1,6 +1,7 @@
 import { Component, For, Show } from 'solid-js';
 import { gameState, units } from '../game';
 import { Team } from '../types';
+import { getUnitIcon } from './common/icons';
 
 export const TurnOrderDisplay: Component = () => {
   return (
@@ -21,16 +22,16 @@ export const TurnOrderDisplay: Component = () => {
             
             return (
               <div 
-                class={`flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center text-lg transition-all ${
+                class={`flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center transition-all ${
                   isCurrent() 
                     ? 'ring-2 ring-game-gold scale-110 shadow-lg shadow-game-gold/30' 
                     : 'opacity-60 hover:opacity-100'
                 } ${
-                  isPlayer ? 'bg-blue-600/50' : 'bg-red-600/50'
+                  isPlayer ? 'bg-arcindigo-500/50' : 'bg-danger/50'
                 }`}
                 title={`${unit.name} (Initiative: ${unit.stats.initiative})`}
               >
-                {getUnitIcon(unit.type)}
+                {getUnitIcon(unit.type, { class: "w-5 h-5 text-white" })}
               </div>
             );
           }}
@@ -51,15 +52,3 @@ export const TurnOrderDisplay: Component = () => {
   );
 };
 
-function getUnitIcon(type: string): string {
-  switch (type) {
-    case 'warrior': return '⚔️';
-    case 'mage': return '🔮';
-    case 'archer': return '🏹';
-    case 'rogue': return '🗡️';
-    case 'healer': return '✨';
-    case 'enemy_skeleton': return '💀';
-    case 'enemy_mage': return '🧙';
-    default: return '👤';
-  }
-}

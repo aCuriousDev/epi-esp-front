@@ -261,9 +261,9 @@ export default function CampaignsPage() {
         .campaigns-page {
           background: linear-gradient(
             135deg,
-            #1a1a2e 0%,
-            #16213e 50%,
-            #0f0f1a 100%
+            var(--ink-700) 0%,
+            var(--ink-800) 50%,
+            var(--ink-900) 100%
           );
         }
 
@@ -362,7 +362,7 @@ function CampaignCard(props: { campaign: Campaign; onClick: () => void }) {
   return (
     <button
       onClick={props.onClick}
-      class="campaign-card group relative bg-[#1a1a2e] backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl hover:shadow-purple-500/10 hover:border-purple-500/40 transition-all text-left w-full"
+      class="campaign-card group relative bg-ink-700 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl hover:shadow-purple-500/10 hover:border-purple-500/40 transition-all text-left w-full"
     >
       {/* Cover gradient */}
       <div class="h-28 bg-gradient-to-br from-purple-800/50 via-indigo-800/40 to-violet-800/50 relative">
@@ -378,7 +378,7 @@ function CampaignCard(props: { campaign: Campaign; onClick: () => void }) {
         </div>
 
         {/* Gradient overlay at bottom - matches card bg color */}
-        <div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#1a1a2e] to-transparent" />
+        <div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-ink-700 to-transparent" />
       </div>
 
       {/* Content */}

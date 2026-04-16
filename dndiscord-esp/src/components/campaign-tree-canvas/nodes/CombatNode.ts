@@ -1,4 +1,5 @@
 import draw2d from 'draw2d';
+import { tokens } from "@/styles/design-tokens";
 import { CampaignNode, BaseNodeData } from './CampaignNode';
 
 export interface CombatNodeData extends BaseNodeData {
@@ -28,8 +29,8 @@ export class CombatNode extends CampaignNode {
     super(x, y, data);
     this.nodeWidth = 240;
     this.nodeHeight = 120;
-    this.background.setBackgroundColor('#4a1a1a');
-    this.background.setColor('#8b0000');
+    this.background.setBackgroundColor(tokens.nodes.combat.fill);
+    this.background.setColor(tokens.nodes.combat.stroke);
   }
   
   /**
@@ -44,8 +45,8 @@ export class CombatNode extends CampaignNode {
     this.enemiesLabel = new draw2d.shape.basic.Label({
       text: `⚔️ Ennemis: ${(combatData.enemies || []).length}`,
       fontSize: 12,
-      fontColor: '#ffcccc',
-      color: '#ffcccc'
+      fontColor: tokens.text.high,
+      color: tokens.text.high
     });
     
     // Positionner en haut
@@ -56,8 +57,8 @@ export class CombatNode extends CampaignNode {
     this.difficultyLabel = new draw2d.shape.basic.Label({
       text: difficultyText,
       fontSize: 14,
-      fontColor: '#ff8888',
-      color: '#ff8888',
+      fontColor: tokens.status.danger,
+      color: tokens.status.danger,
       bold: true
     });
     

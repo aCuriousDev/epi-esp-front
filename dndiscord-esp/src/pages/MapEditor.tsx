@@ -2895,7 +2895,7 @@ export default function MapEditor() {
 							}
 						}}
 					>
-						{editMode() ? "✏️ Mode Édition Actif" : "✏️ Mode Édition"}
+						{editMode() ? "Mode Édition Actif" : "Mode Édition"}
 					</button>
 					{editMode() && (
 						<p class="mt-2 text-xs text-slate-400">
@@ -3004,14 +3004,14 @@ export default function MapEditor() {
 							}
 						}}
 					>
-						{collisionPreviewMode() ? "🔴 Mode Collision Actif" : "⚪ Mode Collision"}
+						{collisionPreviewMode() ? "Mode Collision Actif" : "Mode Collision"}
 					</button>
 					{collisionPreviewMode() && (
 						<div class="mt-2 text-xs text-slate-400 space-y-1">
 							<p>Affiche les collisions de toutes les cellules</p>
-							<p>🟢 Vert = Zone walkable (marchable)</p>
-							<p>🟡 Jaune = Terrain difficile (coût élevé)</p>
-							<p>🔴 Rouge = Zone bloquée (non walkable)</p>
+							<p><span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" /> Vert = Zone walkable (marchable)</p>
+							<p><span class="inline-block w-2 h-2 rounded-full bg-yellow-500 mr-1" /> Jaune = Terrain difficile (coût élevé)</p>
+							<p><span class="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" /> Rouge = Zone bloquée (non walkable)</p>
 						</div>
 					)}
 				</div>

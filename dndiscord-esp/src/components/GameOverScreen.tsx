@@ -1,4 +1,5 @@
 import { Component, Show } from 'solid-js';
+import { Trophy, Skull } from 'lucide-solid';
 import { gameState, units, startGame } from '../game';
 import { Team, GamePhase } from '../types';
 
@@ -12,12 +13,18 @@ export const GameOverScreen: Component = () => {
   
   return (
     <Show when={gameState.phase === GamePhase.GAME_OVER}>
-      <div class="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+      <div class="fixed inset-0 bg-black/80 flex items-center justify-center z-50" role="dialog" aria-modal="true">
         <div class="panel-game text-center p-8 max-w-md">
+          <div class="flex justify-center mb-4">
+            {isVictory()
+              ? <Trophy class="w-12 h-12 text-game-gold" />
+              : <Skull class="w-12 h-12 text-red-500" />
+            }
+          </div>
           <h1 class={`font-fantasy text-4xl mb-4 ${
             isVictory() ? 'text-game-gold' : 'text-red-500'
           }`}>
-            {isVictory() ? '🏆 Victory! 🏆' : '💀 Defeat 💀'}
+            {isVictory() ? 'Victory!' : 'Defeat'}
           </h1>
           
           <p class="text-gray-300 mb-6">
@@ -31,7 +38,7 @@ export const GameOverScreen: Component = () => {
           </div>
           
           <button
-            class="btn-game text-lg px-8 py-3"
+            class="btn-game text-lg px-8 py-3 focus-ring-gold"
             onClick={() => startGame()}
           >
             Play Again

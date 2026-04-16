@@ -32,9 +32,9 @@ export default function LoginButton(props: LoginButtonProps) {
         disabled={isLoggingIn()}
         class={`
           group relative flex items-center gap-3 px-6 py-3 
-          bg-[#5865F2] hover:bg-[#4752C4] 
+          bg-discord-blurple hover:bg-discord-blurple-dark 
           text-white font-medium rounded-xl
-          transition-all duration-200
+          transition-colors duration-ds-sm focus-ring-gold
           disabled:opacity-60 disabled:cursor-not-allowed
           shadow-lg hover:shadow-xl hover:-translate-y-0.5
           ${props.class || ""}

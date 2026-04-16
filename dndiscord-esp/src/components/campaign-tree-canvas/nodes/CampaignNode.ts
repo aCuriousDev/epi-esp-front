@@ -1,4 +1,5 @@
 import draw2d from 'draw2d';
+import { tokens } from "@/styles/design-tokens";
 
 /**
  * Interface de base pour tous les types de nodes
@@ -21,8 +22,8 @@ export abstract class CampaignNode extends draw2d.shape.composite.Group {
   protected background: draw2d.shape.basic.Rectangle = new draw2d.shape.basic.Rectangle({
     width: this.nodeWidth,
     height: this.nodeHeight,
-    bgColor: '#2d2d30',
-    color: '#3c3c3f',
+    bgColor: tokens.ink[600],
+    color: tokens.ink[500],
     stroke: 1,
     radius: 8,
   });

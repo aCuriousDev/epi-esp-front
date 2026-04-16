@@ -1,10 +1,12 @@
 import { useNavigate } from "@solidjs/router";
 import { createSignal, For, JSX, onCleanup, onMount, Show } from "solid-js";
-import { Settings, ScrollText, Swords, Users, BookOpen } from "lucide-solid";
+import { Settings, ScrollText, Swords, Users } from "lucide-solid";
 
-import { GameIconsFoldedPaper } from "../components/common/GameIconsFoldedPaper";
-import { GameIconsPencilBrush } from "../components/common/GameIconsPencilBrush";
 import { GameIconsCrossedSwords } from "../components/common/GameIconsCrossedSwords";
+import { GameIconsFoldedPaper } from "../components/common/GameIconsFoldedPaper";
+import { GameIconsOpenBook } from "../components/common/GameIconsOpenBook";
+import { GameIconsPencilBrush } from "../components/common/GameIconsPencilBrush";
+import { GameIconsQuillInk } from "../components/common/GameIconsQuillInk";
 import { GameIconsTreasureMap } from "../components/common/GameIconsTreasureMap";
 import { AnimatedD20 } from "../components/common/AnimatedD20";
 import ButtonMenu from "../components/common/ButtonMenu";
@@ -25,52 +27,46 @@ export default function MenuComponent() {
 			hoveringLabel: string;
 			route: string;
 			hoveringDescription?: string;
-			emoji?: string;
 		}>
 	>([
 		{
 			label: "Jouer",
-			icon: <GameIconsCrossedSwords class="menu-badge-icon h-12 w-12" />,
+			icon: <GameIconsCrossedSwords class="menu-badge-icon h-8 w-8" />,
 			hoveringLabel: "play",
 			route: "/board",
 			hoveringDescription: "Lancez une partie et explorez le système de combat tactique.",
-			emoji: "⚔️",
 		},
 		{
 			label: "Personnages",
-			icon: <GameIconsPencilBrush class="menu-badge-icon h-10 w-10" />,
+			icon: <GameIconsPencilBrush class="menu-badge-icon h-8 w-8" />,
 			hoveringLabel: "characters",
 			route: "/characters",
 			hoveringDescription: "Forgez un héros pour vos quêtes.",
-			emoji: "🎭",
 		},
 		{
 			label: "Campagnes",
-			icon: <ScrollText class="menu-badge-icon h-10 w-10" />,
+			icon: <GameIconsOpenBook class="menu-badge-icon h-8 w-8" />,
 			hoveringLabel: "campaigns",
 			route: "/campaigns",
 			hoveringDescription: "Gérez vos campagnes et sessions de jeu.",
-			emoji: "📜",
 		},
 		{
 			label: "Campagnes Manager",
-			icon: <ScrollText class="menu-badge-icon h-10 w-10" />,
-			hoveringLabel: "campaigns",
+			icon: <GameIconsQuillInk class="menu-badge-icon h-8 w-8" />,
+			hoveringLabel: "campaigns-manager",
 			route: "/campaigns-manager",
 			hoveringDescription: "Gérez vos campagnes",
-			emoji: "📜",
 		},
 		{
 			label: "Règles du jeu",
-			icon: <GameIconsFoldedPaper class="menu-badge-icon h-10 w-10" />,
+			icon: <GameIconsFoldedPaper class="menu-badge-icon h-8 w-8" />,
 			hoveringLabel: "rules",
 			route: "/rules",
 			hoveringDescription: "Consultez les règles du jeu.",
-			emoji: "📖",
 		},
 		{
 			label: "Map Editor",
-			icon: <GameIconsTreasureMap class="menu-badge-icon h-10 w-10" />,
+			icon: <GameIconsTreasureMap class="menu-badge-icon h-8 w-8" />,
 			hoveringLabel: "map-editor",
 			route: "/map-editor",
 			hoveringDescription: "Créez et éditez vos propres cartes de jeu.",
@@ -167,12 +163,9 @@ export default function MenuComponent() {
 				{/* Context hint area with animation */}
 				<div class="h-8 flex items-center justify-center">
 					<Show when={hovered()}>
-						<p class="text-center text-sm text-slate-300/90 animate-fadeIn flex items-center gap-2">
-							<span class="text-lg">
-								{menuItems().find((x) => x.hoveringLabel === hovered())?.emoji}
-							</span>
-							{menuItems().find((x) => x.hoveringLabel === hovered())?.hoveringDescription}
-						</p>
+					<p class="text-center text-sm text-slate-300/90 animate-fadeIn">
+						{menuItems().find((x) => x.hoveringLabel === hovered())?.hoveringDescription}
+					</p>
 					</Show>
 				</div>
 
@@ -210,11 +203,11 @@ export default function MenuComponent() {
 
 			<style jsx>{`
 				.menu-page {
-					background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1a 100%);
+					background: linear-gradient(135deg, var(--ink-700) 0%, var(--ink-800) 50%, var(--ink-900) 100%);
 				}
 
 				.main-title {
-					background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 25%, #8b5cf6 50%, #7c3aed 75%, #a78bfa 100%);
+					background: linear-gradient(135deg, var(--plum-300) 0%, var(--plum-300) 25%, var(--plum-500) 50%, var(--plum-500) 75%, var(--plum-300) 100%);
 					background-size: 200% 200%;
 					-webkit-background-clip: text;
 					background-clip: text;

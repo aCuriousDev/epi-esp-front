@@ -130,6 +130,7 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                 onClick={copyCode}
                 class="p-2 rounded-lg hover:bg-white/10 transition text-slate-300 hover:text-white"
                 title="Copier le code"
+                aria-label="Copier le code de la salle"
               >
                 <Show when={copied()} fallback={<Copy class="w-5 h-5" />}>
                   <Check class="w-5 h-5 text-green-400" />
@@ -150,7 +151,9 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                     <div class="flex items-center gap-3">
                       <div
                         class={`w-2.5 h-2.5 rounded-full ${player.status === "Connected" ? "bg-green-400" : "bg-gray-500"}`}
+                        aria-hidden="true"
                       />
+                      <span class="sr-only">{player.status === "Connected" ? "Connecté" : "Déconnecté"}</span>
                       <span class="text-white font-medium">
                         {player.userName}
                       </span>

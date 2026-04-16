@@ -213,8 +213,8 @@ const CampaignManager: Component = () => {
       height: '100vh',
       display: 'flex',
       'flex-direction': 'column',
-      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1a 100%)',
-      color: '#d4d4d4',
+      background: 'linear-gradient(135deg, var(--ink-700) 0%, var(--ink-800) 50%, var(--ink-900) 100%)',
+      color: 'var(--text-high)',
       'font-family': 'system-ui, -apple-system, sans-serif'
     }}>
       {/* Header */}
@@ -248,9 +248,9 @@ const CampaignManager: Component = () => {
         {/* Sidebar for selected node details */}
         <aside
          style={{
-          background:'#0f0f1a',
+          background:'var(--ink-900)',
           width: '320px',
-          'border-right': '1px solid #333',
+          'border-right': '1px solid var(--ink-600)',
           padding: '1.5rem',
           'overflow-y': 'auto',
         }}>
@@ -274,7 +274,7 @@ const CampaignManager: Component = () => {
                     'font-weight': '500',
                     'font-size': '0.9rem'
                   }}>
-                    📖 Texte narratif :
+                    Texte narratif :
                   </label>
                   <textarea
                     value={storyText()}
@@ -284,10 +284,10 @@ const CampaignManager: Component = () => {
                     style={{
                       width: '100%',
                       'min-height': '120px',
-                      background: '#1e1e1e',
-                      border: '1px solid #3c3c3f',
+                      background: 'var(--ink-700)',
+                      border: '1px solid var(--ink-500)',
                       'border-radius': '4px',
-                      color: '#d4d4d4',
+                      color: 'var(--text-high)',
                       padding: '0.75rem',
                       'font-family': 'inherit',
                       'font-size': '0.9rem',
@@ -313,7 +313,7 @@ const CampaignManager: Component = () => {
                       onClick={handleAddChoice}
                       style={{
                         padding: '0.25rem 0.5rem',
-                        background: '#0e639c',
+                        background: 'var(--arcindigo-500)',
                         border: 'none',
                         'border-radius': '3px',
                         color: 'white',
@@ -327,7 +327,7 @@ const CampaignManager: Component = () => {
 
                   <Show when={storyChoices().length > 0} fallback={
                     <p style={{
-                      color: '#888',
+                      color: 'var(--text-low)',
                       'font-size': '0.9rem',
                       'font-style': 'italic'
                     }}>
@@ -344,7 +344,7 @@ const CampaignManager: Component = () => {
                           }}>
                             <span style={{
                               'min-width': '24px',
-                              color: '#888',
+                              color: 'var(--text-low)',
                               'font-weight': '500'
                             }}>
                               {index() + 1}.
@@ -356,10 +356,10 @@ const CampaignManager: Component = () => {
                               onBlur={handleUpdateNode}
                               style={{
                                 flex: 1,
-                                background: '#1e1e1e',
-                                border: '1px solid #3c3c3f',
+                                background: 'var(--ink-700)',
+                                border: '1px solid var(--ink-500)',
                                 'border-radius': '4px',
-                                color: '#d4d4d4',
+                                color: 'var(--text-high)',
                                 padding: '0.5rem',
                                 'font-size': '0.9rem'
                               }}
@@ -371,10 +371,10 @@ const CampaignManager: Component = () => {
                               }}
                               style={{
                                 padding: '0.5rem',
-                                background: '#5a1d1d',
+                                background: 'rgba(239,68,68,0.22)',
                                 border: 'none',
                                 'border-radius': '3px',
-                                color: '#f48771',
+                                color: 'var(--status-danger)',
                                 cursor: 'pointer',
                                 'line-height': 1
                               }}
@@ -405,13 +405,13 @@ const CampaignManager: Component = () => {
                       'font-weight': '500',
                       'font-size': '0.9rem'
                     }}>
-                      ⚔️ Ennemis :
+                      Ennemis :
                     </label>
                     <button
                       onClick={handleAddEnemy}
                       style={{
                         padding: '0.25rem 0.5rem',
-                        background: '#8b0000',
+                        background: 'var(--status-danger)',
                         border: 'none',
                         'border-radius': '3px',
                         color: 'white',
@@ -425,7 +425,7 @@ const CampaignManager: Component = () => {
 
                   <Show when={combatEnemies().length > 0} fallback={
                     <p style={{
-                      color: '#888',
+                      color: 'var(--text-low)',
                       'font-size': '0.9rem',
                       'font-style': 'italic'
                     }}>
@@ -448,10 +448,10 @@ const CampaignManager: Component = () => {
                               placeholder="Nom de l'ennemi"
                               style={{
                                 flex: 1,
-                                background: '#1e1e1e',
-                                border: '1px solid #3c3c3f',
+                                background: 'var(--ink-700)',
+                                border: '1px solid var(--ink-500)',
                                 'border-radius': '4px',
-                                color: '#d4d4d4',
+                                color: 'var(--text-high)',
                                 padding: '0.5rem',
                                 'font-size': '0.9rem'
                               }}
@@ -463,10 +463,10 @@ const CampaignManager: Component = () => {
                               }}
                               style={{
                                 padding: '0.5rem',
-                                background: '#5a1d1d',
+                                background: 'rgba(239,68,68,0.22)',
                                 border: 'none',
                                 'border-radius': '3px',
-                                color: '#f48771',
+                                color: 'var(--status-danger)',
                                 cursor: 'pointer',
                                 'line-height': 1
                               }}
@@ -499,10 +499,10 @@ const CampaignManager: Component = () => {
                     style={{
                       width: '100%',
                       padding: '0.5rem',
-                      background: '#1e1e1e',
-                      border: '1px solid #3c3c3f',
+                      background: 'var(--ink-700)',
+                      border: '1px solid var(--ink-500)',
                       'border-radius': '4px',
-                      color: '#d4d4d4',
+                      color: 'var(--text-high)',
                       'font-size': '0.9rem',
                       cursor: 'pointer'
                     }}

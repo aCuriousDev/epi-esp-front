@@ -9,7 +9,7 @@ export interface PlayerBubbleProps {
 }
 
 export const PlayerBubble: Component<PlayerBubbleProps> = (props) => {
-  const accent = () => props.color ?? "#8b5cf6";
+  const accent = () => props.color ?? "var(--plum-500)";
   const displayText = () =>
     props.text.length > 80 ? props.text.slice(0, 77) + "…" : props.text;
   const isVisible = () => (props.phase ?? "in") === "in";
@@ -41,8 +41,8 @@ export const PlayerBubble: Component<PlayerBubbleProps> = (props) => {
         <div
           class="relative px-3.5 py-2.5 rounded-xl text-[13px] leading-snug backdrop-blur-md"
           style={{
-            background: "linear-gradient(170deg, rgba(20, 16, 36, 0.93) 0%, rgba(12, 10, 24, 0.96) 100%)",
-            color: "rgba(240, 238, 255, 0.95)",
+            background: "linear-gradient(170deg, rgba(20,22,43,0.93) 0%, rgba(7,8,18,0.96) 100%)",
+            color: "var(--text-high)",
           }}
         >
           {/* Subtle inner top highlight */}
