@@ -1,4 +1,4 @@
-import { onMount, onCleanup } from "solid-js";
+import { onMount, onCleanup, createSignal } from "solid-js";
 import draw2d from "draw2d";
 import { CampaignNode } from "./nodes/CampaignNode";
 import { StoryNode } from "./nodes/StoryNode";
@@ -7,6 +7,7 @@ import { safeConfirm } from "../../services/ui/confirm";
 import { tokens } from "@/styles/design-tokens";
 import { ChoicesNode } from "./nodes/ChoicesNode";
 import { SceneNode, SceneNodeData } from "./nodes/SceneNode";
+import { MapNode } from "./nodes/MapNode";
 import { StartNode } from './nodes/StartNode';
 import { SceneNode } from './nodes/SceneNode';
 import { MapNode } from './nodes/MapNode';
@@ -52,7 +53,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
   let canvasRef: HTMLDivElement | undefined;
   let canvas: draw2d.Canvas | null = null;
   let selectedNode: CampaignNode | null = null;
-  let currentZoom: number = 1.0;
+  const [currentZoom, setCurrentZoom] = createSignal(1.0);
 
   const addStartNode = () => {
     if (!canvas) return;
@@ -269,8 +270,8 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     if (!canvas || !canvasRef) return;
     canvas.setCurrentSelection(figure);
     const bb = figure.getBoundingBox();
-    const x = (bb.x + bb.w / 2) * (1 / currentZoom);
-    const y = (bb.y + bb.h / 2) * (1 / currentZoom);
+    const x = (bb.x + bb.w / 2) * (1 / currentZoom());
+    const y = (bb.y + bb.h / 2) * (1 / currentZoom());
     canvasRef.scrollLeft = x - canvasRef.offsetWidth / 2;
     canvasRef.scrollTop = y - canvasRef.offsetHeight / 2;
   };
@@ -314,9 +315,9 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     if (!canvas || !event.ctrlKey) return;
     event.preventDefault();
     const delta = event.deltaY * 0.001;
-    const newZoom = Math.min(Math.max(currentZoom + delta, 0.3), 3);
+    const newZoom = Math.min(Math.max(currentZoom() + delta, 0.3), 3);
     const pos = canvas.fromDocumentToCanvasCoordinate(event.clientX, event.clientY);
-    currentZoom = newZoom;
+    setCurrentZoom(newZoom);
     canvas.setZoom(newZoom);
   };
 
@@ -344,8 +345,8 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
    */
   const zoomIn = () => {
     if (!canvas) return;
-    currentZoom = Math.min(currentZoom + 0.1, 3.0);
-    canvas.setZoom(currentZoom);
+    setCurrentZoom(Math.min(currentZoom() + 0.1, 3.0));
+    canvas.setZoom(currentZoom());
   };
 
   const refreshCanvas = () => {
@@ -364,8 +365,8 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
    */
   const zoomOut = () => {
     if (!canvas) return;
-    currentZoom = Math.max(currentZoom - 0.1, 0.3);
-    canvas.setZoom(currentZoom);
+    setCurrentZoom(Math.max(currentZoom() - 0.1, 0.3));
+    canvas.setZoom(currentZoom());
   };
 
   /**
@@ -373,8 +374,8 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
    */
   const zoomReset = () => {
     if (!canvas) return;
-    currentZoom = 1.0;
-    canvas.setZoom(currentZoom);
+    setCurrentZoom(1.0);
+    canvas.setZoom(currentZoom());
   };
 
   /**
@@ -406,9 +407,9 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
 
     const zoomX = canvasWidth / width;
     const zoomY = canvasHeight / height;
-    currentZoom = Math.min(zoomX, zoomY, 1.0) * 0.9; // 90% pour laisser de la marge
+    setCurrentZoom(Math.min(zoomX, zoomY, 1.0) * 0.9); // 90% pour laisser de la marge
 
-    canvas.setZoom(currentZoom);
+    canvas.setZoom(currentZoom());
   };
 
   onMount(() => {
@@ -588,7 +589,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
             }}
             title="Réinitialiser le zoom"
           >
-            {Math.round(currentZoom * 100)}%
+            {Math.round(currentZoom() * 100)}%
           </button>
 
           <button

@@ -185,14 +185,8 @@ const CampaignManager: Component = () => {
 
   // ─── JSX ──────────────────────────────────────────────────────────────────
   return (
-    <div class='bg-brand-gradient' style={{
-      width: '100vw',
-      height: '100vh',
-      display: 'flex',
-      'flex-direction': 'column',
-      background: 'linear-gradient(135deg, var(--ink-700) 0%, var(--ink-800) 50%, var(--ink-900) 100%)',
-      color: 'var(--text-high)',
-      'font-family': 'system-ui, -apple-system, sans-serif'
+    <div class="bg-brand-gradient w-screen h-screen flex flex-col text-[var(--text-mid,#d4d4d4)]" style={{
+      'font-family': 'system-ui, -apple-system, sans-serif',
     }}>
       {/* Header */}
       <header class="relative z-20 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-game-dark/70 backdrop-blur-md">

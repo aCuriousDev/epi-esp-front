@@ -1,7 +1,4 @@
-import { onMount, onCleanup, createEffect } from 'solid-js';
-import * as monaco from 'monaco-editor';
-import prettier from 'prettier';
-import parserBabel from 'prettier/parser-babel';
+import { onMount, onCleanup } from 'solid-js';
 
 interface CodeEditorProps {
   value: string;
@@ -14,13 +11,15 @@ interface CodeEditorProps {
 
 const CodeEditor = (props: CodeEditorProps) => {
   let ref: HTMLDivElement | undefined;
-  let editor: monaco.editor.IStandaloneCodeEditor;
+  let editor: any;
 
   const format = async (value: string): Promise<string> => {
     try {
+      const prettier = await import('prettier');
+      const parserBabel = await import('prettier/parser-babel');
       return await prettier.format(value, {
         parser: 'json',
-        plugins: [parserBabel],
+        plugins: [parserBabel.default ?? parserBabel],
         tabWidth: 2,
       });
     } catch {
@@ -29,6 +28,8 @@ const CodeEditor = (props: CodeEditorProps) => {
   };
 
   onMount(async () => {
+    const monaco = await import('monaco-editor');
+
     const initialValue = props.format
       ? await format(props.value)
       : props.value;
@@ -51,7 +52,7 @@ const CodeEditor = (props: CodeEditorProps) => {
       id: 'format',
       label: 'Format',
       keybindings: [monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF],
-      run: async (ed) => {
+      run: async (ed: any) => {
         const formatted = await format(ed.getValue());
         ed.setValue(formatted);
       },

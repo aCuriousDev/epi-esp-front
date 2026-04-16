@@ -164,8 +164,10 @@ export interface CampaignMemberListResponse {
  */
 function getAuthHeaders() {
   const token = localStorage.getItem("token");
+  if (!token) throw new Error("Not authenticated");
   return {
     Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
   };
 }
 
