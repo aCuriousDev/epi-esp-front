@@ -51,13 +51,6 @@ export default function MenuComponent() {
 			hoveringDescription: "Gérez vos campagnes et sessions de jeu.",
 		},
 		{
-			label: "Campagnes Manager",
-			icon: <GameIconsQuillInk class="menu-badge-icon h-8 w-8" />,
-			hoveringLabel: "campaigns-manager",
-			route: "/campaigns-manager",
-			hoveringDescription: "Gérez vos campagnes",
-		},
-		{
 			label: "Règles du jeu",
 			icon: <GameIconsFoldedPaper class="menu-badge-icon h-8 w-8" />,
 			hoveringLabel: "rules",

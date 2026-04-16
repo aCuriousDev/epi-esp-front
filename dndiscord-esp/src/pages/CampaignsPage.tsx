@@ -20,7 +20,6 @@ import { AuthService } from "../services/auth.service";
 import {
   CampaignService,
   CampaignResponse,
-  CampaignStatus as APICampaignStatus,
 } from "../services/campaign.service";
 
 /**
@@ -69,6 +68,7 @@ function mapCampaignResponse(response: CampaignResponse): Campaign {
     createdAt: response.createdAt,
     updatedAt: response.updatedAt,
     nextSessionDate: response.lastPlayedAt,
+    campaignTreeDefinition: undefined,
   };
 }
 

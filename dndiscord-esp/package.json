@@ -35,6 +35,8 @@
     "@fontsource/im-fell-english-sc": "^5.2.6",
     "@fontsource/inter": "^5.2.8",
     "@iconify-json/game-icons": "^1.2.3",
+    "monaco-editor": "^0.55.1",
+    "prettier": "^3.8.1",
     "@types/node": "^22.7.5",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
