@@ -10,8 +10,8 @@ ENV VITE_API_URL=$VITE_API_URL
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies (npm install resolves platform-specific optional deps for Alpine)
+RUN npm install --ignore-scripts=false
 
 # Copy source code
 COPY . .
