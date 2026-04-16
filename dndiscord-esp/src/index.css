@@ -37,6 +37,8 @@
 	--gold-300: #F4C542;
 	--gold-200: #FFE08A;
 
+	--parchment: #F5F1E4;
+
 	--text-high: #F5F1E4;
 	--text-mid:  #CBC6B3;
 	--text-low:  #8A8574;
@@ -498,15 +500,15 @@ body {
     outline: none;
     box-shadow:
       0 0 0 2px var(--gold-300),
-      0 0 0 6px rgba(244, 197, 66, 0.25),
-      0 0 20px rgba(244, 197, 66, 0.35);
+      0 0 0 6px color-mix(in srgb, var(--gold-300) 25%, transparent),
+      0 0 20px color-mix(in srgb, var(--gold-300) 35%, transparent);
     border-radius: inherit;
   }
 
   .glow-candle {
     box-shadow:
-      0 0 20px rgba(244, 197, 66, 0.35),
-      0 0 40px rgba(75, 30, 78, 0.4);
+      0 0 20px color-mix(in srgb, var(--gold-300) 35%, transparent),
+      0 0 40px color-mix(in srgb, var(--plum-300) 40%, transparent);
   }
 
   .vignette-radial {
