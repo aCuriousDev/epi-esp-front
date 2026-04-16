@@ -1,6 +1,6 @@
 import Modal from '@/components/Modal';
 import draw2d from "draw2d"
-import { Accessor, Component, createSignal, onMount } from 'solid-js';
+import { Accessor, Component, createEffect, createSignal } from 'solid-js';
 import { CampaignNode } from '../nodes/CampaignNode';
 import { CampaignTreeCanvasRef } from '../CampagnTreeCanvas';
 import CodeEditor from '@/components/CodeEditor';
@@ -37,12 +37,12 @@ const ExportImportModal: Component<ExportImportModalProps> = (props) => {
     };
     reader.readAsText(file);
   };
-  onMount(async ()=>{
-    if(props.canvasRef()){
-        const json = await props.canvasRef()?.exportData();
-        setJsonDefinition(json ?? "[]");
+  createEffect(async () => {
+    if (props.isOpen && props.canvasRef()) {
+      const json = props.canvasRef()?.exportData();
+      setJsonDefinition(json ?? "[]");
     }
-  })
+  });
 
   return (
     <Modal
@@ -57,7 +57,15 @@ const ExportImportModal: Component<ExportImportModalProps> = (props) => {
                  onClick={props.onClose}>Fermer</button>
                 <button
                  class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all shadow-lg shadow-purple-500/20"
-                 onClick={props.onClose}>Sauvegarder</button>
+                 onClick={() => {
+                   try {
+                     const data = JSON.parse(jsonDefinition());
+                     props.onImport(data);
+                     props.onClose();
+                   } catch {
+                     // invalid JSON -- keep modal open
+                   }
+                 }}>Sauvegarder</button>
             </div>
         </div>
         }

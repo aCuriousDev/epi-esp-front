@@ -108,6 +108,17 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
         break;
       }
 
+      case 'map': {
+        const existingId = nodeData.data?.id as string | undefined;
+        node = new MapNode(x, y, {
+          id: existingId ?? generateId('map'),
+          type: 'map',
+          title: nodeData.data?.title ?? '',
+          selectedMap: nodeData.data?.selectedMap ?? '',
+        });
+        break;
+      }
+
       default:
         throw new Error(`Unknown node type: ${nodeData.type}`);
     }
