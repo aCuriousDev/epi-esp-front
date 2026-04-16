@@ -68,6 +68,7 @@ function mapCampaignResponse(response: CampaignResponse): Campaign {
     createdAt: response.createdAt,
     updatedAt: response.updatedAt,
     nextSessionDate: response.lastPlayedAt,
+    campaignTreeDefinition: undefined,
   };
 }
 

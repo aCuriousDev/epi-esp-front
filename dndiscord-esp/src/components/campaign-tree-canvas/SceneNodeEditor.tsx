@@ -10,8 +10,8 @@ interface SceneNodeEditorProps {
 const generateId = () => `item-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
 
 const SceneNodeEditor: Component<SceneNodeEditorProps> = (props : SceneNodeEditorProps) => {
-    const [text,setText] = createSignal<string>(props.node.getData().text)
-    const [title,setTitle] = createSignal<string>(props.node.getData().title)
+    const [text,setText] = createSignal<string>(props.node.getData().text ?? '')
+    const [title,setTitle] = createSignal<string>(props.node.getData().title ?? '')
 
     createEffect(() => {
         // setItems(props.node.getItems());

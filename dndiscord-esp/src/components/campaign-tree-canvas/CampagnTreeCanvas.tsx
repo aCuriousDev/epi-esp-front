@@ -1,16 +1,13 @@
 import { onMount, onCleanup, createSignal } from "solid-js";
 import draw2d from "draw2d";
 import { CampaignNode } from "./nodes/CampaignNode";
-import { StoryNode } from "./nodes/StoryNode";
 import { CombatNode } from "./nodes/CombatNode";
 import { safeConfirm } from "../../services/ui/confirm";
 import { tokens } from "@/styles/design-tokens";
 import { ChoicesNode } from "./nodes/ChoicesNode";
 import { SceneNode, SceneNodeData } from "./nodes/SceneNode";
 import { MapNode } from "./nodes/MapNode";
-import { StartNode } from './nodes/StartNode';
-import { SceneNode } from './nodes/SceneNode';
-import { MapNode } from './nodes/MapNode';
+import { StartNode } from "./nodes/StartNode";
 
 interface CampaignTreeCanvasProps {
   onNodeSelect?: (node: CampaignNode | null) => void;
@@ -37,7 +34,7 @@ export interface CampaignTreeCanvasRef {
 }
 
 interface AddNodeData {
-  type: "choices" | "combat" | "scene" | "condition";
+  type: "choices" | "combat" | "scene" | "map" | "condition";
   x?: number;
   y?: number;
   data?: any;
