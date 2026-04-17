@@ -196,6 +196,10 @@ export class BabylonEngine {
   // ============================================
   
   public async createUnit(unit: Unit): Promise<void> {
+    if (this.hasUnit(unit.id)) {
+      console.warn(`[BabylonEngine] createUnit called for ${unit.id} but already exists — skipping`);
+      return;
+    }
     console.log(`[BabylonEngine] Creating unit ${unit.id} at (${unit.position.x}, ${unit.position.z})`);
     await this.unitRenderer.createUnit(unit);
     this.unitPreviousPositions.set(unit.id, { ...unit.position });

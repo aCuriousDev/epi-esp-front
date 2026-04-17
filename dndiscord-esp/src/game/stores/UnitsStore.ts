@@ -45,6 +45,17 @@ export function clearUnits(): void {
 }
 
 /**
+ * Add a single unit to the store (used by DM spawn, etc.).
+ */
+export function addUnit(unit: Unit): void {
+  setUnits(
+    produce((draft) => {
+      (draft as any)[unit.id] = unit;
+    }),
+  );
+}
+
+/**
  * Remove all units owned by a given user (used when a player leaves a multiplayer session).
  * Also clears tile occupancy for the removed units.
  */

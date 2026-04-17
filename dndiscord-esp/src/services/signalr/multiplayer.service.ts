@@ -25,6 +25,7 @@ import {
   type DmHiddenRollPayload,
   type DmGrantItemPayload,
   type ItemGrantedPayload,
+  type DmSpawnUnitPayload,
 } from "../../types/multiplayer";
 import {
   setSession,
@@ -84,6 +85,7 @@ const HUB = {
   dmMoveToken: "DmMoveToken",
   dmHiddenRoll: "DmHiddenRoll",
   dmGrantItem: "DmGrantItem",
+  dmSpawnUnit: "DmSpawnUnit",
 } as const;
 
 async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
@@ -340,6 +342,11 @@ export async function dmGrantItem(payload: DmGrantItemPayload): Promise<void> {
   await signalRService.invoke(HUB.dmGrantItem, payload);
 }
 
+/** DM spawns a new enemy unit. */
+export async function dmSpawnUnit(payload: DmSpawnUnitPayload): Promise<void> {
+  await signalRService.invoke(HUB.dmSpawnUnit, payload);
+}
+
 // --- Enregistrement des handlers d'événements ---
 
 /** Map backend integer enum to frontend enum. Backend: 0=Player, 1=DungeonMaster */
@@ -545,11 +552,6 @@ export function registerMultiplayerHandlers(): void {
   signalRService.on("ItemGranted", (msg: any) => {
     const payload: ItemGrantedPayload = msg?.payload ?? msg;
     addGrantedItem(payload);
-  });
-
-  // DM force-moved a token (broadcast to all)
-  signalRService.on("DmTokenMoved", (msg: any) => {
-    // Handled in gameSync.ts
   });
 
   // Optionnel: SessionEnded

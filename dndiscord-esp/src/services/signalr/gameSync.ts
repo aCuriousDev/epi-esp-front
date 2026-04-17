@@ -4,17 +4,19 @@
  */
 
 import { signalRService } from "./SignalRService";
-import type { GameMessage, MoveResult, TurnEndedPayload, GameStateSnapshotPayload, DmMoveTokenPayload } from "../../types/multiplayer";
-import type { GridPosition } from "../../types";
+import type { GameMessage, MoveResult, TurnEndedPayload, GameStateSnapshotPayload, DmMoveTokenPayload, DmSpawnUnitPayload } from "../../types/multiplayer";
+import type { GridPosition, Unit, UnitType, Team } from "../../types";
 import { units, setUnits } from "../../game/stores/UnitsStore";
+import { addUnit } from "../../game/stores/UnitsStore";
 import { tiles, setTiles } from "../../game/stores/TilesStore";
 import { setGameState } from "../../game/stores/GameStateStore";
 import { updatePathfinder } from "../../game/stores/TilesStore";
 import { posToKey } from "../../game/utils/GridUtils";
 import { produce } from "solid-js/store";
-import { sessionState } from "../../stores/session.store";
+import { sessionState, isHost } from "../../stores/session.store";
 
 import { addCombatLog } from "../../game/stores/GameStateStore";
+import { addSpawnedEnemy } from "../../stores/dmTools.store";
 
 /** Backend envoie (x, y), le jeu utilise (x, z). */
 function toFrontendPos(p: { x: number; y: number }): GridPosition {
@@ -98,8 +100,10 @@ export function registerGameSyncHandlers(): void {
     updatePathfinder();
   });
 
-  // DM force-moved a token — apply to all clients
+  // DM force-moved a token — apply to all clients except the DM (who already updated optimistically)
   signalRService.on("DmTokenMoved", (message: GameMessage<DmMoveTokenPayload>) => {
+    if (isHost()) return; // DM already applied optimistically
+
     const payload = message?.payload ?? message;
     if (!payload?.unitId || !payload?.target) return;
 
@@ -128,5 +132,45 @@ export function registerGameSyncHandlers(): void {
     updatePathfinder();
 
     addCombatLog(`[MJ] ${unitData.name} déplacé en (${dest.x}, ${dest.z})`, "system");
+  });
+
+  // DM spawned a new enemy unit — materialise it on all clients
+  signalRService.on("DmUnitSpawned", (message: GameMessage<DmSpawnUnitPayload>) => {
+    if (isHost()) return; // DM already added the unit locally before broadcasting
+
+    const payload = message?.payload ?? message;
+    if (!payload?.unitId || !payload?.target) return;
+
+    // Extra guard: skip if unit already exists
+    if (units[payload.unitId]) return;
+
+    const pos = toFrontendPos(payload.target as { x: number; y: number });
+    const tileKey = posToKey(pos);
+    const tile = tiles[tileKey];
+    if (!tile) return;
+
+    let stats;
+    try { stats = JSON.parse(payload.statsJson); } catch { return; }
+
+    const unit: Unit = {
+      id: payload.unitId,
+      name: payload.name,
+      type: payload.unitType as UnitType,
+      team: "enemy" as Team,
+      position: pos,
+      stats,
+      abilities: [],
+      statusEffects: [],
+      isAlive: true,
+      hasActed: false,
+      hasMoved: false,
+    };
+
+    addUnit(unit);
+    setTiles(tileKey, "occupiedBy", unit.id);
+    updatePathfinder();
+
+    addCombatLog(`[MJ] ${unit.name} apparaît en (${pos.x}, ${pos.z}) !`, "system");
+    addSpawnedEnemy({ name: unit.name, x: pos.x, z: pos.z });
   });
 }

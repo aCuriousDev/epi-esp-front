@@ -20,6 +20,7 @@ import { LobbyScreen } from "../components/LobbyScreen";
 import { DialogueOverlay } from "../components/dialogue/DialogueOverlay";
 import { DmPanel } from "../components/dm/DmPanel";
 import { ItemReceivedToast } from "../components/dm/ItemReceivedToast";
+import { EnemySpawnToast } from "../components/dm/EnemySpawnToast";
 import { clearAllDialogues } from "../stores/dialogue.store";
 import {
   gameState,
@@ -548,6 +549,9 @@ const BoardGame: Component = () => {
 
             {/* Item received notification toasts */}
             <ItemReceivedToast />
+
+            {/* Enemy spawn notification toasts */}
+            <EnemySpawnToast />
 
             {/* Loading Overlay */}
             <Show when={!isEngineReady()}>

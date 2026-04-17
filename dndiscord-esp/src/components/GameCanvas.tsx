@@ -1,10 +1,12 @@
-import { Component, onMount, onCleanup, createEffect, createSignal } from 'solid-js';
+import { Component, onMount, onCleanup, createEffect, createSignal, untrack } from 'solid-js';
 import { BabylonEngine } from '../engine/BabylonEngine';
 import {
   gameState,
   setGameState,
   tiles,
+  setTiles,
   units,
+  setUnits,
   selectUnit,
   previewPath,
   moveUnit,
@@ -15,12 +17,15 @@ import {
   getEnemyUnits,
   getCurrentUnit,
   getAllySpawnPositions,
+  updatePathfinder,
 } from '../game';
+import { produce } from 'solid-js/store';
 import { setVFXEngine } from '../game/vfx/VFXIntegration';
 import { SoundManager } from '../engine/audio/SoundManager';
 import { setSoundEngine } from '../game/audio/SoundIntegration';
 import { soundSettings } from '../stores/sound.store';
 import { isHost as getIsHost } from '../stores/session.store';
+import { dmDragUnit, setDmDragUnit, dmSpawnTemplate, setDmSpawnTemplate, dmActiveMode } from '../stores/dmTools.store';
 import { GamePhase, TurnPhase, Team, Unit, GridPosition, GameMode } from '../types';
 
 let engineInstance: BabylonEngine | null = null;
@@ -150,6 +155,7 @@ export const GameCanvas: Component = () => {
   
   // Lock to prevent concurrent effect execution
   let isProcessingUnits = false;
+  let pendingRerun = false;
   
   // Clear engine and previous positions when stores are cleared (for restart)
   createEffect(() => {
@@ -188,54 +194,43 @@ export const GameCanvas: Component = () => {
       }
     }
     
-    console.log('[GameCanvas] Units effect triggered - Count:', unitSnapshots.length, 'Engine ready:', isEngineReady(), 'Processing:', isProcessingUnits);
-    
-    if (!engineInstance || !isEngineReady()) {
-      console.log('[GameCanvas] Skipping units - engine not ready');
-      return;
-    }
+    if (!engineInstance || !isEngineReady()) return;
     if (isProcessingUnits) {
-      console.log('[GameCanvas] Skipping unit processing - already in progress');
+      pendingRerun = true;
       return;
     }
-    
-    console.log('[GameCanvas] Processing', unitSnapshots.length, 'units');
     
     // Process units sequentially to handle async model loading
     // Use the snapshot data captured synchronously above
     isProcessingUnits = true;
+    pendingRerun = false;
     (async () => {
       try {
         for (const { id, unit, currentPos } of unitSnapshots) {
           const exists = engineInstance.hasUnit(id);
           const prevPos = prevPositions.get(id);
           
-          console.log(`[GameCanvas] Unit ${id} - Exists: ${exists}, PrevPos:`, prevPos, 'CurrentPos:', currentPos);
-          
           if (!exists) {
-            // Create new unit
-            console.log(`[GameCanvas] Creating NEW unit ${id} at (${currentPos.x}, ${currentPos.z})`);
             await engineInstance.createUnit(unit);
-            // Initialize previous position when unit is first created
-            prevPositions.set(id, { ...currentPos });
-            console.log(`[GameCanvas] ✓ Created unit ${id}, prevPos set to (${currentPos.x}, ${currentPos.z})`);
-          } else {
-            // Check if position changed for animation
-            const positionChanged = prevPos && (prevPos.x !== currentPos.x || prevPos.z !== currentPos.z);
-            
-            if (positionChanged) {
-              console.log(`[GameCanvas] Unit ${id} MOVED from (${prevPos.x}, ${prevPos.z}) to (${currentPos.x}, ${currentPos.z})`);
-              engineInstance.updateUnit(unit);
-              // Update stored position immediately after calling updateUnit
-              prevPositions.set(id, { ...currentPos });
+            // After async load, check if position changed in the store while loading
+            // (e.g. DM moved the unit right after spawning it)
+            const liveUnit = units[id];
+            if (liveUnit && (liveUnit.position.x !== currentPos.x || liveUnit.position.z !== currentPos.z)) {
+              engineInstance.updateUnit(liveUnit);
+              prevPositions.set(id, { x: liveUnit.position.x, z: liveUnit.position.z });
             } else {
-              // Position didn't change, just update state (selection, health, etc.)
-              console.log(`[GameCanvas] Unit ${id} updated (no movement)`);
-              engineInstance.updateUnit(unit);
+              prevPositions.set(id, { ...currentPos });
             }
+          } else {
+            const positionChanged = prevPos && (prevPos.x !== currentPos.x || prevPos.z !== currentPos.z);
+            if (positionChanged) {
+              engineInstance.updateUnit(unit);
+              prevPositions.set(id, { ...currentPos });
+            }
+            // Skip updateUnit when position hasn't changed to avoid
+            // animation stacking that causes units to float upward
           }
         }
-        console.log('[GameCanvas] All units processed');
         
         // Mettre à jour la visibilité des ennemis après création/mise à jour des unités
         const phase = gameState.phase;
@@ -248,6 +243,19 @@ export const GameCanvas: Component = () => {
         }
       } finally {
         isProcessingUnits = false;
+        // If the effect was triggered while we were processing, re-process now
+        // to pick up any units that were missed (e.g. DM spawned while processing)
+        if (pendingRerun) {
+          pendingRerun = false;
+          const freshIds = Object.keys(units);
+          for (const id of freshIds) {
+            const u = units[id];
+            if (u && !engineInstance.hasUnit(id)) {
+              await engineInstance.createUnit(u);
+              prevPositions.set(id, { x: u.position.x, z: u.position.z });
+            }
+          }
+        }
       }
     })();
   });
@@ -372,9 +380,33 @@ export const GameCanvas: Component = () => {
     });
   });
   
+  // When DM activates a tool mode, clear game selection & show all tiles as highlighted
+  createEffect(() => {
+    const mode = dmActiveMode();
+    const dragId = dmDragUnit();
+    const spawnTpl = dmSpawnTemplate();
+
+    if (!mode) return; // not in DM mode — don't touch game state
+
+    // Clear normal game selection
+    setGameState('selectedUnit', null);
+
+    // When DM has a unit or spawn template selected, highlight ALL tiles on the map
+    if (dragId || spawnTpl) {
+      const allPositions = untrack(() =>
+        Object.values(tiles)
+          .filter((t) => t && t.position)
+          .map((t) => ({ x: t.position.x, z: t.position.z }))
+      );
+      setGameState('highlightedTiles', allPositions);
+    } else {
+      setGameState('highlightedTiles', []);
+    }
+  });
+
   // En phase de préparation, s'assurer que toutes les cases alliées sont toujours visibles
   createEffect(() => {
-    if (gameState.phase === GamePhase.COMBAT_PREPARATION && !gameState.selectedUnit) {
+    if (gameState.phase === GamePhase.COMBAT_PREPARATION && !gameState.selectedUnit && !dmActiveMode()) {
       const allyPositions = getAllySpawnPositions(gameState.mapId);
       if (allyPositions.length > 0 && JSON.stringify(gameState.highlightedTiles) !== JSON.stringify(allyPositions)) {
         setGameState('highlightedTiles', allyPositions);
@@ -466,6 +498,48 @@ export const GameCanvas: Component = () => {
     const tile = tiles[tileKey];
     
     if (!tile) return;
+
+    // --- DM tool mode: block normal game logic, only handle DM actions ---
+    if (dmActiveMode()) {
+      const dragId = dmDragUnit();
+      if (dragId) {
+        const unit = units[dragId];
+        if (unit) {
+          import('../services/signalr/multiplayer.service').then(({ dmMoveToken }) => {
+            dmMoveToken({ unitId: dragId, target: { x: pos.x, y: pos.z } as any });
+          }).catch(err => console.warn('[DM] move broadcast failed:', err));
+          const oldKey = posToKey(unit.position);
+          if (tiles[oldKey]) setTiles(oldKey, 'occupiedBy', null);
+          setTiles(tileKey, 'occupiedBy', dragId);
+          setUnits(dragId, produce((u: any) => { u.position = pos; }));
+          updatePathfinder();
+
+          // Directly update the engine mesh to avoid race with async createEffect
+          if (engineInstance && engineInstance.hasUnit(dragId)) {
+            engineInstance.updateUnit({ ...unit, position: pos });
+          }
+          // Keep prevPositions in sync so the reactive effect won't re-process
+          prevPositions.set(dragId, { ...pos });
+
+          setDmDragUnit(null);
+        } else {
+          setDmDragUnit(null);
+        }
+        return;
+      }
+
+      const spawnTpl = dmSpawnTemplate();
+      if (spawnTpl) {
+        window.dispatchEvent(new CustomEvent('dm-tile-click', { detail: pos }));
+        return;
+      }
+
+      // DM mode active but no drag/spawn → allow unit selection on map
+      if (tile.occupiedBy) {
+        handleUnitClick(tile.occupiedBy);
+      }
+      return;
+    }
     
     const isFreeRoam = getIsFreeRoamMode();
     
@@ -563,6 +637,16 @@ export const GameCanvas: Component = () => {
     
     const isFreeRoam = getIsFreeRoamMode();
     const isPreparation = gameState.phase === GamePhase.COMBAT_PREPARATION;
+    
+    // DM move mode: clicking a unit on the map selects/deselects it for teleport
+    if (dmActiveMode() === "move") {
+      if (dmDragUnit() === unitId) {
+        setDmDragUnit(null);
+      } else {
+        setDmDragUnit(unitId);
+      }
+      return;
+    }
     
     // Phase de préparation : ne sélectionner que les unités alliées
     if (isPreparation) {

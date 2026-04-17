@@ -206,3 +206,12 @@ export interface ItemGrantedPayload {
   description?: string;
   timestamp: string;
 }
+
+export interface DmSpawnUnitPayload {
+  unitId: string;
+  templateId: string;
+  name: string;
+  unitType: string;
+  target: GridPosition;
+  statsJson: string;
+}

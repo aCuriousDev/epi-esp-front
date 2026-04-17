@@ -107,6 +107,13 @@ export class UnitRenderer {
    * Falls back to capsule mesh if model loading fails.
    */
   public async createUnit(unit: Unit): Promise<void> {
+    // Guard: if a mesh already exists for this unit, dispose it first to prevent duplicates
+    const existing = this.unitMeshes.get(unit.id);
+    if (existing) {
+      console.warn(`[UnitRenderer] createUnit called for ${unit.id} but mesh already exists — skipping`);
+      return;
+    }
+
     console.log(`Creating unit: ${unit.id}, team: ${unit.team}, type: ${unit.type}, name: ${unit.name}`);
     const worldPosObj = gridToWorld(unit.position);
     const worldPos = new Vector3(worldPosObj.x, worldPosObj.y, worldPosObj.z);
@@ -233,7 +240,11 @@ export class UnitRenderer {
     
     const worldPosObj = gridToWorld(unit.position);
     const worldPos = new Vector3(worldPosObj.x, worldPosObj.y, worldPosObj.z);
-    const currentY = mesh.position.y;
+    // Use the known Y offset instead of mesh.position.y to avoid capturing
+    // a mid-animation elevated Y that causes units to float higher over time
+    const currentY = unit.team === 'player'
+      ? this.MODEL_CONFIG.playerYOffset
+      : this.MODEL_CONFIG.enemyYOffset;
     
     // Use previous position if available, otherwise use current mesh position
     const fromPosObj = previousPosition 
@@ -267,8 +278,11 @@ export class UnitRenderer {
       this.animateRotation(mesh, targetRotation);
     }
     
-    // Then animate movement
-    this.animateMovement(mesh, worldPos, currentY);
+    // Only animate movement if position actually changed
+    if (willAnimate) {
+      this.scene.stopAnimation(mesh);
+      this.animateMovement(mesh, worldPos, currentY);
+    }
     
     // Update visibility
     this.updateVisibility(mesh, unit.isAlive);
