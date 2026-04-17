@@ -24,8 +24,8 @@ import { setVFXEngine } from '../game/vfx/VFXIntegration';
 import { SoundManager } from '../engine/audio/SoundManager';
 import { setSoundEngine } from '../game/audio/SoundIntegration';
 import { soundSettings } from '../stores/sound.store';
-import { isHost as getIsHost } from '../stores/session.store';
-import { dmDragUnit, setDmDragUnit, dmSpawnTemplate, setDmSpawnTemplate, dmActiveMode } from '../stores/dmTools.store';
+import { isHost as getIsHost, isDm } from '../stores/session.store';
+import { dmDragUnit, setDmDragUnit, dmSpawnTemplate, setDmSpawnTemplate, dmActiveMode, setDmInspectedUnit } from '../stores/dmTools.store';
 import { GamePhase, TurnPhase, Team, Unit, GridPosition, GameMode } from '../types';
 
 let engineInstance: BabylonEngine | null = null;
@@ -255,23 +255,31 @@ export const GameCanvas: Component = () => {
               prevPositions.set(id, { x: u.position.x, z: u.position.z });
             }
           }
+          // Update visibility for any freshly created enemies
+          const freshPhase = gameState.phase;
+          const freshEnemies = getEnemyUnits();
+          const freshEnemyIds = freshEnemies.map(u => u.id);
+          const freshVisible = freshPhase !== GamePhase.COMBAT_PREPARATION;
+          if (freshEnemyIds.length > 0 && engineInstance) {
+            engineInstance.setEnemyVisibility(freshVisible, freshEnemyIds);
+          }
         }
       }
     })();
   });
   
   // Gérer la visibilité des ennemis selon la phase du jeu
+  // NOTE: Only reacts to phase changes. Unit creation already handles visibility
+  // inside the async processing loop above (after meshes are created).
   createEffect(() => {
     if (!engineInstance || !isEngineReady()) return;
     
-    // Accéder à units pour déclencher l'effet quand de nouvelles unités sont créées
-    const unitCount = Object.keys(units).length;
     const phase = gameState.phase;
     
     const enemyUnits = getEnemyUnits();
     const enemyUnitIds = enemyUnits.map(u => u.id);
     
-    console.log(`[GameCanvas] Visibility effect triggered - Phase: ${phase}, Enemy count: ${enemyUnitIds.length}, Unit count: ${unitCount}`);
+    console.log(`[GameCanvas] Visibility effect triggered - Phase: ${phase}, Enemy count: ${enemyUnitIds.length}`);
     
     // En phase de préparation : rendre les ennemis invisibles
     // Sinon : rendre les ennemis visibles
@@ -281,7 +289,7 @@ export const GameCanvas: Component = () => {
       console.log(`[GameCanvas] Setting enemy visibility to ${shouldBeVisible ? 'VISIBLE' : 'INVISIBLE'} for ${enemyUnitIds.length} enemies`);
       engineInstance.setEnemyVisibility(shouldBeVisible, enemyUnitIds);
     } else {
-      console.warn(`[GameCanvas] No enemy units found! Total units: ${unitCount}`);
+      console.warn(`[GameCanvas] No enemy units found for visibility update`);
     }
   });
 
@@ -645,6 +653,13 @@ export const GameCanvas: Component = () => {
       } else {
         setDmDragUnit(unitId);
       }
+      return;
+    }
+
+    // DM inspect: clicking a player unit opens stats/inventory panel
+    if (isDm() && unit.team === Team.PLAYER && !dmActiveMode()) {
+      setDmInspectedUnit(unitId);
+      selectUnit(unitId);
       return;
     }
     

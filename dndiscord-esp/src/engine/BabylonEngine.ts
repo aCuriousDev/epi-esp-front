@@ -314,8 +314,8 @@ export class BabylonEngine {
    * @param visible - true pour rendre visibles, false pour invisibles
    * @param enemyUnitIds - Liste des IDs des unités ennemies
    */
-  public setEnemyVisibility(visible: boolean, enemyUnitIds: string[]): void {
-    this.unitRenderer.setEnemyVisibility(visible, enemyUnitIds);
+  public async setEnemyVisibility(visible: boolean, enemyUnitIds: string[]): Promise<void> {
+    await this.unitRenderer.setEnemyVisibility(visible, enemyUnitIds);
   }
 
   /**

@@ -571,6 +571,13 @@ body {
 	animation: dm-slide-in 0.3s ease-out;
 }
 
+.dm-inspect-panel {
+	@apply rounded-xl p-3 border backdrop-blur-xl;
+	border-color: rgba(139, 92, 246, 0.2);
+	background: linear-gradient(135deg, rgba(55, 25, 78, 0.7) 0%, rgba(18, 36, 58, 0.7) 100%);
+	animation: dm-slide-in 0.25s ease-out;
+}
+
 .dm-input {
 	@apply rounded-lg px-2.5 py-1.5 text-xs text-white w-full appearance-none;
 	background: rgba(139, 92, 246, 0.08);
@@ -620,4 +627,36 @@ select.dm-input option {
 .dm-item-card--active {
 	background: rgba(245, 158, 11, 0.12);
 	border-color: rgba(245, 158, 11, 0.35);
+}
+
+/* ── DM Inventory catalog ── */
+
+.dm-catalog-grid::-webkit-scrollbar {
+	width: 3px;
+}
+.dm-catalog-grid::-webkit-scrollbar-track {
+	background: transparent;
+}
+.dm-catalog-grid::-webkit-scrollbar-thumb {
+	background: rgba(139, 92, 246, 0.25);
+	border-radius: 9999px;
+}
+
+.dm-catalog-item {
+	@apply cursor-pointer transition-all duration-200;
+}
+.dm-catalog-item:disabled {
+	@apply opacity-40 cursor-not-allowed;
+}
+.dm-catalog-item:not(:disabled):hover {
+	transform: translateY(-1px);
+	box-shadow: 0 2px 8px rgba(139, 92, 246, 0.15);
+}
+
+.dm-qty-btn {
+	@apply flex items-center justify-center w-5 h-5 rounded;
+	background: rgba(139, 92, 246, 0.12);
+	border: 1px solid rgba(139, 92, 246, 0.2);
+	@apply text-purple-300/70 transition-all cursor-pointer;
+	@apply hover:bg-purple-500/25 hover:text-purple-200;
 }

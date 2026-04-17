@@ -43,6 +43,10 @@ export { dmDragUnit, setDmDragUnit };
 const [dmSpawnTemplate, setDmSpawnTemplate] = createSignal<string | null>(null);
 export { dmSpawnTemplate, setDmSpawnTemplate };
 
+/** Unit ID (player) the DM is currently inspecting. null = closed */
+const [dmInspectedUnit, setDmInspectedUnit] = createSignal<string | null>(null);
+export { dmInspectedUnit, setDmInspectedUnit };
+
 /** Add a hidden roll result (DM only). */
 export function addHiddenRoll(roll: DmHiddenRollPayload): void {
   setState("hiddenRolls", (prev) => [...prev, roll]);
@@ -64,4 +68,5 @@ export function clearDmToolsState(): void {
   setDmActiveMode(null);
   setDmDragUnit(null);
   setDmSpawnTemplate(null);
+  setDmInspectedUnit(null);
 }

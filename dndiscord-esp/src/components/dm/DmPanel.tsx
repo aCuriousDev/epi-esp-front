@@ -1,6 +1,7 @@
 /**
- * DmPanel — Dungeon Master toolkit: move tokens, spawn enemies, hidden dice, grant items.
+ * DmPanel — Dungeon Master toolkit: move tokens, spawn enemies, hidden dice.
  * Cleaner / lighter design. Move & spawn interact directly with the 3D map.
+ * Item management is handled via DmPlayerInspectPanel when clicking player units.
  */
 
 import {
@@ -10,17 +11,13 @@ import {
   createSignal,
   createEffect,
   onCleanup,
-  batch,
 } from "solid-js";
 import {
   Crown,
   Dices,
-  Package,
   ChevronDown,
   ChevronUp,
-  Skull,
   Sparkles,
-  Move,
   X,
 } from "lucide-solid";
 import { isDm, getOtherPlayers, getCurrentSession } from "../../stores/session.store";
@@ -35,7 +32,6 @@ import {
 } from "../../stores/dmTools.store";
 import {
   dmHiddenRoll,
-  dmGrantItem,
   dmSpawnUnit,
 } from "../../services/signalr/multiplayer.service";
 import { units, addUnit } from "../../game/stores/UnitsStore";
@@ -61,37 +57,19 @@ const ENEMY_CATALOGUE: EnemyTemplate[] = [
     stats: { maxHealth: 120, currentHealth: 120, maxActionPoints: 7, currentActionPoints: 7, movementRange: 4, attackRange: 2, attackDamage: 22, defense: 10, initiative: 16 } },
 ];
 
-// ─── Items ─────────────────────────────────────────────────────────
-
-const ITEM_CATALOGUE = [
-  { id: "potion_heal", name: "Potion de soin", icon: "🧪", description: "Restaure 2d4+2 HP" },
-  { id: "potion_mana", name: "Potion de mana", icon: "💧", description: "+10 mana" },
-  { id: "scroll_fireball", name: "Boule de feu", icon: "📜", description: "Parchemin Nv.3" },
-  { id: "ring_protection", name: "Anneau prot.", icon: "💍", description: "+1 CA" },
-  { id: "sword_flame", name: "Épée feu", icon: "🗡️", description: "+1d6 feu" },
-  { id: "shield_faith", name: "Bouclier foi", icon: "🛡️", description: "+2 CA 10min" },
-  { id: "cloak_invisibility", name: "Cape invis.", icon: "🧥", description: "Invisibilité 1h" },
-  { id: "bag_holding", name: "Sac sans fond", icon: "👜", description: "Stockage dim." },
-];
-
 let spawnCounter = 0;
 
 // ═══════════════════════════════════════════════════════════════════
 
 export const DmPanel: Component = () => {
   const [isExpanded, setIsExpanded] = createSignal(true);
-  const [activeTab, setActiveTab] = createSignal<"move" | "roll" | "spawn" | "item">("move");
+  const [activeTab, setActiveTab] = createSignal<"move" | "roll" | "spawn">("move");
 
   // Dice
   const [diceType, setDiceType] = createSignal(20);
   const [diceModifier, setDiceModifier] = createSignal(0);
   const [diceLabel, setDiceLabel] = createSignal("");
   const [isRolling, setIsRolling] = createSignal(false);
-
-  // Item
-  const [grantTarget, setGrantTarget] = createSignal<string | null>(null);
-  const [grantItemId, setGrantItemId] = createSignal<string | null>(null);
-  const [grantQuantity, setGrantQuantity] = createSignal(1);
 
   // Status messages
   const [statusMsg, setStatusMsg] = createSignal<string | null>(null);
@@ -172,24 +150,12 @@ export const DmPanel: Component = () => {
     finally { setIsRolling(false); }
   };
 
-  const handleGrantItem = async () => {
-    const targetId = grantTarget();
-    const itemId = grantItemId();
-    if (!targetId || !itemId) return;
-    const item = ITEM_CATALOGUE.find((i) => i.id === itemId);
-    if (!item) return;
-    try {
-      await dmGrantItem({ targetUserId: targetId, itemId: item.id, itemName: item.name, quantity: grantQuantity(), description: item.description });
-      batch(() => { setGrantTarget(null); setGrantItemId(null); setGrantQuantity(1); });
-    } catch (e: any) { console.error("Grant item failed:", e); }
-  };
-
   const toggleSpawnMode = (tplId: string) => {
     if (dmSpawnTemplate() === tplId) { setDmSpawnTemplate(null); }
     else { setDmSpawnTemplate(tplId); setDmDragUnit(null); }
   };
 
-  const switchTab = (tab: "move" | "roll" | "spawn" | "item") => {
+  const switchTab = (tab: "move" | "roll" | "spawn") => {
     setActiveTab(tab);
     setDmDragUnit(null);
     setDmSpawnTemplate(null);
@@ -220,7 +186,6 @@ export const DmPanel: Component = () => {
             <DmTab active={activeTab() === "move"} onClick={() => switchTab("move")} label="Déplacer" />
             <DmTab active={activeTab() === "spawn"} onClick={() => switchTab("spawn")} label="Invoquer" />
             <DmTab active={activeTab() === "roll"} onClick={() => switchTab("roll")} label="Dés" />
-            <DmTab active={activeTab() === "item"} onClick={() => switchTab("item")} label="Objet" />
           </div>
 
           {/* Status flash */}
@@ -312,38 +277,6 @@ export const DmPanel: Component = () => {
             </div>
           </Show>
 
-          {/* ── ITEM TAB ── */}
-          <Show when={activeTab() === "item"}>
-            <div class="mt-2 space-y-1.5">
-              <select class="dm-input w-full" value={grantTarget() ?? ""} onChange={(e) => setGrantTarget(e.currentTarget.value || null)}>
-                <option value="">— Joueur —</option>
-                <For each={players()}>{(p) => <option value={p.userId}>{p.userName}</option>}</For>
-              </select>
-
-              <div class="grid grid-cols-4 gap-0.5">
-                <For each={ITEM_CATALOGUE}>
-                  {(item) => {
-                    const sel = () => grantItemId() === item.id;
-                    return (
-                      <button class={`dm-item-card ${sel() ? "dm-item-card--active" : ""}`}
-                        onClick={() => setGrantItemId(sel() ? null : item.id)} title={item.description}>
-                        <span class="text-sm">{item.icon}</span>
-                        <span class="text-[8px] text-purple-300/50 leading-tight text-center">{item.name}</span>
-                      </button>
-                    );
-                  }}
-                </For>
-              </div>
-
-              <div class="flex gap-1.5 items-end">
-                <input type="number" min="1" max="99" class="dm-input w-12" value={grantQuantity()}
-                  onInput={(e) => setGrantQuantity(Math.max(1, parseInt(e.currentTarget.value) || 1))} />
-                <button class="dm-btn flex-1" disabled={!grantTarget() || !grantItemId()} onClick={handleGrantItem}>
-                  <Sparkles class="w-3 h-3" /> Donner
-                </button>
-              </div>
-            </div>
-          </Show>
         </Show>
       </div>
     </Show>

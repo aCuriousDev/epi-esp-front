@@ -19,6 +19,7 @@ import { RoomJoinScreen } from "../components/RoomJoinScreen";
 import { LobbyScreen } from "../components/LobbyScreen";
 import { DialogueOverlay } from "../components/dialogue/DialogueOverlay";
 import { DmPanel } from "../components/dm/DmPanel";
+import DmPlayerInspectPanel from "../components/dm/DmPlayerInspectPanel";
 import { ItemReceivedToast } from "../components/dm/ItemReceivedToast";
 import { EnemySpawnToast } from "../components/dm/EnemySpawnToast";
 import { clearAllDialogues } from "../stores/dialogue.store";
@@ -332,6 +333,7 @@ const BoardGame: Component = () => {
       {/* DM Panel — only visible to the Dungeon Master */}
       <Show when={sessionState.session && isDm()}>
         <DmPanel />
+        <DmPlayerInspectPanel />
       </Show>
       <Show
         when={
