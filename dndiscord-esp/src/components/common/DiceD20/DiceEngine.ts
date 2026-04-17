@@ -16,51 +16,68 @@ import {
 import { buildD20Geometry, type D20Geometry, topFaceIndex } from "./diceGeometry";
 import { createEmissiveAtlas, createNumeralAtlas, GRIMOIRE_DIE } from "./diceTextures";
 
-export type DiceTone = "idle" | "crit-success" | "crit-fail";
-
 export interface DiceEngineCallbacks {
-	/** Fires when the tumble starts. */
 	onRollStart?: (value: number) => void;
-	/** Fires on every virtual "bounce" during tumble — plug procedural SFX here. */
-	onBounce?: (intensity: number) => void;
-	/** Fires when the die has settled on its target face. */
+	/** Fires on every "bounce" of the die (x, y in local canvas px relative to centre, intensity 0..1). */
+	onBounce?: (x: number, y: number, intensity: number) => void;
+	/** Fires once the die is fully settled on its target face. */
 	onRollEnd?: (value: number) => void;
-	/** Fires continuously as the currently top-facing numeral changes. */
+	/** Fires when the currently top-facing numeral changes during the tumble. */
 	onFaceChange?: (value: number) => void;
+	/** Fires when the windup (pre-launch suspense) begins. */
+	onWindup?: () => void;
+	/** Fires the moment the die is flung into the air — big whoosh SFX hooks here. */
+	onLaunch?: (power: number) => void;
+	/** Fires as the die enters the hanging suspense pause (last bounce before reveal). */
+	onSuspense?: () => void;
 }
+
+/** Phases of a dice throw — ordered from first to last. */
+type Phase =
+	| "idle"
+	| "charging"
+	| "windup"
+	| "tumbling"
+	| "suspense"
+	| "settling"
+	| "resting";
 
 interface InternalState {
 	geometry: D20Geometry;
 	engine: Engine;
 	scene: Scene;
 	dice: Mesh;
-	/** Current rotation quaternion (separate from mesh so we can animate freely). */
 	rotation: Quaternion;
 	angular: Vector3;
-	phase: "idle" | "charging" | "tumbling" | "settling" | "resting";
-	rollStart: number;
-	rollDuration: number;
+	phase: Phase;
+	/** Simulated local position relative to the die's "rest" origin. */
+	position: Vector3;
+	/** Velocity for the kinematic leap simulation. */
+	velocity: Vector3;
+	phaseStart: number;
+	phaseDuration: number;
 	targetValue: number;
 	targetQuat: Quaternion | null;
 	settleFrom: Quaternion | null;
-	settleStart: number;
-	settleDuration: number;
+	settleRotation: Quaternion;
 	chargeIntensity: number;
-	lastBounceAt: number;
 	lastTopFace: number;
 	reducedMotion: boolean;
 	critPulse: number;
+	rollPower: number;
+	bounceCount: number;
+	squash: number;
 }
 
 const DICE_RADIUS = 1.1;
+const GROUND_Y = -0.95;
+const GRAVITY = -22;
 
 /**
- * Builds a Babylon scene with a custom icosahedron d20 and exposes a tiny
- * imperative API for the Solid component to drive rolling / charging / etc.
- *
- * The die is rendered on a transparent canvas so the page's existing nebula
- * background shows through. No physics engine is used — tumbling is a
- * lightweight kinematic simulation, enough for a satisfying home-screen toy.
+ * Babylon scene that renders a chunky, bouncy 3D d20 with a dramatic
+ * multi-phase throw. No physics engine — positions are a simple kinematic
+ * simulation with projectile arcs + impulsive bounces, which looks lively
+ * without pulling in Havok.
  */
 export class DiceEngine {
 	private state: InternalState;
@@ -69,7 +86,7 @@ export class DiceEngine {
 	private hoverTarget = { x: 0, y: 0 };
 	private cameraShake = { amplitude: 0, decay: 0 };
 	private flashLight: PointLight;
-	private baseEmissive = new Color3(0.08, 0.04, 0.12);
+	private baseEmissive = new Color3(0.1, 0.05, 0.14);
 	private critEmissive = new Color3(0, 0, 0);
 
 	constructor(canvas: HTMLCanvasElement, callbacks: DiceEngineCallbacks = {}) {
@@ -84,24 +101,22 @@ export class DiceEngine {
 			"d20-cam",
 			Math.PI / 2,
 			Math.PI / 2,
-			4.2,
+			5.2,
 			Vector3.Zero(),
 			scene,
 		);
 		camera.minZ = 0.1;
-		camera.fov = 0.9;
-		// Camera is driven manually (hover parallax); detach inputs.
+		camera.fov = 0.75;
 		camera.detachControl();
 
-		// Warm key + cool rim — echoes the plum / gold design language.
 		const key = new HemisphericLight("d20-key", new Vector3(0.3, 1, 0.4), scene);
-		key.intensity = 0.75;
+		key.intensity = 0.8;
 		key.diffuse = new Color3(1, 0.95, 0.85);
 		key.groundColor = new Color3(0.12, 0.08, 0.18);
 
 		const rim = new PointLight("d20-rim", new Vector3(-3, 2, -3), scene);
-		rim.diffuse = new Color3(0.65, 0.5, 1);
-		rim.intensity = 0.9;
+		rim.diffuse = new Color3(0.7, 0.55, 1);
+		rim.intensity = 1.0;
 
 		this.flashLight = new PointLight("d20-flash", new Vector3(0, 0, 3), scene);
 		this.flashLight.diffuse = new Color3(1, 0.85, 0.35);
@@ -118,18 +133,21 @@ export class DiceEngine {
 			rotation: Quaternion.Identity(),
 			angular: new Vector3(0.3, 0.5, 0.2),
 			phase: "idle",
-			rollStart: 0,
-			rollDuration: 1.6,
+			position: Vector3.Zero(),
+			velocity: Vector3.Zero(),
+			phaseStart: 0,
+			phaseDuration: 0,
 			targetValue: 20,
 			targetQuat: null,
 			settleFrom: null,
-			settleStart: 0,
-			settleDuration: 0.55,
+			settleRotation: Quaternion.Identity(),
 			chargeIntensity: 0,
-			lastBounceAt: 0,
 			lastTopFace: 0,
 			reducedMotion: prefersReducedMotion(),
 			critPulse: 0,
+			rollPower: 0.7,
+			bounceCount: 0,
+			squash: 0,
 		};
 
 		dice.rotationQuaternion = this.state.rotation.clone();
@@ -144,7 +162,6 @@ export class DiceEngine {
 	// PUBLIC API
 	// =========================================================
 
-	/** Forwards the current pointer position (normalized -1..1) for hover parallax. */
 	setHover(nx: number, ny: number): void {
 		this.hoverTarget.x = clamp(nx, -1, 1);
 		this.hoverTarget.y = clamp(ny, -1, 1);
@@ -155,14 +172,11 @@ export class DiceEngine {
 		this.hoverTarget.y = 0;
 	}
 
-	/**
-	 * Begin a "charging" wobble that should be held while the user is
-	 * pressing down / shaking. `intensity` 0..1 modulates the wobble.
-	 */
 	beginCharge(): void {
-		if (this.state.phase === "tumbling" || this.state.phase === "settling") return;
-		this.state.phase = "charging";
-		this.state.chargeIntensity = 0;
+		const s = this.state;
+		if (s.phase === "tumbling" || s.phase === "settling" || s.phase === "windup" || s.phase === "suspense") return;
+		s.phase = "charging";
+		s.chargeIntensity = 0;
 	}
 
 	updateCharge(intensity: number): void {
@@ -176,48 +190,54 @@ export class DiceEngine {
 	}
 
 	/**
-	 * Throw the die. `power` 0..1 extends the tumble duration and spin speed.
-	 * If `value` is omitted a random 1..20 is chosen. Returns the resolved value.
+	 * Kick off a full throw sequence. `power` 0..1 controls windup intensity,
+	 * launch velocity, spin and number of bounces. Returns the resolved face value.
 	 */
 	roll(power = 0.7, value?: number): number {
 		const s = this.state;
-		if (s.phase === "tumbling" || s.phase === "settling") return s.targetValue;
+		if (
+			s.phase === "tumbling" ||
+			s.phase === "settling" ||
+			s.phase === "windup" ||
+			s.phase === "suspense"
+		) {
+			return s.targetValue;
+		}
 
 		const resolved = value ?? 1 + Math.floor(Math.random() * 20);
 		const face = s.geometry.faces.find((f) => f.value === resolved)!;
 		s.targetValue = resolved;
 		s.targetQuat = face.targetQuat.clone();
-
-		const spin = s.reducedMotion ? 4 : 9 + power * 14;
-		const axis = new Vector3(
-			Math.random() * 2 - 1,
-			Math.random() * 2 - 1,
-			Math.random() * 2 - 1,
-		).normalize();
-		s.angular = axis.scale(spin);
-
-		s.phase = "tumbling";
-		s.rollStart = performance.now() / 1000;
-		s.rollDuration = s.reducedMotion ? 0.4 : 0.9 + power * 1.0;
+		s.rollPower = clamp(power, 0, 1);
 		s.chargeIntensity = 0;
-		s.lastBounceAt = 0;
+		s.bounceCount = 0;
+
+		// Give the die a touch of extra spin on the final settle so it slams
+		// into place rather than slerping blandly.
+		const extraTwist = Quaternion.RotationAxis(new Vector3(0, 0, 1), Math.PI * 2);
+		s.settleRotation = s.targetQuat.multiply(extraTwist);
+
+		const windupDur = s.reducedMotion ? 0.05 : 0.35 + power * 0.25;
+		s.phase = "windup";
+		s.phaseStart = performance.now() / 1000;
+		s.phaseDuration = windupDur;
 		this.callbacks.onRollStart?.(resolved);
+		this.callbacks.onWindup?.();
 		return resolved;
 	}
 
-	/** Visual flourish (flash + critical-hued emissive) without rolling. */
 	critFlare(kind: "crit-success" | "crit-fail"): void {
 		if (kind === "crit-success") {
 			this.flashLight.diffuse = new Color3(1, 0.85, 0.3);
-			this.critEmissive = new Color3(0.35, 0.2, 0.0);
+			this.critEmissive = new Color3(0.55, 0.35, 0.05);
 		} else {
 			this.flashLight.diffuse = new Color3(1, 0.15, 0.12);
-			this.critEmissive = new Color3(0.4, 0.04, 0.04);
+			this.critEmissive = new Color3(0.6, 0.06, 0.06);
 		}
-		this.flashLight.intensity = 4;
+		this.flashLight.intensity = kind === "crit-success" ? 6 : 5;
 		this.state.critPulse = 1;
-		this.cameraShake.amplitude = kind === "crit-success" ? 0.08 : 0.12;
-		this.cameraShake.decay = 4.0;
+		this.cameraShake.amplitude = kind === "crit-success" ? 0.12 : 0.18;
+		this.cameraShake.decay = 3.5;
 	}
 
 	resize(): void {
@@ -253,7 +273,6 @@ export class DiceEngine {
 				geometry.vertices[b].scale(DICE_RADIUS),
 				geometry.vertices[c].scale(DICE_RADIUS),
 			];
-			// Flat-shade: duplicate vertices per face so normals are per-face.
 			for (const v of verts) {
 				positions.push(v.x, v.y, v.z);
 				normals.push(face.normal.x, face.normal.y, face.normal.z);
@@ -279,9 +298,9 @@ export class DiceEngine {
 		mat.diffuseTexture = createNumeralAtlas(scene, GRIMOIRE_DIE);
 		mat.emissiveTexture = createEmissiveAtlas(scene, "#F4C542");
 		mat.emissiveColor = this.baseEmissive.clone();
-		mat.specularColor = new Color3(0.85, 0.75, 0.55);
-		mat.specularPower = 48;
-		mat.ambientColor = new Color3(0.35, 0.2, 0.45);
+		mat.specularColor = new Color3(0.9, 0.78, 0.55);
+		mat.specularPower = 56;
+		mat.ambientColor = new Color3(0.4, 0.25, 0.5);
 		mesh.material = mat;
 
 		return mesh;
@@ -301,8 +320,14 @@ export class DiceEngine {
 			case "charging":
 				this.stepCharging(dt);
 				break;
+			case "windup":
+				this.stepWindup(dt, now);
+				break;
 			case "tumbling":
 				this.stepTumbling(dt, now);
+				break;
+			case "suspense":
+				this.stepSuspense(dt, now);
 				break;
 			case "settling":
 				this.stepSettling(dt, now);
@@ -312,8 +337,9 @@ export class DiceEngine {
 				break;
 		}
 
-		s.dice.rotationQuaternion = s.rotation;
-
+		// Relax squash back to 0 every frame.
+		s.squash *= Math.pow(0.6, dt * 60);
+		this.applyTransform();
 		this.applyHoverParallax(dt);
 		this.applyCameraShake(dt);
 		this.applyFlash(dt);
@@ -321,45 +347,185 @@ export class DiceEngine {
 		this.maybeEmitFaceChange();
 	}
 
+	// ----- phase steps -----
+
 	private stepIdle(dt: number): void {
-		const drift = new Vector3(0.08, 0.22, 0.05);
+		const drift = new Vector3(0.12, 0.35, 0.08);
 		this.integrateRotation(drift, dt);
+		this.ease(this.state.position, Vector3.Zero(), dt, 6);
+		this.state.velocity.copyFromFloats(0, 0, 0);
 	}
 
 	private stepCharging(dt: number): void {
 		const s = this.state;
-		const wobble = 0.6 + s.chargeIntensity * 4.0;
+		const wobble = 0.8 + s.chargeIntensity * 6.0;
+		const t = performance.now() * 0.001;
 		const axis = new Vector3(
-			Math.sin(performance.now() * 0.02) * wobble,
-			Math.cos(performance.now() * 0.017) * wobble,
-			Math.sin(performance.now() * 0.013) * wobble * 0.5,
+			Math.sin(t * 18) * wobble,
+			Math.cos(t * 15) * wobble,
+			Math.sin(t * 12) * wobble * 0.5,
 		);
 		this.integrateRotation(axis, dt);
+
+		const jitter = s.chargeIntensity * 0.06;
+		const target = new Vector3(
+			(Math.random() - 0.5) * jitter,
+			Math.sin(t * 35) * jitter * 0.5,
+			(Math.random() - 0.5) * jitter * 0.4,
+		);
+		this.ease(s.position, target, dt, 30);
+		s.squash = Math.max(s.squash, s.chargeIntensity * 0.12);
 	}
 
+	/**
+	 * Windup: die pulls back, rotates ominously; emissive pulses. Ends with
+	 * a big "launch" impulse into `tumbling`.
+	 */
+	private stepWindup(dt: number, now: number): void {
+		const s = this.state;
+		const elapsed = now - s.phaseStart;
+		const t = clamp(elapsed / s.phaseDuration, 0, 1);
+		const eased = easeInCubic(t);
+
+		// Pull the die back toward the camera and downward like a sling loading.
+		const targetY = -0.05 - eased * 0.45;
+		const targetZ = eased * 0.35;
+		this.ease(s.position, new Vector3(0, targetY, targetZ), dt, 10);
+
+		// Slow ominous twist that accelerates.
+		const twist = new Vector3(0.4, 1.8 + eased * 2.5, 0.3);
+		this.integrateRotation(twist, dt);
+
+		// Vertical compression for the "crouch".
+		s.squash = Math.max(s.squash, 0.15 + eased * 0.2);
+
+		if (t >= 1) {
+			this.launch();
+		}
+	}
+
+	private launch(): void {
+		const s = this.state;
+		const power = s.rollPower;
+		const now = performance.now() / 1000;
+
+		const vy = 9 + power * 6;
+		const vx = (Math.random() - 0.5) * 2.2;
+		const vz = -1.2 - power * 1.4;
+		s.velocity = new Vector3(vx, vy, vz);
+
+		const spin = s.reducedMotion ? 6 : 14 + power * 18;
+		const axis = new Vector3(
+			Math.random() * 2 - 1,
+			Math.random() * 2 - 1,
+			Math.random() * 2 - 1,
+		).normalize();
+		s.angular = axis.scale(spin);
+
+		const tumbleDur = s.reducedMotion ? 0.6 : 1.1 + power * 1.1;
+		s.phase = "tumbling";
+		s.phaseStart = now;
+		s.phaseDuration = tumbleDur;
+		s.bounceCount = 0;
+		s.squash = 0.18;
+
+		this.callbacks.onLaunch?.(power);
+	}
+
+	/**
+	 * Tumbling: projectile arc, bounces on the invisible floor, progressively
+	 * damped. Emits per-bounce callbacks so the Solid layer can play SFX /
+	 * spawn particles.
+	 */
 	private stepTumbling(dt: number, now: number): void {
 		const s = this.state;
-		const elapsed = now - s.rollStart;
-		const t = Math.min(elapsed / s.rollDuration, 1);
-		const damping = 0.82;
-		s.angular = s.angular.scale(Math.pow(damping, dt * 60));
+
+		// Integrate gravity-driven position.
+		s.velocity.y += GRAVITY * dt;
+		s.position.addInPlace(s.velocity.scale(dt));
+
+		// Angular damping so spin slows as bounces pile up.
+		s.angular = s.angular.scale(Math.pow(0.94, dt * 60));
 		this.integrateRotation(s.angular, dt);
 
-		const speed = s.angular.length();
-		// Fake "bounces" when spinning hits certain speed thresholds (synthesized sound beats).
-		if (now - s.lastBounceAt > 0.1) {
-			const threshold = 6 + Math.sin(elapsed * 13) * 2;
-			if (speed > threshold) {
-				s.lastBounceAt = now;
-				const intensity = clamp(speed / 24, 0.1, 1);
-				this.callbacks.onBounce?.(intensity);
-			}
+		// Floor collision.
+		if (s.position.y <= GROUND_Y && s.velocity.y < 0) {
+			const impactSpeed = Math.abs(s.velocity.y);
+			s.position.y = GROUND_Y;
+
+			const restitution = 0.55 - s.bounceCount * 0.06;
+			s.velocity.y = impactSpeed * Math.max(0.18, restitution);
+			s.velocity.x *= 0.78;
+			s.velocity.z *= 0.78;
+
+			// Add a fresh spin kick on each bounce for chaotic tumbling.
+			const kick = new Vector3(
+				(Math.random() - 0.5) * impactSpeed * 1.1,
+				(Math.random() - 0.5) * impactSpeed * 0.9,
+				(Math.random() - 0.5) * impactSpeed * 1.1,
+			);
+			s.angular.addInPlace(kick);
+
+			s.squash = Math.min(0.45, 0.15 + impactSpeed * 0.05);
+			s.bounceCount += 1;
+			const intensity = clamp(impactSpeed / 12, 0.15, 1);
+			this.callbacks.onBounce?.(s.position.x, s.position.y, intensity);
+
+			// Tiny camera shake per bounce.
+			this.cameraShake.amplitude = Math.max(this.cameraShake.amplitude, intensity * 0.04);
+			this.cameraShake.decay = 6;
 		}
 
-		if (t >= 1 && s.targetQuat) {
+		// End tumble → suspense when time is up OR the die is nearly resting.
+		const elapsed = now - s.phaseStart;
+		const nearlyResting =
+			s.bounceCount >= 3 &&
+			Math.abs(s.velocity.y) < 1.0 &&
+			Math.hypot(s.velocity.x, s.velocity.z) < 0.4;
+		if (elapsed >= s.phaseDuration || nearlyResting) {
+			this.enterSuspense(now);
+		}
+	}
+
+	private enterSuspense(now: number): void {
+		const s = this.state;
+		s.phase = "suspense";
+		s.phaseStart = now;
+		// Reduced motion trims suspense to a blink.
+		s.phaseDuration = s.reducedMotion ? 0.12 : 0.55;
+		// Float the die up slightly and freeze rotation for a held beat.
+		s.velocity.copyFromFloats(0, 0.8, 0);
+		// Cache current rotation as the slerp-start for the settle phase.
+		s.settleFrom = s.rotation.clone();
+		this.callbacks.onSuspense?.();
+	}
+
+	/**
+	 * Suspense: die hangs in the air, slowly lifting and twirling while a
+	 * bated-breath SFX plays. Camera tightens in slightly for drama.
+	 */
+	private stepSuspense(dt: number, now: number): void {
+		const s = this.state;
+		const elapsed = now - s.phaseStart;
+		const t = clamp(elapsed / s.phaseDuration, 0, 1);
+
+		// Gentle float upward, easing into position.
+		const targetPos = new Vector3(0, 0.6 + Math.sin(elapsed * 6) * 0.06, 0);
+		this.ease(s.position, targetPos, dt, 8);
+		s.velocity.copyFromFloats(0, 0, 0);
+
+		// Very slow axial twirl.
+		const twirl = new Vector3(0, 1.6, 0);
+		this.integrateRotation(twirl, dt);
+
+		// Subtle pulse of the emissive.
+		s.critPulse = Math.max(s.critPulse, 0.25 + 0.25 * Math.sin(elapsed * 12));
+
+		if (t >= 1) {
 			s.phase = "settling";
+			s.phaseStart = now;
+			s.phaseDuration = s.reducedMotion ? 0.35 : 0.85;
 			s.settleFrom = s.rotation.clone();
-			s.settleStart = now;
 		}
 	}
 
@@ -369,30 +535,50 @@ export class DiceEngine {
 			s.phase = "resting";
 			return;
 		}
-		const elapsed = now - s.settleStart;
-		const t = clamp(elapsed / s.settleDuration, 0, 1);
+		const elapsed = now - s.phaseStart;
+		const t = clamp(elapsed / s.phaseDuration, 0, 1);
 		const eased = easeOutBack(t);
-		s.rotation = Quaternion.Slerp(s.settleFrom, s.targetQuat, eased);
+
+		// Interpolate rotation via an intermediate "overshoot" frame to make
+		// the reveal feel snappy and confident.
+		if (t < 0.7) {
+			const k = t / 0.7;
+			s.rotation = Quaternion.Slerp(s.settleFrom, s.settleRotation, easeOutQuart(k));
+		} else {
+			const k = (t - 0.7) / 0.3;
+			s.rotation = Quaternion.Slerp(s.settleRotation, s.targetQuat, easeOutBack(k));
+		}
+
+		// Position drops from suspense height down to rest with a small squash.
+		const posT = easeOutQuart(t);
+		const targetY = 0.0;
+		s.position.y = lerp(s.position.y, targetY, posT);
+		s.position.x = lerp(s.position.x, 0, posT);
+		s.position.z = lerp(s.position.z, 0, posT);
+		if (t > 0.6 && s.squash < 0.25) s.squash = 0.22;
 
 		if (t >= 1) {
 			s.rotation = s.targetQuat.clone();
 			s.phase = "resting";
 			s.angular = Vector3.Zero();
+			s.velocity = Vector3.Zero();
+			s.position = Vector3.Zero();
 			this.callbacks.onRollEnd?.(s.targetValue);
-			// Tiny celebratory wobble for crits
 			if (s.targetValue === 20 || s.targetValue === 1) {
 				s.critPulse = 1;
 			}
 		}
 		void dt;
+		void eased;
 	}
 
 	private stepResting(dt: number): void {
-		const s = this.state;
-		// Gentle idle breathing rotation so the die never feels completely frozen.
-		const drift = new Vector3(0, 0.05, 0);
+		const drift = new Vector3(0, 0.08, 0);
 		this.integrateRotation(drift, dt);
+		this.ease(this.state.position, Vector3.Zero(), dt, 4);
 	}
+
+	// ----- helpers -----
 
 	private integrateRotation(angular: Vector3, dt: number): void {
 		const s = this.state;
@@ -404,14 +590,32 @@ export class DiceEngine {
 		s.rotation.normalize();
 	}
 
+	private applyTransform(): void {
+		const s = this.state;
+		s.dice.rotationQuaternion = s.rotation;
+		s.dice.position.copyFrom(s.position);
+
+		// Squash-and-stretch: preserve volume (roughly) by shrinking Y and
+		// expanding X/Z by sqrt of the inverse.
+		const sq = clamp(s.squash, 0, 0.5);
+		const ySc = 1 - sq;
+		const xzSc = 1 + sq * 0.5;
+		s.dice.scaling.set(xzSc, ySc, xzSc);
+	}
+
 	private applyHoverParallax(dt: number): void {
 		const camera = this.state.scene.activeCamera as ArcRotateCamera;
 		if (!camera) return;
-		const targetAlpha = Math.PI / 2 + this.hoverTarget.x * 0.25;
-		const targetBeta = Math.PI / 2 - this.hoverTarget.y * 0.2;
+		const targetAlpha = Math.PI / 2 + this.hoverTarget.x * 0.3;
+		const targetBeta = Math.PI / 2 - this.hoverTarget.y * 0.22;
+		// Slight dolly-in during suspense + crit flash.
+		const s = this.state;
+		const tightness = (s.phase === "suspense" ? 0.4 : 0) + s.critPulse * 0.3;
+		const targetRadius = 5.2 - tightness * 0.8;
 		const k = 1 - Math.exp(-dt * 6);
 		camera.alpha += (targetAlpha - camera.alpha) * k;
 		camera.beta += (targetBeta - camera.beta) * k;
+		camera.radius += (targetRadius - camera.radius) * k;
 	}
 
 	private applyCameraShake(dt: number): void {
@@ -428,15 +632,15 @@ export class DiceEngine {
 			this.flashLight.intensity = 0;
 			return;
 		}
-		this.flashLight.intensity *= Math.max(0, 1 - dt * 4);
+		this.flashLight.intensity *= Math.max(0, 1 - dt * 3.5);
 	}
 
 	private applyCritEmissive(dt: number): void {
 		const mat = this.state.dice.material as StandardMaterial | null;
 		if (!mat) return;
 		const s = this.state;
-		s.critPulse = Math.max(0, s.critPulse - dt * 1.2);
-		const blend = s.critPulse;
+		s.critPulse = Math.max(0, s.critPulse - dt * 1.0);
+		const blend = clamp(s.critPulse, 0, 1);
 		mat.emissiveColor = Color3.Lerp(this.baseEmissive, this.critEmissive, blend);
 	}
 
@@ -448,10 +652,21 @@ export class DiceEngine {
 			this.callbacks.onFaceChange?.(s.geometry.faces[idx].value);
 		}
 	}
+
+	private ease(out: Vector3, target: Vector3, dt: number, speed: number): void {
+		const k = 1 - Math.exp(-dt * speed);
+		out.x += (target.x - out.x) * k;
+		out.y += (target.y - out.y) * k;
+		out.z += (target.z - out.z) * k;
+	}
 }
 
 function clamp(v: number, lo: number, hi: number): number {
 	return Math.max(lo, Math.min(hi, v));
+}
+
+function lerp(a: number, b: number, t: number): number {
+	return a + (b - a) * clamp(t, 0, 1);
 }
 
 function easeOutBack(t: number): number {
@@ -459,6 +674,15 @@ function easeOutBack(t: number): number {
 	const c3 = c1 + 1;
 	const x = t - 1;
 	return 1 + c3 * x * x * x + c1 * x * x;
+}
+
+function easeOutQuart(t: number): number {
+	const x = 1 - t;
+	return 1 - x * x * x * x;
+}
+
+function easeInCubic(t: number): number {
+	return t * t * t;
 }
 
 function prefersReducedMotion(): boolean {
