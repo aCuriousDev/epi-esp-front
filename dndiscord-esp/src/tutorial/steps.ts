@@ -69,7 +69,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: "done",
     route: "/",
     title: "C'est prêt",
-    body: "Tu peux relancer ce tutoriel à tout moment depuis Paramètres → Tutoriel.",
+    body: "Tu peux relancer ce tutoriel à tout moment depuis Paramètres -> Tutoriel.",
     cta: "Terminer",
   },
 ];
