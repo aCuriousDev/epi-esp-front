@@ -29,7 +29,7 @@ export interface InventoryEntry {
   item: Item;
 }
 
-export type InventoryChangeAction = "Added" | "Removed";
+export type InventoryChangeAction = "Added" | "Updated" | "Removed";
 
 export interface InventoryChangedEvent {
   characterId: string;

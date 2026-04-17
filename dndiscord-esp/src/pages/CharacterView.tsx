@@ -30,6 +30,7 @@ import { GetCharacterProfilPic } from "../utils/characterProfilPic";
 import { safeConfirm } from "../services/ui/confirm";
 import InventoryPanel from "../components/InventoryPanel";
 import WalletPanel from "../components/WalletPanel";
+import { isHost } from "../stores/session.store";
 
 /**
  * Map API character response to frontend Character type
@@ -220,19 +221,21 @@ export default function CharacterView() {
                       </Show>
                     </div>
 
-                    {/* Action buttons */}
-                    <div class="flex gap-2 pt-4 sm:pt-8">
-                      <button
-                        onClick={handleLevelUp}
-                        class="px-3 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-600 border border-amber-400/20 hover:from-amber-400 hover:to-yellow-500 transition-colors flex items-center gap-2"
-                        title="Monter de niveau"
-                      >
-                        <TrendingUp class="w-4 h-4 text-white" />
-                        <span class="text-white text-sm font-semibold">
-                          Level Up
-                        </span>
-                      </button>
-                    </div>
+                    {/* Action buttons (MJ only) */}
+                    <Show when={isHost()}>
+                      <div class="flex gap-2 pt-4 sm:pt-8">
+                        <button
+                          onClick={handleLevelUp}
+                          class="px-3 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-600 border border-amber-400/20 hover:from-amber-400 hover:to-yellow-500 transition-colors flex items-center gap-2"
+                          title="Monter de niveau"
+                        >
+                          <TrendingUp class="w-4 h-4 text-white" />
+                          <span class="text-white text-sm font-semibold">
+                            Level Up
+                          </span>
+                        </button>
+                      </div>
+                    </Show>
                   </div>
                 </div>
 
@@ -248,22 +251,24 @@ export default function CharacterView() {
                             Points de vie
                           </span>
                         </div>
-                        <div class="flex gap-1">
-                          <button
-                            onClick={() => handleHitPointsChange(-1)}
-                            class="w-6 h-6 rounded bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 flex items-center justify-center transition-colors"
-                            title="Retirer 1 PV"
-                          >
-                            <Minus class="w-3 h-3 text-red-400" />
-                          </button>
-                          <button
-                            onClick={() => handleHitPointsChange(1)}
-                            class="w-6 h-6 rounded bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 flex items-center justify-center transition-colors"
-                            title="Ajouter 1 PV"
-                          >
-                            <Plus class="w-3 h-3 text-green-400" />
-                          </button>
-                        </div>
+                        <Show when={isHost()}>
+                          <div class="flex gap-1">
+                            <button
+                              onClick={() => handleHitPointsChange(-1)}
+                              class="w-6 h-6 rounded bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 flex items-center justify-center transition-colors"
+                              title="Retirer 1 PV"
+                            >
+                              <Minus class="w-3 h-3 text-red-400" />
+                            </button>
+                            <button
+                              onClick={() => handleHitPointsChange(1)}
+                              class="w-6 h-6 rounded bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 flex items-center justify-center transition-colors"
+                              title="Ajouter 1 PV"
+                            >
+                              <Plus class="w-3 h-3 text-green-400" />
+                            </button>
+                          </div>
+                        </Show>
                       </div>
                       <div class="text-2xl font-bold text-white">
                         {char().currentHitPoints}
@@ -384,8 +389,8 @@ export default function CharacterView() {
 
               <Show when={activeTab() === "inventory"}>
                 <div class="mt-4 space-y-4">
-                  <WalletPanel characterId={char().id} />
-                  <InventoryPanel characterId={char().id} />
+                  <WalletPanel characterId={char().id} isMJ={isHost()} />
+                  <InventoryPanel characterId={char().id} isMJ={isHost()} />
                 </div>
               </Show>
 

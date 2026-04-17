@@ -8,6 +8,7 @@ import type { WalletDto, WalletChangedEvent } from "../types/inventory";
 
 interface WalletPanelProps {
   characterId: string;
+  isMJ?: boolean;
 }
 
 interface CoinDef {
@@ -36,7 +37,7 @@ const COINS: CoinDef[] = [
     key: "goldPieces",
     label: "Or",
     abbr: "PO",
-    icon: "game-icons:two-coins",
+    icon: "game-icons:gold-stack",
     color: "text-yellow-300",
     bg: "from-yellow-500/20 to-amber-400/10",
     border: "border-yellow-400/30",
@@ -46,7 +47,7 @@ const COINS: CoinDef[] = [
     key: "electrumPieces",
     label: "Électrum",
     abbr: "PE",
-    icon: "game-icons:coins",
+    icon: "game-icons:coinflip",
     color: "text-blue-300",
     bg: "from-blue-500/20 to-cyan-400/10",
     border: "border-blue-400/30",
@@ -56,7 +57,7 @@ const COINS: CoinDef[] = [
     key: "silverPieces",
     label: "Argent",
     abbr: "PA",
-    icon: "game-icons:coins-pile",
+    icon: "game-icons:two-coins",
     color: "text-slate-300",
     bg: "from-slate-500/20 to-gray-400/10",
     border: "border-slate-400/30",
@@ -66,7 +67,7 @@ const COINS: CoinDef[] = [
     key: "copperPieces",
     label: "Cuivre",
     abbr: "PC",
-    icon: "game-icons:coins",
+    icon: "game-icons:coins-pile",
     color: "text-orange-400",
     bg: "from-orange-500/20 to-amber-600/10",
     border: "border-orange-400/30",
@@ -194,24 +195,26 @@ export default function WalletPanel(props: WalletPanelProps) {
                     {coin.label}
                   </div>
 
-                  {/* +/- controls */}
-                  <div class="flex gap-1 mt-2 justify-center">
-                    <button
-                      onClick={() => handleModify(coin.key, -1)}
-                      disabled={value() === 0}
-                      class="w-6 h-6 rounded bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                      title={`Retirer 1 ${coin.label}`}
-                    >
-                      <Minus class="w-3 h-3 text-red-400" />
-                    </button>
-                    <button
-                      onClick={() => handleModify(coin.key, 1)}
-                      class="w-6 h-6 rounded bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 flex items-center justify-center transition-colors"
-                      title={`Ajouter 1 ${coin.label}`}
-                    >
-                      <Plus class="w-3 h-3 text-green-400" />
-                    </button>
-                  </div>
+                  {/* +/- controls (MJ only) */}
+                  <Show when={props.isMJ}>
+                    <div class="flex gap-1 mt-2 justify-center">
+                      <button
+                        onClick={() => handleModify(coin.key, -1)}
+                        disabled={value() === 0}
+                        class="w-6 h-6 rounded bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        title={`Retirer 1 ${coin.label}`}
+                      >
+                        <Minus class="w-3 h-3 text-red-400" />
+                      </button>
+                      <button
+                        onClick={() => handleModify(coin.key, 1)}
+                        class="w-6 h-6 rounded bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 flex items-center justify-center transition-colors"
+                        title={`Ajouter 1 ${coin.label}`}
+                      >
+                        <Plus class="w-3 h-3 text-green-400" />
+                      </button>
+                    </div>
+                  </Show>
                 </div>
               );
             }}

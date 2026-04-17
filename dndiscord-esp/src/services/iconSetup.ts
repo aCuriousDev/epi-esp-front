@@ -8,27 +8,28 @@ import gameIcons from "@iconify-json/game-icons/icons.json";
  */
 const gi = gameIcons as IconifyJSON;
 const neededIcons = [
+  // Inventory item icons
   "health-potion",
-  "potion-ball",
+  "magic-potion",
   "torch",
-  "bread-slice",
+  "hot-meal",
   "rope-coil",
   "plain-dagger",
-  "pocket-bow",
+  "bow-arrow",
   "round-shield",
   "scroll-unfurled",
   "two-coins",
+  "locked-chest",
   "gem-pendant",
   "treasure-map",
   "swap-bag",
   "knapsack",
   "crossed-swords",
   // Wallet coin icons
-  "coins",
-  "coins-pile",
-  "two-coins",
   "crown-coin",
-  "gold-bar",
+  "gold-stack",
+  "coinflip",
+  "coins-pile",
   "shiny-purse",
 ];
 

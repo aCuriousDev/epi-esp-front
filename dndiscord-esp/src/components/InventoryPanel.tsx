@@ -29,6 +29,7 @@ import type {
 
 interface InventoryPanelProps {
   characterId: string;
+  isMJ?: boolean;
 }
 
 interface RevealItem {
@@ -184,6 +185,16 @@ export default function InventoryPanel(props: InventoryPanelProps) {
         quantity: evt.entry.quantity,
         category: evt.entry.item.category,
       });
+    } else if (evt.action === "Updated") {
+      setEntries((prev) => {
+        const idx = prev.findIndex((e) => e.id === evt.entry.id);
+        if (idx >= 0) {
+          const copy = [...prev];
+          copy[idx] = evt.entry;
+          return copy;
+        }
+        return prev;
+      });
     } else if (evt.action === "Removed") {
       setEntries((prev) => prev.filter((e) => e.id !== evt.entry.id));
     }
@@ -192,7 +203,8 @@ export default function InventoryPanel(props: InventoryPanelProps) {
   let unsubscribe: (() => void) | null = null;
 
   onMount(async () => {
-    await Promise.all([loadInventory(), loadCatalog()]);
+    await loadInventory();
+    if (props.isMJ) await loadCatalog();
 
     const subscribe = () => {
       unsubscribe = InventoryService.onInventoryChanged(handleInventoryChanged);
@@ -256,13 +268,15 @@ export default function InventoryPanel(props: InventoryPanelProps) {
             </h2>
           </div>
 
-          <button
-            onClick={() => setShowCatalog(true)}
-            class="group px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600/80 to-indigo-600/80 hover:from-purple-500 hover:to-indigo-500 border border-purple-400/30 text-white text-sm font-semibold flex items-center gap-2 transition-all shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40"
-          >
-            <Gift class="w-4 h-4 group-hover:rotate-12 transition-transform" />
-            Don du MJ
-          </button>
+          <Show when={props.isMJ}>
+            <button
+              onClick={() => setShowCatalog(true)}
+              class="group px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600/80 to-indigo-600/80 hover:from-purple-500 hover:to-indigo-500 border border-purple-400/30 text-white text-sm font-semibold flex items-center gap-2 transition-all shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40"
+            >
+              <Gift class="w-4 h-4 group-hover:rotate-12 transition-transform" />
+              Don du MJ
+            </button>
+          </Show>
         </div>
 
         {/* Category filter chips */}
@@ -347,13 +361,15 @@ export default function InventoryPanel(props: InventoryPanelProps) {
                             ×{entry.quantity}
                           </div>
                         </Show>
-                        <button
-                          onClick={() => handleDrop(entry)}
-                          class="w-6 h-6 rounded-full bg-red-500/20 hover:bg-red-500/40 border border-red-500/30 flex items-center justify-center transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
-                          title="Jeter"
-                        >
-                          <Trash2 class="w-3 h-3 text-red-400" />
-                        </button>
+                        <Show when={props.isMJ}>
+                          <button
+                            onClick={() => handleDrop(entry)}
+                            class="w-6 h-6 rounded-full bg-red-500/20 hover:bg-red-500/40 border border-red-500/30 flex items-center justify-center transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+                            title="Jeter"
+                          >
+                            <Trash2 class="w-3 h-3 text-red-400" />
+                          </button>
+                        </Show>
                       </div>
 
                       {/* Item icon */}

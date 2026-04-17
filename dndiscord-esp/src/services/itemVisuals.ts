@@ -8,15 +8,15 @@ import type { ItemCategory } from "../types/inventory";
 
 export const ICON_NAME: Record<string, string> = {
   "potion-red": "game-icons:health-potion",
-  "potion-blue": "game-icons:potion-ball",
+  "potion-blue": "game-icons:magic-potion",
   torch: "game-icons:torch",
-  bread: "game-icons:bread-slice",
+  bread: "game-icons:hot-meal",
   rope: "game-icons:rope-coil",
   dagger: "game-icons:plain-dagger",
-  bow: "game-icons:pocket-bow",
+  bow: "game-icons:bow-arrow",
   shield: "game-icons:round-shield",
   scroll: "game-icons:scroll-unfurled",
-  "coin-gold": "game-icons:two-coins",
+  chest: "game-icons:locked-chest",
   amulet: "game-icons:gem-pendant",
   map: "game-icons:treasure-map",
 };
