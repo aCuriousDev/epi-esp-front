@@ -14,6 +14,8 @@ import {
   ScrollText,
   X,
 } from "lucide-solid";
+import { Icon } from "@iconify-icon/solid";
+import "../services/iconSetup";
 import { createSignal, onMount, Show, For } from "solid-js";
 import {
   Character,
@@ -26,6 +28,8 @@ import {
 import { CharacterService, CharacterDto } from "../services/character.service";
 import { GetCharacterProfilPic } from "../utils/characterProfilPic";
 import { safeConfirm } from "../services/ui/confirm";
+import InventoryPanel from "../components/InventoryPanel";
+import WalletPanel from "../components/WalletPanel";
 
 /**
  * Map API character response to frontend Character type
@@ -53,6 +57,7 @@ export default function CharacterView() {
   const [character, setCharacter] = createSignal<Character | null>(null);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
+  const [activeTab, setActiveTab] = createSignal<"traits" | "inventory">("traits");
 
   onMount(async () => {
     try {
@@ -351,8 +356,42 @@ export default function CharacterView() {
                 </div>
               </div>
 
+              {/* Tab switcher */}
+              <div class="mt-6 flex gap-2 p-1 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm">
+                <button
+                  onClick={() => setActiveTab("traits")}
+                  class={`flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${
+                    activeTab() === "traits"
+                      ? "bg-gradient-to-r from-purple-600/80 to-indigo-600/80 text-white shadow-lg shadow-purple-500/20"
+                      : "text-slate-400 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  <Icon icon="game-icons:crossed-swords" width="1.2em" height="1.2em" />
+                  Traits
+                </button>
+                <button
+                  onClick={() => setActiveTab("inventory")}
+                  class={`flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${
+                    activeTab() === "inventory"
+                      ? "bg-gradient-to-r from-amber-600/80 to-orange-600/80 text-white shadow-lg shadow-amber-500/20"
+                      : "text-slate-400 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  <Icon icon="game-icons:knapsack" width="1.2em" height="1.2em" />
+                  Inventaire
+                </button>
+              </div>
+
+              <Show when={activeTab() === "inventory"}>
+                <div class="mt-4 space-y-4">
+                  <WalletPanel characterId={char().id} />
+                  <InventoryPanel characterId={char().id} />
+                </div>
+              </Show>
+
+              <Show when={activeTab() === "traits"}>
               {/* Quick Info Cards */}
-              <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Class Features Placeholder */}
                 <div class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-xl">
                   <h2 class="font-display text-lg text-white mb-3">
@@ -395,6 +434,7 @@ export default function CharacterView() {
                   </div>
                 </div>
               </div>
+              </Show>
 
               {/* Actions */}
               <div class="mt-6 flex flex-col sm:flex-row gap-4">
