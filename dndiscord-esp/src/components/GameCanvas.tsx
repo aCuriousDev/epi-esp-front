@@ -21,6 +21,7 @@ import { SoundManager } from '../engine/audio/SoundManager';
 import { setSoundEngine } from '../game/audio/SoundIntegration';
 import { soundSettings } from '../stores/sound.store';
 import { GamePhase, TurnPhase, Team, Unit, GridPosition, GameMode } from '../types';
+import { getCurrentSession, isHost as isSessionHost } from '../stores/session.store';
 
 let engineInstance: BabylonEngine | null = null;
 let soundInstance: SoundManager | null = null;
@@ -444,6 +445,10 @@ export const GameCanvas: Component = () => {
     }
     
     // Only execute if it's enemy turn and we haven't executed this specific index yet
+    // Multiplayer: only the host executes enemy AI to avoid duplicated/desynced enemy actions.
+    const inSession = !!getCurrentSession();
+    if (inSession && !isSessionHost()) return;
+
     if (isEnemyTurn && lastExecutedEnemyIndex !== currentIndex) {
       lastExecutedEnemyIndex = currentIndex;
       enemyTurnTimeout = setTimeout(async () => {

@@ -11,6 +11,8 @@ import { gameState, setGameState, addCombatLog } from '../stores/GameStateStore'
 import { units, setUnits, getPlayerUnits, getEnemyUnits } from '../stores/UnitsStore';
 import { tiles, setTiles, pathfinder, updatePathfinder } from '../stores/TilesStore';
 import { posToKey } from '../utils/GridUtils';
+import { getCurrentSession, isHost as getIsHost } from '../../stores/session.store';
+import { sendAbilityUsed, sendGameStateSnapshot } from '../../services/signalr/multiplayer.service';
 import { playSpellEffect, playDamageEffect, playDeathEffect, playHitReactionEffect, playCameraShake } from '../vfx/VFXIntegration';
 import { playSpellCastSound, playImpactSound, playDeathSound, playSwordHitSound, playVictorySound, playDefeatSound, playSelectSound, playArrowShotSound, playShieldBashSound, playClawAttackSound } from '../audio/SoundIntegration';
 
@@ -202,6 +204,48 @@ export function useAbility(targetPos: GridPosition): boolean {
   
   // Check game over
   checkGameOver();
+
+  // Multiplayer: broadcast ability usage so other clients can reconcile (they'll request FullStateSync).
+  const session = getCurrentSession();
+  if (session) {
+    sendAbilityUsed({
+      unitId: unit.id,
+      abilityId: ability.id,
+      targets: targetUnitIds,
+      effects: [],
+    }).catch((err) => {
+      console.warn("[CombatActions] sendAbilityUsed failed:", err);
+    });
+
+    // Host publishes a minimal snapshot so RequestFullState has up-to-date HP/positions.
+    if (getIsHost()) {
+      const snapshot = {
+        sessionId: session.sessionId,
+        combatState: {
+          isActive: gameState.mode === GameMode.COMBAT || gameState.mode === GameMode.DUNGEON,
+          currentRound: gameState.currentTurn,
+          currentUnitId: gameState.turnOrder[gameState.currentUnitIndex] ?? "",
+          initiativeOrder: gameState.turnOrder.map((id) => ({
+            unitId: id,
+            initiative: units[id]?.stats.initiative ?? 0,
+            controllerId: units[id]?.ownerUserId ?? "00000000-0000-0000-0000-000000000000",
+          })),
+        },
+        units: Object.values(units).map((u) => ({
+          unitId: u.id,
+          name: u.name,
+          hp: u.stats.currentHealth,
+          maxHp: u.stats.maxHealth,
+          position: { x: u.position.x, y: u.position.z },
+          controllerId: u.ownerUserId ?? "00000000-0000-0000-0000-000000000000",
+          statusEffects: (u.statusEffects ?? []).map((s) => String((s as any).type ?? "")),
+        })),
+        mapState: { width: 0, height: 0, tiles: [] as any[] },
+        lastSequenceNumber: 0,
+      };
+      sendGameStateSnapshot(snapshot as any).catch(() => {});
+    }
+  }
   
   return true;
 }
