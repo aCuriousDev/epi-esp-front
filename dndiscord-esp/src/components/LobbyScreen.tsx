@@ -34,6 +34,7 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
   const [selectedMapId, setSelectedMapId] = createSignal<string | null>(null);
   const [copied, setCopied] = createSignal(false);
   const [starting, setStarting] = createSignal(false);
+  const [startError, setStartError] = createSignal<string | null>(null);
 
   onMount(async () => {
     try {
@@ -78,6 +79,7 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
   };
 
   const handleStartGame = async () => {
+    setStartError(null);
     const mapId = selectedMapId();
     if (
       !mapId &&
@@ -91,6 +93,11 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
       await startGameHub(mapId ?? "default");
     } catch (err: any) {
       console.error("[Lobby] startGame failed:", err);
+      setStartError(
+        err?.message ??
+          err?.toString?.() ??
+          "Impossible de lancer la partie (erreur inconnue).",
+      );
       setStarting(false);
     }
   };
@@ -103,7 +110,10 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
   };
 
   const playerCount = () => session()?.players.length ?? 0;
-  const canStart = () => playerCount() >= 2 && !starting();
+  // Campagne: autoriser le host à lancer même seul (utile pour tests).
+  // Room libre: conserver la contrainte d'au moins 2 joueurs.
+  const minPlayersToStart = () => (session()?.campaignId ? 1 : 2);
+  const canStart = () => playerCount() >= minPlayersToStart() && !starting();
 
   return (
     <div class="relative min-h-screen w-full overflow-hidden bg-brand-gradient">
@@ -251,9 +261,15 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                   ? "Lancement..."
                   : `Lancer la partie (${playerCount()} joueurs)`}
               </button>
-              <Show when={playerCount() < 2}>
+              <Show when={playerCount() < minPlayersToStart()}>
                 <p class="text-center text-sm text-slate-400 mt-2">
-                  Au moins 2 joueurs requis pour commencer.
+                  Au moins {minPlayersToStart()} joueur
+                  {minPlayersToStart() > 1 ? "s" : ""} requis pour commencer.
+                </p>
+              </Show>
+              <Show when={startError()}>
+                <p class="text-center text-sm text-red-200 mt-3" role="alert">
+                  {startError()}
                 </p>
               </Show>
             </div>

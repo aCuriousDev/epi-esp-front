@@ -4,19 +4,60 @@
  */
 
 import { signalRService } from "./SignalRService";
-import type { GameMessage, MoveResult, TurnEndedPayload, GameStateSnapshotPayload } from "../../types/multiplayer";
+import type {
+  GameMessage,
+  MoveResult,
+  TurnEndedPayload,
+  GameStateSnapshotPayload,
+} from "../../types/multiplayer";
 import type { GridPosition } from "../../types";
 import { units, setUnits } from "../../game/stores/UnitsStore";
 import { tiles, setTiles } from "../../game/stores/TilesStore";
-import { setGameState } from "../../game/stores/GameStateStore";
+import {
+  gameState,
+  setGameState,
+  getIsFreeRoamMode,
+} from "../../game/stores/GameStateStore";
 import { updatePathfinder } from "../../game/stores/TilesStore";
 import { posToKey } from "../../game/utils/GridUtils";
 import { produce } from "solid-js/store";
 import { sessionState } from "../../stores/session.store";
+import { requestFullState } from "./multiplayer.service";
 
 /** Backend envoie (x, y), le jeu utilise (x, z). */
 function toFrontendPos(p: { x: number; y: number }): GridPosition {
   return { x: p.x, z: p.y };
+}
+
+function applySnapshot(payload: GameStateSnapshotPayload): void {
+  if (!payload?.units?.length) return;
+
+  for (const key of Object.keys(tiles)) {
+    if (tiles[key]?.occupiedBy != null) {
+      setTiles(key, "occupiedBy", null);
+    }
+  }
+
+  for (const u of payload.units) {
+    const pos = toFrontendPos(u.position as { x: number; y: number });
+    if (!units[u.unitId]) continue;
+
+    setUnits(
+      u.unitId,
+      produce((unit) => {
+        unit.position = pos;
+        unit.stats.currentHealth = u.hp;
+        unit.stats.maxHealth = u.maxHp;
+      }),
+    );
+
+    const tileKey = posToKey(pos);
+    if (tiles[tileKey]) {
+      setTiles(tileKey, "occupiedBy", u.unitId);
+    }
+  }
+
+  updatePathfinder();
 }
 
 /**
@@ -30,15 +71,19 @@ export function registerGameSyncHandlers(): void {
     const unitId = payload.unitId;
 
     const unitData = units[unitId];
-    if (unitData?.ownerUserId && unitData.ownerUserId === sessionState.hubUserId) return;
+    if (
+      unitData?.ownerUserId &&
+      unitData.ownerUserId === sessionState.hubUserId
+    )
+      return;
 
-    const path = payload.path.map((pos) => toFrontendPos(pos as { x: number; y: number }));
+    const path = payload.path.map((pos) =>
+      toFrontendPos(pos as { x: number; y: number }),
+    );
     const dest = path[path.length - 1];
     const start = path[0];
     if (!dest) return;
 
-    // Tile grid may not be initialized yet (reconnection before game board mounts).
-    // FullStateSync will reconcile once the board is ready.
     const destTile = tiles[posToKey(dest)];
     if (!destTile) return;
 
@@ -52,47 +97,69 @@ export function registerGameSyncHandlers(): void {
 
     if (!unitData) return;
 
-    setUnits(unitId, produce((u) => {
-      u.position = dest;
-      u.stats.currentActionPoints = Math.max(0, u.stats.currentActionPoints - (payload.apCost ?? 1));
-      u.hasMoved = true;
-    }));
+    setUnits(
+      unitId,
+      produce((u) => {
+        u.position = dest;
+        if (!getIsFreeRoamMode()) {
+          u.stats.currentActionPoints = Math.max(
+            0,
+            u.stats.currentActionPoints - (payload.apCost ?? 1),
+          );
+        }
+        u.hasMoved = true;
+      }),
+    );
 
-    setGameState("pathPreview", []);
-    setGameState("highlightedTiles", []);
-    updatePathfinder();
-  });
-
-  signalRService.on("TurnEnded", (message: GameMessage<TurnEndedPayload> | TurnEndedPayload) => {
-    const payload = (message && typeof message === "object" && "payload" in message)
-      ? (message as GameMessage<TurnEndedPayload>).payload
-      : (message as TurnEndedPayload);
-    if (!payload?.unitId) return;
-    // Le tour est passé à l'unité suivante côté serveur ; on peut avancer l'index local
-    // pour garder l'UI en phase (ou attendre un événement TurnChanged du backend)
-    setGameState("selectedUnit", null);
-    setGameState("turnPhase", "SELECT_UNIT" as any);
-  });
-
-  signalRService.on("FullStateSync", (message: GameMessage<GameStateSnapshotPayload>) => {
-    const payload = message?.payload ?? message;
-    if (!payload?.units?.length) return;
-
-    for (const u of payload.units) {
-      const pos = toFrontendPos(u.position as { x: number; y: number });
-      if (!units[u.unitId]) continue;
-
-      setUnits(u.unitId, produce((unit) => {
-        unit.position = pos;
-        unit.stats.currentHealth = u.hp;
-        unit.stats.maxHealth = u.maxHp;
-      }));
-
-      const tileKey = posToKey(pos);
-      if (tiles[tileKey]) {
-        setTiles(tileKey, "occupiedBy", u.unitId);
-      }
+    if (gameState.selectedUnit === unitId) {
+      setGameState("pathPreview", []);
+      setGameState("highlightedTiles", []);
     }
     updatePathfinder();
+  });
+
+  signalRService.on(
+    "TurnEnded",
+    (message: GameMessage<TurnEndedPayload> | TurnEndedPayload) => {
+      const payload =
+        message && typeof message === "object" && "payload" in message
+          ? (message as GameMessage<TurnEndedPayload>).payload
+          : (message as TurnEndedPayload);
+      if (!payload?.unitId) return;
+
+      if (getIsFreeRoamMode()) return;
+
+      if (gameState.selectedUnit === payload.unitId) {
+        setGameState("selectedUnit", null);
+        setGameState("turnPhase", "SELECT_UNIT" as any);
+      }
+    },
+  );
+
+  signalRService.on(
+    "FullStateSync",
+    (message: GameMessage<GameStateSnapshotPayload>) => {
+      const payload = message?.payload ?? message;
+      applySnapshot(payload);
+    },
+  );
+
+  signalRService.on("AttackResolved", async () => {
+    try {
+      const msg = await requestFullState();
+      const payload = (msg as any)?.payload ?? (msg as any);
+      applySnapshot(payload as any);
+    } catch {
+      // ignore
+    }
+  });
+  signalRService.on("AbilityUsed", async () => {
+    try {
+      const msg = await requestFullState();
+      const payload = (msg as any)?.payload ?? (msg as any);
+      applySnapshot(payload as any);
+    } catch {
+      // ignore
+    }
   });
 }

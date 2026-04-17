@@ -13,7 +13,7 @@ import { tiles, setTiles, pathfinder, updatePathfinder } from '../stores/TilesSt
 import { posToKey } from '../utils/GridUtils';
 import { getCurrentSession, getHubUserId } from '../../stores/session.store';
 import { isHost as getIsHost } from '../../stores/session.store';
-import { sendUnitMove } from '../../services/signalr/multiplayer.service';
+import { move as hubMove, sendUnitMove, sendGameStateSnapshot } from '../../services/signalr/multiplayer.service';
 import { getAllySpawnPositions, getEnemySpawnPositions } from '../initialization/InitUnits';
 import { getTeleportPositions } from '../../services/mapStorage';
 import { transitionToNextRoom } from './TurnActions';
@@ -125,6 +125,7 @@ export function moveUnit(targetPos: GridPosition): boolean {
 
   const isFreeRoam = getIsFreeRoamMode();
   const isPreparation = gameState.phase === GamePhase.COMBAT_PREPARATION;
+  const session = getCurrentSession();
   
   // Phase de préparation : placement direct sur une case de spawn (sans pathfinding)
   if (isPreparation && (unit.team === Team.PLAYER || unit.team === Team.ENEMY)) {
@@ -197,6 +198,9 @@ export function moveUnit(targetPos: GridPosition): boolean {
   // Check if unit has enough AP for this move (skip in Free Roam)
   if (!isFreeRoam && unit.stats.currentActionPoints < movementCost) return false;
   
+  const prevPos = { ...unit.position };
+  const prevDestOccupiedBy = tiles[posToKey(targetPos)]?.occupiedBy ?? null;
+
   batch(() => {
     // Play movement dust trail VFX + footstep sound
     playMovementDustEffect(unit.position, targetPos);
@@ -250,20 +254,74 @@ export function moveUnit(targetPos: GridPosition): boolean {
   // Update pathfinder with new tile state
   updatePathfinder();
 
-
-  // En session multijoueur : diffuser le mouvement aux autres joueurs (backend envoie UnitMoved aux autres uniquement)
-  const session = getCurrentSession();
+  // En session multijoueur :
+  // - unités PLAYER: Move() (hub, validation + broadcast)
+  // - unités ENEMY (AI): legacy broadcast (sans validation) pour synchroniser les autres clients
   if (session) {
-    const remainingAp = units[unit.id].stats.currentActionPoints;
     const pathForBackend = path.map((p) => ({ x: p.x, y: p.z }));
-    sendUnitMove({
-      unitId: unit.id,
-      path: pathForBackend,
-      apCost: movementCost,
-      remainingAp,
-    }).catch((err) => {
-      console.warn("[MovementActions] sendUnitMove failed:", err);
-    });
+    if (unit.team === Team.PLAYER) {
+      hubMove({
+        unitId: unit.id,
+        targetX: targetPos.x,
+        targetY: targetPos.z,
+        path: pathForBackend,
+      }).then((res) => {
+        if (res?.success) return;
+        // Rollback si refusé côté serveur
+        console.warn("[MovementActions] hub Move rejected:", res?.error ?? "unknown");
+        batch(() => {
+          setTiles(posToKey(targetPos), 'occupiedBy', prevDestOccupiedBy);
+          setUnits(unit.id, produce((u) => {
+            u.position = prevPos;
+          }));
+          setTiles(posToKey(prevPos), 'occupiedBy', unit.id);
+          setGameState('pathPreview', []);
+          setGameState('highlightedTiles', []);
+        });
+        updatePathfinder();
+      }).catch((err) => {
+        console.warn("[MovementActions] hub Move failed:", err);
+        // On ne rollback pas sur erreurs réseau transitoires; FullStateSync pourra resynchroniser.
+      });
+    } else {
+      sendUnitMove({
+        unitId: unit.id,
+        path: pathForBackend,
+        apCost: movementCost,
+        remainingAp: units[unit.id].stats.currentActionPoints,
+      }).catch((err) => {
+        console.warn("[MovementActions] sendUnitMove (enemy) failed:", err);
+      });
+    }
+
+    // Host: publier un snapshot minimal pour resync (HP/positions) via RequestFullState
+    if (getIsHost()) {
+      const snapshot = {
+        sessionId: session.sessionId,
+        combatState: {
+          isActive: gameState.mode === GameMode.COMBAT || gameState.mode === GameMode.DUNGEON,
+          currentRound: gameState.currentTurn,
+          currentUnitId: gameState.turnOrder[gameState.currentUnitIndex] ?? "",
+          initiativeOrder: gameState.turnOrder.map((id) => ({
+            unitId: id,
+            initiative: units[id]?.stats.initiative ?? 0,
+            controllerId: units[id]?.ownerUserId ?? "00000000-0000-0000-0000-000000000000",
+          })),
+        },
+        units: Object.values(units).map((u) => ({
+          unitId: u.id,
+          name: u.name,
+          hp: u.stats.currentHealth,
+          maxHp: u.stats.maxHealth,
+          position: { x: u.position.x, y: u.position.z },
+          controllerId: u.ownerUserId ?? "00000000-0000-0000-0000-000000000000",
+          statusEffects: (u.statusEffects ?? []).map((s) => String((s as any).type ?? "")),
+        })),
+        mapState: { width: 0, height: 0, tiles: [] as any[] },
+        lastSequenceNumber: 0,
+      };
+      sendGameStateSnapshot(snapshot as any).catch(() => {});
+    }
   }
 
   // Check if the unit stepped on a teleport cell (dungeon mode only)
