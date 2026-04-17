@@ -277,7 +277,12 @@ export class DiceEngine {
 				positions.push(v.x, v.y, v.z);
 				normals.push(face.normal.x, face.normal.y, face.normal.z);
 			}
-			indices.push(base, base + 1, base + 2);
+			// Geometry stores triangles CCW-from-outside, but Babylon's default
+			// left-handed system treats CW-from-outside as front-facing. Without
+			// the flip, the user sees the *back* of the mesh (i.e. the opposite
+			// face, which on a d20 sums to 21 with the intended one — that's
+			// why nat 20 used to show a 1 and vice-versa).
+			indices.push(base, base + 2, base + 1);
 			const uvForLocal = (local: 0 | 1 | 2): [number, number] => {
 				if (local === face.topLocal) return face.uvs.top;
 				if (local === face.leftLocal) return face.uvs.left;
