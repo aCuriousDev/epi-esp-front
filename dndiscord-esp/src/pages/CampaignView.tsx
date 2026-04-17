@@ -18,9 +18,13 @@ import {
   Plus,
   Check,
   X,
+  ScrollText,
+  Swords,
+  User,
+  Drama,
   Loader2,
 } from "lucide-solid";
-import { createSignal, onCleanup, onMount, Show, For } from "solid-js";
+import { createSignal, onCleanup, onMount, Show, For, type JSX } from "solid-js";
 import {
   Campaign,
   CampaignStatus,
@@ -36,7 +40,9 @@ import {
   CampaignService,
   CampaignDetailResponse,
   CampaignMemberResponse,
-  CampaignStatus as APICampaignStatus,
+  APICampaignStatus,
+  mapCampaignResponse,
+  mapToAPICampaignStatus,
 } from "../services/campaign.service";
 import {
   createSession,
@@ -47,95 +53,6 @@ import {
 } from "../services/signalr/multiplayer.service";
 import { signalRService } from "../services/signalr/SignalRService";
 
-/**
- * Map API campaign status (integer) to frontend status (string)
- */
-function mapCampaignStatus(apiStatus: number): CampaignStatus {
-  switch (apiStatus) {
-    case 0:
-      return CampaignStatus.Planning; // Draft
-    case 1:
-      return CampaignStatus.Active;
-    case 2:
-      return CampaignStatus.Paused;
-    case 3:
-      return CampaignStatus.Completed;
-    case 4:
-      return CampaignStatus.Archived;
-    default:
-      return CampaignStatus.Planning;
-  }
-}
-
-/**
- * Map API member role to frontend role
- */
-function mapMemberRole(apiRole: string): "dm" | "player" {
-  switch (apiRole) {
-    case "CoDungeonMaster":
-      return "dm";
-    case "Player":
-    case "Spectator":
-    default:
-      return "player";
-  }
-}
-
-/**
- * Map frontend status to API status (integer)
- */
-function mapToAPICampaignStatus(status: CampaignStatus): APICampaignStatus {
-  switch (status) {
-    case CampaignStatus.Planning:
-      return APICampaignStatus.Draft;
-    case CampaignStatus.Active:
-      return APICampaignStatus.Active;
-    case CampaignStatus.Paused:
-      return APICampaignStatus.Paused;
-    case CampaignStatus.Completed:
-      return APICampaignStatus.Completed;
-    case CampaignStatus.Archived:
-      return APICampaignStatus.Archived;
-    default:
-      return APICampaignStatus.Draft;
-  }
-}
-
-/**
- * Map API campaign response to frontend Campaign type
- */
-function mapCampaignResponse(apiCampaign: CampaignDetailResponse): Campaign {
-  return {
-    id: apiCampaign.id,
-    title: apiCampaign.name,
-    description: apiCampaign.description,
-    coverImageUrl: apiCampaign.imageUrl,
-    status: mapCampaignStatus(apiCampaign.status),
-    visibility: apiCampaign.isPublic ? ("Public" as any) : ("Private" as any),
-    dungeonMasterId: apiCampaign.dungeonMasterId,
-    isDungeonMaster: apiCampaign.isDungeonMaster,
-    dungeonMasterName: "Maître du Jeu", // API doesn't provide this
-    dungeonMasterAvatar: "",
-    maxPlayers: apiCampaign.maxPlayers,
-    currentPlayers: apiCampaign.memberCount,
-    players:
-      apiCampaign.members?.map((m) => ({
-        id: m.id,
-        username: m.userId, // API doesn't provide username, using userId
-        role: mapMemberRole(m.role),
-        characterName: m.nickname,
-        joinedAt: m.joinedAt,
-      })) || [],
-    sessions: [], // API doesn't provide sessions yet
-    totalSessions: apiCampaign.snapshotCount || 0,
-    setting: undefined,
-    startingLevel: 1,
-    currentLevel: 1,
-    tags: [],
-    createdAt: apiCampaign.createdAt,
-    updatedAt: apiCampaign.updatedAt,
-  };
-}
 
 export default function CampaignView() {
   const params = useParams();
@@ -627,17 +544,17 @@ export default function CampaignView() {
                     </h3>
                     <div class="space-y-3">
                       <ActivityItem
-                        icon="📜"
+                        icon={<ScrollText class="w-5 h-5 text-amber-300" />}
                         text="Session 12 terminée: Les Tours d'Argent"
                         time="Il y a 4 jours"
                       />
                       <ActivityItem
-                        icon="⚔️"
+                        icon={<Swords class="w-5 h-5 text-red-300" />}
                         text="Le groupe a atteint le niveau 6"
                         time="Il y a 1 semaine"
                       />
                       <ActivityItem
-                        icon="👤"
+                        icon={<User class="w-5 h-5 text-purple-300" />}
                         text="DragonSlayer a rejoint la campagne"
                         time="Il y a 2 semaines"
                       />
@@ -686,7 +603,7 @@ export default function CampaignView() {
                         {(player) => (
                           <div class="p-4 flex items-center gap-4 hover:bg-white/5 transition-colors">
                             <div class="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center">
-                              <span class="text-lg">🎭</span>
+                              <Drama class="w-6 h-6 text-purple-300" />
                             </div>
                             <div class="flex-1 min-w-0">
                               <p class="text-white font-semibold">
@@ -937,9 +854,9 @@ export default function CampaignView() {
         .campaign-view-page {
           background: linear-gradient(
             135deg,
-            #1a1a2e 0%,
-            #16213e 50%,
-            #0f0f1a 100%
+            var(--ink-700) 0%,
+            var(--ink-800) 50%,
+            var(--ink-900) 100%
           );
         }
       `}</style>
@@ -1013,10 +930,10 @@ function StatCard(props: {
 /**
  * Activity item component
  */
-function ActivityItem(props: { icon: string; text: string; time: string }) {
+function ActivityItem(props: { icon: JSX.Element; text: string; time: string }) {
   return (
     <div class="flex items-start gap-3 p-3 bg-white/5 rounded-xl">
-      <span class="text-lg">{props.icon}</span>
+      <span>{props.icon}</span>
       <div class="flex-1 min-w-0">
         <p class="text-white text-sm">{props.text}</p>
         <p class="text-slate-500 text-xs mt-0.5">{props.time}</p>

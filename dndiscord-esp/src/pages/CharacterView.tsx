@@ -10,6 +10,9 @@ import {
   Plus,
   Minus,
   TrendingUp,
+  Swords,
+  ScrollText,
+  X,
 } from "lucide-solid";
 import { createSignal, onMount, Show, For } from "solid-js";
 import {
@@ -205,8 +208,9 @@ export default function CharacterView() {
                         </span>
                       </p>
                       <Show when={char().campaign}>
-                        <p class="text-slate-400 text-sm mt-2">
-                          📜 {char().campaign!.title}
+                        <p class="text-slate-400 text-sm mt-2 flex items-center gap-1.5">
+                          <ScrollText class="w-4 h-4 flex-shrink-0" />
+                          {char().campaign!.title}
                         </p>
                       </Show>
                     </div>
@@ -398,13 +402,15 @@ export default function CharacterView() {
                   class="flex-1 py-3 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold hover:from-purple-500 hover:to-indigo-500 transition-all shadow-lg hover:shadow-purple-500/25"
                   onClick={() => navigate("/board")}
                 >
-                  ⚔️ Lancer en combat
+                  <Swords class="w-4 h-4 inline-block mr-1.5" />
+                  Lancer en combat
                 </button>
                 <button
                   class="flex-1 py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-white font-semibold hover:bg-white/10 transition-all"
                   onClick={() => navigate("/characters")}
                 >
-                  ← Retour aux personnages
+                  <ArrowLeft class="w-4 h-4 inline-block mr-1.5" />
+                  Retour aux personnages
                 </button>
               </div>
             </main>
@@ -419,8 +425,9 @@ export default function CharacterView() {
           <button
             onClick={() => setError(null)}
             class="ml-4 text-white/80 hover:text-white"
+            aria-label="Fermer"
           >
-            ✕
+            <X class="w-4 h-4" />
           </button>
         </div>
       </Show>

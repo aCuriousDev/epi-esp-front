@@ -1,5 +1,6 @@
-import { Show, createEffect } from "solid-js";
+import { Show, createEffect, type JSX } from "solid-js";
 import { useNavigate } from "@solidjs/router";
+import { Swords, Drama, ScrollText } from "lucide-solid";
 import { authStore } from "../stores/auth.store";
 import { LoginButton } from "../components/auth";
 import { AnimatedD20 } from "../components/common/AnimatedD20";
@@ -87,15 +88,15 @@ export default function LoginPage() {
                     </p>
                     <div class="grid grid-cols-3 gap-4">
                       <FeaturePreview 
-                        icon="⚔️" 
+                        icon={<Swords class="w-6 h-6 text-red-300" />} 
                         label="Combats tactiques" 
                       />
                       <FeaturePreview 
-                        icon="🎭" 
+                        icon={<Drama class="w-6 h-6 text-purple-300" />} 
                         label="Personnages" 
                       />
                       <FeaturePreview 
-                        icon="📜" 
+                        icon={<ScrollText class="w-6 h-6 text-amber-300" />} 
                         label="Campagnes" 
                       />
                     </div>
@@ -116,11 +117,11 @@ export default function LoginPage() {
 
       <style jsx>{`
         .login-page {
-          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1a 100%);
+          background: linear-gradient(135deg, var(--ink-700) 0%, var(--ink-800) 50%, var(--ink-900) 100%);
         }
 
         .login-title {
-          background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 25%, #8b5cf6 50%, #7c3aed 75%, #a78bfa 100%);
+          background: linear-gradient(135deg, var(--plum-300) 0%, var(--plum-300) 25%, var(--plum-500) 50%, var(--plum-500) 75%, var(--plum-300) 100%);
           background-size: 200% 200%;
           -webkit-background-clip: text;
           background-clip: text;
@@ -165,10 +166,10 @@ export default function LoginPage() {
 /**
  * Feature preview item component
  */
-function FeaturePreview(props: { icon: string; label: string }) {
+function FeaturePreview(props: { icon: JSX.Element; label: string }) {
   return (
     <div class="flex flex-col items-center gap-2 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors">
-      <span class="text-2xl">{props.icon}</span>
+      <span>{props.icon}</span>
       <span class="text-xs text-slate-300/80 text-center leading-tight">
         {props.label}
       </span>

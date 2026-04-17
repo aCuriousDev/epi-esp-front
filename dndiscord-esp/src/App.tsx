@@ -7,6 +7,8 @@ import "@fontsource/im-fell-english-sc";
 import "@fontsource/inter/400.css";
 import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
+import "@fontsource/jetbrains-mono/400.css";
+import "@fontsource/jetbrains-mono/600.css";
 import "./lib/jquery-setup";
 
 import MenuComponent from "./pages/MenuComponent";

@@ -1,21 +1,21 @@
 import { A, useNavigate } from "@solidjs/router";
-import { ArrowLeft, BookOpen, Swords, Dices, Heart, Sparkles, Shield, Wand2, ChevronUp } from "lucide-solid";
-import { createSignal, For, Show } from "solid-js";
+import { ArrowLeft, BookOpen, Swords, Dices, Heart, Sparkles, Shield, Wand2, ChevronUp, Drama, Moon, Zap } from "lucide-solid";
+import { createSignal, For, Show, type JSX } from "solid-js";
 
 interface RuleSection {
 	id: string;
 	title: string;
-	icon: any;
+	icon: JSX.Element;
 	color: string;
 }
 
 const ruleSections: RuleSection[] = [
-	{ id: "creation", title: "Création", icon: "🎭", color: "purple" },
-	{ id: "jets", title: "Jets de dés", icon: "🎲", color: "blue" },
-	{ id: "combat", title: "Combat", icon: "⚔️", color: "red" },
-	{ id: "repos", title: "Repos", icon: "💤", color: "green" },
-	{ id: "etats", title: "États", icon: "⚡", color: "yellow" },
-	{ id: "magie", title: "Magie", icon: "✨", color: "indigo" },
+	{ id: "creation", title: "Création", icon: <Drama class="w-4 h-4" />, color: "purple" },
+	{ id: "jets", title: "Jets de dés", icon: <Dices class="w-4 h-4" />, color: "blue" },
+	{ id: "combat", title: "Combat", icon: <Swords class="w-4 h-4" />, color: "red" },
+	{ id: "repos", title: "Repos", icon: <Moon class="w-4 h-4" />, color: "green" },
+	{ id: "etats", title: "États", icon: <Zap class="w-4 h-4" />, color: "yellow" },
+	{ id: "magie", title: "Magie", icon: <Sparkles class="w-4 h-4" />, color: "indigo" },
 ];
 
 export default function Rules() {
@@ -97,8 +97,8 @@ export default function Rules() {
 				{/* Creation Section */}
 				<RuleCard
 					id="creation"
-					icon={<span class="text-2xl">🎭</span>}
-					title="Création de personnage"
+				icon={<Drama class="w-6 h-6 text-purple-300" />}
+				title="Création de personnage"
 					color="purple"
 				>
 					<ul class="space-y-3">
@@ -129,8 +129,8 @@ export default function Rules() {
 				{/* Dice Rolls Section */}
 				<RuleCard
 					id="jets"
-					icon={<span class="text-2xl">🎲</span>}
-					title="Jets de dés"
+				icon={<Dices class="w-6 h-6 text-blue-300" />}
+				title="Jets de dés"
 					color="blue"
 				>
 					<ul class="space-y-3">
@@ -158,8 +158,8 @@ export default function Rules() {
 				{/* Combat Section */}
 				<RuleCard
 					id="combat"
-					icon={<span class="text-2xl">⚔️</span>}
-					title="Combat"
+				icon={<Swords class="w-6 h-6 text-red-300" />}
+				title="Combat"
 					color="red"
 				>
 					<ul class="space-y-3">
@@ -190,8 +190,8 @@ export default function Rules() {
 				{/* Rest Section */}
 				<RuleCard
 					id="repos"
-					icon={<span class="text-2xl">💤</span>}
-					title="Repos et survie"
+				icon={<Moon class="w-6 h-6 text-green-300" />}
+				title="Repos et survie"
 					color="green"
 				>
 					<ul class="space-y-3">
@@ -210,8 +210,8 @@ export default function Rules() {
 				{/* Conditions Section */}
 				<RuleCard
 					id="etats"
-					icon={<span class="text-2xl">⚡</span>}
-					title="États (Conditions)"
+				icon={<Zap class="w-6 h-6 text-yellow-300" />}
+				title="États (Conditions)"
 					color="yellow"
 				>
 					<p class="text-slate-300 text-sm mb-4">
@@ -234,8 +234,8 @@ export default function Rules() {
 				{/* Magic Section */}
 				<RuleCard
 					id="magie"
-					icon={<span class="text-2xl">✨</span>}
-					title="Magie"
+				icon={<Sparkles class="w-6 h-6 text-indigo-300" />}
+				title="Magie"
 					color="indigo"
 				>
 					<ul class="space-y-3">
@@ -260,8 +260,8 @@ export default function Rules() {
 				{/* Skills Section */}
 				<RuleCard
 					id="competences"
-					icon={<span class="text-2xl">📚</span>}
-					title="Compétences et inspiration"
+				icon={<BookOpen class="w-6 h-6 text-purple-300" />}
+				title="Compétences et inspiration"
 					color="purple"
 				>
 					<ul class="space-y-3">
@@ -295,7 +295,7 @@ export default function Rules() {
 
 			<style jsx>{`
 				.rules-page {
-					background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1a 100%);
+					background: linear-gradient(135deg, var(--ink-700) 0%, var(--ink-800) 50%, var(--ink-900) 100%);
 				}
 
 				.hero-section {

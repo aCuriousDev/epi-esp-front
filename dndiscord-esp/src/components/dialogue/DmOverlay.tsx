@@ -34,7 +34,7 @@ export const DmOverlay: Component<DmOverlayProps> = (props) => {
         <div
           class="absolute -inset-px rounded-2xl"
           style={{
-            background: "linear-gradient(135deg, rgba(168,130,255,0.4), rgba(120,80,220,0.1), rgba(200,170,255,0.35), rgba(130,90,230,0.1))",
+            background: "linear-gradient(135deg, rgba(169,104,174,0.4), rgba(107,44,111,0.1), rgba(169,104,174,0.35), rgba(107,44,111,0.1))",
             "background-size": "300% 300%",
             animation: isVisible() ? "dm-border-shimmer 6s ease infinite" : "none",
           }}
@@ -44,41 +44,40 @@ export const DmOverlay: Component<DmOverlayProps> = (props) => {
         <div
           class="relative px-8 py-6 rounded-2xl text-center overflow-hidden"
           style={{
-            background: "linear-gradient(180deg, rgba(22, 10, 45, 0.95) 0%, rgba(14, 8, 30, 0.97) 100%)",
-            "box-shadow": "0 0 40px rgba(139, 92, 246, 0.15), 0 0 80px rgba(139, 92, 246, 0.06), 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04)",
+            background: "linear-gradient(180deg, var(--plum-900) 0%, var(--ink-950) 100%)",
+            "box-shadow": "0 0 40px rgba(75,30,78,0.25), 0 0 80px rgba(75,30,78,0.1), 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04)",
           }}
         >
           {/* Animated shimmer line across top */}
           <div
             class="absolute top-0 left-0 right-0 h-[1px]"
             style={{
-              background: "linear-gradient(90deg, transparent 0%, transparent 30%, rgba(200,170,255,0.7) 50%, transparent 70%, transparent 100%)",
+              background: "linear-gradient(90deg, transparent 0%, transparent 30%, rgba(169,104,174,0.7) 50%, transparent 70%, transparent 100%)",
               "background-size": "200% 100%",
               animation: isVisible() ? "dm-shimmer-line 3s ease-in-out infinite" : "none",
             }}
           />
 
           {/* Corner accents */}
-          <div class="absolute top-2 left-3 w-4 h-4 border-t border-l rounded-tl" style={{ "border-color": "rgba(168,130,255,0.25)" }} />
-          <div class="absolute top-2 right-3 w-4 h-4 border-t border-r rounded-tr" style={{ "border-color": "rgba(168,130,255,0.25)" }} />
-          <div class="absolute bottom-2 left-3 w-4 h-4 border-b border-l rounded-bl" style={{ "border-color": "rgba(168,130,255,0.15)" }} />
-          <div class="absolute bottom-2 right-3 w-4 h-4 border-b border-r rounded-br" style={{ "border-color": "rgba(168,130,255,0.15)" }} />
+          <div class="absolute top-2 left-3 w-4 h-4 border-t border-l rounded-tl" style={{ "border-color": "rgba(169,104,174,0.25)" }} />
+          <div class="absolute top-2 right-3 w-4 h-4 border-t border-r rounded-tr" style={{ "border-color": "rgba(169,104,174,0.25)" }} />
+          <div class="absolute bottom-2 left-3 w-4 h-4 border-b border-l rounded-bl" style={{ "border-color": "rgba(169,104,174,0.15)" }} />
+          <div class="absolute bottom-2 right-3 w-4 h-4 border-b border-r rounded-br" style={{ "border-color": "rgba(169,104,174,0.15)" }} />
 
           {/* DM icon / label */}
           <div class="flex items-center justify-center gap-2 mb-3">
             <div
               class="w-5 h-px"
-              style={{ background: "linear-gradient(90deg, transparent, rgba(168,130,255,0.5))" }}
+              style={{ background: "linear-gradient(90deg, transparent, var(--plum-300))" }}
             />
             <span
-              class="text-[11px] font-bold uppercase tracking-[0.25em]"
-              style={{ color: "rgba(180, 150, 255, 0.8)" }}
+              class="text-[11px] font-bold uppercase tracking-[0.25em] text-plum-300"
             >
-              ✦ Maître du Jeu ✦
+              ✦ Ma\u00eetre du Jeu ✦
             </span>
             <div
               class="w-5 h-px"
-              style={{ background: "linear-gradient(90deg, rgba(168,130,255,0.5), transparent)" }}
+              style={{ background: "linear-gradient(90deg, var(--plum-300), transparent)" }}
             />
           </div>
 
@@ -86,10 +85,10 @@ export const DmOverlay: Component<DmOverlayProps> = (props) => {
           <p
             class="text-lg leading-relaxed whitespace-pre-wrap break-words"
             style={{
-              color: "rgba(235, 225, 255, 0.95)",
-              "font-family": "'Georgia', 'Times New Roman', serif",
+              color: "var(--text-high)",
+              "font-family": "'IM Fell English SC', serif",
               "font-style": "italic",
-              "text-shadow": "0 0 24px rgba(139, 92, 246, 0.35), 0 0 8px rgba(168, 130, 255, 0.15)",
+              "text-shadow": "0 0 24px rgba(75,30,78,0.5), 0 0 8px rgba(169,104,174,0.2)",
               "letter-spacing": "0.02em",
             }}
           >
@@ -101,7 +100,7 @@ export const DmOverlay: Component<DmOverlayProps> = (props) => {
             class="mx-auto mt-4 h-px rounded-full"
             style={{
               width: "40%",
-              background: "linear-gradient(90deg, transparent, rgba(168,130,255,0.3), transparent)",
+              background: "linear-gradient(90deg, transparent, rgba(169,104,174,0.3), transparent)",
             }}
           />
         </div>
@@ -110,8 +109,8 @@ export const DmOverlay: Component<DmOverlayProps> = (props) => {
       {/* Keyframes */}
       <style>{`
         @keyframes dm-glow-pulse {
-          0%, 100% { filter: drop-shadow(0 0 12px rgba(139,92,246,0.15)); }
-          50% { filter: drop-shadow(0 0 24px rgba(139,92,246,0.3)); }
+          0%, 100% { filter: drop-shadow(0 0 12px rgba(75,30,78,0.2)); }
+          50% { filter: drop-shadow(0 0 24px rgba(75,30,78,0.4)); }
         }
         @keyframes dm-border-shimmer {
           0%, 100% { background-position: 0% 0%; }

@@ -1,5 +1,5 @@
 import { Component, createSignal, onMount, Show } from 'solid-js';
-import { ArrowLeft, Loader2 } from 'lucide-solid';
+import { ArrowLeft, Loader2, Plus, Link } from 'lucide-solid';
 import { createRoom, joinSession, tryRecoverSession } from '../services/signalr/multiplayer.service';
 import { signalRService } from '../services/signalr/SignalRService';
 import { ensureMultiplayerHandlersRegistered } from '../services/signalr/multiplayer.service';
@@ -106,7 +106,7 @@ export const RoomJoinScreen: Component<RoomJoinScreenProps> = (props) => {
             </header>
 
             <Show when={sessionState.error}>
-              <div class="mb-6 p-4 rounded-xl bg-red-500/20 border border-red-400/30 text-red-200 text-center">
+              <div class="mb-6 p-4 rounded-xl bg-red-500/20 border border-red-400/30 text-red-200 text-center" role="alert">
                 {sessionState.error}
               </div>
             </Show>
@@ -115,13 +115,14 @@ export const RoomJoinScreen: Component<RoomJoinScreenProps> = (props) => {
               {/* Create Room */}
               <div class="rounded-2xl border border-white/10 bg-gradient-to-br from-brandStart/80 to-brandEnd/80 backdrop-blur-sm p-8">
                 <div class="text-center">
-                  <div class="text-5xl mb-4">+</div>
+                  <div class="mb-4 flex justify-center"><Plus class="w-12 h-12 text-blue-300" /></div>
                   <h2 class="font-display text-2xl sm:text-3xl text-white mb-6">
                     Cr&eacute;er une salle
                   </h2>
                   <div class="mb-6">
-                    <label class="block text-slate-200/80 text-sm mb-2">Joueurs max (2-6)</label>
+                    <label for="max-players" class="block text-slate-200/80 text-sm mb-2">Joueurs max (2-6)</label>
                     <input
+                      id="max-players"
                       type="number"
                       min={2}
                       max={6}
@@ -143,13 +144,14 @@ export const RoomJoinScreen: Component<RoomJoinScreenProps> = (props) => {
               {/* Join Room */}
               <div class="rounded-2xl border border-white/10 bg-gradient-to-br from-brandStart/80 to-brandEnd/80 backdrop-blur-sm p-8">
                 <div class="text-center">
-                  <div class="text-5xl mb-4">&#x1F517;</div>
+                  <div class="mb-4 flex justify-center"><Link class="w-12 h-12 text-green-300" /></div>
                   <h2 class="font-display text-2xl sm:text-3xl text-white mb-6">
                     Rejoindre
                   </h2>
                   <div class="mb-6">
-                    <label class="block text-slate-200/80 text-sm mb-2">Code de la salle</label>
+                    <label for="room-code" class="block text-slate-200/80 text-sm mb-2">Code de la salle</label>
                     <input
+                      id="room-code"
                       type="text"
                       placeholder="XXXX-XXXX"
                       value={roomCode()}

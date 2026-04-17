@@ -6,20 +6,63 @@
    GLOBAL THEMING - DnD Purple/Blue Theme
    ======================================== */
 :root {
-	--ring-color: theme(colors.brandStart);
-	--safe-top: env(safe-area-inset-top, 0px);
-	--safe-right: env(safe-area-inset-right, 0px);
-	--safe-bottom: env(safe-area-inset-bottom, 0px);
-	--safe-left: env(safe-area-inset-left, 0px);
-	/* POC Game colors */
-	--color-game-dark: #1a1a2e;
-	--color-game-darker: #0f0f1a;
-	--color-game-accent: #e94560;
-	--color-game-gold: #f4c542;
-	--color-game-blue: #0f3460;
-	--color-game-blue-light: #1e5a8e;
-	--color-game-green: #4ade80;
-	--color-game-red: #ef4444;
+	--ring-color: theme(colors.gold.300);
+
+	/* Safe-area: Discord SDK variable preferred, env() as fallback */
+	--safe-top:    var(--discord-safe-area-inset-top,    env(safe-area-inset-top,    0px));
+	--safe-right:  var(--discord-safe-area-inset-right,  env(safe-area-inset-right,  0px));
+	--safe-bottom: var(--discord-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+	--safe-left:   var(--discord-safe-area-inset-left,   env(safe-area-inset-left,   0px));
+
+	/* === Design System — Arcane Grimoire === */
+	--ink-950: #070812;
+	--ink-900: #0F0F1A;
+	--ink-800: #14162B;
+	--ink-700: #1A1A2E;
+	--ink-600: #232544;
+	--ink-500: #2E3150;
+
+	--plum-900: #2B0F2E;
+	--plum-700: #4B1E4E;
+	--plum-500: #6B2C6F;
+	--plum-300: #A968AE;
+	--arcindigo-900: #0B1A2C;
+	--arcindigo-700: #162C44;
+	--arcindigo-500: #2A4E78;
+	--arcindigo-300: #6A90C0;
+
+	--gold-700: #8A6A1C;
+	--gold-500: #C99A2C;
+	--gold-400: #E3B23C;
+	--gold-300: #F4C542;
+	--gold-200: #FFE08A;
+
+	--parchment: #F5F1E4;
+
+	--text-high: #F5F1E4;
+	--text-mid:  #CBC6B3;
+	--text-low:  #8A8574;
+	--text-mute: #5A5648;
+
+	--status-success: #4ADE80;
+	--status-danger:  #EF4444;
+	--status-warning: #F59E0B;
+	--status-info:    #38BDF8;
+	--status-crit:    #F4C542;
+	--status-fumble:  #9F1239;
+
+	--discord-blurple:      #5865F2;
+	--discord-blurple-dark: #4752C4;
+
+	/* === Legacy POC tokens (keep; some existing code reads these) === */
+	--color-game-dark:       #1A1A2E;
+	--color-game-darker:     #0F0F1A;
+	--color-game-accent:     #E94560;
+	--color-game-gold:       #F4C542;
+	--color-game-blue:       #0F3460;
+	--color-game-blue-light: #1E5A8E;
+	--color-game-green:      #4ADE80;
+	--color-game-red:        #EF4444;
 }
 
 html,
@@ -276,7 +319,8 @@ body {
 }
 
 .menu-badge-icon {
-	@apply text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.35)];
+	@apply drop-shadow-[0_2px_6px_rgba(0,0,0,0.35)];
+	color: var(--gold-400);
 }
 
 /* Hover linkage: when hovering the row/button, animate the badge */
@@ -304,7 +348,8 @@ body {
 
 .menu-row:hover .menu-badge-icon {
 	transform: scale(1.06);
-	filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.35));
+	filter: drop-shadow(0 0 8px rgba(227, 178, 60, 0.45));
+	color: var(--gold-300);
 }
 
 .menu-badge:hover {
@@ -430,4 +475,73 @@ body {
 	.stat-bar-fill {
 		@apply h-full transition-all duration-300 shadow-sm;
 	}
+}
+
+/* ========================================
+   DESIGN SYSTEM UTILITIES
+   ======================================== */
+@layer utilities {
+  .surface-0 { background-color: var(--ink-900); }
+  .surface-1 {
+    background-color: var(--ink-800);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .surface-2 {
+    background-color: var(--ink-700);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .text-high { color: var(--text-high); }
+  .text-mid  { color: var(--text-mid); }
+  .text-low  { color: var(--text-low); }
+  .text-mute { color: var(--text-mute); }
+
+  .focus-ring-gold:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px var(--gold-300),
+      0 0 0 6px color-mix(in srgb, var(--gold-300) 25%, transparent),
+      0 0 20px color-mix(in srgb, var(--gold-300) 35%, transparent);
+    border-radius: inherit;
+  }
+
+  .glow-candle {
+    box-shadow:
+      0 0 20px color-mix(in srgb, var(--gold-300) 35%, transparent),
+      0 0 40px color-mix(in srgb, var(--plum-300) 40%, transparent);
+  }
+
+  .vignette-radial {
+    background-image: radial-gradient(
+      ellipse at center,
+      transparent 55%,
+      rgba(0, 0, 0, 0.65) 100%
+    );
+  }
+}
+
+/* ========================================
+   REDUCED MOTION
+   ======================================== */
+@media (prefers-reduced-motion: reduce) {
+  .title-gradient,
+  .menu-button::after,
+  .menu-button:hover::after,
+  .menu-badge::after {
+    animation: none !important;
+  }
+  .art-enter,
+  .art-exit {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 120ms !important;
+    scroll-behavior: auto !important;
+  }
 }

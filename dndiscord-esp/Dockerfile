@@ -7,11 +7,11 @@ WORKDIR /app
 ARG VITE_API_URL=""
 ENV VITE_API_URL=$VITE_API_URL
 
-# Copy package files
-COPY package*.json ./
+# Copy package.json only (ignore Windows-generated lockfile to resolve platform deps)
+COPY package.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies fresh for Alpine/linux-x64-musl
+RUN npm install
 
 # Copy source code
 COPY . .
