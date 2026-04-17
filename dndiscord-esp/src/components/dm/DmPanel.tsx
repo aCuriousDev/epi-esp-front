@@ -108,6 +108,12 @@ export const DmPanel: Component = () => {
         statusEffects: [], isAlive: true, hasActed: false, hasMoved: false,
       };
 
+      // TODO FIX: Duplication bug — le MJ ajoute l'unité localement ici,
+      // puis le GameHub broadcast DmUnitSpawned à tous les clients.
+      // gameSync.ts filtre le DM via `isHost()`, mais si isHost() ne match pas
+      // (ex: reconnexion, race condition), l'unité est ajoutée 2 fois.
+      // Solution: soit ne PAS ajouter localement et attendre le broadcast,
+      // soit vérifier `units[uid]` avant addUnit dans gameSync.ts.
       addUnit(unit);
       setTiles(posToKey(pos), "occupiedBy", uid);
       updatePathfinder();
