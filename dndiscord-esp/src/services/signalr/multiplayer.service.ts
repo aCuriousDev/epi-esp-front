@@ -21,6 +21,10 @@ import {
   type GameStateSnapshotPayload,
   type PlayerInfo,
   type GameStartedPayload,
+  type DmMoveTokenPayload,
+  type DmHiddenRollPayload,
+  type DmGrantItemPayload,
+  type ItemGrantedPayload,
 } from "../../types/multiplayer";
 import {
   setSession,
@@ -53,6 +57,7 @@ import {
   getPlayerUnits,
   removeUnitsByOwnerUserId,
 } from "../../game/stores/UnitsStore";
+import { addHiddenRoll, addGrantedItem } from "../../stores/dmTools.store";
 
 const HUB = {
   createSession: "CreateSession",
@@ -75,6 +80,10 @@ const HUB = {
   sendUnitMove: "SendUnitMove",
   sendAbilityUsed: "SendAbilityUsed",
   sendEndTurn: "SendEndTurn",
+  // DM Tools
+  dmMoveToken: "DmMoveToken",
+  dmHiddenRoll: "DmHiddenRoll",
+  dmGrantItem: "DmGrantItem",
 } as const;
 
 async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
@@ -305,6 +314,32 @@ export async function sendEndTurn(payload: TurnEndedPayload): Promise<void> {
   await signalRService.invoke(HUB.sendEndTurn, payload);
 }
 
+// --- DM Tools (E-MJ) ---
+
+/** DM force-moves any token on the board. */
+export async function dmMoveToken(payload: DmMoveTokenPayload): Promise<void> {
+  await signalRService.invoke(HUB.dmMoveToken, payload);
+}
+
+/** DM rolls a hidden dice (result only sent back to caller). */
+export async function dmHiddenRoll(
+  diceType: number = 20,
+  modifier: number = 0,
+  label?: string,
+): Promise<DmHiddenRollPayload> {
+  return signalRService.invoke(
+    HUB.dmHiddenRoll,
+    diceType,
+    modifier,
+    label ?? null,
+  ) as Promise<DmHiddenRollPayload>;
+}
+
+/** DM grants an item to a player. */
+export async function dmGrantItem(payload: DmGrantItemPayload): Promise<void> {
+  await signalRService.invoke(HUB.dmGrantItem, payload);
+}
+
 // --- Enregistrement des handlers d'événements ---
 
 /** Map backend integer enum to frontend enum. Backend: 0=Player, 1=DungeonMaster */
@@ -497,6 +532,24 @@ export function registerMultiplayerHandlers(): void {
   // Session mise à jour (si le backend envoie SessionUpdated)
   signalRService.on("SessionUpdated", (data: Record<string, unknown>) => {
     updateSession(normalizeSession(data));
+  });
+
+  // --- DM Tools events ---
+
+  // Hidden roll result (only received by the DM who rolled)
+  signalRService.on("DmHiddenRollResult", (data: DmHiddenRollPayload) => {
+    addHiddenRoll(data);
+  });
+
+  // Item granted to a player (broadcast to all)
+  signalRService.on("ItemGranted", (msg: any) => {
+    const payload: ItemGrantedPayload = msg?.payload ?? msg;
+    addGrantedItem(payload);
+  });
+
+  // DM force-moved a token (broadcast to all)
+  signalRService.on("DmTokenMoved", (msg: any) => {
+    // Handled in gameSync.ts
   });
 
   // Optionnel: SessionEnded

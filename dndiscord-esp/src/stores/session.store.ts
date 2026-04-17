@@ -12,6 +12,7 @@ import type {
   GameStartedPayload,
 } from "../types/multiplayer";
 import { PlayerRole } from "../types/multiplayer";
+import { clearDmToolsState } from "./dmTools.store";
 
 export interface SessionStoreState {
   /** Session courante (null si pas en session). */
@@ -97,6 +98,7 @@ export function getPersistedGameStarted(): GameStartedPayload | null {
 export function clearSession(): void {
   clearPersistedSession();
   clearPersistedGameStarted();
+  clearDmToolsState();
   setSessionState({
     session: null,
     isLoading: false,
@@ -201,6 +203,18 @@ export function isHost(): boolean {
   if (!hubId || !sessionState.session) return false;
   const me = sessionState.session.players.find((p) => p.userId === hubId);
   return me?.role === PlayerRole.DungeonMaster;
+}
+
+/** Alias explicite : vérifie si l'utilisateur courant est le Dungeon Master. */
+export const isDm = isHost;
+
+/** Retourne la liste des autres joueurs (pas le DM courant). */
+export function getOtherPlayers() {
+  const hubId = sessionState.hubUserId;
+  if (!hubId || !sessionState.session) return [];
+  return sessionState.session.players.filter(
+    (p) => p.userId !== hubId && p.role === PlayerRole.Player
+  );
 }
 
 /** Retourne le userId (Guid) du hub pour comparaison avec les players. */

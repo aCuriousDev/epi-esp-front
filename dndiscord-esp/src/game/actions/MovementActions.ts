@@ -13,7 +13,7 @@ import { tiles, setTiles, pathfinder, updatePathfinder } from '../stores/TilesSt
 import { posToKey } from '../utils/GridUtils';
 import { getCurrentSession, getHubUserId } from '../../stores/session.store';
 import { isHost as getIsHost } from '../../stores/session.store';
-import { sendUnitMove } from '../../services/signalr/multiplayer.service';
+import { sendUnitMove, dmMoveToken } from '../../services/signalr/multiplayer.service';
 import { getAllySpawnPositions, getEnemySpawnPositions } from '../initialization/InitUnits';
 import { getTeleportPositions } from '../../services/mapStorage';
 import { transitionToNextRoom } from './TurnActions';
@@ -42,7 +42,7 @@ export function selectUnit(unitId: string): void {
   const isHost = getIsHost();
   const isOwned = !!unit.ownerUserId;
   const isMine = !isOwned || unit.ownerUserId === myUserId;
-  const canControl = !session || isMine || (isPreparation && isHost); // Host can place during preparation
+  const canControl = !session || isMine || isHost; // DM (host) can control any unit
 
   console.log('[selectUnit]', unit.name, '| mode:', isFreeRoam ? 'Free Roam' : isPreparation ? 'Preparation' : 'Combat', '| isCurrentUnit:', isCurrentUnit, '| isPlayerTurn:', isPlayerTurn, '| canControl:', canControl);
 
@@ -120,7 +120,7 @@ export function moveUnit(targetPos: GridPosition): boolean {
   if (unit.ownerUserId) {
     const myUserId = getHubUserId();
     const isHost = getIsHost();
-    if (myUserId && unit.ownerUserId !== myUserId && !(gameState.phase === GamePhase.COMBAT_PREPARATION && isHost)) return false;
+    if (myUserId && unit.ownerUserId !== myUserId && !isHost) return false;
   }
 
   const isFreeRoam = getIsFreeRoamMode();
@@ -251,19 +251,33 @@ export function moveUnit(targetPos: GridPosition): boolean {
   updatePathfinder();
 
 
-  // En session multijoueur : diffuser le mouvement aux autres joueurs (backend envoie UnitMoved aux autres uniquement)
+  // En session multijoueur : diffuser le mouvement aux autres joueurs
   const session = getCurrentSession();
   if (session) {
-    const remainingAp = units[unit.id].stats.currentActionPoints;
-    const pathForBackend = path.map((p) => ({ x: p.x, y: p.z }));
-    sendUnitMove({
-      unitId: unit.id,
-      path: pathForBackend,
-      apCost: movementCost,
-      remainingAp,
-    }).catch((err) => {
-      console.warn("[MovementActions] sendUnitMove failed:", err);
-    });
+    const myUserId = getHubUserId();
+    const isDmMovingOther = getIsHost() && unit.ownerUserId && unit.ownerUserId !== myUserId;
+
+    if (isDmMovingOther) {
+      // DM force-moving another player's token → use DmMoveToken for proper broadcast
+      dmMoveToken({
+        unitId: unit.id,
+        target: { x: targetPos.x, y: targetPos.z },
+      }).catch((err) => {
+        console.warn("[MovementActions] dmMoveToken failed:", err);
+      });
+    } else {
+      // Normal movement → legacy broadcast
+      const remainingAp = units[unit.id].stats.currentActionPoints;
+      const pathForBackend = path.map((p) => ({ x: p.x, y: p.z }));
+      sendUnitMove({
+        unitId: unit.id,
+        path: pathForBackend,
+        apCost: movementCost,
+        remainingAp,
+      }).catch((err) => {
+        console.warn("[MovementActions] sendUnitMove failed:", err);
+      });
+    }
   }
 
   // Check if the unit stepped on a teleport cell (dungeon mode only)

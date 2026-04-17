@@ -172,3 +172,37 @@ export interface GameStateSnapshotPayload {
   mapState?: { width: number; height: number; tiles: unknown[] };
   lastSequenceNumber: number;
 }
+
+// --- DM Tools Payloads ---
+
+export interface DmMoveTokenPayload {
+  unitId: string;
+  target: GridPosition;
+}
+
+export interface DmHiddenRollPayload {
+  diceType: number;
+  result: number;
+  modifier: number;
+  total: number;
+  label?: string;
+  timestamp: string;
+}
+
+export interface DmGrantItemPayload {
+  targetUserId: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  description?: string;
+}
+
+export interface ItemGrantedPayload {
+  targetUserId: string;
+  targetUserName: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  description?: string;
+  timestamp: string;
+}

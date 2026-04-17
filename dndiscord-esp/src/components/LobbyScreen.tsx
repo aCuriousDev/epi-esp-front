@@ -103,7 +103,8 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
   };
 
   const playerCount = () => session()?.players.length ?? 0;
-  const canStart = () => playerCount() >= 2 && !starting();
+  // Allow host (DM) to force-start alone for testing
+  const canStart = () => (amHost() || playerCount() >= 2) && !starting();
 
   return (
     <div class="relative min-h-screen w-full overflow-hidden bg-brand-gradient">
@@ -251,7 +252,7 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                   ? "Lancement..."
                   : `Lancer la partie (${playerCount()} joueurs)`}
               </button>
-              <Show when={playerCount() < 2}>
+              <Show when={playerCount() < 2 && !amHost()}>
                 <p class="text-center text-sm text-slate-400 mt-2">
                   Au moins 2 joueurs requis pour commencer.
                 </p>

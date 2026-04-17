@@ -18,6 +18,8 @@ import { DungeonSelectionForGame } from "../components/DungeonSelectionForGame";
 import { RoomJoinScreen } from "../components/RoomJoinScreen";
 import { LobbyScreen } from "../components/LobbyScreen";
 import { DialogueOverlay } from "../components/dialogue/DialogueOverlay";
+import { DmPanel } from "../components/dm/DmPanel";
+import { ItemReceivedToast } from "../components/dm/ItemReceivedToast";
 import { clearAllDialogues } from "../stores/dialogue.store";
 import {
   gameState,
@@ -32,6 +34,7 @@ import {
 } from "../game";
 import { GamePhase, AppPhase, GameMode } from "../types";
 import { sessionState, clearSession } from "../stores/session.store";
+import { isDm } from "../stores/session.store";
 import { leaveSession } from "../services/signalr/multiplayer.service";
 import type { GameStartedPayload } from "../types/multiplayer";
 import { saveMap, type SavedMapData } from "../services/mapStorage";
@@ -325,6 +328,10 @@ const BoardGame: Component = () => {
           </button>
         </div>
       </Show>
+      {/* DM Panel — only visible to the Dungeon Master */}
+      <Show when={sessionState.session && isDm()}>
+        <DmPanel />
+      </Show>
       <Show
         when={
           getCurrentMode() === GameMode.COMBAT ||
@@ -538,6 +545,9 @@ const BoardGame: Component = () => {
 
             {/* Dialogue bubbles overlay (positioned above canvas) */}
             <DialogueOverlay />
+
+            {/* Item received notification toasts */}
+            <ItemReceivedToast />
 
             {/* Loading Overlay */}
             <Show when={!isEngineReady()}>

@@ -4,7 +4,7 @@
  */
 
 import { signalRService } from "./SignalRService";
-import type { GameMessage, MoveResult, TurnEndedPayload, GameStateSnapshotPayload } from "../../types/multiplayer";
+import type { GameMessage, MoveResult, TurnEndedPayload, GameStateSnapshotPayload, DmMoveTokenPayload } from "../../types/multiplayer";
 import type { GridPosition } from "../../types";
 import { units, setUnits } from "../../game/stores/UnitsStore";
 import { tiles, setTiles } from "../../game/stores/TilesStore";
@@ -13,6 +13,8 @@ import { updatePathfinder } from "../../game/stores/TilesStore";
 import { posToKey } from "../../game/utils/GridUtils";
 import { produce } from "solid-js/store";
 import { sessionState } from "../../stores/session.store";
+
+import { addCombatLog } from "../../game/stores/GameStateStore";
 
 /** Backend envoie (x, y), le jeu utilise (x, z). */
 function toFrontendPos(p: { x: number; y: number }): GridPosition {
@@ -94,5 +96,37 @@ export function registerGameSyncHandlers(): void {
       }
     }
     updatePathfinder();
+  });
+
+  // DM force-moved a token — apply to all clients
+  signalRService.on("DmTokenMoved", (message: GameMessage<DmMoveTokenPayload>) => {
+    const payload = message?.payload ?? message;
+    if (!payload?.unitId || !payload?.target) return;
+
+    const unitId = payload.unitId;
+    const dest = toFrontendPos(payload.target as { x: number; y: number });
+    const unitData = units[unitId];
+    if (!unitData) return;
+
+    const destTile = tiles[posToKey(dest)];
+    if (!destTile) return;
+
+    // Clear old tile
+    const oldKey = posToKey(unitData.position);
+    if (tiles[oldKey]) {
+      setTiles(oldKey, "occupiedBy", null);
+    }
+    // Set new tile
+    setTiles(posToKey(dest), "occupiedBy", unitId);
+
+    setUnits(unitId, produce((u) => {
+      u.position = dest;
+    }));
+
+    setGameState("pathPreview", []);
+    setGameState("highlightedTiles", []);
+    updatePathfinder();
+
+    addCombatLog(`[MJ] ${unitData.name} déplacé en (${dest.x}, ${dest.z})`, "system");
   });
 }

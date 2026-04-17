@@ -20,6 +20,7 @@ import { setVFXEngine } from '../game/vfx/VFXIntegration';
 import { SoundManager } from '../engine/audio/SoundManager';
 import { setSoundEngine } from '../game/audio/SoundIntegration';
 import { soundSettings } from '../stores/sound.store';
+import { isHost as getIsHost } from '../stores/session.store';
 import { GamePhase, TurnPhase, Team, Unit, GridPosition, GameMode } from '../types';
 
 let engineInstance: BabylonEngine | null = null;
@@ -571,9 +572,9 @@ export const GameCanvas: Component = () => {
       return;
     }
     
-    // Free Roam Mode - only allow selecting player units
+    // Free Roam Mode - allow selecting player units (DM can select any)
     if (isFreeRoam) {
-      if (unit.team === Team.PLAYER) {
+      if (unit.team === Team.PLAYER || getIsHost()) {
         selectUnit(unitId);
       }
       return;
