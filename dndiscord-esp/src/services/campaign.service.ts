@@ -37,7 +37,7 @@ export enum MembershipStatus {
 /**
  * Map API member role to frontend role
  */
-export const mapMemberRole=(apiRole: string): "dm" | "player"=> {
+export const mapMemberRole = (apiRole: string): "dm" | "player" => {
   switch (apiRole) {
     case "CoDungeonMaster":
       return "dm";
@@ -46,7 +46,7 @@ export const mapMemberRole=(apiRole: string): "dm" | "player"=> {
     default:
       return "player";
   }
-}
+};
 /**
  * Backend API Types
  */
@@ -114,7 +114,7 @@ export interface CampaignResponse {
   createdAt: string;
   updatedAt: string;
   lastPlayedAt?: string;
-  campaignTreeDefinition:string;
+  campaignTreeDefinition: string;
 }
 
 export interface CampaignMemberResponse {
@@ -136,7 +136,7 @@ export interface CampaignDetailResponse extends CampaignResponse {
   snapshotCount: number;
 }
 export interface UpdateCampaignManagerRequest {
-  campaignTreeDefinition:string
+  campaignTreeDefinition: string;
 }
 
 export interface CampaignListResponse {
@@ -174,51 +174,69 @@ function getAuthHeaders() {
 /**
  * Map frontend status to API status (integer)
  */
-export const mapToAPICampaignStatus = (status: CampaignStatus): APICampaignStatus => {
+export const mapToAPICampaignStatus = (
+  status: CampaignStatus,
+): APICampaignStatus => {
   switch (status) {
-    case CampaignStatus.Planning: return APICampaignStatus.Draft;
-    case CampaignStatus.Active: return APICampaignStatus.Active;
-    case CampaignStatus.Paused: return APICampaignStatus.Paused;
-    case CampaignStatus.Completed: return APICampaignStatus.Completed;
-    case CampaignStatus.Archived: return APICampaignStatus.Archived;
-    default: return APICampaignStatus.Draft;
+    case CampaignStatus.Planning:
+      return APICampaignStatus.Draft;
+    case CampaignStatus.Active:
+      return APICampaignStatus.Active;
+    case CampaignStatus.Paused:
+      return APICampaignStatus.Paused;
+    case CampaignStatus.Completed:
+      return APICampaignStatus.Completed;
+    case CampaignStatus.Archived:
+      return APICampaignStatus.Archived;
+    default:
+      return APICampaignStatus.Draft;
   }
-}
+};
 
 /**
  * Map API campaign status (integer) to frontend status (string)
  */
-export const mapCampaignStatus = (apiStatus: number): CampaignStatus=> {
+export const mapCampaignStatus = (apiStatus: number): CampaignStatus => {
   switch (apiStatus) {
-    case 0: return CampaignStatus.Planning; // Draft
-    case 1: return CampaignStatus.Active;
-    case 2: return CampaignStatus.Paused;
-    case 3: return CampaignStatus.Completed;
-    case 4: return CampaignStatus.Archived;
-    default: return CampaignStatus.Planning;
+    case 0:
+      return CampaignStatus.Planning; // Draft
+    case 1:
+      return CampaignStatus.Active;
+    case 2:
+      return CampaignStatus.Paused;
+    case 3:
+      return CampaignStatus.Completed;
+    case 4:
+      return CampaignStatus.Archived;
+    default:
+      return CampaignStatus.Planning;
   }
-}
+};
 
-export const mapCampaignResponse = (apiCampaign: CampaignDetailResponse): Campaign=> {
+export const mapCampaignResponse = (
+  apiCampaign: CampaignDetailResponse,
+): Campaign => {
   return {
     id: apiCampaign.id,
     title: apiCampaign.name,
     description: apiCampaign.description,
     coverImageUrl: apiCampaign.imageUrl,
     status: mapCampaignStatus(apiCampaign.status),
-    visibility: apiCampaign.isPublic ? "Public" as any : "Private" as any,
+    visibility: apiCampaign.isPublic ? ("Public" as any) : ("Private" as any),
     dungeonMasterId: apiCampaign.dungeonMasterId,
+    isDungeonMaster: apiCampaign.isDungeonMaster,
     dungeonMasterName: "Maître du Jeu", // API doesn't provide this
     dungeonMasterAvatar: "",
     maxPlayers: apiCampaign.maxPlayers,
     currentPlayers: apiCampaign.memberCount,
-    players: apiCampaign.members?.map(m => ({
-      id: m.id,
-      username: m.userId, // API doesn't provide username, using userId
-      role: mapMemberRole(m.role),
-      characterName: m.nickname,
-      joinedAt: m.joinedAt,
-    })) || [],
+    players:
+      apiCampaign.members?.map((m) => ({
+        id: m.id,
+        username: m.userId, // API doesn't provide username, using userId
+        role: mapMemberRole(m.role),
+        characterName: m.nickname,
+        joinedAt: m.joinedAt,
+      })) || [],
     sessions: [], // API doesn't provide sessions yet
     totalSessions: apiCampaign.snapshotCount || 0,
     setting: undefined,
@@ -227,9 +245,9 @@ export const mapCampaignResponse = (apiCampaign: CampaignDetailResponse): Campai
     tags: [],
     createdAt: apiCampaign.createdAt,
     updatedAt: apiCampaign.updatedAt,
-    campaignTreeDefinition: apiCampaign.campaignTreeDefinition
+    campaignTreeDefinition: apiCampaign.campaignTreeDefinition,
   };
-}
+};
 /**
  * Campaign Service - handles all campaign API calls
  */
@@ -237,34 +255,41 @@ export const CampaignService = {
   /**
    * Create a new campaign
    */
-  async createCampaign(request: CreateCampaignRequest): Promise<CampaignDetailResponse> {
+  async createCampaign(
+    request: CreateCampaignRequest,
+  ): Promise<CampaignDetailResponse> {
     const response = await axios.post<CampaignDetailResponse>(
       `${API_URL}/api/campaigns`,
       request,
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
     return response.data;
   },
 
-  async editCampaignManager(campaignId : string,request:UpdateCampaignManagerRequest) : Promise<CampaignDetailResponse>{
-     const response = await axios.put<CampaignDetailResponse>(
+  async editCampaignManager(
+    campaignId: string,
+    request: UpdateCampaignManagerRequest,
+  ): Promise<CampaignDetailResponse> {
+    const response = await axios.put<CampaignDetailResponse>(
       `${API_URL}/api/campaigns/${campaignId}/manager`,
       request,
-      { headers: getAuthHeaders() }
-      );
-      return response.data;
+      { headers: getAuthHeaders() },
+    );
+    return response.data;
   },
 
   /**
    * Get paginated list of campaigns with filters
    */
-  async listCampaigns(filters?: CampaignFilterRequest): Promise<CampaignListResponse> {
+  async listCampaigns(
+    filters?: CampaignFilterRequest,
+  ): Promise<CampaignListResponse> {
     const response = await axios.get<CampaignListResponse>(
       `${API_URL}/api/campaigns`,
       {
         headers: getAuthHeaders(),
         params: filters,
-      }
+      },
     );
     return response.data;
   },
@@ -275,7 +300,7 @@ export const CampaignService = {
   async getCampaign(id: string): Promise<CampaignDetailResponse> {
     const response = await axios.get<CampaignDetailResponse>(
       `${API_URL}/api/campaigns/${id}`,
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
     return response.data;
   },
@@ -285,12 +310,12 @@ export const CampaignService = {
    */
   async updateCampaign(
     id: string,
-    request: UpdateCampaignRequest
+    request: UpdateCampaignRequest,
   ): Promise<CampaignDetailResponse> {
     const response = await axios.put<CampaignDetailResponse>(
       `${API_URL}/api/campaigns/${id}`,
       request,
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
     return response.data;
   },
@@ -310,12 +335,12 @@ export const CampaignService = {
    */
   async generateInviteCode(
     campaignId: string,
-    request?: GenerateInviteCodeRequest
+    request?: GenerateInviteCodeRequest,
   ): Promise<InviteCodeResponse> {
     const response = await axios.post<InviteCodeResponse>(
       `${API_URL}/api/campaigns/${campaignId}/invite`,
       request || {},
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
     return response.data;
   },
@@ -323,11 +348,13 @@ export const CampaignService = {
   /**
    * Join a campaign using an invite code
    */
-  async joinCampaign(request: JoinCampaignRequest): Promise<CampaignDetailResponse> {
+  async joinCampaign(
+    request: JoinCampaignRequest,
+  ): Promise<CampaignDetailResponse> {
     const response = await axios.post<CampaignDetailResponse>(
       `${API_URL}/api/campaigns/join`,
       request,
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
     return response.data;
   },
@@ -335,10 +362,12 @@ export const CampaignService = {
   /**
    * Get campaign members
    */
-  async getCampaignMembers(campaignId: string): Promise<CampaignMemberListResponse> {
+  async getCampaignMembers(
+    campaignId: string,
+  ): Promise<CampaignMemberListResponse> {
     const response = await axios.get<CampaignMemberListResponse>(
       `${API_URL}/api/campaigns/${campaignId}/members`,
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
     return response.data;
   },
@@ -348,12 +377,12 @@ export const CampaignService = {
    */
   async addMember(
     campaignId: string,
-    request: AddMemberRequest
+    request: AddMemberRequest,
   ): Promise<CampaignMemberResponse> {
     const response = await axios.post<CampaignMemberResponse>(
       `${API_URL}/api/campaigns/${campaignId}/members`,
       request,
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
     return response.data;
   },
@@ -364,12 +393,12 @@ export const CampaignService = {
   async updateMember(
     campaignId: string,
     memberId: string,
-    request: UpdateMemberRequest
+    request: UpdateMemberRequest,
   ): Promise<CampaignMemberResponse> {
     const response = await axios.put<CampaignMemberResponse>(
       `${API_URL}/api/campaigns/${campaignId}/members/${memberId}`,
       request,
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
     return response.data;
   },
@@ -378,9 +407,12 @@ export const CampaignService = {
    * Remove a member from a campaign
    */
   async removeMember(campaignId: string, memberId: string): Promise<void> {
-    await axios.delete(`${API_URL}/api/campaigns/${campaignId}/members/${memberId}`, {
-      headers: getAuthHeaders(),
-    });
+    await axios.delete(
+      `${API_URL}/api/campaigns/${campaignId}/members/${memberId}`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
   },
 
   /**
@@ -390,7 +422,7 @@ export const CampaignService = {
     await axios.post(
       `${API_URL}/api/campaigns/${campaignId}/leave`,
       {},
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
   },
 };
