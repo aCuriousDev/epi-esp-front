@@ -115,9 +115,9 @@ export default function MenuComponent() {
 			<main class="relative z-10 mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center gap-8 p-6 sm:p-10">
 				{/* Logo and Title Section */}
 				<header class="text-center hero-section">
-					{/* Animated D20 dice - click to re-roll */}
-					<div class="flex justify-center mb-6">
-						<AnimatedD20 size={96} />
+					{/* Animated D20 dice - click, hold-and-shake, or flick to roll */}
+					<div class="flex justify-center mb-10">
+						<AnimatedD20 size={220} />
 					</div>
 
 					<h1 class="main-title font-display text-5xl sm:text-6xl md:text-7xl tracking-wide">

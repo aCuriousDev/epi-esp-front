@@ -35,9 +35,9 @@ export default function LoginPage() {
         <div class="w-full max-w-md">
           {/* Logo/Brand section */}
           <header class="text-center mb-12">
-            {/* Animated D20 dice - click to re-roll */}
-            <div class="flex justify-center mb-6">
-              <AnimatedD20 size={96} />
+            {/* Animated D20 dice - click, hold-and-shake, or flick to roll */}
+            <div class="flex justify-center mb-8">
+              <AnimatedD20 size={180} />
             </div>
 
             <h1 class="login-title font-display text-5xl sm:text-6xl tracking-wide">
