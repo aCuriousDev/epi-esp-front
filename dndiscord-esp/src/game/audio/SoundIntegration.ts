@@ -172,6 +172,21 @@ export function playDiceCritFailSound(): void {
   getOrCreate().playDiceCritFail();
 }
 
+export function playDiceWindupSound(): void {
+  if (!soundSettings.sfxEnabled()) return;
+  getOrCreate().playDiceWindup();
+}
+
+export function playDiceLaunchSound(): void {
+  if (!soundSettings.sfxEnabled()) return;
+  getOrCreate().playDiceLaunch();
+}
+
+export function playDiceSuspenseSound(): void {
+  if (!soundSettings.sfxEnabled()) return;
+  getOrCreate().playDiceSuspense();
+}
+
 export function playBabbleSound(text: string, pitch: 'low' | 'mid' | 'high' = 'mid'): void {
   if (!soundSettings.sfxEnabled()) return;
   getOrCreate().playBabbleVoice(text, pitch);

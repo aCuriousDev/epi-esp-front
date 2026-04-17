@@ -929,6 +929,63 @@ export class SoundManager {
     boom.connect(bg).connect(this.uiBus); boom.start(now); boom.stop(now + 0.55);
   }
 
+  /** Low rising whoosh — plays at the start of a throw's windup. */
+  playDiceWindup(): void {
+    this.resume();
+    const now = this.ctx.currentTime;
+    const o = this.ctx.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(60, now);
+    o.frequency.exponentialRampToValueAtTime(220, now + 0.4);
+    const g = this.gain(0);
+    g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(0.1, now + 0.12);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+    o.connect(this.lp(900)).connect(g).connect(this.uiBus);
+    o.start(now); o.stop(now + 0.5);
+
+    const rm = this.ctx.createBufferSource(); rm.buffer = this.pink(0.45);
+    const rg = this.gain(0);
+    rg.gain.setValueAtTime(0, now); rg.gain.linearRampToValueAtTime(0.09, now + 0.12);
+    rg.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+    rm.connect(this.lp(380)).connect(rg).connect(this.uiBus); rm.start(now);
+  }
+
+  /** Punchy swoosh that fires the moment the die is flung. */
+  playDiceLaunch(): void {
+    this.resume();
+    const now = this.ctx.currentTime;
+    const sw = this.ctx.createBufferSource(); sw.buffer = this.white(0.35);
+    const sg = this.gain(0);
+    sg.gain.setValueAtTime(0.3, now);
+    sg.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+    const sf = this.bp(700, 1.1);
+    sf.frequency.setValueAtTime(700, now);
+    sf.frequency.exponentialRampToValueAtTime(4200, now + 0.2);
+    sw.connect(sf).connect(sg).connect(this.uiBus); sw.start(now);
+
+    const o = this.ctx.createOscillator(); o.type = 'triangle';
+    o.frequency.setValueAtTime(140, now);
+    o.frequency.exponentialRampToValueAtTime(680, now + 0.22);
+    const og = this.gain(0);
+    og.gain.setValueAtTime(0.14, now);
+    og.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+    o.connect(og).connect(this.uiBus); o.start(now); o.stop(now + 0.3);
+  }
+
+  /** Held breath: a sustained chime + shimmer that hangs as the die floats. */
+  playDiceSuspense(): void {
+    this.resume();
+    const now = this.ctx.currentTime;
+    ['G4','B4','D5'].forEach((n, i) => {
+      this.note(nf(n), now + i * 0.04, 0.55, this.uiBus, 'sine',
+        { attack: 0.08, decay: 0.1, sustain: 0.5, release: 0.3, peak: 0.08 });
+    });
+    const sh = this.ctx.createBufferSource(); sh.buffer = this.white(0.55);
+    const sg = this.gain(0);
+    sg.gain.setValueAtTime(0, now); sg.gain.linearRampToValueAtTime(0.05, now + 0.1);
+    sg.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+    sh.connect(this.hp(6000)).connect(sg).connect(this.uiBus); sh.start(now);
+  }
+
   /** Nat-1 sting — dissonant fall + hollow thud. */
   playDiceCritFail(): void {
     this.resume();
