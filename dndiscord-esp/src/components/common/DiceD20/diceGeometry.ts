@@ -195,7 +195,12 @@ function buildFaceOrientation(
 		(i) => i !== topLocal,
 	);
 	const rotatedAfterTwist = face.map((idx) => rotateVec(vertices[idx], quat));
-	const leftLocal = rotatedAfterTwist[others[0]].x < rotatedAfterTwist[others[1]].x
+	// Babylon uses a left-handed coordinate system: with the camera looking
+	// toward -Z, world +X is drawn on the LEFT of the screen. So the vertex
+	// that should receive the atlas's "left" UV is the one with the LARGER
+	// world-X (not smaller — that would land on screen-right and mirror the
+	// numeral horizontally).
+	const leftLocal = rotatedAfterTwist[others[0]].x > rotatedAfterTwist[others[1]].x
 		? others[0]
 		: others[1];
 	const rightLocal = leftLocal === others[0] ? others[1] : others[0];
