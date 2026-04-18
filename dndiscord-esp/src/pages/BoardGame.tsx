@@ -1,6 +1,6 @@
 import { Component, Show, onMount, onCleanup, createSignal, createEffect } from "solid-js";
 import { useNavigate, useLocation } from "@solidjs/router";
-import { ArrowLeft, RotateCcw, Check, Hand, MousePointer, Move as MoveIcon, Flag } from "lucide-solid";
+import { ArrowLeft, RotateCcw, Check, Hand, MousePointer, Move as MoveIcon, Flag, HelpCircle, X } from "lucide-solid";
 import { getPhaseIcon } from "../components/common/icons";
 import {
   GameCanvas,
@@ -362,6 +362,40 @@ const BoardGame: Component = () => {
       u.stats.currentActionPoints < u.stats.maxActionPoints
     );
   };
+  // Controls-help panel: collapsed to a "?" icon by default to keep the
+  // canvas uncluttered. Auto-expands for a few seconds when a combat /
+  // dungeon run starts, then retracts so the user can reopen it on demand.
+  const [helpOpen, setHelpOpen] = createSignal(false);
+  let helpAutoRetractTimer: number | null = null;
+  let lastHelpAutoShownForPhase: GamePhase | null = null;
+  createEffect(() => {
+    const phase = gameState.phase;
+    const isCombatish =
+      phase === GamePhase.PLAYER_TURN ||
+      phase === GamePhase.ENEMY_TURN ||
+      phase === GamePhase.COMBAT_PREPARATION;
+    if (isCombatish && lastHelpAutoShownForPhase === null) {
+      lastHelpAutoShownForPhase = phase;
+      setHelpOpen(true);
+      if (helpAutoRetractTimer !== null) clearTimeout(helpAutoRetractTimer);
+      helpAutoRetractTimer = window.setTimeout(() => {
+        setHelpOpen(false);
+        helpAutoRetractTimer = null;
+      }, 5000);
+    }
+    // Reset the one-shot so a fresh combat after a return-to-menu triggers
+    // the help bubble again.
+    if (!isCombatish) {
+      lastHelpAutoShownForPhase = null;
+    }
+  });
+  onCleanup(() => {
+    if (helpAutoRetractTimer !== null) {
+      clearTimeout(helpAutoRetractTimer);
+      helpAutoRetractTimer = null;
+    }
+  });
+
   const [endTurnPending, setEndTurnPending] = createSignal(false);
   let endTurnPendingTimer: number | null = null;
   const handleEndTurnClick = () => {
@@ -733,63 +767,94 @@ const BoardGame: Component = () => {
               </button>
             </div>
 
-            {/* Controls Help */}
-            <div class="absolute left-3 sm:left-4 bottom-20 sm:bottom-4 z-10 panel-game text-xs w-[min(16rem,calc(100vw-1.5rem))] lg:w-auto lg:max-w-xs">
-              <h4 class="font-semibold text-game-gold mb-3">Controls</h4>
-              <ul class="space-y-1.5 text-gray-400 lg:hidden">
-                <li class="flex items-start gap-2">
-                  <Hand class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
-                  <span>
-                    <span class="text-gray-300 font-medium">Tap</span> - Select
-                    unit / Move / Attack
-                  </span>
-                </li>
-                <li class="flex items-start gap-2">
-                  <MoveIcon class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
-                  <span>
-                    <span class="text-gray-300 font-medium">Drag</span> - Rotate
-                    / pan camera
-                  </span>
-                </li>
-                <li class="flex items-start gap-2">
-                  <MoveIcon class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
-                  <span>
-                    <span class="text-gray-300 font-medium">Pinch</span> - Zoom
-                    in/out
-                  </span>
-                </li>
-              </ul>
-              <ul class="space-y-1.5 text-gray-400 hidden lg:block">
-                <li class="flex items-start gap-2">
-                  <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
-                  <span>
-                    <span class="text-gray-300 font-medium">Left Click</span> -
-                    Select unit / Move / Attack
-                  </span>
-                </li>
-                <li class="flex items-start gap-2">
-                  <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
-                  <span>
-                    <span class="text-gray-300 font-medium">Right Drag</span> -
-                    Rotate camera
-                  </span>
-                </li>
-                <li class="flex items-start gap-2">
-                  <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
-                  <span>
-                    <span class="text-gray-300 font-medium">Scroll</span> - Zoom
-                    in/out
-                  </span>
-                </li>
-              </ul>
+            {/* Controls help cluster (bottom-left). Retracts to a "?"
+                + Reset View duo when closed so the canvas stays clean;
+                expands to a legend panel on click/hover. Auto-shows on
+                combat start then retracts after 5 s. */}
+            <div class="absolute left-3 sm:left-4 bottom-4 z-10 flex flex-col gap-2 items-start pl-safe-left pb-safe-bottom">
+              <Show when={helpOpen()}>
+                <div class="panel-game text-xs w-[min(16rem,calc(100vw-1.5rem))] lg:max-w-xs relative">
+                  <button
+                    class="absolute top-2 right-2 text-slate-400 hover:text-white"
+                    onClick={() => setHelpOpen(false)}
+                    aria-label="Fermer l'aide"
+                  >
+                    <X class="w-3.5 h-3.5" />
+                  </button>
+                  <h4 class="font-semibold text-game-gold mb-3 pr-5">Controls</h4>
+                  <ul class="space-y-1.5 text-gray-400 lg:hidden">
+                    <li class="flex items-start gap-2">
+                      <Hand class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
+                      <span>
+                        <span class="text-gray-300 font-medium">Tap</span> —
+                        sélectionner / déplacer / attaquer
+                      </span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                      <MoveIcon class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
+                      <span>
+                        <span class="text-gray-300 font-medium">Drag</span> —
+                        orbiter / panner la caméra
+                      </span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                      <MoveIcon class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
+                      <span>
+                        <span class="text-gray-300 font-medium">Pinch</span> —
+                        zoom
+                      </span>
+                    </li>
+                  </ul>
+                  <ul class="space-y-1.5 text-gray-400 hidden lg:block">
+                    <li class="flex items-start gap-2">
+                      <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
+                      <span>
+                        <span class="text-gray-300 font-medium">Clic</span> —
+                        sélectionner / déplacer / attaquer
+                      </span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                      <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
+                      <span>
+                        <span class="text-gray-300 font-medium">Clic droit + drag</span> —
+                        orbiter la caméra
+                      </span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                      <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
+                      <span>
+                        <span class="text-gray-300 font-medium">Molette</span> —
+                        zoom
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              </Show>
+
+              <div class="flex items-center gap-2">
+                <button
+                  class="w-9 h-9 flex items-center justify-center rounded-full border border-white/20 bg-game-dark/85 backdrop-blur text-white shadow-lg hover:bg-game-dark transition-colors focus-ring-gold"
+                  onClick={() => setHelpOpen((v) => !v)}
+                  title={helpOpen() ? "Fermer l'aide" : "Aide & contrôles"}
+                  aria-label={helpOpen() ? "Fermer l'aide" : "Ouvrir l'aide"}
+                  aria-expanded={helpOpen()}
+                >
+                  <HelpCircle class="w-4 h-4" />
+                </button>
+                <button
+                  class="btn-game text-xs sm:text-sm py-1.5 px-3 flex items-center gap-2"
+                  onClick={() => resetCamera()}
+                  title="Réinitialiser la caméra"
+                >
+                  <RotateCcw class="w-3.5 h-3.5" />
+                  <span>Reset View</span>
+                </button>
+              </div>
             </div>
 
-            {/* Floating End Turn (bottom-right). When the player hasn't
-                spent any AP yet, a first click arms a 2.5s confirm
-                window and shows a "are you sure?" popover above the
-                button — a second click within that window commits. If
-                the player has already moved or used an ability, one
-                click ends the turn immediately. */}
+            {/* Floating End Turn (bottom-right) — alone so it can't be
+                mis-clicked with camera or help controls. Reset View
+                lives in the help cluster bottom-left instead. */}
             <div class="absolute bottom-4 right-3 sm:right-4 z-20 pr-safe-right pb-safe-bottom flex flex-col gap-2 items-end">
               <Show when={canEndPlayerTurn()}>
                 <Show when={endTurnPending()}>
@@ -810,14 +875,6 @@ const BoardGame: Component = () => {
                   <span>{endTurnPending() ? "Confirmer" : "Fin du tour"}</span>
                 </button>
               </Show>
-              <button
-                class="btn-game text-xs sm:text-sm py-2 px-3 sm:px-4 flex items-center gap-2"
-                onClick={() => resetCamera()}
-                title="Reset camera to default view"
-              >
-                <RotateCcw class="w-4 h-4" />
-                <span>Reset View</span>
-              </button>
             </div>
           </main>
 
