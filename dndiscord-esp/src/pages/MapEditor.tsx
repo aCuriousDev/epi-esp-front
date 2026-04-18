@@ -856,6 +856,58 @@ export default function MapEditor() {
 	let previewMesh: AbstractMesh | null = null;
 	let previewAssetId: string | null = null;
 	let previewLoadToken = 0; // guards against races when the selected asset changes mid-load
+
+	// Edit mode keeps the original mesh visible with a blue emissive tint
+	// while a ghost preview follows the cursor. The original is only
+	// disposed when the placement is actually committed (or if the user
+	// clicks the same asset again to deselect).
+	let editingOriginalMesh: AbstractMesh | null = null;
+	let editingOriginalEmissives: Array<{ mat: StandardMaterial | PBRMaterial; orig: Color3 }> = [];
+	const EDIT_TINT = new Color3(0.2, 0.55, 1);
+
+	const tintEditingMesh = (root: AbstractMesh) => {
+		editingOriginalEmissives = [];
+		const visit = (m: AbstractMesh) => {
+			const mat = m.material;
+			if (mat instanceof StandardMaterial || mat instanceof PBRMaterial) {
+				editingOriginalEmissives.push({ mat, orig: mat.emissiveColor.clone() });
+				mat.emissiveColor = EDIT_TINT.clone();
+				if (mat instanceof PBRMaterial) {
+					mat.emissiveIntensity = 1.0;
+				}
+			}
+			m.getChildMeshes().forEach(visit);
+		};
+		visit(root);
+	};
+
+	const untintEditingMesh = () => {
+		editingOriginalEmissives.forEach(({ mat, orig }) => {
+			try {
+				mat.emissiveColor = orig;
+				if (mat instanceof PBRMaterial) mat.emissiveIntensity = 1.0;
+			} catch {
+				// material was disposed — nothing to restore.
+			}
+		});
+		editingOriginalEmissives = [];
+	};
+
+	const consumeEditingOriginal = () => {
+		if (!editingOriginalMesh) return;
+		// Material tint is lost with the mesh disposal; no need to untint first.
+		if (!editingOriginalMesh.isDisposed()) {
+			gridManager?.unregisterAsset(editingOriginalMesh.name);
+			editingOriginalMesh.dispose();
+		}
+		editingOriginalMesh = null;
+		editingOriginalEmissives = [];
+	};
+
+	const cancelEditingSelection = () => {
+		untintEditingMesh();
+		editingOriginalMesh = null;
+	};
 	let selectionOverlays: Map<string, Mesh> = new Map(); // Map des overlays de sélection par cellule
 	let previewUpdateTimeout: number | null = null;
 	let isUpdatingPreview: boolean = false; // Flag pour éviter les mises à jour multiples simultanées
@@ -975,10 +1027,28 @@ export default function MapEditor() {
 
 	// Initialize map ID and name from params (in onMount to ensure params are available)
 
-	// Update preview rotation when rotation angle changes
+	// If edit mode is turned off or editingAsset clears (without a commit
+	// path), make sure the tinted original mesh returns to its normal
+	// look. The commit path calls consumeEditingOriginal() which disposes
+	// the mesh outright; this effect is purely a safety net for mode
+	// switches, palette clicks, etc.
 	createEffect(() => {
-		if (previewMesh && (selectedAsset() || editingAsset()) && scene) {
-			const rotationRad = (rotationAngle() * Math.PI) / 180;
+		const active = editMode() && !!editingAsset();
+		if (!active && editingOriginalMesh && !editingOriginalMesh.isDisposed()) {
+			untintEditingMesh();
+			editingOriginalMesh = null;
+		}
+	});
+
+	// Update preview rotation when the slider / keyboard shortcut changes.
+	// Forces a world-matrix recompute so the new angle shows on the very
+	// next render instead of waiting for the user to move the cursor.
+	createEffect(() => {
+		// Read rotationAngle unconditionally so Solid tracks it even when
+		// previewMesh isn't ready yet — once the preview loads later,
+		// repositionPreviewOnCell picks up the current angle.
+		const rotationRad = (rotationAngle() * Math.PI) / 180;
+		if (previewMesh && !previewMesh.isDisposed() && scene && (selectedAsset() || editingAsset() || lightMode())) {
 			if (previewMesh.rotationQuaternion) {
 				const euler = previewMesh.rotationQuaternion.toEulerAngles();
 				previewMesh.rotationQuaternion = null;
@@ -986,6 +1056,8 @@ export default function MapEditor() {
 			} else {
 				previewMesh.rotation.y = rotationRad;
 			}
+			previewMesh.computeWorldMatrix(true);
+			previewMesh.getChildMeshes(false).forEach((child) => child.computeWorldMatrix(true));
 		}
 	});
 
@@ -1348,6 +1420,12 @@ export default function MapEditor() {
 		cleanupPreviewMesh();
 		clearCollisionPreview();
 		clearAllLightFixtures();
+		// Restore any mesh still blue-tinted from an edit-mode session
+		// (it was going to be disposed with the scene anyway, but
+		// untinting first keeps the material look consistent if the
+		// user navigates back).
+		untintEditingMesh();
+		editingOriginalMesh = null;
 		// Clear selection overlays
 		selectionOverlays.forEach((overlay) => {
 			if (!overlay.isDisposed()) {
@@ -2466,10 +2544,31 @@ export default function MapEditor() {
 					const gridX = meta.gridX;
 					const gridZ = meta.gridZ;
 
+					// Stack the light on top of whatever is already on the
+					// cell (table, wall, crate, etc.) — same logic as normal
+					// asset placement. Also account for external multi-cell
+					// assets that overflow into this cell.
+					let stackY = 0;
+					if (gridManager && assetStackManager) {
+						const cell = gridManager.getCell(gridX, gridZ);
+						if (cell) {
+							stackY = cell.getStackHeight();
+							const external = gridManager.getAssetsAffectingCell(gridX, gridZ);
+							for (const extMesh of external) {
+								const inStack = cell.getStackedAssets().some((sa) => sa.mesh === extMesh);
+								const isGround = cell.getGround() === extMesh;
+								if (inStack || isGround) continue;
+								const extTopY = assetStackManager.calculateWorldTopY(extMesh);
+								stackY = Math.max(stackY, extTopY);
+							}
+						}
+					}
+
 					const newLight: SavedLightData = {
 						presetId: selectedLightPreset(),
 						x: gridX,
 						z: gridZ,
+						y: stackY,
 					};
 					setPlacedLights((prev) => {
 						const without = prev.filter((l) => !(l.x === gridX && l.z === gridZ));
@@ -2697,35 +2796,66 @@ export default function MapEditor() {
 				}
 
 				if (editMode()) {
-					// Edit mode is two taps: first tap picks up an existing
-					// asset into editingAsset; second tap places it on a new
-					// cell. If we already hold one, skip the pick-up branch
-					// and fall through to the normal placement logic below.
+					// Edit mode flow:
+					//   1. First tap on an asset → select it: blue tint on
+					//      the original mesh (stays in place), editingAsset
+					//      set, ghost preview follows the cursor.
+					//   2. Second tap on the same asset → deselect: un-tint
+					//      and clear editing state. Original stays exactly
+					//      where it was.
+					//   3. Second tap on a cellPlane → commit move: dispose
+					//      the original, place a fresh mesh at the target.
 					if (!editingAsset()) {
 						const rootMesh = hoveredMesh
 							|| (pickInfo?.hit && pickInfo.pickedMesh ? findRootAssetMesh(pickInfo.pickedMesh) : null);
 						if (rootMesh && gridManager) {
 							clearHighlight();
+							let foundStacked: { asset: MapAsset; cell: GridCell; mesh: AbstractMesh } | null = null;
 							gridManager.getAllCells().forEach((cell) => {
-								const stackedAssets = cell.getStackedAssets();
-								stackedAssets.forEach((stackedAsset) => {
-									if (stackedAsset.mesh === rootMesh) {
-										setEditingAsset({ asset: stackedAsset.asset, cell, mesh: stackedAsset.mesh });
-										setSelectedAsset(stackedAsset.asset);
-										setRotationAngle(0);
-										gridManager!.unregisterAsset(stackedAsset.mesh.name);
-										cell.removeAsset(stackedAsset.mesh);
-										stackedAsset.mesh.dispose();
+								cell.getStackedAssets().forEach((sa) => {
+									if (sa.mesh === rootMesh) {
+										foundStacked = { asset: sa.asset, cell, mesh: sa.mesh };
 									}
 								});
 							});
-							if (showCollisions()) {
-								updateCollisionOverlays();
+							if (foundStacked) {
+								// Keep the original alive + blue-tinted. It will
+								// be disposed on commit (cellPlane tap) or
+								// un-tinted on deselect (same-asset tap).
+								const picked = foundStacked as { asset: MapAsset; cell: GridCell; mesh: AbstractMesh };
+								editingOriginalMesh = picked.mesh;
+								tintEditingMesh(picked.mesh);
+								setEditingAsset(picked);
+								setSelectedAsset(picked.asset);
+								setRotationAngle(0);
+								if (showCollisions()) {
+									updateCollisionOverlays();
+								}
 							}
 						}
 						return;
 					}
-					// editingAsset() is set → let placement run.
+
+					// editingAsset() is already set. If the click is on the
+					// same original mesh (any descendant), the user wants to
+					// deselect — not place.
+					if (editingOriginalMesh) {
+						const rawPick = scene.pick(scene.pointerX, scene.pointerY);
+						if (rawPick?.hit && rawPick.pickedMesh) {
+							const descendants = editingOriginalMesh.getDescendants(false);
+							const isSameAsset =
+								rawPick.pickedMesh === editingOriginalMesh ||
+								descendants.some((d) => d === rawPick.pickedMesh);
+							if (isSameAsset) {
+								cancelEditingSelection();
+								setEditingAsset(null);
+								setSelectedAsset(null);
+								cleanupPreviewMesh();
+								return;
+							}
+						}
+					}
+					// Fall through to the placement branch below.
 				}
 
 				// Normal placement mode (single cell)
@@ -2786,6 +2916,11 @@ export default function MapEditor() {
 								placeAsset(assetToPlace, gridX, gridZ);
 								
 								if (editingAsset()) {
+									// Edit-mode commit: the original mesh is
+									// still in its old spot with the blue
+									// tint — remove it now that the new copy
+									// is placed on the target cell.
+									consumeEditingOriginal();
 									setEditingAsset(null);
 									setEditMode(false);
 								}
