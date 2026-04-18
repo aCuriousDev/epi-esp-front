@@ -21,34 +21,15 @@ import {
 } from "@babylonjs/core";
 import { ModelLoader } from "../engine/ModelLoader";
 import { gridToWorld, GRID_SIZE, TILE_SIZE } from "../game";
-import { ASSET_PACKS } from "../config/assetPacks";
 import { getCollisionProperties, doesAssetBlockMovement } from "../game/utils/CollisionUtils";
+import type { MapAsset, AssetCategory, StackedAsset } from "../components/map-editor/types";
+import {
+	CHARACTER_ASSETS,
+	ENEMY_ASSETS,
+	ASSET_CATEGORIES,
+} from "../components/map-editor/PaletteData";
+import { ASSET_FAVORITE_PATHS } from "../config/assetFavorites";
 import "@babylonjs/loaders";
-
-interface MapAsset {
-	id: string;
-	name: string;
-	path: string;
-	type: "floor" | "wall" | "block" | "water" | "character" | "enemy" | "nature" | "furniture" | "decoration" | "resource";
-	icon?: string;
-}
-
-interface AssetCategory {
-	id: string;
-	name: string;
-	assets: MapAsset[];
-}
-
-/**
- * Représente un asset placé dans une cellule
- */
-interface StackedAsset {
-	mesh: AbstractMesh;
-	asset: MapAsset;
-	height: number; // Hauteur réelle calculée depuis bounding box
-	bottomY: number; // Position Y du bas du mesh (dans l'espace local de la cellule)
-	topY: number; // Position Y du haut du mesh (dans l'espace local de la cellule)
-}
 
 /**
  * Classe représentant une cellule de la grille avec ses données
@@ -721,98 +702,8 @@ class AssetStackManager {
 	}
 }
 
-// Helper function to create asset from file path
-const createAssetFromPath = (
-	basePath: string,
-	fileName: string,
-	type: MapAsset["type"],
-	displayName?: string
-): MapAsset => {
-	const id = fileName.replace(/\.(gltf|glb)$/i, "").toLowerCase().replace(/[^a-z0-9]/g, "_");
-	const name = displayName || fileName
-		.replace(/\.(gltf|glb)$/i, "")
-		.replace(/_/g, " ")
-		.replace(/\b\w/g, (l) => l.toUpperCase());
-	return {
-		id,
-		name,
-		path: `${basePath}/${fileName}`,
-		type,
-	};
-};
-
-// Helper function to create assets from file list
-const createAssetsFromFiles = (
-	basePath: string,
-	files: string[],
-	type: MapAsset["type"]
-): MapAsset[] => {
-	return files.map((file) => createAssetFromPath(basePath, file, type));
-};
-
-// Helper function to extract folder name from base path
-const extractFolderNameFromPath = (basePath: string): string => {
-	const match = basePath.match(/\/packages\/([^\/]+)/);
-	return match ? match[1] : basePath;
-};
-
-// Helper function to create category with automatic name from base path
-const createCategory = (
-	basePath: string,
-	files: string[],
-	type: MapAsset["type"]
-): AssetCategory => {
-	const folderName = extractFolderNameFromPath(basePath);
-	const assets = createAssetsFromFiles(basePath, files, type);
-	return {
-		id: folderName.toLowerCase().replace(/[^a-z0-9]/g, "_"),
-		name: folderName,
-		assets,
-	};
-};
-
-// Characters
-const CHARACTER_ASSETS: MapAsset[] = [
-	{ id: "knight", name: "Chevalier", path: "/models/characters/knight/knight.glb", type: "character" },
-	{ id: "rogue", name: "Voleur", path: "/models/characters/rogue/rogue.glb", type: "character" },
-	{ id: "wizard", name: "Magicien", path: "/models/characters/wizard/wizard.glb", type: "character" },
-];
-
-// Enemies
-const ENEMY_ASSETS: MapAsset[] = [
-	{ id: "skeleton_warrior", name: "Squelette Guerrier", path: "/models/enemies/skeleton_warrior/skeleton_warrior.glb", type: "enemy" },
-	{ id: "skeleton_mage", name: "Squelette Mage", path: "/models/enemies/skeleton_mage/skeleton_mage.glb", type: "enemy" },
-	{ id: "skeleton_rogue", name: "Squelette Voleur", path: "/models/enemies/skeleton_rogue/skeleton_rogue.glb", type: "enemy" },
-];
-
-// Asset Categories - Grouped by catName from config file
-const ASSET_CATEGORIES: AssetCategory[] = (() => {
-	const groupedByCatName = new Map<string, MapAsset[]>();
-	
-	Object.values(ASSET_PACKS).forEach((pack) => {
-		const packAssets = createAssetsFromFiles(pack.basePath, pack.files, pack.type);
-		const catName = pack.catName;
-		
-		if (!groupedByCatName.has(catName)) {
-			groupedByCatName.set(catName, []);
-		}
-		groupedByCatName.get(catName)!.push(...packAssets);
-	});
-	
-	const categories: AssetCategory[] = [];
-	groupedByCatName.forEach((assets, catName) => {
-		categories.push({
-			id: catName.toLowerCase().replace(/[^a-z0-9]/g, "_"),
-			name: catName,
-			assets,
-		});
-	});
-	
-	categories.push({ id: "enemies", name: "Enemies", assets: ENEMY_ASSETS });
-	categories.push({ id: "characters", name: "Characters", assets: CHARACTER_ASSETS });
-	
-	return categories;
-})();
+// Palette data (CHARACTER_ASSETS / ENEMY_ASSETS / ASSET_CATEGORIES) lives in
+// src/components/map-editor/PaletteData.ts and is imported at the top.
 
 export default function MapEditor() {
 	const params = useParams<{ mapId?: string }>();
@@ -1211,7 +1102,15 @@ export default function MapEditor() {
 
 		// Initialize model loader
 		modelLoader = new ModelLoader(scene);
-		
+
+		// Warm AssetContainer cache for the curated favorites so the first
+		// drag-drop is instant (was stuttery — each placement used to kick
+		// off its own glTF fetch + parse on the main thread).
+		// Fire-and-forget: failures here just mean the first drop is slow.
+		modelLoader
+			.preloadModels(ASSET_FAVORITE_PATHS)
+			.catch((err) => console.warn("[MapEditor] Palette preload partial failure:", err));
+
 		// Initialize grid manager and asset stack manager
 		gridManager = new GridManager(scene);
 		assetStackManager = new AssetStackManager(scene, modelLoader);
