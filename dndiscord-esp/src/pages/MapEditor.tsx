@@ -824,6 +824,8 @@ export default function MapEditor() {
 	const [contextMenuCell, setContextMenuCell] = createSignal<{ x: number; z: number; screenX: number; screenY: number } | null>(null);
 	
 	let previewMesh: AbstractMesh | null = null;
+	let previewAssetId: string | null = null;
+	let previewLoadToken = 0; // guards against races when the selected asset changes mid-load
 	let selectionOverlays: Map<string, Mesh> = new Map(); // Map des overlays de sélection par cellule
 	let previewUpdateTimeout: number | null = null;
 	let isUpdatingPreview: boolean = false; // Flag pour éviter les mises à jour multiples simultanées
@@ -1388,14 +1390,20 @@ export default function MapEditor() {
 	};
 
 	// Cleanup preview mesh
+	/**
+	 * Tear down the current preview mesh entirely. Called on mode switches,
+	 * unmount and any explicit cleanup site. The load-once pointer-move flow
+	 * does NOT call this between cells — it only hides the existing mesh.
+	 */
 	const cleanupPreviewMesh = async () => {
-		// Annuler le timeout en cours
 		if (previewUpdateTimeout !== null) {
 			clearTimeout(previewUpdateTimeout);
 			previewUpdateTimeout = null;
 		}
+		// Invalidate any in-flight load so its result is discarded.
+		previewLoadToken += 1;
+		previewAssetId = null;
 
-		// Attendre que la mise à jour en cours soit terminée
 		while (isUpdatingPreview) {
 			await new Promise(resolve => setTimeout(resolve, 10));
 		}
@@ -1403,22 +1411,16 @@ export default function MapEditor() {
 		if (previewMesh) {
 			const meshToClean = previewMesh;
 			previewMesh = null;
-			
-			const allDescendants = meshToClean.getDescendants(false);
 			const meshScene = meshToClean.getScene();
-			
 			if (meshScene) {
-				// Nettoyer tous les descendants
-				allDescendants.forEach((node) => {
+				meshToClean.getDescendants(false).forEach((node) => {
 					if (node instanceof AbstractMesh || node instanceof Mesh) {
 						try {
 							if (!(node as AbstractMesh).isDisposed()) {
 								meshScene.removeMesh(node as AbstractMesh);
 								(node as AbstractMesh).dispose();
 							}
-						} catch (e) {
-							// Ignorer les erreurs de disposal
-						}
+						} catch (e) { /* ignore */ }
 					}
 				});
 				try {
@@ -1426,11 +1428,131 @@ export default function MapEditor() {
 						meshScene.removeMesh(meshToClean);
 						meshToClean.dispose();
 					}
-				} catch (e) {
-					// Ignorer les erreurs de disposal
-				}
+				} catch (e) { /* ignore */ }
 			}
 		}
+	};
+
+	/**
+	 * Hide the preview without disposing it. Used when the pointer leaves a
+	 * valid drop target — on the next valid cell we just re-enable it, which
+	 * is one frame of work vs. a full glTF reload.
+	 */
+	const hidePreview = () => {
+		if (previewMesh && !previewMesh.isDisposed()) {
+			previewMesh.setEnabled(false);
+		}
+	};
+
+	const applyPreviewAlpha = (mesh: AbstractMesh) => {
+		const setAlpha = (m: AbstractMesh) => {
+			const mat = m.material;
+			if (mat instanceof StandardMaterial) {
+				mat.alpha = 0.35;
+			} else if (mat instanceof PBRMaterial) {
+				mat.transparencyMode = 2;
+				mat.alpha = 0.35;
+			}
+			m.getChildMeshes().forEach((child) => setAlpha(child));
+		};
+		setAlpha(mesh);
+	};
+
+	/**
+	 * Ensure a preview mesh exists for `asset`. Sync-fast when the current
+	 * preview already represents this asset (the common case during hover);
+	 * async load only when the asset changes or there's no preview yet. A
+	 * monotonic token discards any stale load that finishes after a later
+	 * selection change.
+	 */
+	const ensurePreviewForAsset = async (asset: MapAsset): Promise<AbstractMesh | null> => {
+		if (
+			previewAssetId === asset.id &&
+			previewMesh &&
+			!previewMesh.isDisposed()
+		) {
+			return previewMesh;
+		}
+
+		// Different asset (or no preview yet) — dispose the old, load the new.
+		if (previewMesh) {
+			await cleanupPreviewMesh();
+		}
+
+		if (!assetStackManager) return null;
+		const token = ++previewLoadToken;
+		try {
+			isUpdatingPreview = true;
+			const uniqueName = `preview_${asset.id}_${Date.now()}`;
+			const mesh = await assetStackManager.loadModel(asset, uniqueName);
+
+			// If another selection happened while we were loading, drop this.
+			if (token !== previewLoadToken) {
+				if (!mesh.isDisposed()) mesh.dispose(false, true);
+				return null;
+			}
+
+			// Scale per asset type, matching commit-time sizing.
+			let scale = 1;
+			if (asset.type === "character" || asset.type === "enemy") scale = 0.3;
+			else if (asset.type === "furniture" || asset.type === "decoration") scale = 0.4;
+			else scale = 0.5;
+			mesh.scaling.setAll(scale);
+
+			applyPreviewAlpha(mesh);
+
+			mesh.isPickable = false;
+			mesh.getChildMeshes().forEach((c) => { c.isPickable = false; });
+			mesh.renderingGroupId = 1;
+			mesh.getChildMeshes().forEach((c) => {
+				if ('renderingGroupId' in c) (c as any).renderingGroupId = 1;
+			});
+			mesh.metadata = { isPreview: true };
+			mesh.getChildMeshes().forEach((c) => { c.metadata = { isPreview: true }; });
+
+			mesh.setEnabled(false); // start hidden; shown once we position it
+			previewMesh = mesh;
+			previewAssetId = asset.id;
+			return mesh;
+		} catch (error) {
+			console.warn(`[MapEditor] Preview load failed for ${asset.id}:`, error);
+			return null;
+		} finally {
+			isUpdatingPreview = false;
+		}
+	};
+
+	/**
+	 * Reparent the persistent preview to the target cell and snap its Y to
+	 * the correct commit height (floor for ground, stack-top otherwise).
+	 * Cheap: no glTF round-trip, only TransformNode updates.
+	 */
+	const repositionPreviewOnCell = (cell: GridCell, asset: MapAsset) => {
+		if (!previewMesh || previewMesh.isDisposed() || !assetStackManager) return;
+
+		// Latest rotation from the UI.
+		const rotationRad = (rotationAngle() * Math.PI) / 180;
+		if (previewMesh.rotationQuaternion) {
+			const euler = previewMesh.rotationQuaternion.toEulerAngles();
+			previewMesh.rotationQuaternion = null;
+			previewMesh.rotation.y = euler.y + rotationRad;
+		} else {
+			previewMesh.rotation.y = rotationRad;
+		}
+
+		const cellNode = cell.getCellNode();
+		if (!cellNode) return;
+		previewMesh.parent = cellNode;
+		previewMesh.position.set(0, 0, 0);
+		previewMesh.computeWorldMatrix(true);
+		previewMesh.getChildMeshes(false).forEach((child) => child.computeWorldMatrix(true));
+
+		if (asset.type === "floor") {
+			assetStackManager.positionMeshAtHeight(previewMesh, 0, 0);
+		} else {
+			assetStackManager.positionMeshOnStack(previewMesh, cell);
+		}
+		previewMesh.setEnabled(true);
 	};
 
 	/**
@@ -1749,173 +1871,63 @@ export default function MapEditor() {
 		setContextMenuCell(null);
 	};
 
-	// Setup preview mesh
+	/**
+	 * Pointer-move observer — load-once, reposition-always.
+	 *
+	 * The previous implementation reloaded the glTF + disposed the previous
+	 * preview on every POINTERMOVE, debounced at 50 ms. That produced the
+	 * visible stutter the user reported. This version keeps a single long-
+	 * lived preview mesh for the currently selected asset and only moves it
+	 * across cells. Cost per move is O(matrix updates) rather than
+	 * O(glTF load + dispose).
+	 */
 	const setupPreviewMesh = () => {
-		if (!scene || !camera || !gridManager || !assetStackManager) return;
+		if (!scene) return;
 
-		scene.onPointerObservable.add((pointerInfo) => {
-			if (pointerInfo.type === PointerEventTypes.POINTERMOVE && (selectedAsset() || editingAsset()) && !deleteMode() && !collisionPreviewMode() && !zoneSelectionMode() && scene) {
-				if (previewUpdateTimeout !== null) {
-					clearTimeout(previewUpdateTimeout);
-					previewUpdateTimeout = null;
-				}
-				
-				previewUpdateTimeout = window.setTimeout(async () => {
-					if (!scene || !gridManager || !assetStackManager || isUpdatingPreview) {
-						previewUpdateTimeout = null;
-						return;
-					}
-					
-					const currentAsset = selectedAsset() || editingAsset()?.asset;
-					if (!currentAsset) {
-						await cleanupPreviewMesh();
-						previewUpdateTimeout = null;
-						return;
-					}
-					
-					const pickInfo = scene.pick(scene.pointerX, scene.pointerY, (mesh) => {
-						// Permettre seulement les cellPlanes pour le preview
-						return mesh.name.startsWith("cellPlane_") && 
-						       !mesh.name.startsWith("preview_") &&
-						       !mesh.metadata?.isPreview;
-					});
+		scene.onPointerObservable.add(async (pointerInfo) => {
+			if (pointerInfo.type !== PointerEventTypes.POINTERMOVE) return;
+			if (!scene || !gridManager) return;
 
-					if (pickInfo?.hit && pickInfo.pickedPoint) {
-						const worldX = pickInfo.pickedPoint.x;
-						const worldZ = pickInfo.pickedPoint.z;
-						const gridX = Math.floor((worldX / TILE_SIZE) + (GRID_SIZE / 2) - 0.5);
-						const gridZ = Math.floor((worldZ / TILE_SIZE) + (GRID_SIZE / 2) - 0.5);
-
-						if (gridX >= 0 && gridX < GRID_SIZE && gridZ >= 0 && gridZ < GRID_SIZE) {
-							const cell = gridManager.getCell(gridX, gridZ);
-							if (cell) {
-								await updatePreviewMesh(currentAsset, cell);
-							} else if (previewMesh) {
-								previewMesh.setEnabled(false);
-							}
-						} else if (previewMesh) {
-							previewMesh.setEnabled(false);
-						}
-					} else if (previewMesh) {
-						// Ray missed (empty space, or occluded by a tall placed
-						// asset). Hide rather than leak the last valid position.
-						previewMesh.setEnabled(false);
-					}
-					previewUpdateTimeout = null;
-				}, 50); // Augmenté à 50ms pour réduire les appels multiples
-			} else if ((!selectedAsset() && !editingAsset()) || deleteMode() || collisionPreviewMode() || zoneSelectionMode()) {
-				if (previewUpdateTimeout !== null) {
-					clearTimeout(previewUpdateTimeout);
-					previewUpdateTimeout = null;
-				}
-				cleanupPreviewMesh();
+			// Modes that MUST NOT show a placement ghost.
+			if (deleteMode() || collisionPreviewMode() || zoneSelectionMode() || lightMode()) {
+				hidePreview();
+				return;
 			}
+
+			const currentAsset = selectedAsset() || editingAsset()?.asset;
+			if (!currentAsset) {
+				hidePreview();
+				return;
+			}
+
+			// Ensure the preview is loaded for this asset (cache hit is sync-ish).
+			const ready = await ensurePreviewForAsset(currentAsset);
+			if (!ready) return;
+
+			const pick = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
+				mesh.name.startsWith("cellPlane_") &&
+				!mesh.name.startsWith("preview_") &&
+				!mesh.metadata?.isPreview,
+			);
+			if (!pick?.hit || !pick.pickedPoint) {
+				hidePreview();
+				return;
+			}
+			const worldX = pick.pickedPoint.x;
+			const worldZ = pick.pickedPoint.z;
+			const gridX = Math.floor((worldX / TILE_SIZE) + (GRID_SIZE / 2) - 0.5);
+			const gridZ = Math.floor((worldZ / TILE_SIZE) + (GRID_SIZE / 2) - 0.5);
+			if (gridX < 0 || gridX >= GRID_SIZE || gridZ < 0 || gridZ >= GRID_SIZE) {
+				hidePreview();
+				return;
+			}
+			const cell = gridManager.getCell(gridX, gridZ);
+			if (!cell) {
+				hidePreview();
+				return;
+			}
+			repositionPreviewOnCell(cell, currentAsset);
 		});
-	};
-
-	// Update preview mesh
-	const updatePreviewMesh = async (asset: MapAsset, cell: GridCell) => {
-		if (!scene || !assetStackManager || isUpdatingPreview) return;
-
-		isUpdatingPreview = true;
-
-		try {
-			// 1. Load the new preview mesh FIRST. Disposing before load left a
-			//    ~10ms frame gap that produced a visible flicker during fast
-			//    cursor movement. Load → swap → dispose keeps the previous
-			//    preview on screen until the replacement is fully ready.
-			const uniqueName = `preview_${asset.id}_${Date.now()}`;
-			const mesh = await assetStackManager.loadModel(asset, uniqueName);
-
-			// Scale + rotation
-			let scale = 1;
-			if (asset.type === "character" || asset.type === "enemy") scale = 0.3;
-			else if (asset.type === "furniture" || asset.type === "decoration") scale = 0.4;
-			else scale = 0.5;
-			mesh.scaling.setAll(scale);
-
-			const rotationRad = (rotationAngle() * Math.PI) / 180;
-			if (mesh.rotationQuaternion) {
-				const euler = mesh.rotationQuaternion.toEulerAngles();
-				mesh.rotationQuaternion = null;
-				mesh.rotation.y = euler.y + rotationRad;
-			} else {
-				mesh.rotation.y = rotationRad;
-			}
-
-			const cellNode = cell.getCellNode();
-			if (cellNode) {
-				mesh.parent = cellNode;
-				mesh.position.set(0, 0, 0);
-				mesh.computeWorldMatrix(true);
-				mesh.getChildMeshes(false).forEach((child) => child.computeWorldMatrix(true));
-				// Preview matches the final landing position: floor for ground
-				// tiles, stack-top for everything else. This avoids the "item
-				// jumped into the air at commit" feeling — preview and commit
-				// now agree. The earlier flicker fix keeps the transition from
-				// one cell's stack to another feeling smooth.
-				if (asset.type === "floor") {
-					assetStackManager.positionMeshAtHeight(mesh, 0, 0);
-				} else {
-					assetStackManager.positionMeshOnStack(mesh, cell);
-				}
-			}
-
-			// Translucent material override (alpha per-instance since ModelLoader
-			// clones materials with cloneMaterials=true — templates unaffected).
-			const setAlpha = (m: AbstractMesh) => {
-				if (m.material) {
-					if (m.material instanceof StandardMaterial) {
-						m.material.alpha = 0.3;
-					} else if (m.material instanceof PBRMaterial) {
-						m.material.transparencyMode = 2;
-						m.material.alpha = 0.3;
-					}
-				}
-				m.getChildMeshes().forEach((child) => setAlpha(child));
-			};
-			setAlpha(mesh);
-
-			mesh.isPickable = false;
-			mesh.getChildMeshes().forEach((child) => { child.isPickable = false; });
-			mesh.renderingGroupId = 1;
-			mesh.getChildMeshes().forEach((child) => {
-				if ('renderingGroupId' in child) {
-					(child as any).renderingGroupId = 1;
-				}
-			});
-			mesh.metadata = { isPreview: true };
-			mesh.getChildMeshes().forEach((child) => {
-				child.metadata = { isPreview: true };
-			});
-			mesh.setEnabled(true);
-
-			// 2. Now that the new preview is fully set up, swap & dispose the
-			//    previous one. No frame is ever rendered without a preview.
-			const prev = previewMesh;
-			previewMesh = mesh;
-			if (prev && !prev.isDisposed()) {
-				const prevScene = prev.getScene();
-				prev.getDescendants(false).forEach((node) => {
-					if (node instanceof AbstractMesh || node instanceof Mesh) {
-						try {
-							if (!(node as AbstractMesh).isDisposed()) {
-								prevScene?.removeMesh(node as AbstractMesh);
-								(node as AbstractMesh).dispose();
-							}
-						} catch (e) { /* ignore */ }
-					}
-				});
-				try {
-					prevScene?.removeMesh(prev);
-					prev.dispose();
-				} catch (e) { /* ignore */ }
-			}
-		} catch (error) {
-			console.warn(`Failed to load preview for ${asset.name}:`, error);
-		} finally {
-			isUpdatingPreview = false;
-		}
 	};
 
 	// Place asset on a single cell
