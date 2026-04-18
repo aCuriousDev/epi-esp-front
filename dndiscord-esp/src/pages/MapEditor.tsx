@@ -1703,8 +1703,16 @@ export default function MapEditor() {
 							const cell = gridManager.getCell(gridX, gridZ);
 							if (cell) {
 								await updatePreviewMesh(currentAsset, cell);
+							} else if (previewMesh) {
+								previewMesh.setEnabled(false);
 							}
+						} else if (previewMesh) {
+							previewMesh.setEnabled(false);
 						}
+					} else if (previewMesh) {
+						// Ray missed (empty space, or occluded by a tall placed
+						// asset). Hide rather than leak the last valid position.
+						previewMesh.setEnabled(false);
 					}
 					previewUpdateTimeout = null;
 				}, 50); // Augmenté à 50ms pour réduire les appels multiples
@@ -1725,54 +1733,20 @@ export default function MapEditor() {
 		isUpdatingPreview = true;
 
 		try {
-			// Nettoyer le preview précédent de manière synchrone
-			if (previewMesh) {
-				const meshToClean = previewMesh;
-				previewMesh = null;
-				
-				const allDescendants = meshToClean.getDescendants(false);
-				const meshScene = meshToClean.getScene();
-				
-				if (meshScene) {
-					allDescendants.forEach((node) => {
-						if (node instanceof AbstractMesh || node instanceof Mesh) {
-							try {
-								if (!(node as AbstractMesh).isDisposed()) {
-									meshScene.removeMesh(node as AbstractMesh);
-									(node as AbstractMesh).dispose();
-								}
-							} catch (e) {}
-						}
-					});
-					try {
-						if (!meshToClean.isDisposed()) {
-							meshScene.removeMesh(meshToClean);
-							meshToClean.dispose();
-						}
-					} catch (e) {}
-				}
-			}
-
-			// Attendre un peu pour s'assurer que le cleanup est terminé
-			await new Promise(resolve => setTimeout(resolve, 10));
-
+			// 1. Load the new preview mesh FIRST. Disposing before load left a
+			//    ~10ms frame gap that produced a visible flicker during fast
+			//    cursor movement. Load → swap → dispose keeps the previous
+			//    preview on screen until the replacement is fully ready.
 			const uniqueName = `preview_${asset.id}_${Date.now()}`;
 			const mesh = await assetStackManager.loadModel(asset, uniqueName);
-			
-			// 1. Définir le scale
+
+			// Scale + rotation
 			let scale = 1;
-			if (asset.type === "character" || asset.type === "enemy") {
-				scale = 0.3;
-			} else if (asset.type === "furniture" || asset.type === "decoration") {
-				scale = 0.4;
-			} else if (asset.type === "floor") {
-				scale = 0.5;
-			} else {
-				scale = 0.5;
-			}
+			if (asset.type === "character" || asset.type === "enemy") scale = 0.3;
+			else if (asset.type === "furniture" || asset.type === "decoration") scale = 0.4;
+			else scale = 0.5;
 			mesh.scaling.setAll(scale);
-			
-			// 2. Appliquer la rotation
+
 			const rotationRad = (rotationAngle() * Math.PI) / 180;
 			if (mesh.rotationQuaternion) {
 				const euler = mesh.rotationQuaternion.toEulerAngles();
@@ -1782,36 +1756,28 @@ export default function MapEditor() {
 				mesh.rotation.y = rotationRad;
 			}
 
-			// 3. Parenter à la cellule
 			const cellNode = cell.getCellNode();
 			if (cellNode) {
 				mesh.parent = cellNode;
-				
-				// 4. Initialiser la position au centre de la cellule
 				mesh.position.set(0, 0, 0);
-				
-				// 5. Forcer le recalcul des matrices world après le parenting
 				mesh.computeWorldMatrix(true);
-				mesh.getChildMeshes(false).forEach(child => child.computeWorldMatrix(true));
-				
-				// 6. Positionner correctement en Y
-				if (asset.type === "floor") {
-					// Pour les sols, positionner à y=0
-					assetStackManager.positionMeshAtHeight(mesh, 0, 0);
-				} else {
-					// Positionner au-dessus de la pile existante
-					assetStackManager.positionMeshOnStack(mesh, cell);
-				}
+				mesh.getChildMeshes(false).forEach((child) => child.computeWorldMatrix(true));
+				// Always pin preview to the cell floor. Using positionMeshOnStack
+				// made the preview "teleport" vertically over cells with tall
+				// props already placed. The actual commit in placeAsset() still
+				// stacks correctly — this only affects the visual preview.
+				assetStackManager.positionMeshAtHeight(mesh, 0, 0);
 			}
 
-			// Make preview more transparent (accentuated transparency)
+			// Translucent material override (alpha per-instance since ModelLoader
+			// clones materials with cloneMaterials=true — templates unaffected).
 			const setAlpha = (m: AbstractMesh) => {
 				if (m.material) {
 					if (m.material instanceof StandardMaterial) {
-						m.material.alpha = 0.3; // Plus transparent (était 0.6)
+						m.material.alpha = 0.3;
 					} else if (m.material instanceof PBRMaterial) {
-						m.material.transparencyMode = 2; // ALPHABLEND
-						m.material.alpha = 0.3; // Plus transparent (était 0.6)
+						m.material.transparencyMode = 2;
+						m.material.alpha = 0.3;
 					}
 				}
 				m.getChildMeshes().forEach((child) => setAlpha(child));
@@ -1830,8 +1796,29 @@ export default function MapEditor() {
 			mesh.getChildMeshes().forEach((child) => {
 				child.metadata = { isPreview: true };
 			});
+			mesh.setEnabled(true);
 
+			// 2. Now that the new preview is fully set up, swap & dispose the
+			//    previous one. No frame is ever rendered without a preview.
+			const prev = previewMesh;
 			previewMesh = mesh;
+			if (prev && !prev.isDisposed()) {
+				const prevScene = prev.getScene();
+				prev.getDescendants(false).forEach((node) => {
+					if (node instanceof AbstractMesh || node instanceof Mesh) {
+						try {
+							if (!(node as AbstractMesh).isDisposed()) {
+								prevScene?.removeMesh(node as AbstractMesh);
+								(node as AbstractMesh).dispose();
+							}
+						} catch (e) { /* ignore */ }
+					}
+				});
+				try {
+					prevScene?.removeMesh(prev);
+					prev.dispose();
+				} catch (e) { /* ignore */ }
+			}
 		} catch (error) {
 			console.warn(`Failed to load preview for ${asset.name}:`, error);
 		} finally {
