@@ -6,6 +6,7 @@ import {
   tiles,
   units,
   selectUnit,
+  deselectUnit,
   previewPath,
   moveUnit,
   useAbility,
@@ -581,30 +582,36 @@ export const GameCanvas: Component = () => {
   function handleUnitClick(unitId: string): void {
     const unit = units[unitId];
     if (!unit || !unit.isAlive) return;
-    
+
     const isFreeRoam = getIsFreeRoamMode();
     const isPreparation = gameState.phase === GamePhase.COMBAT_PREPARATION;
-    
+
+    // Click the already-selected unit → deselect. Lets the player back out
+    // of a selection without having to click empty ground, which on mobile
+    // is easy to miss and grabs the camera instead.
+    const alreadySelected = gameState.selectedUnit === unitId;
+
     // Phase de préparation : ne sélectionner que les unités alliées
     if (isPreparation) {
       if (unit.team === Team.PLAYER) {
-        selectUnit(unitId);
+        if (alreadySelected) deselectUnit();
+        else selectUnit(unitId);
       }
       return;
     }
-    
+
     // Free Roam Mode - only allow selecting player units
     if (isFreeRoam) {
       if (unit.team === Team.PLAYER) {
-        selectUnit(unitId);
+        if (alreadySelected) deselectUnit();
+        else selectUnit(unitId);
       }
       return;
     }
-    
-    // Combat Mode - original logic
-    // During player turn
+
+    // Combat Mode
     if (gameState.phase === GamePhase.PLAYER_TURN) {
-      // If we're targeting with an ability and clicked on an enemy
+      // Ability targeting: click an enemy in the targetable set to fire.
       if (gameState.selectedAbility && unit.team === Team.ENEMY) {
         const pos = unit.position;
         const isValidTarget = gameState.targetableTiles.some(
@@ -615,9 +622,9 @@ export const GameCanvas: Component = () => {
           return;
         }
       }
-      
-      // Allow selecting any unit for inspection
-      selectUnit(unitId);
+
+      if (alreadySelected) deselectUnit();
+      else selectUnit(unitId);
     }
   }
   

@@ -65,6 +65,7 @@ export {
 
 export {
   selectUnit,
+  deselectUnit,
   previewPath,
   moveUnit,
 } from './actions/MovementActions';
