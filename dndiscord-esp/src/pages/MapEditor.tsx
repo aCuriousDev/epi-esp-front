@@ -1849,11 +1849,16 @@ export default function MapEditor() {
 				mesh.position.set(0, 0, 0);
 				mesh.computeWorldMatrix(true);
 				mesh.getChildMeshes(false).forEach((child) => child.computeWorldMatrix(true));
-				// Always pin preview to the cell floor. Using positionMeshOnStack
-				// made the preview "teleport" vertically over cells with tall
-				// props already placed. The actual commit in placeAsset() still
-				// stacks correctly — this only affects the visual preview.
-				assetStackManager.positionMeshAtHeight(mesh, 0, 0);
+				// Preview matches the final landing position: floor for ground
+				// tiles, stack-top for everything else. This avoids the "item
+				// jumped into the air at commit" feeling — preview and commit
+				// now agree. The earlier flicker fix keeps the transition from
+				// one cell's stack to another feeling smooth.
+				if (asset.type === "floor") {
+					assetStackManager.positionMeshAtHeight(mesh, 0, 0);
+				} else {
+					assetStackManager.positionMeshOnStack(mesh, cell);
+				}
 			}
 
 			// Translucent material override (alpha per-instance since ModelLoader
@@ -2355,10 +2360,30 @@ export default function MapEditor() {
 					});
 
 				if (deleteMode()) {
-					// If the click lands on a cell that hosts a placed light, nuke
-					// the light first. We look at the cell under the pointer (via
-					// cellPlane_ metadata) rather than the picked mesh because the
-					// light fixture mesh isn't marked isPickable as a cell asset.
+					// Try to detect a placed-light click two ways, most specific
+					// first: direct hit on the fixture mesh (or one of its
+					// descendants), then cellPlane fallback for "click the tile
+					// near the light" UX. Either match short-circuits the normal
+					// asset-delete path so lights are never left orphaned.
+					const rawPick = scene.pick(scene.pointerX, scene.pointerY);
+					if (rawPick?.hit && rawPick.pickedMesh) {
+						const hit = rawPick.pickedMesh;
+						for (const [key, entry] of lightVisuals.entries()) {
+							const fixtureDescendants = entry.mesh.getDescendants(false);
+							const isFixture =
+								hit === entry.mesh ||
+								fixtureDescendants.indexOf(hit as unknown as typeof fixtureDescendants[number]) !== -1 ||
+								hit.name.startsWith(entry.mesh.name);
+							if (isFixture) {
+								const [xs, zs] = key.split(",").map(Number);
+								setPlacedLights((prev) =>
+									prev.filter((l) => !(l.x === xs && l.z === zs)),
+								);
+								despawnLightFixture(xs, zs);
+								return;
+							}
+						}
+					}
 					const cellPick = scene.pick(scene.pointerX, scene.pointerY, (m) =>
 						m.name.startsWith("cellPlane_"),
 					);
