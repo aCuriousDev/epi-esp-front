@@ -230,25 +230,20 @@ const BoardGame: Component = () => {
     clearSession();
   };
 
-  const returnToMenu = () => {
+  const returnToMenu = async () => {
     console.log("[BoardGame] ========== RETURNING TO MENU ==========");
-    console.log("[BoardGame] Clearing engine state...");
+    // Wait for the 3D reset to finish before touching stores so the tiles
+    // effect doesn't race against an in-flight teardown.
+    await clearEngineState();
 
-    // FIRST: Clear the 3D engine (removes all meshes)
-    clearEngineState();
-
-    console.log("[BoardGame] Clearing units, tiles, and game state...");
-    // THEN: Clear all game state stores
     clearUnits();
     clearTiles();
     resetGameState();
 
-    console.log("[BoardGame] All state cleared, navigating to home");
-    // Navigate back to main menu
     navigate("/");
   };
 
-  const restartGame = () => {
+  const restartGame = async () => {
     const currentMode = getCurrentMode();
     const currentMapId = selectedMapId();
     console.log(
@@ -259,22 +254,16 @@ const BoardGame: Component = () => {
       "==========",
     );
 
-    console.log("[BoardGame] Clearing game state stores...");
+    // Explicit, awaited teardown — deterministic ordering replaces the old
+    // setTimeout(100) race window.
+    await clearEngineState();
+
     clearUnits();
     clearTiles();
     resetGameState();
 
-    // Wait a bit for cleanup effects to process, then reinitialize
-    setTimeout(() => {
-      console.log(
-        "[BoardGame] Re-initializing game in",
-        currentMode,
-        "mode with map:",
-        currentMapId || "default",
-      );
-      startGame(currentMode, currentMapId);
-      console.log("[BoardGame] Game restart complete");
-    }, 100);
+    await startGame(currentMode, currentMapId);
+    console.log("[BoardGame] Game restart complete");
   };
 
   const closeDrawers = () => {

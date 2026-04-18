@@ -39,13 +39,11 @@ export const GameCanvas: Component = () => {
     console.log('[GameCanvas] Existing engine:', !!engineInstance);
     console.log('[GameCanvas] Canvas ref:', !!canvasRef);
     
-    // If there's an existing engine, dispose it first to prevent memory leaks and ghost meshes
+    // If there's an existing engine, dispose it. engine.dispose() releases
+    // the entire scene; no need to call clearAll first.
     if (engineInstance) {
       console.log('[GameCanvas] WARNING: Found existing engine! Disposing...');
       try {
-        // First clear all objects
-        engineInstance.clearAll();
-        // Then dispose the engine
         engineInstance.dispose();
         console.log('[GameCanvas] Existing engine disposed');
       } catch (e) {
@@ -127,21 +125,46 @@ export const GameCanvas: Component = () => {
     soundInstance.sfxVolume = soundSettings.sfxEnabled() ? soundSettings.sfxVolume() : 0;
   });
   
-  // Create grid when tiles change (only after engine is ready)
+  // Create grid when tiles change (only after engine is ready).
+  // Guards:
+  //   - skip the initial "stores cleared" firing (tileCount === 0)
+  //   - coalesce rapid re-fires while a createGrid is already in flight, so
+  //     a restart mid-load doesn't leave two parallel grid-build passes
+  //     racing to populate the scene.
+  let createGridInFlight: Promise<void> | null = null;
+  let pendingCreateGrid: { tiles: typeof tiles; mapId: string | null } | null = null;
+
+  const runCreateGrid = async (mapId: string | null) => {
+    if (!engineInstance) return;
+    try {
+      console.log('[GameCanvas] Creating grid (mapId:', mapId, ')');
+      await engineInstance.createGrid(tiles, mapId);
+      console.log('[GameCanvas] Grid creation complete');
+    } catch (error) {
+      console.error('[GameCanvas] Failed to create grid:', error);
+    } finally {
+      createGridInFlight = null;
+      const queued = pendingCreateGrid;
+      pendingCreateGrid = null;
+      if (queued && engineInstance) {
+        createGridInFlight = runCreateGrid(queued.mapId);
+      }
+    }
+  };
+
   createEffect(() => {
     const tileCount = Object.keys(tiles).length;
     const currentMapId = gameState.mapId;
-    console.log('[GameCanvas] Tiles effect triggered - Count:', tileCount, 'Engine ready:', isEngineReady(), 'MapId:', currentMapId);
-    
-    if (engineInstance && isEngineReady() && tileCount > 0) {
-      console.log('[GameCanvas] Creating grid with', tileCount, 'tiles', currentMapId ? `using map: ${currentMapId}` : 'using default map');
-      // Grid creation is now async due to 3D model loading
-      engineInstance.createGrid(tiles, currentMapId).then(() => {
-        console.log('[GameCanvas] Grid creation complete');
-      }).catch(error => {
-        console.error('[GameCanvas] Failed to create grid:', error);
-      });
+
+    if (!engineInstance || !isEngineReady() || tileCount === 0) return;
+
+    if (createGridInFlight) {
+      pendingCreateGrid = { tiles, mapId: currentMapId };
+      console.log('[GameCanvas] createGrid already in flight — queueing latest tiles');
+      return;
     }
+
+    createGridInFlight = runCreateGrid(currentMapId);
   });
   
   // Track previous unit positions for movement animation
@@ -150,18 +173,17 @@ export const GameCanvas: Component = () => {
   // Lock to prevent concurrent effect execution
   let isProcessingUnits = false;
   
-  // Clear engine and previous positions when stores are cleared (for restart)
+  // Defensive reactive fallback: if both stores empty out while the engine
+  // is alive (e.g. logout path), clean the scene. The primary restart flow
+  // calls engine.clearAll() explicitly from BoardGame.restartGame.
   createEffect(() => {
     const unitCount = Object.keys(units).length;
     const tileCount = Object.keys(tiles).length;
-    
-    // If both stores are empty and we had data before, clear the engine's game objects
-    // This handles the "restart" case where the component stays mounted
+
     if (unitCount === 0 && tileCount === 0 && prevPositions.size > 0 && engineInstance) {
-      console.log('[GameCanvas] Stores cleared (restart detected) - clearing engine game objects');
-      engineInstance.clearAll();
+      console.log('[GameCanvas] Stores cleared - clearing engine game objects (fallback)');
+      void engineInstance.clearAll();
       prevPositions.clear();
-      console.log('[GameCanvas] Engine game objects and previous positions cleared');
     }
   });
   
@@ -612,10 +634,10 @@ export function getEngine(): BabylonEngine | null {
   return engineInstance;
 }
 
-export function clearEngineState(): void {
+export async function clearEngineState(): Promise<void> {
   console.log('[GameCanvas] clearEngineState called');
   if (engineInstance) {
-    engineInstance.clearAll();
+    await engineInstance.clearAll();
   }
 }
 
