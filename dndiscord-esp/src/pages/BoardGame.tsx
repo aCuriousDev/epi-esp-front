@@ -1,6 +1,7 @@
 import { Component, Show, onMount, onCleanup, createSignal, createEffect } from "solid-js";
 import { useNavigate, useLocation } from "@solidjs/router";
-import { ArrowLeft, RotateCcw, Check, Hand, MousePointer, Move as MoveIcon, Flag, HelpCircle, X } from "lucide-solid";
+import { ArrowLeft, RotateCcw, Check, Hand, MousePointer, Move as MoveIcon, Flag, HelpCircle, X, Settings as SettingsIcon } from "lucide-solid";
+import { InGameSettingsModal } from "../components/InGameSettingsModal";
 import { getPhaseIcon } from "../components/common/icons";
 import {
   GameCanvas,
@@ -397,6 +398,7 @@ const BoardGame: Component = () => {
   });
 
   const [endTurnPending, setEndTurnPending] = createSignal(false);
+  const [settingsOpen, setSettingsOpen] = createSignal(false);
   let endTurnPendingTimer: number | null = null;
   const handleEndTurnClick = () => {
     if (!canEndPlayerTurn()) return;
@@ -611,13 +613,21 @@ const BoardGame: Component = () => {
       <div class="w-full h-screen-dynamic flex flex-col bg-game-darker overflow-hidden pb-safe-bottom">
         {/* Header */}
         <header class="h-14 shrink-0 bg-gradient-to-r from-brandStart/90 to-brandEnd/90 backdrop-blur-sm border-b border-white/10 flex items-center justify-between px-3 sm:px-4 pt-safe-top">
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => returnToMenu()}
               class="flex items-center justify-center w-9 h-9 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 transition-colors"
               aria-label="Retour au menu"
             >
               <ArrowLeft class="w-4 h-4 text-white" />
+            </button>
+            <button
+              onClick={() => setSettingsOpen(true)}
+              class="flex items-center justify-center w-9 h-9 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 transition-colors"
+              aria-label="Paramètres"
+              title="Paramètres rapides"
+            >
+              <SettingsIcon class="w-4 h-4 text-white" />
             </button>
             <h1 class="font-display text-white text-lg sm:text-xl tracking-wide">
               DnDiscord
@@ -932,6 +942,12 @@ const BoardGame: Component = () => {
 
         {/* Game Over Modal */}
         <GameOverScreen />
+
+        {/* Quick settings overlay — opens over the canvas without
+            unmounting the engine. Game state persists. */}
+        <Show when={settingsOpen()}>
+          <InGameSettingsModal onClose={() => setSettingsOpen(false)} />
+        </Show>
       </div>
     </Show>
   );
