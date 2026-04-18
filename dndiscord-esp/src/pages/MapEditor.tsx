@@ -29,6 +29,10 @@ import {
 	ASSET_CATEGORIES,
 } from "../components/map-editor/PaletteData";
 import { ASSET_FAVORITE_PATHS } from "../config/assetFavorites";
+import {
+	filterCategories,
+	pickFavoritesCategory,
+} from "../components/map-editor/AssetPaletteFilter";
 import "@babylonjs/loaders";
 
 /**
@@ -730,6 +734,15 @@ export default function MapEditor() {
 	const [dungeonData, setDungeonData] = createSignal<DungeonData | null>(null);
 	const [selectedAsset, setSelectedAsset] = createSignal<MapAsset | null>(null);
 	const [expandedCategories, setExpandedCategories] = createSignal<Set<string>>(new Set());
+	const [activePaletteTab, setActivePaletteTab] = createSignal<"favoris" | "tous">("favoris");
+	const [searchQuery, setSearchQuery] = createSignal("");
+
+	const visibleCategories = () => {
+		const base = activePaletteTab() === "favoris"
+			? [pickFavoritesCategory(ASSET_CATEGORIES, ASSET_FAVORITE_PATHS)]
+			: ASSET_CATEGORIES;
+		return filterCategories(base, searchQuery());
+	};
 	const [rotationAngle, setRotationAngle] = createSignal(0);
 	const [deleteMode, setDeleteMode] = createSignal(false);
 	const [editMode, setEditMode] = createSignal(false);
@@ -2652,10 +2665,51 @@ export default function MapEditor() {
 
 				<div class="mb-4">
 					<label class="block text-sm text-slate-300 mb-2">Sélectionner un asset</label>
+
+					{/* Tab switcher */}
+					<div class="flex gap-1 bg-black/40 rounded-lg p-1 mb-2">
+						<button
+							type="button"
+							onClick={() => setActivePaletteTab("favoris")}
+							class={`flex-1 px-2 py-1 rounded-md text-xs transition-colors ${
+								activePaletteTab() === "favoris"
+									? "bg-gradient-to-r from-brandStart to-brandEnd text-white"
+									: "text-slate-300 hover:bg-white/10"
+							}`}
+						>
+							Favoris
+						</button>
+						<button
+							type="button"
+							onClick={() => setActivePaletteTab("tous")}
+							class={`flex-1 px-2 py-1 rounded-md text-xs transition-colors ${
+								activePaletteTab() === "tous"
+									? "bg-gradient-to-r from-brandStart to-brandEnd text-white"
+									: "text-slate-300 hover:bg-white/10"
+							}`}
+						>
+							Tous
+						</button>
+					</div>
+
+					{/* Search input */}
+					<input
+						type="text"
+						placeholder="Chercher un asset..."
+						value={searchQuery()}
+						onInput={(e) => setSearchQuery(e.currentTarget.value)}
+						class="w-full px-3 py-2 mb-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:border-brandStart transition"
+					/>
+
 					<div class="space-y-2">
-						<For each={ASSET_CATEGORIES}>
+						<For each={visibleCategories()}>
 							{(category) => {
-								const isExpanded = () => expandedCategories().has(category.id);
+								// Auto-expand when in Favoris tab or when searching so the
+								// user doesn't have to click every accordion header.
+								const isExpanded = () =>
+									activePaletteTab() === "favoris" ||
+									searchQuery().length > 0 ||
+									expandedCategories().has(category.id);
 								const toggleCategory = () => {
 									const newSet = new Set(expandedCategories());
 									if (newSet.has(category.id)) {
@@ -2672,7 +2726,10 @@ export default function MapEditor() {
 											class="w-full flex items-center justify-between px-3 py-2 bg-black/30 hover:bg-black/40 text-slate-200 transition text-sm font-medium"
 											onClick={toggleCategory}
 										>
-											<span>{category.name}</span>
+											<span>
+												{category.name}{" "}
+												<span class="text-slate-500">({category.assets.length})</span>
+											</span>
 											<Show when={isExpanded()} fallback={<ChevronRight class="h-4 w-4" />}>
 												<ChevronDown class="h-4 w-4" />
 											</Show>
