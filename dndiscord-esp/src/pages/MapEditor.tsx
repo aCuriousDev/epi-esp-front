@@ -2409,8 +2409,34 @@ export default function MapEditor() {
 			}
 		});
 
+		// Placement fires on POINTERTAP (pointer-up without appreciable move)
+		// rather than POINTERDOWN. Benefits:
+		//  - Camera orbit drags no longer drop an asset mid-rotation.
+		//  - Touchpad / mobile users can slide to aim before releasing.
+		//  - Rectangle zone-selection is the only mode that needs immediate
+		//    press feedback, so it keeps a dedicated POINTERDOWN branch
+		//    below.
 		scene.onPointerObservable.add((pointerInfo) => {
-			if (pointerInfo.type === PointerEventTypes.POINTERDOWN && scene) {
+			// Zone selection: start on POINTERDOWN so the rectangle grows
+			// while the user drags. Ending handled by the POINTERUP observer
+			// registered elsewhere in setupClickHandler.
+			if (
+				pointerInfo.type === PointerEventTypes.POINTERDOWN &&
+				scene &&
+				zoneSelectionMode() &&
+				(selectedAsset() || editingAsset()?.asset)
+			) {
+				const coords = getGridCoordsFromPointer();
+				if (coords) {
+					setSelectionStart(coords);
+					setSelectionEnd(coords);
+					setIsSelecting(true);
+					updateSelectionOverlay();
+				}
+				return;
+			}
+
+			if (pointerInfo.type === PointerEventTypes.POINTERTAP && scene) {
 				// Light placement mode — click a cell to drop a light.
 				if (lightMode()) {
 					const pick = scene.pick(scene.pointerX, scene.pointerY, (m) =>
@@ -2437,15 +2463,9 @@ export default function MapEditor() {
 					return;
 				}
 
-				// Zone selection mode
-				if (zoneSelectionMode() && (selectedAsset() || editingAsset()?.asset)) {
-					const coords = getGridCoordsFromPointer();
-					if (coords) {
-						setSelectionStart(coords);
-						setSelectionEnd(coords);
-						setIsSelecting(true);
-						updateSelectionOverlay();
-					}
+				// Zone selection start is handled on POINTERDOWN above; swallow
+				// the tap so a release doesn't also try to place an asset.
+				if (zoneSelectionMode()) {
 					return;
 				}
 
