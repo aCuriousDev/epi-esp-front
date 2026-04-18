@@ -8,6 +8,9 @@ import {
   Texture,
   Observer,
   Nullable,
+  AbstractMesh,
+  StandardMaterial,
+  PBRMaterial,
 } from '@babylonjs/core';
 import type { ModelLoader } from '../ModelLoader';
 import type { SceneResetManager } from '../SceneResetManager';
@@ -72,6 +75,19 @@ export class LightManager {
       );
       mesh.position.copyFrom(position);
       mesh.scaling.setAll(0.5);
+      // Emissive tint — fixtures look lit even when the PointLight is
+      // occluded. Picked up by the scene's GlowLayer for bloom.
+      const tint = (m: AbstractMesh) => {
+        const mat = m.material;
+        if (mat instanceof StandardMaterial) {
+          mat.emissiveColor = preset.fixtureEmissive.clone();
+        } else if (mat instanceof PBRMaterial) {
+          mat.emissiveColor = preset.fixtureEmissive.clone();
+          mat.emissiveIntensity = 1.5;
+        }
+        m.getChildMeshes().forEach(tint);
+      };
+      tint(mesh);
     } catch (error) {
       console.warn(`[LightManager] Mesh load failed for ${preset.meshPath}:`, error);
     }
@@ -89,6 +105,7 @@ export class LightManager {
     pointLight.diffuse = color;
     pointLight.specular = color;
     pointLight.intensity = intensity;
+    pointLight.radius = preset.radius;
     pointLight.range = preset.range;
     this.sceneReset.trackLight(pointLight);
 

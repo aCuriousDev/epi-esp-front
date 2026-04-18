@@ -797,7 +797,23 @@ export default function MapEditor() {
 			light.diffuse = color;
 			light.specular = color;
 			light.intensity = data.intensityOverride ?? preset.intensity;
+			light.radius = preset.radius;
 			light.range = preset.range;
+
+			// Paint the fixture mesh emissive so it reads as "lit" even if
+			// the PointLight is occluded. GlowLayer picks this up for bloom.
+			const tintMesh = (m: AbstractMesh) => {
+				const mat = m.material;
+				if (mat instanceof StandardMaterial) {
+					mat.emissiveColor = preset.fixtureEmissive.clone();
+				} else if (mat instanceof PBRMaterial) {
+					mat.emissiveColor = preset.fixtureEmissive.clone();
+					mat.emissiveIntensity = 1.5;
+				}
+				m.getChildMeshes().forEach(tintMesh);
+			};
+			tintMesh(mesh);
+
 			lightVisuals.set(key, { mesh, light });
 		} catch (error) {
 			console.warn(`[MapEditor] Failed to spawn light ${preset.id}:`, error);
