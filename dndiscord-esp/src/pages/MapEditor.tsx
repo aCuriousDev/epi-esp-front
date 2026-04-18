@@ -1946,12 +1946,28 @@ export default function MapEditor() {
 			if (!scene || !gridManager) return;
 
 			// Modes that MUST NOT show a placement ghost.
-			if (deleteMode() || collisionPreviewMode() || zoneSelectionMode() || lightMode()) {
+			if (deleteMode() || collisionPreviewMode() || zoneSelectionMode()) {
 				hidePreview();
 				return;
 			}
 
-			const currentAsset = selectedAsset() || editingAsset()?.asset;
+			// In light mode, resolve the "current asset" to a synthetic
+			// MapAsset pointing at the selected preset's fixture mesh —
+			// lets the user see a ghost of the torch/lantern/orb where it
+			// will drop on release, same as any normal asset.
+			const lightPresetAsset: MapAsset | null = lightMode()
+				? {
+					id: `light_preset_${selectedLightPreset()}`,
+					name: LIGHT_PRESETS[selectedLightPreset()].label,
+					path: LIGHT_PRESETS[selectedLightPreset()].meshPath,
+					// "block" keeps the preview at 0.5 scale to match
+					// spawnLightFixture's final mesh scaling.
+					type: "block",
+				}
+				: null;
+
+			const currentAsset: MapAsset | null =
+				lightPresetAsset ?? selectedAsset() ?? editingAsset()?.asset ?? null;
 			if (!currentAsset) {
 				hidePreview();
 				return;
@@ -2469,13 +2485,16 @@ export default function MapEditor() {
 					return;
 				}
 
-				const isDeleteOrEdit = deleteMode() || editMode();
-				
+				// In edit mode we need the cellPlane filter once we're already
+				// holding an asset (placement tap). Only use the delete/edit
+				// filter for the pick-up tap in edit mode and for delete.
+				const isDeleteOrEdit = deleteMode() || (editMode() && !editingAsset());
+
 				// Choisir le filtre selon le mode
 				const pickInfo = isDeleteOrEdit
 					? scene.pick(scene.pointerX, scene.pointerY, deleteEditPickFilter)
 					: scene.pick(scene.pointerX, scene.pointerY, (mesh) => {
-						if (mesh.name.startsWith("preview_") || 
+						if (mesh.name.startsWith("preview_") ||
 						    mesh.name.startsWith("collision_") ||
 						    mesh.metadata?.isPreview) return false;
 						if (mesh.name.startsWith("cellPlane_")) return true;
@@ -2678,36 +2697,35 @@ export default function MapEditor() {
 				}
 
 				if (editMode()) {
-					// Edit mode: utiliser le mesh survolé (déjà identifié par le hover handler)
-					// ou fallback sur le picking direct
-					const rootMesh = hoveredMesh 
-						|| (pickInfo?.hit && pickInfo.pickedMesh ? findRootAssetMesh(pickInfo.pickedMesh) : null);
-					if (rootMesh && gridManager) {
-						
-						// Nettoyer la surbrillance
-						clearHighlight();
-						
-						gridManager.getAllCells().forEach((cell) => {
-							const stackedAssets = cell.getStackedAssets();
-							stackedAssets.forEach((stackedAsset) => {
-								if (stackedAsset.mesh === rootMesh) {
-									setEditingAsset({ asset: stackedAsset.asset, cell, mesh: stackedAsset.mesh });
-									setSelectedAsset(stackedAsset.asset);
-									setRotationAngle(0);
-									// Nettoyer l'enregistrement multi-cases
-									gridManager!.unregisterAsset(stackedAsset.mesh.name);
-									cell.removeAsset(stackedAsset.mesh);
-									stackedAsset.mesh.dispose();
-								}
+					// Edit mode is two taps: first tap picks up an existing
+					// asset into editingAsset; second tap places it on a new
+					// cell. If we already hold one, skip the pick-up branch
+					// and fall through to the normal placement logic below.
+					if (!editingAsset()) {
+						const rootMesh = hoveredMesh
+							|| (pickInfo?.hit && pickInfo.pickedMesh ? findRootAssetMesh(pickInfo.pickedMesh) : null);
+						if (rootMesh && gridManager) {
+							clearHighlight();
+							gridManager.getAllCells().forEach((cell) => {
+								const stackedAssets = cell.getStackedAssets();
+								stackedAssets.forEach((stackedAsset) => {
+									if (stackedAsset.mesh === rootMesh) {
+										setEditingAsset({ asset: stackedAsset.asset, cell, mesh: stackedAsset.mesh });
+										setSelectedAsset(stackedAsset.asset);
+										setRotationAngle(0);
+										gridManager!.unregisterAsset(stackedAsset.mesh.name);
+										cell.removeAsset(stackedAsset.mesh);
+										stackedAsset.mesh.dispose();
+									}
+								});
 							});
-						});
-						
-						// Update collision overlays if enabled
-						if (showCollisions()) {
-							updateCollisionOverlays();
+							if (showCollisions()) {
+								updateCollisionOverlays();
+							}
 						}
+						return;
 					}
-					return;
+					// editingAsset() is set → let placement run.
 				}
 
 				// Normal placement mode (single cell)
@@ -3018,13 +3036,17 @@ export default function MapEditor() {
 																	: "bg-black/30 border-white/10 text-slate-200 hover:bg-black/40"
 															}`}
 															onClick={() => {
+																// Click-again-to-deselect: clicking the same palette
+																// asset a second time clears the selection and the
+																// preview ghost.
+																const already = selectedAsset()?.id === asset.id;
 																cleanupPreviewMesh();
-																setSelectedAsset(asset);
 																setEditingAsset(null);
 																setEditMode(false);
 																setDeleteMode(false);
 																setZoneSelectionMode(false);
 																setLightMode(false);
+																setSelectedAsset(already ? null : asset);
 															}}
 														>
 															{asset.name}
