@@ -808,14 +808,16 @@ export default function MapEditor() {
 			light.range = preset.range;
 
 			// Paint the fixture mesh emissive so it reads as "lit" even if
-			// the PointLight is occluded. GlowLayer picks this up for bloom.
+			// the PointLight is occluded. GlowLayer picks this up for a
+			// subtle halo — kept modest so the fixture silhouette stays
+			// readable rather than blowing out into a white blob.
 			const tintMesh = (m: AbstractMesh) => {
 				const mat = m.material;
 				if (mat instanceof StandardMaterial) {
 					mat.emissiveColor = preset.fixtureEmissive.clone();
 				} else if (mat instanceof PBRMaterial) {
 					mat.emissiveColor = preset.fixtureEmissive.clone();
-					mat.emissiveIntensity = 1.5;
+					mat.emissiveIntensity = 0.6;
 				}
 				m.getChildMeshes().forEach(tintMesh);
 			};
@@ -1233,7 +1235,7 @@ export default function MapEditor() {
 		// GlowLayer lets emissive materials + flame particles bloom, which is
 		// the main reason torches look "lit" rather than pinprick dots.
 		editorGlowLayer = new GlowLayer("editor_glow", scene);
-		editorGlowLayer.intensity = 0.8;
+		editorGlowLayer.intensity = 0.35;
 
 		// Sun shadow map — walls/props cast soft shadows on the floor. The
 		// torch PointLights intentionally don't cast shadows (omnidirectional
@@ -2144,12 +2146,30 @@ export default function MapEditor() {
 			// 6. Calculer toutes les cellules affectées par cet asset (basé sur le bounding box)
 			const bounds = assetStackManager.getCombinedWorldBoundsFull(mesh);
 			if (bounds) {
-				// Convertir le bounding box world en cellules de grille
+				// Convert the world-space bounds to grid-cell indices. Two
+				// subtle traps the old math fell into:
+				//   1. Using `Math.floor` on maxX/maxZ claimed the NEXT cell
+				//      whenever the bounds ended exactly on a cell boundary
+				//      (which is the common case for 1x1 assets, since the
+				//      bounding box is tight to the mesh). That caused the
+				//      adjacent cell to think a block hovered above it and
+				//      the next placement went "in the air".
+				//   2. Floating-point noise at the boundary (e.g. 0.0001 past
+				//      the edge) had the same effect.
+				// Using ceil-minus-one + a small epsilon so an asset only
+				// claims cells whose INTERIOR it actually overlaps.
 				const halfSize = (GRID_SIZE * TILE_SIZE) / 2;
-				const minGridX = Math.max(0, Math.floor((bounds.minX + halfSize) / TILE_SIZE));
-				const maxGridX = Math.min(GRID_SIZE - 1, Math.floor((bounds.maxX + halfSize) / TILE_SIZE));
-				const minGridZ = Math.max(0, Math.floor((bounds.minZ + halfSize) / TILE_SIZE));
-				const maxGridZ = Math.min(GRID_SIZE - 1, Math.floor((bounds.maxZ + halfSize) / TILE_SIZE));
+				const epsilon = 0.05;
+				const minGridX = Math.max(0, Math.floor((bounds.minX + epsilon + halfSize) / TILE_SIZE));
+				const maxGridX = Math.min(
+					GRID_SIZE - 1,
+					Math.ceil((bounds.maxX - epsilon + halfSize) / TILE_SIZE) - 1,
+				);
+				const minGridZ = Math.max(0, Math.floor((bounds.minZ + epsilon + halfSize) / TILE_SIZE));
+				const maxGridZ = Math.min(
+					GRID_SIZE - 1,
+					Math.ceil((bounds.maxZ - epsilon + halfSize) / TILE_SIZE) - 1,
+				);
 
 				// Enregistrer toutes les cellules affectées
 				const affectedCellKeys: string[] = [];

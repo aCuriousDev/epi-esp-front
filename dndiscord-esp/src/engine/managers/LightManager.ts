@@ -76,14 +76,15 @@ export class LightManager {
       mesh.position.copyFrom(position);
       mesh.scaling.setAll(0.5);
       // Emissive tint — fixtures look lit even when the PointLight is
-      // occluded. Picked up by the scene's GlowLayer for bloom.
+      // occluded. Modest intensity keeps the silhouette readable rather
+      // than blowing the fixture out into a white blob under glow/bloom.
       const tint = (m: AbstractMesh) => {
         const mat = m.material;
         if (mat instanceof StandardMaterial) {
           mat.emissiveColor = preset.fixtureEmissive.clone();
         } else if (mat instanceof PBRMaterial) {
           mat.emissiveColor = preset.fixtureEmissive.clone();
-          mat.emissiveIntensity = 1.5;
+          mat.emissiveIntensity = 0.6;
         }
         m.getChildMeshes().forEach(tint);
       };
