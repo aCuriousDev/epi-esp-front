@@ -3,11 +3,15 @@ import {
   Vector3,
   Animation,
   TransformNode,
+  Color3,
+  LinesMesh,
+  MeshBuilder,
 } from '@babylonjs/core';
 import '@babylonjs/core/Debug/debugLayer';
 import '@babylonjs/inspector';
 import { UnitRenderer } from '../renderers/UnitRenderer';
-import { gameState } from '../../game';
+import { gameState, tiles, gridToWorld, TILE_SIZE } from '../../game';
+import { TileType } from '../../types';
 
 /**
  * DebugController - Manages debug tools and controls
@@ -15,13 +19,89 @@ import { gameState } from '../../game';
 export class DebugController {
   private scene: Scene;
   private unitRenderer: UnitRenderer;
+  private collisionLinesMesh: LinesMesh | null = null;
 
   constructor(scene: Scene, unitRenderer: UnitRenderer) {
     this.scene = scene;
     this.unitRenderer = unitRenderer;
-    
+
     this.logDebugInstructions();
     this.setupDebugControls();
+  }
+
+  /**
+   * Walk scene.materials and flip the `wireframe` flag. Stored so we know
+   * which materials to revert when turning the toggle off (materials added
+   * after enabling will also switch — the simple implementation applies to
+   * everything currently in the scene).
+   */
+  public setWireframe(on: boolean): void {
+    this.scene.materials.forEach((mat) => {
+      (mat as unknown as { wireframe: boolean }).wireframe = on;
+    });
+  }
+
+  public setBoundingBoxes(on: boolean): void {
+    this.scene.forceShowBoundingBoxes = on;
+  }
+
+  /**
+   * Draw a green line overlay at each wall tile. A single LineSystem mesh
+   * keeps the overlay cheap (one draw call) even on large maps.
+   */
+  public setCollisionCells(on: boolean): void {
+    // Always clear first to avoid stale lines from the previous grid.
+    if (this.collisionLinesMesh) {
+      this.collisionLinesMesh.dispose();
+      this.collisionLinesMesh = null;
+    }
+    if (!on) return;
+
+    const segments: Vector3[][] = [];
+    const half = TILE_SIZE / 2;
+    const y = 0.02;
+    Object.values(tiles).forEach((tile) => {
+      if (tile.type !== TileType.WALL) return;
+      const world = gridToWorld(tile.position);
+      const x1 = world.x - half;
+      const x2 = world.x + half;
+      const z1 = world.z - half;
+      const z2 = world.z + half;
+      segments.push([
+        new Vector3(x1, y, z1),
+        new Vector3(x2, y, z1),
+        new Vector3(x2, y, z2),
+        new Vector3(x1, y, z2),
+        new Vector3(x1, y, z1),
+      ]);
+    });
+
+    if (segments.length === 0) return;
+
+    const lines = MeshBuilder.CreateLineSystem(
+      'debug_collision_cells',
+      { lines: segments, updatable: false },
+      this.scene
+    );
+    lines.color = new Color3(0.1, 1, 0.3);
+    lines.isPickable = false;
+    this.collisionLinesMesh = lines;
+  }
+
+  /**
+   * Explicit show/hide for the Babylon Inspector so UI code can trigger it
+   * without simulating the F9 keystroke.
+   */
+  public showInspector(): void {
+    if (!this.scene.debugLayer.isVisible()) {
+      this.scene.debugLayer.show({ embedMode: true });
+    }
+  }
+
+  public hideInspector(): void {
+    if (this.scene.debugLayer.isVisible()) {
+      this.scene.debugLayer.hide();
+    }
   }
 
   /**
