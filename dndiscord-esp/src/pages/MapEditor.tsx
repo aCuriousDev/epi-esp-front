@@ -33,6 +33,11 @@ import {
 	filterCategories,
 	pickFavoritesCategory,
 } from "../components/map-editor/AssetPaletteFilter";
+import {
+	LIGHT_PRESETS,
+	LIGHT_PRESET_IDS,
+	type LightPresetId,
+} from "../config/lightPresets";
 import "@babylonjs/loaders";
 
 /**
@@ -752,6 +757,8 @@ export default function MapEditor() {
 	const [collisionPreviewMode, setCollisionPreviewMode] = createSignal(false);
 	const [selectedCollisionAsset, setSelectedCollisionAsset] = createSignal<{ asset: MapAsset; cell: GridCell; mesh: AbstractMesh } | null>(null);
 	const [zoneSelectionMode, setZoneSelectionMode] = createSignal(false);
+	const [lightMode, setLightMode] = createSignal(false);
+	const [selectedLightPreset, setSelectedLightPreset] = createSignal<LightPresetId>("torch");
 	const [selectionStart, setSelectionStart] = createSignal<{ x: number; z: number } | null>(null);
 	const [selectionEnd, setSelectionEnd] = createSignal<{ x: number; z: number } | null>(null);
 	const [isSelecting, setIsSelecting] = createSignal(false);
@@ -2751,6 +2758,7 @@ export default function MapEditor() {
 																setEditMode(false);
 																setDeleteMode(false);
 																setZoneSelectionMode(false);
+																setLightMode(false);
 															}}
 														>
 															{asset.name}
@@ -2831,6 +2839,7 @@ export default function MapEditor() {
 								setDeleteMode(false);
 								setZoneSelectionMode(false);
 								setCollisionPreviewMode(false);
+								setLightMode(false);
 								setSelectedAsset(null);
 								setEditingAsset(null);
 							} else {
@@ -2868,6 +2877,7 @@ export default function MapEditor() {
 								setEditMode(false);
 								setZoneSelectionMode(false);
 								setCollisionPreviewMode(false);
+								setLightMode(false);
 								setSelectedAsset(null);
 								setEditingAsset(null);
 							}
@@ -2898,6 +2908,7 @@ export default function MapEditor() {
 								setDeleteMode(false);
 								setEditMode(false);
 								setCollisionPreviewMode(false);
+								setLightMode(false);
 							} else {
 								setIsSelecting(false);
 								setSelectionStart(null);
@@ -2932,6 +2943,7 @@ export default function MapEditor() {
 								setDeleteMode(false);
 								setEditMode(false);
 								setZoneSelectionMode(false);
+								setLightMode(false);
 								setSelectedAsset(null);
 								setEditingAsset(null);
 								setShowCollisions(false);
@@ -2957,6 +2969,54 @@ export default function MapEditor() {
 							<p><span class="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" /> Rouge = Zone bloquée (non walkable)</p>
 						</div>
 					)}
+				</div>
+
+				{/* Light Placement Mode */}
+				<div class="mb-4">
+					<button
+						class={`w-full px-4 py-2 rounded-lg text-sm transition ${
+							lightMode()
+								? "bg-orange-500/90 hover:bg-orange-500 text-white"
+								: "bg-black/40 hover:bg-black/60 border border-white/10 text-slate-200"
+						}`}
+						onClick={() => {
+							const newMode = !lightMode();
+							setLightMode(newMode);
+							cleanupPreviewMesh();
+							if (newMode) {
+								setDeleteMode(false);
+								setEditMode(false);
+								setZoneSelectionMode(false);
+								setCollisionPreviewMode(false);
+								setSelectedAsset(null);
+								setEditingAsset(null);
+							}
+						}}
+					>
+						{lightMode() ? "💡 Mode Lumière Actif" : "💡 Placer une lumière"}
+					</button>
+					<Show when={lightMode()}>
+						<div class="mt-2 grid grid-cols-3 gap-1 bg-black/40 rounded-lg p-1">
+							<For each={LIGHT_PRESET_IDS}>
+								{(id) => (
+									<button
+										type="button"
+										onClick={() => setSelectedLightPreset(id)}
+										class={`px-2 py-1.5 rounded-md text-xs transition-colors ${
+											selectedLightPreset() === id
+												? "bg-gradient-to-r from-amber-500 to-orange-500 text-white"
+												: "text-slate-200 hover:bg-white/10"
+										}`}
+									>
+										{LIGHT_PRESETS[id].label}
+									</button>
+								)}
+							</For>
+						</div>
+						<p class="mt-2 text-xs text-slate-400">
+							Cliquez sur une cellule pour y déposer la lumière. Utilisez le mode suppression pour retirer une lumière existante.
+						</p>
+					</Show>
 				</div>
 
 				<div class="flex gap-2">
