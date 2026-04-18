@@ -1,7 +1,7 @@
 import { Component, onMount, onCleanup, createSignal, For, Show, createEffect } from "solid-js";
 import { A, useParams, useSearchParams, useNavigate } from "@solidjs/router";
 import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-solid";
-import { saveMap, loadMap, generateMapId, loadDungeon, saveDungeon, type SavedMapData, type SavedCellData, type SavedAssetData, type DungeonData } from "../services/mapStorage";
+import { saveMap, loadMap, generateMapId, loadDungeon, saveDungeon, type SavedMapData, type SavedCellData, type SavedAssetData, type SavedLightData, type DungeonData } from "../services/mapStorage";
 import {
 	Engine,
 	Scene,
@@ -18,6 +18,7 @@ import {
 	MeshBuilder,
 	TransformNode,
 	BoundingInfo,
+	PointLight,
 } from "@babylonjs/core";
 import { ModelLoader } from "../engine/ModelLoader";
 import { gridToWorld, GRID_SIZE, TILE_SIZE } from "../game";
@@ -759,6 +760,60 @@ export default function MapEditor() {
 	const [zoneSelectionMode, setZoneSelectionMode] = createSignal(false);
 	const [lightMode, setLightMode] = createSignal(false);
 	const [selectedLightPreset, setSelectedLightPreset] = createSignal<LightPresetId>("torch");
+	const [placedLights, setPlacedLights] = createSignal<SavedLightData[]>([]);
+
+	// Babylon objects mirroring placedLights, keyed by "x,z". Kept outside the
+	// signal so disposal doesn't force a reactive pass on every mutation.
+	const lightVisuals = new Map<string, { mesh: AbstractMesh; light: PointLight }>();
+	const lightKey = (x: number, z: number) => `${x},${z}`;
+
+	const spawnLightFixture = async (data: SavedLightData): Promise<void> => {
+		if (!scene || !modelLoader) return;
+		const preset = LIGHT_PRESETS[data.presetId];
+		if (!preset) return;
+		despawnLightFixture(data.x, data.z);
+
+		const world = gridToWorld({ x: data.x, z: data.z });
+		const key = lightKey(data.x, data.z);
+		const uniqueName = `editor_light_${data.presetId}_${key}_${Date.now()}`;
+		try {
+			const mesh = await modelLoader.loadModel(preset.meshPath, uniqueName);
+			mesh.position.set(world.x, data.y ?? 0, world.z);
+			mesh.scaling.setAll(0.5);
+
+			const light = new PointLight(
+				`editor_pl_${uniqueName}`,
+				new Vector3(world.x, (data.y ?? 0) + preset.lightYOffset, world.z),
+				scene,
+			);
+			const color = data.colorOverride
+				? new Color3(data.colorOverride[0], data.colorOverride[1], data.colorOverride[2])
+				: preset.lightColor;
+			light.diffuse = color;
+			light.specular = color;
+			light.intensity = data.intensityOverride ?? preset.intensity;
+			light.range = preset.range;
+			lightVisuals.set(key, { mesh, light });
+		} catch (error) {
+			console.warn(`[MapEditor] Failed to spawn light ${preset.id}:`, error);
+		}
+	};
+
+	const despawnLightFixture = (x: number, z: number): void => {
+		const entry = lightVisuals.get(lightKey(x, z));
+		if (!entry) return;
+		if (!entry.mesh.isDisposed()) entry.mesh.dispose(false, true);
+		entry.light.dispose();
+		lightVisuals.delete(lightKey(x, z));
+	};
+
+	const clearAllLightFixtures = (): void => {
+		lightVisuals.forEach((e) => {
+			if (!e.mesh.isDisposed()) e.mesh.dispose(false, true);
+			e.light.dispose();
+		});
+		lightVisuals.clear();
+	};
 	const [selectionStart, setSelectionStart] = createSignal<{ x: number; z: number } | null>(null);
 	const [selectionEnd, setSelectionEnd] = createSignal<{ x: number; z: number } | null>(null);
 	const [isSelecting, setIsSelecting] = createSignal(false);
@@ -1004,6 +1059,14 @@ export default function MapEditor() {
 					}
 				}
 			}
+			// Restore placed lights (if any). loadMap already ran migrateMap, so
+			// `.lights` is either an array or undefined — never the old shape.
+			const savedLights = savedData.lights ?? [];
+			setPlacedLights(savedLights);
+			clearAllLightFixtures();
+			for (const l of savedLights) {
+				await spawnLightFixture(l);
+			}
 		} catch (error) {
 			console.error("Error loading map:", error);
 		} finally {
@@ -1031,6 +1094,7 @@ export default function MapEditor() {
 			});
 
 			const existingMap = loadMap(mapId()!);
+			const lightsList = placedLights();
 			const mapData: SavedMapData = {
 				id: mapId()!,
 				name,
@@ -1041,6 +1105,8 @@ export default function MapEditor() {
 				mapType: existingMap?.mapType,
 				dungeonId: existingMap?.dungeonId,
 				roomIndex: existingMap?.roomIndex,
+				lights: lightsList.length > 0 ? lightsList : undefined,
+				version: 2,
 			};
 
 			saveMap(mapData);
@@ -1222,6 +1288,7 @@ export default function MapEditor() {
 	onCleanup(() => {
 		cleanupPreviewMesh();
 		clearCollisionPreview();
+		clearAllLightFixtures();
 		// Clear selection overlays
 		selectionOverlays.forEach((overlay) => {
 			if (!overlay.isDisposed()) {
@@ -2236,6 +2303,31 @@ export default function MapEditor() {
 
 		scene.onPointerObservable.add((pointerInfo) => {
 			if (pointerInfo.type === PointerEventTypes.POINTERDOWN && scene) {
+				// Light placement mode — click a cell to drop a light.
+				if (lightMode()) {
+					const pick = scene.pick(scene.pointerX, scene.pointerY, (m) =>
+						m.name.startsWith("cellPlane_"),
+					);
+					if (!pick?.hit || !pick.pickedMesh || !pick.pickedPoint) return;
+					const worldX = pick.pickedPoint.x;
+					const worldZ = pick.pickedPoint.z;
+					const gridX = Math.floor((worldX / TILE_SIZE) + (GRID_SIZE / 2) - 0.5);
+					const gridZ = Math.floor((worldZ / TILE_SIZE) + (GRID_SIZE / 2) - 0.5);
+					if (gridX < 0 || gridX >= GRID_SIZE || gridZ < 0 || gridZ >= GRID_SIZE) return;
+
+					const newLight: SavedLightData = {
+						presetId: selectedLightPreset(),
+						x: gridX,
+						z: gridZ,
+					};
+					setPlacedLights((prev) => {
+						const without = prev.filter((l) => !(l.x === gridX && l.z === gridZ));
+						return [...without, newLight];
+					});
+					void spawnLightFixture(newLight);
+					return;
+				}
+
 				// Zone selection mode
 				if (zoneSelectionMode() && (selectedAsset() || editingAsset()?.asset)) {
 					const coords = getGridCoordsFromPointer();
@@ -2263,6 +2355,26 @@ export default function MapEditor() {
 					});
 
 				if (deleteMode()) {
+					// If the click lands on a cell that hosts a placed light, nuke
+					// the light first. We look at the cell under the pointer (via
+					// cellPlane_ metadata) rather than the picked mesh because the
+					// light fixture mesh isn't marked isPickable as a cell asset.
+					const cellPick = scene.pick(scene.pointerX, scene.pointerY, (m) =>
+						m.name.startsWith("cellPlane_"),
+					);
+					if (cellPick?.hit && cellPick.pickedPoint) {
+						const wx = cellPick.pickedPoint.x;
+						const wz = cellPick.pickedPoint.z;
+						const gx = Math.floor((wx / TILE_SIZE) + (GRID_SIZE / 2) - 0.5);
+						const gz = Math.floor((wz / TILE_SIZE) + (GRID_SIZE / 2) - 0.5);
+						const hadLight = placedLights().some((l) => l.x === gx && l.z === gz);
+						if (hadLight) {
+							setPlacedLights((prev) => prev.filter((l) => !(l.x === gx && l.z === gz)));
+							despawnLightFixture(gx, gz);
+							return;
+						}
+					}
+
 					// Delete mode: utiliser le mesh survolé (déjà identifié par le hover handler)
 					// ou fallback sur le picking direct
 					let targetMesh: AbstractMesh | null = null;
@@ -2556,6 +2668,8 @@ export default function MapEditor() {
 	const clearMap = () => {
 		cleanupPreviewMesh();
 		clearCollisionPreview();
+		clearAllLightFixtures();
+		setPlacedLights([]);
 		// Clear selection overlays
 		selectionOverlays.forEach((overlay) => {
 			if (!overlay.isDisposed()) {
