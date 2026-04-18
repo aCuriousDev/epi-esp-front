@@ -2876,9 +2876,30 @@ export default function MapEditor() {
 		}
 	};
 
+	// Human-readable current mode for the top banner. Order matters:
+	// delete/edit/zone/collision/light "take over" the scene and should win
+	// over "Placement" even when an asset is still selected.
+	const currentModeLabel = () => {
+		if (deleteMode()) return { text: "Mode Suppression", color: "bg-red-600/80 text-white" };
+		if (editMode()) return { text: "Mode Édition", color: "bg-blue-600/80 text-white" };
+		if (zoneSelectionMode()) return { text: "Mode Zone", color: "bg-purple-600/80 text-white" };
+		if (collisionPreviewMode()) return { text: "Mode Collision", color: "bg-yellow-500/80 text-game-darker" };
+		if (lightMode()) return { text: "Mode Lumière", color: "bg-orange-500/90 text-game-darker" };
+		if (selectedAsset() || editingAsset()) return { text: "Placement", color: "bg-emerald-600/80 text-white" };
+		return { text: "Consultation", color: "bg-slate-700/80 text-white" };
+	};
+
 	return (
 		<div class="relative min-h-full w-full overflow-hidden bg-brand-gradient">
 			<div class="vignette absolute inset-0 pointer-events-none"></div>
+
+			{/* Current-mode banner — top-center. Shows the editor's current
+			    tool at a glance so the user knows what a click will do. */}
+			<div class="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-30">
+				<div class={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold shadow-lg border border-white/10 backdrop-blur-sm ${currentModeLabel().color}`}>
+					{currentModeLabel().text}
+				</div>
+			</div>
 
 			{/* Back button */}
 			<A href="/map-editor" class="settings-btn" aria-label="Retour">
@@ -3062,30 +3083,52 @@ export default function MapEditor() {
 					</div>
 				</div>
 
-				{/* Rotation Control */}
-				{(selectedAsset() || editingAsset()) && (
+				{/* Rotation Control: keyboard (Q/D) + step buttons + slider */}
+				{(selectedAsset() || editingAsset() || lightMode()) && (
 					<div class="mb-4">
 						<label class="block text-sm text-slate-300 mb-2">
-							Rotation: {rotationAngle()}°
+							Rotation:{" "}
+							<span class="text-game-gold font-mono">
+								{rotationAngle()}°
+							</span>
 						</label>
-						<div class="flex gap-2">
+						<div class="flex gap-2 mb-2">
 							<button
 								class="flex-1 px-3 py-2 rounded-lg bg-black/40 hover:bg-black/60 border border-white/10 text-slate-200 text-sm transition"
 								onClick={() => setRotationAngle((prev) => (prev - 15 + 360) % 360)}
-								title="Appuyez sur Q pour tourner à gauche"
+								title="Raccourci Q"
 							>
-								↺ Q (Gauche)
+								↺ −15°
+							</button>
+							<button
+								class="flex-1 px-3 py-2 rounded-lg bg-black/40 hover:bg-black/60 border border-white/10 text-slate-200 text-sm transition"
+								onClick={() => setRotationAngle(0)}
+								title="Remettre à 0°"
+							>
+								0°
 							</button>
 							<button
 								class="flex-1 px-3 py-2 rounded-lg bg-black/40 hover:bg-black/60 border border-white/10 text-slate-200 text-sm transition"
 								onClick={() => setRotationAngle((prev) => (prev + 15) % 360)}
-								title="Appuyez sur D pour tourner à droite"
+								title="Raccourci D"
 							>
-								↻ D (Droite)
+								↻ +15°
 							</button>
 						</div>
+						<input
+							type="range"
+							min="0"
+							max="360"
+							step="5"
+							value={rotationAngle()}
+							onInput={(e) =>
+								setRotationAngle(parseInt(e.currentTarget.value, 10) % 360)
+							}
+							class="w-full accent-pink-500"
+						/>
 						<p class="mt-2 text-xs text-slate-400">
-							Utilisez Q (gauche) et D (droite) pour faire tourner
+							Raccourcis Q / D. La rotation est appliquée au preview
+							et enregistrée avec l'objet posé.
 						</p>
 					</div>
 				)}
