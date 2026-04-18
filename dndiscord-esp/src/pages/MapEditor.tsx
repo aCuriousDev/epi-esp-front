@@ -45,6 +45,13 @@ import {
 import "@babylonjs/loaders";
 
 /**
+ * Verbose per-mesh positioning/placement logs. Firing them on every
+ * preview hover created thousands of lines per second. Flip this to
+ * true when actually debugging stacking or commit-height issues.
+ */
+const MAPEDITOR_DEBUG = false;
+
+/**
  * Classe représentant une cellule de la grille avec ses données
  * Totalement découplée du visuel, data-driven
  */
@@ -659,7 +666,7 @@ class AssetStackManager {
 	public createStackedAsset(mesh: AbstractMesh, asset: MapAsset, cellWorldY: number = 0): StackedAsset {
 		const { bottomY, topY, height } = this.calculateCellRelativeYPositions(mesh, cellWorldY);
 		
-		console.log(`Created StackedAsset: ${asset.name} - bottomY: ${bottomY.toFixed(3)}, topY: ${topY.toFixed(3)}, height: ${height.toFixed(3)}`);
+		if (MAPEDITOR_DEBUG) console.log(`Created StackedAsset: ${asset.name} - bottomY: ${bottomY.toFixed(3)}, topY: ${topY.toFixed(3)}, height: ${height.toFixed(3)}`);
 		
 		return {
 			mesh,
@@ -693,7 +700,7 @@ class AssetStackManager {
 		// Calculer l'offset nécessaire
 		const offsetY = targetWorldBottomY - currentWorldBottomY;
 		
-		console.log(`Positioning ${mesh.name}: currentBottom=${currentWorldBottomY.toFixed(3)}, targetBottom=${targetWorldBottomY.toFixed(3)}, offset=${offsetY.toFixed(3)}`);
+		if (MAPEDITOR_DEBUG) console.log(`Positioning ${mesh.name}: currentBottom=${currentWorldBottomY.toFixed(3)}, targetBottom=${targetWorldBottomY.toFixed(3)}, offset=${offsetY.toFixed(3)}`);
 		
 		// Appliquer l'offset à la position du mesh
 		mesh.position.y += offsetY;
@@ -710,7 +717,7 @@ class AssetStackManager {
 	 */
 	public positionMeshOnStack(mesh: AbstractMesh, cell: GridCell): void {
 		const stackHeight = cell.getStackHeight();
-		console.log(`Placing on stack at height: ${stackHeight.toFixed(3)}`);
+		if (MAPEDITOR_DEBUG) console.log(`Placing on stack at height: ${stackHeight.toFixed(3)}`);
 		this.positionMeshAtHeight(mesh, stackHeight, 0);
 	}
 }
@@ -2479,12 +2486,12 @@ export default function MapEditor() {
 					// D'abord essayer avec le mesh survolé
 					if (hoveredMesh) {
 						targetMesh = hoveredMesh;
-						console.log('[DELETE] Using hoveredMesh:', targetMesh.name);
+						if (MAPEDITOR_DEBUG) console.log('[DELETE] Using hoveredMesh:', targetMesh.name);
 					} 
 					// Sinon, essayer avec le picking direct
 					else if (pickInfo?.hit && pickInfo.pickedMesh) {
 						targetMesh = findRootAssetMesh(pickInfo.pickedMesh);
-						console.log('[DELETE] Found via pickInfo:', targetMesh?.name);
+						if (MAPEDITOR_DEBUG) console.log('[DELETE] Found via pickInfo:', targetMesh?.name);
 					}
 					
 					if (!targetMesh) {
@@ -2492,12 +2499,12 @@ export default function MapEditor() {
 						const debugPick = scene.pick(scene.pointerX, scene.pointerY);
 						if (debugPick?.hit && debugPick.pickedMesh) {
 							targetMesh = findRootAssetMesh(debugPick.pickedMesh);
-							console.log('[DELETE] Found via debugPick:', targetMesh?.name);
+							if (MAPEDITOR_DEBUG) console.log('[DELETE] Found via debugPick:', targetMesh?.name);
 						}
 					}
 					
 					if (targetMesh && gridManager) {
-						console.log('[DELETE] Target mesh found:', targetMesh.name);
+						if (MAPEDITOR_DEBUG) console.log('[DELETE] Target mesh found:', targetMesh.name);
 						
 						// Sauvegarder la référence ET le nom avant de nettoyer la surbrillance
 						const targetMeshRef = targetMesh;
@@ -2546,7 +2553,7 @@ export default function MapEditor() {
 								// Vérifier le mesh principal et tous ses enfants
 								if (isSameMesh(cellMesh)) {
 									deletedMesh = cellMesh;
-									console.log('[DELETE] Found in stackedAssets:', deletedMesh.name);
+									if (MAPEDITOR_DEBUG) console.log('[DELETE] Found in stackedAssets:', deletedMesh.name);
 									cell.removeAsset(cellMesh);
 									cellMesh.dispose();
 									cellsToRestack.push(cell);
@@ -2558,7 +2565,7 @@ export default function MapEditor() {
 								for (const child of childMeshes) {
 									if (child instanceof AbstractMesh && isSameMesh(child)) {
 										deletedMesh = cellMesh; // Supprimer le mesh parent
-										console.log('[DELETE] Found via child mesh in stackedAssets:', cellMesh.name);
+										if (MAPEDITOR_DEBUG) console.log('[DELETE] Found via child mesh in stackedAssets:', cellMesh.name);
 										cell.removeAsset(cellMesh);
 										cellMesh.dispose();
 										cellsToRestack.push(cell);
@@ -2571,7 +2578,7 @@ export default function MapEditor() {
 							const ground = cell.getGround();
 							if (ground && isSameMesh(ground)) {
 								deletedMesh = ground;
-								console.log('[DELETE] Found in ground:', deletedMesh.name);
+								if (MAPEDITOR_DEBUG) console.log('[DELETE] Found in ground:', deletedMesh.name);
 								ground.dispose();
 								cell.setGround(null);
 								cellsToRestack.push(cell);
@@ -2579,8 +2586,8 @@ export default function MapEditor() {
 						});
 						
 						if (!deletedMesh) {
-							console.warn('[DELETE] Mesh not found in grid cells:', targetMeshName);
-							console.log('[DELETE] Available meshes:', gridManager.getAllCells().flatMap(cell => {
+							if (MAPEDITOR_DEBUG) console.warn('[DELETE] Mesh not found in grid cells:', targetMeshName);
+							if (MAPEDITOR_DEBUG) console.log('[DELETE] Available meshes:', gridManager.getAllCells().flatMap(cell => {
 								const meshes: string[] = [];
 								cell.getStackedAssets().forEach(sa => meshes.push(sa.mesh.name));
 								if (cell.getGround()) meshes.push('ground: ' + cell.getGround()!.name);
@@ -2608,10 +2615,10 @@ export default function MapEditor() {
 								updateCollisionOverlays();
 							}
 							
-							console.log('[DELETE] Successfully deleted mesh');
+							if (MAPEDITOR_DEBUG) console.log('[DELETE] Successfully deleted mesh');
 						}
 					} else {
-						console.warn('[DELETE] No target mesh found or gridManager missing');
+						if (MAPEDITOR_DEBUG) console.warn('[DELETE] No target mesh found or gridManager missing');
 					}
 					return;
 				}
