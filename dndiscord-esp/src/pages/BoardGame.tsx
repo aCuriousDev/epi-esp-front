@@ -1,6 +1,6 @@
-import { Component, Show, onMount, onCleanup, createSignal } from "solid-js";
+import { Component, Show, onMount, onCleanup, createSignal, createEffect } from "solid-js";
 import { useNavigate, useLocation } from "@solidjs/router";
-import { ArrowLeft, RotateCcw, Check, Hand, MousePointer, Move as MoveIcon } from "lucide-solid";
+import { ArrowLeft, RotateCcw, Check, Hand, MousePointer, Move as MoveIcon, Flag } from "lucide-solid";
 import { getPhaseIcon } from "../components/common/icons";
 import {
   GameCanvas,
@@ -29,6 +29,8 @@ import {
   resetGameState,
   clearUnits,
   clearTiles,
+  getCurrentUnit,
+  endUnitTurn,
 } from "../game";
 import { GamePhase, AppPhase, GameMode } from "../types";
 import { sessionState, clearSession } from "../stores/session.store";
@@ -290,6 +292,29 @@ const BoardGame: Component = () => {
   const [leftDrawerOpen, setLeftDrawerOpen] = createSignal(false);
   const [rightDrawerOpen, setRightDrawerOpen] = createSignal(false);
 
+  // Auto-open the unit info drawer the first time a selection happens. We
+  // only force-open on a selection transition — any manual close by the
+  // user stays closed until they select a different unit.
+  let lastAutoOpenedFor: string | null = null;
+  createEffect(() => {
+    const sel = gameState.selectedUnit;
+    if (sel && sel !== lastAutoOpenedFor) {
+      lastAutoOpenedFor = sel;
+      setLeftDrawerOpen(true);
+      setRightDrawerOpen(false);
+    }
+    if (!sel) {
+      lastAutoOpenedFor = null;
+    }
+  });
+
+  // Floating End Turn is only visible and clickable when it matters.
+  const canEndPlayerTurn = () => {
+    if (gameState.phase !== GamePhase.PLAYER_TURN) return false;
+    const current = getCurrentUnit();
+    return !!current && current.team === "player";
+  };
+
   const renderLeftPanelContent = () => (
     <>
       <Show when={sessionState.session}>
@@ -514,13 +539,11 @@ const BoardGame: Component = () => {
           </div>
         </header>
 
-        {/* Main Game Area */}
+        {/* Main Game Area — the 3D canvas owns the full width on every
+            breakpoint. Info / log panels slide in as drawers on top of the
+            canvas (mobile-style) rather than stealing permanent layout
+            space, so the board stays the focus on laptops/desktops too. */}
         <div class="flex-1 flex overflow-hidden min-h-0 relative">
-          {/* Left Panel - Unit Info */}
-          <aside class="hidden lg:flex lg:w-72 xl:w-80 lg:min-w-[280px] lg:max-w-[400px] p-3 xl:p-4 flex-col gap-4 overflow-y-auto bg-game-darker/50">
-            {renderLeftPanelContent()}
-          </aside>
-
           {/* Center - Game Canvas */}
           <main class="flex-1 relative min-w-0">
             <GameCanvas />
@@ -602,8 +625,9 @@ const BoardGame: Component = () => {
               </div>
             </Show>
 
-            {/* Mobile Drawer Toggles */}
-            <div class="lg:hidden absolute top-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
+            {/* Drawer toggles — visible on every breakpoint now that the
+                panels are drawers instead of permanent sidebars. */}
+            <div class="absolute top-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
               <button
                 class="pointer-events-auto px-3 py-2 rounded-lg border border-white/20 bg-game-dark/85 backdrop-blur text-xs text-white font-medium shadow-lg focus-ring-gold"
                 onClick={toggleLeftDrawer}
@@ -673,8 +697,20 @@ const BoardGame: Component = () => {
               </ul>
             </div>
 
-            {/* Reset View Button */}
-            <div class="absolute bottom-4 right-3 sm:right-4 z-20 pr-safe-right pb-safe-bottom">
+            {/* Floating action cluster (bottom-right). Always accessible
+                without having to open a drawer first; main win for the
+                desktop layout where End Turn used to be buried. */}
+            <div class="absolute bottom-4 right-3 sm:right-4 z-20 pr-safe-right pb-safe-bottom flex flex-col gap-2 items-end">
+              <Show when={canEndPlayerTurn()}>
+                <button
+                  class="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-game-gold hover:bg-amber-400 text-game-darker text-sm font-semibold shadow-lg transition-colors focus-ring-gold"
+                  onClick={() => endUnitTurn()}
+                  title="Terminer le tour de cette unité"
+                >
+                  <Flag class="w-4 h-4" />
+                  <span>Fin du tour</span>
+                </button>
+              </Show>
               <button
                 class="btn-game text-xs sm:text-sm py-2 px-3 sm:px-4 flex items-center gap-2"
                 onClick={() => resetCamera()}
@@ -686,13 +722,11 @@ const BoardGame: Component = () => {
             </div>
           </main>
 
-          {/* Right Panel - Combat Log or Free Roam Info */}
-          <aside class="hidden lg:flex lg:w-80 xl:w-96 lg:min-w-[320px] lg:max-w-[480px] p-3 xl:p-4 flex-col gap-4 overflow-y-auto bg-game-darker/50">
-            {renderRightPanelContent()}
-          </aside>
-
-          {/* Mobile Drawers */}
-          <div class="lg:hidden absolute inset-0 z-40 pointer-events-none">
+          {/* Drawers — same component on all sizes. Left = infos/abilities,
+              right = journal / chat / session. Widths are capped at a
+              fraction of the viewport so they stay non-intrusive on large
+              displays. */}
+          <div class="absolute inset-0 z-40 pointer-events-none">
             <Show when={leftDrawerOpen() || rightDrawerOpen()}>
               <button
                 class="absolute inset-0 bg-black/60 pointer-events-auto"
@@ -703,7 +737,7 @@ const BoardGame: Component = () => {
 
             <div
               id="left-drawer"
-              class={`absolute inset-y-0 left-0 w-[min(86vw,360px)] bg-game-darker/95 backdrop-blur border-r border-white/10 p-3 flex flex-col gap-3 overflow-y-auto transition-transform duration-300 pointer-events-auto ${
+              class={`absolute inset-y-0 left-0 w-[min(88vw,380px)] md:w-[400px] lg:w-[420px] bg-game-darker/95 backdrop-blur border-r border-white/10 p-3 flex flex-col gap-3 overflow-y-auto transition-transform duration-300 pointer-events-auto ${
                 leftDrawerOpen() ? "translate-x-0" : "-translate-x-full"
               }`}
             >
@@ -723,7 +757,7 @@ const BoardGame: Component = () => {
 
             <div
               id="right-drawer"
-              class={`absolute inset-y-0 right-0 w-[min(88vw,400px)] bg-game-darker/95 backdrop-blur border-l border-white/10 p-3 flex flex-col gap-3 overflow-y-auto transition-transform duration-300 pointer-events-auto ${
+              class={`absolute inset-y-0 right-0 w-[min(90vw,420px)] md:w-[440px] lg:w-[460px] bg-game-darker/95 backdrop-blur border-l border-white/10 p-3 flex flex-col gap-3 overflow-y-auto transition-transform duration-300 pointer-events-auto ${
                 rightDrawerOpen() ? "translate-x-0" : "translate-x-full"
               }`}
             >
