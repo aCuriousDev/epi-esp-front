@@ -1966,19 +1966,23 @@ export default function MapEditor() {
 				!mesh.name.startsWith("preview_") &&
 				!mesh.metadata?.isPreview,
 			);
-			if (!pick?.hit || !pick.pickedPoint) {
+			if (!pick?.hit || !pick.pickedMesh) {
 				hidePreview();
 				return;
 			}
-			const worldX = pick.pickedPoint.x;
-			const worldZ = pick.pickedPoint.z;
-			const gridX = Math.floor((worldX / TILE_SIZE) + (GRID_SIZE / 2) - 0.5);
-			const gridZ = Math.floor((worldZ / TILE_SIZE) + (GRID_SIZE / 2) - 0.5);
-			if (gridX < 0 || gridX >= GRID_SIZE || gridZ < 0 || gridZ >= GRID_SIZE) {
+			// Read grid coords from the cellPlane's metadata — the same
+			// source the placement path uses. The old worldX-math path
+			// was off by half a cell versus gridToWorld (the `-0.5` in the
+			// formula conflicted with the `+0.5` gridToWorld applies), so
+			// the preview showed on cell N-1 while placement landed on N.
+			const meta = pick.pickedMesh.metadata as
+				| { gridX?: number; gridZ?: number }
+				| undefined;
+			if (meta?.gridX === undefined || meta?.gridZ === undefined) {
 				hidePreview();
 				return;
 			}
-			const cell = gridManager.getCell(gridX, gridZ);
+			const cell = gridManager.getCell(meta.gridX, meta.gridZ);
 			if (!cell) {
 				hidePreview();
 				return;
@@ -2412,12 +2416,13 @@ export default function MapEditor() {
 					const pick = scene.pick(scene.pointerX, scene.pointerY, (m) =>
 						m.name.startsWith("cellPlane_"),
 					);
-					if (!pick?.hit || !pick.pickedMesh || !pick.pickedPoint) return;
-					const worldX = pick.pickedPoint.x;
-					const worldZ = pick.pickedPoint.z;
-					const gridX = Math.floor((worldX / TILE_SIZE) + (GRID_SIZE / 2) - 0.5);
-					const gridZ = Math.floor((worldZ / TILE_SIZE) + (GRID_SIZE / 2) - 0.5);
-					if (gridX < 0 || gridX >= GRID_SIZE || gridZ < 0 || gridZ >= GRID_SIZE) return;
+					if (!pick?.hit || !pick.pickedMesh) return;
+					const meta = pick.pickedMesh.metadata as
+						| { gridX?: number; gridZ?: number }
+						| undefined;
+					if (meta?.gridX === undefined || meta?.gridZ === undefined) return;
+					const gridX = meta.gridX;
+					const gridZ = meta.gridZ;
 
 					const newLight: SavedLightData = {
 						presetId: selectedLightPreset(),
@@ -2486,16 +2491,19 @@ export default function MapEditor() {
 					const cellPick = scene.pick(scene.pointerX, scene.pointerY, (m) =>
 						m.name.startsWith("cellPlane_"),
 					);
-					if (cellPick?.hit && cellPick.pickedPoint) {
-						const wx = cellPick.pickedPoint.x;
-						const wz = cellPick.pickedPoint.z;
-						const gx = Math.floor((wx / TILE_SIZE) + (GRID_SIZE / 2) - 0.5);
-						const gz = Math.floor((wz / TILE_SIZE) + (GRID_SIZE / 2) - 0.5);
-						const hadLight = placedLights().some((l) => l.x === gx && l.z === gz);
-						if (hadLight) {
-							setPlacedLights((prev) => prev.filter((l) => !(l.x === gx && l.z === gz)));
-							despawnLightFixture(gx, gz);
-							return;
+					if (cellPick?.hit && cellPick.pickedMesh) {
+						const cMeta = cellPick.pickedMesh.metadata as
+							| { gridX?: number; gridZ?: number }
+							| undefined;
+						if (cMeta?.gridX !== undefined && cMeta?.gridZ !== undefined) {
+							const gx = cMeta.gridX;
+							const gz = cMeta.gridZ;
+							const hadLight = placedLights().some((l) => l.x === gx && l.z === gz);
+							if (hadLight) {
+								setPlacedLights((prev) => prev.filter((l) => !(l.x === gx && l.z === gz)));
+								despawnLightFixture(gx, gz);
+								return;
+							}
 						}
 					}
 
