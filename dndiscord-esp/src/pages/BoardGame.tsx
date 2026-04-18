@@ -31,7 +31,9 @@ import {
   clearTiles,
   getCurrentUnit,
   endUnitTurn,
+  selectUnit,
 } from "../game";
+import { getHubUserId } from "../stores/session.store";
 import { GamePhase, AppPhase, GameMode } from "../types";
 import { sessionState, clearSession } from "../stores/session.store";
 import { leaveSession } from "../services/signalr/multiplayer.service";
@@ -308,11 +310,76 @@ const BoardGame: Component = () => {
     }
   });
 
+  // Ownership check — in multiplayer, only the user who owns the current
+  // unit (or single-player, where ownership is undefined) sees the End
+  // Turn button and triggers auto-select on turn start.
+  const isCurrentUnitMine = (): boolean => {
+    const current = getCurrentUnit();
+    if (!current || current.team !== "player") return false;
+    const isOwned = !!current.ownerUserId;
+    const me = getHubUserId();
+    return !isOwned || current.ownerUserId === me;
+  };
+
+  // Auto-select the current player unit when a new PLAYER_TURN starts
+  // IF the local user owns it. Respects the ownership gate so remote
+  // players don't have another player's unit auto-selected. A manual
+  // deselect stays deselected until the turn advances again.
+  let lastAutoSelectedForIndex = -1;
+  createEffect(() => {
+    const phase = gameState.phase;
+    const idx = gameState.currentUnitIndex;
+    if (phase !== GamePhase.PLAYER_TURN) {
+      lastAutoSelectedForIndex = -1;
+      return;
+    }
+    if (idx === lastAutoSelectedForIndex) return;
+    lastAutoSelectedForIndex = idx;
+    const current = getCurrentUnit();
+    if (current && isCurrentUnitMine() && gameState.selectedUnit !== current.id) {
+      selectUnit(current.id);
+    }
+  });
+
   // Floating End Turn is only visible and clickable when it matters.
+  // Ownership gated so remote players don't see "Fin du tour" on turns
+  // that aren't theirs.
   const canEndPlayerTurn = () => {
     if (gameState.phase !== GamePhase.PLAYER_TURN) return false;
     const current = getCurrentUnit();
-    return !!current && current.team === "player";
+    return !!current && current.team === "player" && isCurrentUnitMine();
+  };
+
+  // AP-spent derivation for the end-turn confirm prompt. If the player
+  // hasn't moved OR acted yet, the End Turn button asks for a second
+  // click to avoid accidental skip of a fresh turn.
+  const currentUnitHasSpentAP = () => {
+    const u = getCurrentUnit();
+    if (!u) return false;
+    return (
+      !!u.hasMoved ||
+      !!u.hasActed ||
+      u.stats.currentActionPoints < u.stats.maxActionPoints
+    );
+  };
+  const [endTurnPending, setEndTurnPending] = createSignal(false);
+  let endTurnPendingTimer: number | null = null;
+  const handleEndTurnClick = () => {
+    if (!canEndPlayerTurn()) return;
+    if (currentUnitHasSpentAP() || endTurnPending()) {
+      if (endTurnPendingTimer !== null) {
+        clearTimeout(endTurnPendingTimer);
+        endTurnPendingTimer = null;
+      }
+      setEndTurnPending(false);
+      endUnitTurn();
+      return;
+    }
+    setEndTurnPending(true);
+    endTurnPendingTimer = window.setTimeout(() => {
+      setEndTurnPending(false);
+      endTurnPendingTimer = null;
+    }, 2500);
   };
 
   const renderLeftPanelContent = () => (
@@ -339,14 +406,8 @@ const BoardGame: Component = () => {
           </button>
         </div>
       </Show>
-      <Show
-        when={
-          getCurrentMode() === GameMode.COMBAT ||
-          getCurrentMode() === GameMode.DUNGEON
-        }
-      >
-        <TurnOrderDisplay />
-      </Show>
+      {/* TurnOrderDisplay is now rendered as an always-visible top banner
+          above the canvas, so it stays readable without opening a drawer. */}
       <UnitInfoPanel />
     </>
   );
@@ -566,8 +627,34 @@ const BoardGame: Component = () => {
               </div>
             </Show>
 
-            {/* Game Phase Indicator */}
-            <div class="absolute top-3 sm:top-4 left-1/2 -translate-x-1/2 z-10 flex flex-wrap items-center justify-center gap-2 sm:gap-3 px-3 max-w-[calc(100%-1rem)] sm:max-w-[calc(100%-2rem)]">
+            {/* Persistent turn-order banner — only in combat-ish modes,
+                where the initiative line matters. Rendered above the phase
+                pill so the player sees "whose turn" without opening a
+                drawer. Width-capped so it doesn't cover the whole canvas. */}
+            <Show
+              when={
+                (getCurrentMode() === GameMode.COMBAT ||
+                  getCurrentMode() === GameMode.DUNGEON) &&
+                gameState.turnOrder.length > 0
+              }
+            >
+              <div class="absolute top-3 sm:top-4 left-1/2 -translate-x-1/2 z-10 w-[min(92vw,560px)]">
+                <TurnOrderDisplay />
+              </div>
+            </Show>
+
+            {/* Game Phase Indicator — shifted down when the turn banner is
+                rendered above it (ternary keeps single-line modes at the
+                original top position). */}
+            <div
+              class={`absolute left-1/2 -translate-x-1/2 z-10 flex flex-wrap items-center justify-center gap-2 sm:gap-3 px-3 max-w-[calc(100%-1rem)] sm:max-w-[calc(100%-2rem)] ${
+                (getCurrentMode() === GameMode.COMBAT ||
+                  getCurrentMode() === GameMode.DUNGEON) &&
+                gameState.turnOrder.length > 0
+                  ? "top-[5.25rem] sm:top-24"
+                  : "top-3 sm:top-4"
+              }`}
+            >
               <Show when={gameState.dungeon}>
                 <div class="px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold bg-purple-600/80 text-white whitespace-nowrap flex items-center gap-1.5">
                   {getPhaseIcon("dungeon")}
@@ -697,18 +784,30 @@ const BoardGame: Component = () => {
               </ul>
             </div>
 
-            {/* Floating action cluster (bottom-right). Always accessible
-                without having to open a drawer first; main win for the
-                desktop layout where End Turn used to be buried. */}
+            {/* Floating End Turn (bottom-right). When the player hasn't
+                spent any AP yet, a first click arms a 2.5s confirm
+                window and shows a "are you sure?" popover above the
+                button — a second click within that window commits. If
+                the player has already moved or used an ability, one
+                click ends the turn immediately. */}
             <div class="absolute bottom-4 right-3 sm:right-4 z-20 pr-safe-right pb-safe-bottom flex flex-col gap-2 items-end">
               <Show when={canEndPlayerTurn()}>
+                <Show when={endTurnPending()}>
+                  <div class="px-3 py-1.5 rounded-lg bg-amber-600/90 text-white text-xs font-medium shadow-lg border border-white/10 animate-pulse">
+                    Aucun AP dépensé — reclique pour confirmer
+                  </div>
+                </Show>
                 <button
-                  class="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-game-gold hover:bg-amber-400 text-game-darker text-sm font-semibold shadow-lg transition-colors focus-ring-gold"
-                  onClick={() => endUnitTurn()}
-                  title="Terminer le tour de cette unité"
+                  class={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-lg transition-colors focus-ring-gold ${
+                    endTurnPending()
+                      ? "bg-amber-500 hover:bg-amber-400 text-game-darker"
+                      : "bg-game-gold hover:bg-amber-400 text-game-darker"
+                  }`}
+                  onClick={handleEndTurnClick}
+                  title="Terminer le tour"
                 >
                   <Flag class="w-4 h-4" />
-                  <span>Fin du tour</span>
+                  <span>{endTurnPending() ? "Confirmer" : "Fin du tour"}</span>
                 </button>
               </Show>
               <button
@@ -722,19 +821,11 @@ const BoardGame: Component = () => {
             </div>
           </main>
 
-          {/* Drawers — same component on all sizes. Left = infos/abilities,
-              right = journal / chat / session. Widths are capped at a
-              fraction of the viewport so they stay non-intrusive on large
-              displays. */}
+          {/* Drawers — same component on all sizes. Non-modal: no dim
+              backdrop so the map stays fully interactive while a drawer
+              is open. Users close via the toggle button or the drawer's
+              own "Fermer" button. */}
           <div class="absolute inset-0 z-40 pointer-events-none">
-            <Show when={leftDrawerOpen() || rightDrawerOpen()}>
-              <button
-                class="absolute inset-0 bg-black/60 pointer-events-auto"
-                onClick={closeDrawers}
-                aria-label="Fermer les panneaux"
-              />
-            </Show>
-
             <div
               id="left-drawer"
               class={`absolute inset-y-0 left-0 w-[min(88vw,380px)] md:w-[400px] lg:w-[420px] bg-game-darker/95 backdrop-blur border-r border-white/10 p-3 flex flex-col gap-3 overflow-y-auto transition-transform duration-300 pointer-events-auto ${
