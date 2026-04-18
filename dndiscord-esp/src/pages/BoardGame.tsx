@@ -696,22 +696,29 @@ const BoardGame: Component = () => {
                   {gameState.dungeon?.totalRooms}
                 </div>
               </Show>
-              <div
-                class={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap flex items-center gap-1.5 ${
-                  gameState.phase === GamePhase.COMBAT_PREPARATION
-                    ? "bg-amber-600/80 text-white"
-                    : gameState.phase === GamePhase.FREE_ROAM
-                      ? "bg-blue-600/80 text-white"
-                      : gameState.phase === GamePhase.PLAYER_TURN
-                        ? "bg-green-600/80 text-white"
-                        : gameState.phase === GamePhase.ENEMY_TURN
-                          ? "bg-red-600/80 text-white"
-                          : "bg-gray-600/80 text-white"
-                }`}
+              {/* Phase pill — hidden during PLAYER_TURN / ENEMY_TURN since
+                  the turn-order banner's coloured ring already encodes
+                  whose turn it is. Still shown for prep/free-roam/setup
+                  phases where the global state matters. */}
+              <Show
+                when={
+                  gameState.phase !== GamePhase.PLAYER_TURN &&
+                  gameState.phase !== GamePhase.ENEMY_TURN
+                }
               >
-                {getPhaseIcon(gameState.phase)}
-                {getPhaseText(gameState.phase)}
-              </div>
+                <div
+                  class={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap flex items-center gap-1.5 ${
+                    gameState.phase === GamePhase.COMBAT_PREPARATION
+                      ? "bg-amber-600/80 text-white"
+                      : gameState.phase === GamePhase.FREE_ROAM
+                        ? "bg-blue-600/80 text-white"
+                        : "bg-gray-600/80 text-white"
+                  }`}
+                >
+                  {getPhaseIcon(gameState.phase)}
+                  {getPhaseText(gameState.phase)}
+                </div>
+              </Show>
               {/* Bouton Prêt - Phase de préparation */}
               <Show when={gameState.phase === GamePhase.COMBAT_PREPARATION}>
                 <button
