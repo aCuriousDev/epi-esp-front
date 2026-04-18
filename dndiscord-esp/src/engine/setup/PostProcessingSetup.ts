@@ -17,9 +17,11 @@ import {
   Color4,
   ImageProcessingConfiguration,
 } from '@babylonjs/core';
+import type { EffectsToggles } from '../quality/QualityPresets';
 
 export class PostProcessingSetup {
   private pipeline: DefaultRenderingPipeline;
+  private combatModeActive = false;
 
   constructor(scene: Scene, camera: Camera) {
     this.pipeline = new DefaultRenderingPipeline(
@@ -36,6 +38,23 @@ export class PostProcessingSetup {
     this.configureImageProcessing();
 
     console.log('Post-processing pipeline initialized');
+  }
+
+  /**
+   * Flip individual pipeline effects on/off to match the user's Graphics
+   * settings. Combat-mode tuning still overrides bloom/vignette values when
+   * active, but the on/off state comes from the settings.
+   */
+  public applyEffects(effects: EffectsToggles): void {
+    this.pipeline.bloomEnabled = effects.bloom;
+    this.pipeline.fxaaEnabled = effects.fxaa;
+    this.pipeline.imageProcessing.vignetteEnabled = effects.vignette;
+    // Chromatic aberration is combat-only; settings gate it too.
+    if (this.combatModeActive && effects.chromaticAberration) {
+      this.pipeline.chromaticAberrationEnabled = true;
+    } else {
+      this.pipeline.chromaticAberrationEnabled = false;
+    }
   }
 
   /**
@@ -88,15 +107,16 @@ export class PostProcessingSetup {
    * Combat mode: heavier bloom, deeper vignette, more contrast
    */
   public setCombatMode(active: boolean): void {
+    this.combatModeActive = active;
     if (active) {
       this.pipeline.bloomWeight = 0.55;
       this.pipeline.bloomThreshold = 0.3;
       this.pipeline.imageProcessing.vignetteWeight = 4.0;
       this.pipeline.imageProcessing.contrast = 1.35;
       this.pipeline.imageProcessing.exposure = 1.1;
-      
-      // Enable chromatic aberration for combat intensity
-      this.pipeline.chromaticAberrationEnabled = true;
+
+      // Combat chromatic aberration is gated by the user's effects setting
+      // via applyEffects(); defaults are preserved here.
       this.pipeline.chromaticAberration.aberrationAmount = 15;
       this.pipeline.chromaticAberration.radialIntensity = 0.8;
     } else {
@@ -105,7 +125,7 @@ export class PostProcessingSetup {
       this.pipeline.imageProcessing.vignetteWeight = 2.5;
       this.pipeline.imageProcessing.contrast = 1.2;
       this.pipeline.imageProcessing.exposure = 1.05;
-      
+
       this.pipeline.chromaticAberrationEnabled = false;
     }
   }
