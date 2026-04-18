@@ -7,6 +7,7 @@ import {
 	Scene,
 	ArcRotateCamera,
 	HemisphericLight,
+	DirectionalLight,
 	Vector3,
 	Mesh,
 	AbstractMesh,
@@ -19,6 +20,8 @@ import {
 	TransformNode,
 	BoundingInfo,
 	PointLight,
+	ShadowGenerator,
+	GlowLayer,
 } from "@babylonjs/core";
 import { ModelLoader } from "../engine/ModelLoader";
 import { gridToWorld, GRID_SIZE, TILE_SIZE } from "../game";
@@ -734,6 +737,8 @@ export default function MapEditor() {
 	let modelLoader: ModelLoader | null = null;
 	let gridManager: GridManager | null = null;
 	let assetStackManager: AssetStackManager | null = null;
+	let editorShadowGenerator: ShadowGenerator | null = null;
+	let editorGlowLayer: GlowLayer | null = null;
 	
 	const [mapId, setMapId] = createSignal<string | null>(null);
 	const [mapName, setMapName] = createSignal<string>("Nouvelle Map");
@@ -1184,9 +1189,36 @@ export default function MapEditor() {
 		camera.wheelDeltaPercentage = 0.01;
 		scene.activeCamera = camera;
 
-		// Setup lighting
-		const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
-		light.intensity = 0.8;
+		// Ambient baseline — dim so placed PointLights have visible contrast.
+		// 0.8 was blasting the whole scene flat; 0.35 leaves headroom for
+		// per-light colour + the sun to do their job.
+		const hemi = new HemisphericLight("editor_hemi", new Vector3(0, 1, 0), scene);
+		hemi.intensity = 0.35;
+		hemi.groundColor = new Color3(0.1, 0.1, 0.15);
+
+		// Soft key light so geometry still reads (walls, props) without
+		// flattening colours. Direction matches the game scene so map author
+		// sees approximately what they'll get in play.
+		const sun = new DirectionalLight(
+			"editor_sun",
+			new Vector3(-0.5, -1, -0.5).normalize(),
+			scene,
+		);
+		sun.intensity = 0.7;
+		sun.position = new Vector3(10, 20, 10);
+
+		// GlowLayer lets emissive materials + flame particles bloom, which is
+		// the main reason torches look "lit" rather than pinprick dots.
+		editorGlowLayer = new GlowLayer("editor_glow", scene);
+		editorGlowLayer.intensity = 0.8;
+
+		// Sun shadow map — walls/props cast soft shadows on the floor. The
+		// torch PointLights intentionally don't cast shadows (omnidirectional
+		// cubemap shadows are expensive for an editor preview).
+		editorShadowGenerator = new ShadowGenerator(1024, sun);
+		editorShadowGenerator.useBlurExponentialShadowMap = true;
+		editorShadowGenerator.blurKernel = 24;
+		editorShadowGenerator.setDarkness(0.35);
 
 		// Initialize model loader
 		modelLoader = new ModelLoader(scene);
@@ -2072,6 +2104,18 @@ export default function MapEditor() {
 				// Créer le StackedAsset et l'ajouter à la pile
 				const stackedAsset = assetStackManager.createStackedAsset(mesh, asset, 0);
 				cell.addAsset(stackedAsset);
+			}
+
+			// Register with the sun's shadow map so placed walls/props/furniture
+			// cast soft shadows on the floor. Floor tiles only receive.
+			if (editorShadowGenerator) {
+				if (asset.type !== "floor") {
+					editorShadowGenerator.addShadowCaster(mesh, true);
+				}
+				mesh.receiveShadows = true;
+				mesh.getChildMeshes(false).forEach((child) => {
+					child.receiveShadows = true;
+				});
 			}
 
 			// 6. Calculer toutes les cellules affectées par cet asset (basé sur le bounding box)
