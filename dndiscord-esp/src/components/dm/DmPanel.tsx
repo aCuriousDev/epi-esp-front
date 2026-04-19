@@ -38,6 +38,7 @@ import {
   dmSwitchMap,
 } from "../../services/signalr/multiplayer.service";
 import { MapService, type CampaignMapRecord } from "../../services/map.service";
+import { getAllMaps, loadMap } from "../../services/mapStorage";
 import { units, addUnit } from "../../game/stores/UnitsStore";
 import { setTiles, updatePathfinder } from "../../game/stores/TilesStore";
 import { addCombatLog, gameState } from "../../game/stores/GameStateStore";
@@ -204,6 +205,45 @@ export const DmPanel: Component = () => {
       flash("Échec : impossible de changer de carte");
     } finally {
       setSwitchingMapId(null);
+    }
+  };
+
+  /** Upload every localStorage-editor map to the current campaign so the DM
+   * can start picking from them without a separate import UI. Skips maps whose
+   * name already exists on the server to avoid duplicates on repeated clicks. */
+  const handleImportLocalMaps = async () => {
+    const session = getCurrentSession();
+    if (!session?.campaignId) return;
+    const localList = getAllMaps();
+    if (localList.length === 0) {
+      flash("Aucune carte locale à importer");
+      return;
+    }
+
+    setMapsLoading(true);
+    try {
+      const existingNames = new Set(campaignMaps().map((m) => m.name.toLowerCase()));
+      let imported = 0;
+      for (const meta of localList) {
+        if (existingNames.has(meta.name.toLowerCase())) continue;
+        const data = loadMap(meta.id);
+        if (!data) continue;
+        await MapService.create(session.campaignId, {
+          name: meta.name,
+          data: JSON.stringify(data),
+        });
+        imported++;
+      }
+      // Refresh
+      const refreshed = await MapService.list(session.campaignId);
+      setCampaignMaps(refreshed);
+      setMapsLoaded(true);
+      flash(imported > 0 ? `${imported} carte(s) importée(s)` : "Rien à importer (déjà présent)");
+    } catch (e) {
+      console.warn("[DmPanel] importLocalMaps failed", e);
+      flash("Échec de l'import");
+    } finally {
+      setMapsLoading(false);
     }
   };
 
@@ -379,12 +419,22 @@ export const DmPanel: Component = () => {
                   </For>
                 </div>
               </Show>
-              <button
-                onClick={() => { setMapsLoaded(false); void loadMapsIfNeeded(); }}
-                class="text-[10px] text-purple-300/60 hover:text-purple-200 underline underline-offset-2"
-              >
-                Rafraîchir la liste
-              </button>
+              <div class="flex items-center gap-3 pt-1">
+                <button
+                  onClick={() => { setMapsLoaded(false); void loadMapsIfNeeded(); }}
+                  class="text-[10px] text-purple-300/60 hover:text-purple-200 underline underline-offset-2"
+                >
+                  Rafraîchir
+                </button>
+                <button
+                  onClick={handleImportLocalMaps}
+                  disabled={mapsLoading()}
+                  class="text-[10px] text-amber-300/70 hover:text-amber-200 underline underline-offset-2 disabled:opacity-50"
+                  title="Pousser les cartes enregistrées dans l'éditeur vers cette campagne"
+                >
+                  Importer mes cartes locales
+                </button>
+              </div>
             </div>
           </Show>
 
