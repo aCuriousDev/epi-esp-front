@@ -120,18 +120,23 @@ export const mapCampaignResponse = (apiCampaign: CampaignDetailResponse): Campai
     status: mapCampaignStatus(apiCampaign.status),
     visibility: apiCampaign.isPublic ? "Public" as any : "Private" as any,
     dungeonMasterId: apiCampaign.dungeonMasterId,
-    dungeonMasterName: "Maître du Jeu", // API doesn't provide this
+    // Critical: the backend tells us whether the caller is the DM of this
+    // campaign via IsDungeonMaster. Propagating this unblocks the "Lancer la
+    // session" button, which falls back to comparing dungeonMasterId to the
+    // Discord snowflake — never equal (back's DungeonMasterId is an MD5-derived Guid).
+    isDungeonMaster: apiCampaign.isDungeonMaster,
+    dungeonMasterName: "Maître du Jeu",
     dungeonMasterAvatar: "",
     maxPlayers: apiCampaign.maxPlayers,
     currentPlayers: apiCampaign.memberCount,
     players: apiCampaign.members?.map(m => ({
       id: m.id,
-      username: m.userId, // API doesn't provide username, using userId
+      username: m.nickname ?? m.userId,
       role: mapMemberRole(m.role),
       characterName: m.nickname,
       joinedAt: m.joinedAt,
     })) || [],
-    sessions: [], // API doesn't provide sessions yet
+    sessions: [],
     totalSessions: apiCampaign.snapshotCount || 0,
     setting: undefined,
     startingLevel: 1,
@@ -139,6 +144,6 @@ export const mapCampaignResponse = (apiCampaign: CampaignDetailResponse): Campai
     tags: [],
     createdAt: apiCampaign.createdAt,
     updatedAt: apiCampaign.updatedAt,
-    campaignTreeDefinition: apiCampaign.campaignTreeDefinition
+    campaignTreeDefinition: apiCampaign.campaignTreeDefinition,
   };
 };

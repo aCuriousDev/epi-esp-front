@@ -44,7 +44,8 @@ import { getHubUserId } from "../stores/session.store";
 import { GamePhase, AppPhase, GameMode } from "../types";
 import { sessionState, clearSession } from "../stores/session.store";
 import { isDm } from "../stores/session.store";
-import { leaveSession } from "../services/signalr/multiplayer.service";
+import { leaveSession, startGame as startGameHub } from "../services/signalr/multiplayer.service";
+import { isInSession } from "../stores/session.store";
 import type { GameStartedPayload } from "../types/multiplayer";
 import { saveMap, type SavedMapData } from "../services/mapStorage";
 import { LogOut } from "lucide-solid";
@@ -258,13 +259,21 @@ const BoardGame: Component = () => {
   const restartGame = async () => {
     const currentMode = getCurrentMode();
     const currentMapId = selectedMapId();
-    console.log(
-      "[BoardGame] ========== RESTARTING GAME IN",
-      currentMode,
-      "MODE WITH MAP:",
-      currentMapId || "default",
-      "==========",
-    );
+
+    // Multiplayer host restart: re-dispatch via the hub so every client re-runs
+    // onMultiplayerGameStart with the session's unitAssignments. The local
+    // startGame() falls into the single-player DEFAULT_ENEMIES path and would
+    // replace player characters with the hardcoded "Sir Roland / Elara / Theron"
+    // trio — the bug the user reported as "weird default characters on restart".
+    if (isInSession() && isSessionHost()) {
+      try {
+        await startGameHub(currentMapId || "default");
+        return;
+      } catch (err) {
+        console.warn("[BoardGame] multiplayer restart failed, falling back to local", err);
+        // fall through to the local restart path below
+      }
+    }
 
     // Explicit, awaited teardown — deterministic ordering replaces the old
     // setTimeout(100) race window.
@@ -275,7 +284,6 @@ const BoardGame: Component = () => {
     resetGameState();
 
     await startGame(currentMode, currentMapId);
-    console.log("[BoardGame] Game restart complete");
   };
 
   const closeDrawers = () => {
@@ -668,13 +676,17 @@ const BoardGame: Component = () => {
             </h1>
           </div>
           <div class="flex items-center gap-2">
-            <button
-              class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 text-white text-sm transition-colors"
-              onClick={() => restartGame()}
-            >
-              <RotateCcw class="w-3.5 h-3.5" />
-              <span class="hidden sm:inline">Recommencer</span>
-            </button>
+            {/* Restart is solo-only or DM-only — non-host players in a session
+                shouldn't be able to blow up the game for everyone else. */}
+            <Show when={!isInSession() || isSessionHost()}>
+              <button
+                class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 text-white text-sm transition-colors"
+                onClick={() => restartGame()}
+              >
+                <RotateCcw class="w-3.5 h-3.5" />
+                <span class="hidden sm:inline">Recommencer</span>
+              </button>
+            </Show>
           </div>
         </header>
 
