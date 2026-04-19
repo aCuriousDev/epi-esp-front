@@ -2,7 +2,7 @@
  * EnemySpawnToast — Shows a notification to all players when the DM spawns an enemy.
  */
 
-import { Component, For, createEffect, createSignal, on } from "solid-js";
+import { Component, For, createEffect, createSignal, on, onCleanup } from "solid-js";
 import { Skull } from "lucide-solid";
 import { dmToolsState } from "../../stores/dmTools.store";
 
@@ -16,6 +16,7 @@ interface ToastEntry {
 export const EnemySpawnToast: Component = () => {
   const [toasts, setToasts] = createSignal<ToastEntry[]>([]);
   let nextKey = 0;
+  const pendingTimers = new Set<number>();
 
   createEffect(
     on(
@@ -28,12 +29,19 @@ export const EnemySpawnToast: Component = () => {
         const key = nextKey++;
         setToasts((prev) => [...prev, { ...latest, _key: key }]);
 
-        setTimeout(() => {
+        const timer = window.setTimeout(() => {
           setToasts((prev) => prev.filter((t) => t._key !== key));
+          pendingTimers.delete(timer);
         }, 4000);
+        pendingTimers.add(timer);
       },
     ),
   );
+
+  onCleanup(() => {
+    pendingTimers.forEach((t) => window.clearTimeout(t));
+    pendingTimers.clear();
+  });
 
   return (
     <div class="fixed top-24 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 pointer-events-none">

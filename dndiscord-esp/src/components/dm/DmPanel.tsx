@@ -57,8 +57,6 @@ const ENEMY_CATALOGUE: EnemyTemplate[] = [
     stats: { maxHealth: 120, currentHealth: 120, maxActionPoints: 7, currentActionPoints: 7, movementRange: 4, attackRange: 2, attackDamage: 22, defense: 10, initiative: 16 } },
 ];
 
-let spawnCounter = 0;
-
 // ═══════════════════════════════════════════════════════════════════
 
 export const DmPanel: Component = () => {
@@ -101,19 +99,19 @@ export const DmPanel: Component = () => {
       const tpl = ENEMY_CATALOGUE.find((t) => t.id === tplId);
       if (!tpl) return;
 
-      const uid = `dm_spawn_${tpl.id}_${++spawnCounter}`;
+      // crypto.randomUUID() is CSP-safe and collision-free across concurrent
+      // DMs; the previous module-local counter reused ids across browser
+      // tabs which caused duplicate-spawn races.
+      const uid = `dm_spawn_${tpl.id}_${crypto.randomUUID()}`;
       const unit: Unit = {
         id: uid, name: tpl.name, type: tpl.unitType, team: Team.ENEMY, position: pos,
         stats: { ...tpl.stats }, abilities: cloneAbilities(ENEMY_ABILITIES),
         statusEffects: [], isAlive: true, hasActed: false, hasMoved: false,
       };
 
-      // TODO FIX: Duplication bug — le MJ ajoute l'unité localement ici,
-      // puis le GameHub broadcast DmUnitSpawned à tous les clients.
-      // gameSync.ts filtre le DM via `isHost()`, mais si isHost() ne match pas
-      // (ex: reconnexion, race condition), l'unité est ajoutée 2 fois.
-      // Solution: soit ne PAS ajouter localement et attendre le broadcast,
-      // soit vérifier `units[uid]` avant addUnit dans gameSync.ts.
+      // Optimistic local add for the DM (gameSync skips the DM on the
+      // DmUnitSpawned broadcast via isHost()). The `units[uid]` guard in
+      // gameSync still protects against duplicate delivery on other clients.
       addUnit(unit);
       setTiles(posToKey(pos), "occupiedBy", uid);
       updatePathfinder();

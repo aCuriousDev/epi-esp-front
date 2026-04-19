@@ -98,6 +98,8 @@ export default function WalletPanel(props: WalletPanelProps) {
     }
   };
 
+  let modifyResetTimer: number | undefined;
+
   const handleModify = async (coinKey: string, delta: number) => {
     setModifying(coinKey);
     try {
@@ -117,7 +119,11 @@ export default function WalletPanel(props: WalletPanelProps) {
     } catch (err) {
       console.error("Failed to modify wallet", err);
     } finally {
-      setTimeout(() => setModifying(null), 300);
+      if (modifyResetTimer) window.clearTimeout(modifyResetTimer);
+      modifyResetTimer = window.setTimeout(() => {
+        setModifying(null);
+        modifyResetTimer = undefined;
+      }, 300);
     }
   };
 
@@ -128,6 +134,8 @@ export default function WalletPanel(props: WalletPanelProps) {
   };
 
   let unsubscribe: (() => void) | null = null;
+  let retryInterval: number | undefined;
+  let retryTimeout: number | undefined;
 
   onMount(async () => {
     await loadWallet();
@@ -139,18 +147,29 @@ export default function WalletPanel(props: WalletPanelProps) {
     if (signalRService.isConnected) {
       subscribe();
     } else {
-      const retry = setInterval(() => {
+      // Poll for a SignalR connection up to 5 s. Track the timer ids so
+      // onCleanup can cancel them if the component unmounts during the window.
+      retryInterval = window.setInterval(() => {
         if (signalRService.isConnected) {
-          clearInterval(retry);
+          if (retryInterval) window.clearInterval(retryInterval);
+          retryInterval = undefined;
+          if (retryTimeout) window.clearTimeout(retryTimeout);
+          retryTimeout = undefined;
           subscribe();
         }
       }, 500);
-      setTimeout(() => clearInterval(retry), 5000);
+      retryTimeout = window.setTimeout(() => {
+        if (retryInterval) window.clearInterval(retryInterval);
+        retryInterval = undefined;
+      }, 5000);
     }
   });
 
   onCleanup(() => {
     if (unsubscribe) unsubscribe();
+    if (modifyResetTimer) window.clearTimeout(modifyResetTimer);
+    if (retryInterval) window.clearInterval(retryInterval);
+    if (retryTimeout) window.clearTimeout(retryTimeout);
   });
 
   return (

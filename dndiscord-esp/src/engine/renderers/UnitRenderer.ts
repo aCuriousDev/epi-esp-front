@@ -19,7 +19,7 @@ import {
   QuadraticEase,
 } from '@babylonjs/core';
 import { Unit, UnitType, GridPosition, Team } from '../../types';
-import { gridToWorld } from '../../game';
+import { gridToWorld, gameState } from '../../game';
 import { ModelLoader } from '../ModelLoader';
 
 /**
@@ -635,13 +635,7 @@ export class UnitRenderer {
    * Check if a unit is currently selected
    */
   private isUnitSelected(unitId: string): boolean {
-    // Import game state dynamically to avoid circular dependencies
-    try {
-      const { gameState } = require('../../game');
-      return gameState.selectedUnit === unitId;
-    } catch {
-      return false;
-    }
+    return gameState.selectedUnit === unitId;
   }
 
   /**

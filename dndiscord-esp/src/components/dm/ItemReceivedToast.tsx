@@ -3,7 +3,7 @@
  * Visible to the recipient player only.
  */
 
-import { Component, Show, For, createEffect, createSignal, on } from "solid-js";
+import { Component, Show, For, createEffect, createSignal, on, onCleanup } from "solid-js";
 import { Package } from "lucide-solid";
 import { dmToolsState } from "../../stores/dmTools.store";
 import { getHubUserId } from "../../stores/session.store";
@@ -14,6 +14,7 @@ export const ItemReceivedToast: Component = () => {
     Array<ItemGrantedPayload & { _key: number }>
   >([]);
   let nextKey = 0;
+  const pendingTimers = new Set<number>();
 
   createEffect(
     on(
@@ -29,14 +30,20 @@ export const ItemReceivedToast: Component = () => {
           const key = nextKey++;
           setToasts((prev) => [...prev, { ...latest, _key: key }]);
 
-          // Auto-remove after 5s
-          setTimeout(() => {
+          const timer = window.setTimeout(() => {
             setToasts((prev) => prev.filter((t) => t._key !== key));
+            pendingTimers.delete(timer);
           }, 5000);
+          pendingTimers.add(timer);
         }
       },
     ),
   );
+
+  onCleanup(() => {
+    pendingTimers.forEach((t) => window.clearTimeout(t));
+    pendingTimers.clear();
+  });
 
   return (
     <div class="fixed bottom-20 right-4 z-50 flex flex-col gap-2 pointer-events-none">
