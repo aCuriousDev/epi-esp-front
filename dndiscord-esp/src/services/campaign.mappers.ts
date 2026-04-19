@@ -97,6 +97,20 @@ export const mapToAPICampaignStatus = (status: CampaignStatus): APICampaignStatu
   }
 };
 
+const GUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Display name fallback for legacy members that joined before the backend
+ * started seeding Nickname from the JWT. When nickname is missing and userId
+ * is a raw GUID, render a short compact label instead of the 36-char hex.
+ */
+function prettyMemberName(nickname: string | null | undefined, userId: string): string {
+  const trimmed = nickname?.trim();
+  if (trimmed) return trimmed;
+  if (GUID_SHAPE.test(userId)) return `Joueur #${userId.replace(/-/g, "").slice(0, 6)}`;
+  return userId;
+}
+
 /**
  * Map API campaign status (integer) to frontend status (string)
  */
@@ -129,7 +143,7 @@ export const mapCampaignResponse = (apiCampaign: CampaignDetailResponse): Campai
     currentPlayers: apiCampaign.memberCount,
     players: apiCampaign.members?.map(m => ({
       id: m.id,
-      username: m.nickname ?? m.userId,
+      username: prettyMemberName(m.nickname, m.userId),
       role: mapMemberRole(m.role),
       characterName: m.nickname,
       joinedAt: m.joinedAt,

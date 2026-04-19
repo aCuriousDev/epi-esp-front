@@ -11,6 +11,7 @@ import { sessionState, isHost } from "../stores/session.store";
 import { PlayerRole } from "../types/multiplayer";
 import {
   selectCharacter,
+  selectDefaultTemplate,
   startGame as startGameHub,
   leaveSession,
 } from "../services/signalr/multiplayer.service";
@@ -18,7 +19,8 @@ import {
   CharacterService,
   type CharacterDto,
 } from "../services/character.service";
-import { getAllMaps } from "../services/mapStorage";
+import { getAllMaps, loadMap as loadMapLocal } from "../services/mapStorage";
+import { MapService } from "../services/map.service";
 import type { GameStartedPayload } from "../types/multiplayer";
 import { safeConfirm } from "../services/ui/confirm";
 
@@ -30,6 +32,8 @@ interface LobbyScreenProps {
 export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
   const [characters, setCharacters] = createSignal<CharacterDto[]>([]);
   const [selectedCharId, setSelectedCharId] = createSignal<string | null>(null);
+  type DefaultTemplate = "warrior" | "mage" | "archer";
+  const [selectedTemplate, setSelectedTemplate] = createSignal<DefaultTemplate | null>(null);
   const [maps, setMaps] = createSignal<Array<{ id: string; name: string }>>([]);
   const [selectedMapId, setSelectedMapId] = createSignal<string | null>(null);
   const [copied, setCopied] = createSignal(false);
@@ -70,12 +74,31 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
 
   const handleCharacterSelect = async (charId: string | null) => {
     setSelectedCharId(charId);
+    setSelectedTemplate(null);
     try {
       await selectCharacter(charId);
     } catch (err) {
       console.warn("[Lobby] selectCharacter failed:", err);
     }
   };
+
+  const handleTemplateSelect = async (template: DefaultTemplate) => {
+    // Toggle off if the same preset is tapped twice.
+    const next: DefaultTemplate | null = selectedTemplate() === template ? null : template;
+    setSelectedTemplate(next);
+    setSelectedCharId(null);
+    try {
+      await selectDefaultTemplate(next);
+    } catch (err) {
+      console.warn("[Lobby] selectDefaultTemplate failed:", err);
+    }
+  };
+
+  const DEFAULT_TEMPLATES: Array<{ id: DefaultTemplate; label: string; blurb: string }> = [
+    { id: "warrior", label: "⚔️ Guerrier", blurb: "120 PV · mêlée puissante" },
+    { id: "mage",    label: "🔮 Mage",     blurb: "80 PV · dégâts à distance" },
+    { id: "archer",  label: "🏹 Archer",   blurb: "100 PV · mobile, longue portée" },
+  ];
 
   const handleStartGame = async () => {
     const mapId = selectedMapId();
@@ -88,12 +111,36 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
       return;
     setStarting(true);
     try {
+      // Campaign sessions only: auto-push the chosen map to the campaign's
+      // server-side map pool so the DM's "Cartes" tab is populated straight
+      // away, without needing the manual "Importer mes cartes locales" step.
+      // Best-effort — any failure here is swallowed so the game still starts.
+      const session = sessionState.session;
+      if (session?.campaignId && mapId && mapId !== "default") {
+        await maybePushMapToCampaign(session.campaignId, mapId);
+      }
       await startGameHub(mapId ?? "default");
     } catch (err: any) {
       console.error("[Lobby] startGame failed:", err);
       setStarting(false);
     }
   };
+
+  /** Upload the local map to the campaign if the server doesn't already have
+   * one with the same name. Never throws — the start-game flow proceeds on
+   * any error. */
+  async function maybePushMapToCampaign(campaignId: string, mapId: string): Promise<void> {
+    try {
+      const local = loadMapLocal(mapId);
+      if (!local) return;
+      const existing = await MapService.list(campaignId);
+      const alreadyThere = existing.some(m => m.name.toLowerCase() === local.name.toLowerCase());
+      if (alreadyThere) return;
+      await MapService.create(campaignId, { name: local.name, data: JSON.stringify(local) });
+    } catch (err) {
+      console.warn("[Lobby] maybePushMapToCampaign: best-effort seed failed", err);
+    }
+  }
 
   const handleLeave = async () => {
     try {
@@ -183,37 +230,53 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
               <h3 class="font-display text-xl text-white mb-4">
                 Votre personnage
               </h3>
-              <div class="space-y-2">
-                <button
-                  onClick={() => handleCharacterSelect(null)}
-                  class={`w-full text-left px-4 py-3 rounded-lg border transition ${
-                    selectedCharId() === null
-                      ? "border-blue-400 bg-blue-500/20 text-white"
-                      : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
-                  }`}
-                >
-                  Guerrier par d&eacute;faut
-                </button>
-                <For each={characters()}>
-                  {(char) => (
+
+              {/* Quickstart presets — no persisted character required. Each preset
+                  maps server-side to a different class with its own stats
+                  (BuildDefaultAssignment in GameHub). */}
+              <p class="text-xs text-white/60 uppercase tracking-wider mb-2">Départ rapide</p>
+              <div class="grid grid-cols-3 gap-2 mb-4">
+                <For each={DEFAULT_TEMPLATES}>
+                  {(tpl) => (
                     <button
-                      onClick={() => handleCharacterSelect(char.id)}
-                      class={`w-full text-left px-4 py-3 rounded-lg border transition ${
-                        selectedCharId() === char.id
-                          ? "border-blue-400 bg-blue-500/20 text-white"
+                      onClick={() => handleTemplateSelect(tpl.id)}
+                      class={`flex flex-col items-start gap-0.5 px-3 py-2.5 rounded-lg border text-left transition ${
+                        selectedTemplate() === tpl.id
+                          ? "border-amber-400 bg-amber-500/20 text-white"
                           : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
                       }`}
                     >
-                      <div class="flex justify-between items-center">
-                        <span class="font-medium">{char.name}</span>
-                        <span class="text-sm text-slate-400">
-                          {char.class} Nv.{char.level} - {char.maxHitPoints} PV
-                        </span>
-                      </div>
+                      <span class="text-sm font-semibold">{tpl.label}</span>
+                      <span class="text-[10px] text-white/60">{tpl.blurb}</span>
                     </button>
                   )}
                 </For>
               </div>
+
+              <Show when={characters().length > 0}>
+                <p class="text-xs text-white/60 uppercase tracking-wider mb-2">Mes personnages</p>
+                <div class="space-y-2">
+                  <For each={characters()}>
+                    {(char) => (
+                      <button
+                        onClick={() => handleCharacterSelect(char.id)}
+                        class={`w-full text-left px-4 py-3 rounded-lg border transition ${
+                          selectedCharId() === char.id
+                            ? "border-blue-400 bg-blue-500/20 text-white"
+                            : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+                        }`}
+                      >
+                        <div class="flex justify-between items-center">
+                          <span class="font-medium">{char.name}</span>
+                          <span class="text-sm text-slate-400">
+                            {char.class} Nv.{char.level} - {char.maxHitPoints} PV
+                          </span>
+                        </div>
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </Show>
             </div>
           </Show>
 

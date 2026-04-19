@@ -89,6 +89,7 @@ const HUB = {
   dmStartCombat: "DmStartCombat",
   dmRestartGame: "DmRestartGame",
   dmSwitchMap: "DmSwitchMap",
+  selectDefaultTemplate: "SelectDefaultTemplate",
 } as const;
 
 async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
@@ -241,6 +242,14 @@ export async function selectCharacter(
   characterId: string | null,
 ): Promise<void> {
   await signalRService.invoke(HUB.selectCharacter, characterId);
+}
+
+/** Pick a quickstart preset (warrior / mage / archer). Mutually exclusive with
+ * selectCharacter — whichever was called most recently wins server-side. */
+export async function selectDefaultTemplate(
+  templateId: "warrior" | "mage" | "archer" | null,
+): Promise<void> {
+  await signalRService.invoke(HUB.selectDefaultTemplate, templateId);
 }
 
 /** Lancer la partie (host uniquement). Envoie les données de la map pour les joueurs distants. */

@@ -16,6 +16,7 @@ import { posToKey } from "../../game/utils/GridUtils";
 import { produce } from "solid-js/store";
 import { sessionState, isHost, sessionHasDm } from "../../stores/session.store";
 import { applyCombatStarted } from "./combatStarted";
+import { getAllySpawnPositions } from "../../game/initialization/InitUnits";
 
 import { addCombatLog } from "../../game/stores/GameStateStore";
 import { addSpawnedEnemy } from "../../stores/dmTools.store";
@@ -186,9 +187,14 @@ export function registerGameSyncHandlers(): void {
     const next = applyCombatStarted({
       mode: gameState.mode,
       phase: gameState.phase,
+      allySpawnPositions: getAllySpawnPositions(gameState.mapId),
     });
     if (!next) return;
-    setGameState({ mode: next.mode, phase: next.phase });
+    setGameState({
+      mode: next.mode,
+      phase: next.phase,
+      highlightedTiles: next.highlightedTiles,
+    });
     addCombatLog("[MJ] Combat imminent — placez vos unités.", "system");
   });
 

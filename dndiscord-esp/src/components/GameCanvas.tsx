@@ -142,7 +142,12 @@ export const GameCanvas: Component = () => {
   let pendingCreateGrid: { tiles: typeof tiles; mapId: string | null } | null = null;
 
   const runCreateGrid = async (mapId: string | null) => {
-    if (!engineInstance) return;
+    // Double-check the engine is both alive AND ready — returnToMenu calls
+    // clearEngineState() then resetGameState() in quick succession; the tiles
+    // effect can re-fire during that window. Without this guard the build
+    // kicks off against a disposed Babylon scene and we get a storm of
+    // "Scene has been disposed" errors for every tile model load.
+    if (!engineInstance || !isEngineReady()) return;
     try {
       console.log('[GameCanvas] Creating grid (mapId:', mapId, ')');
       await engineInstance.createGrid(tiles, mapId);
@@ -153,7 +158,7 @@ export const GameCanvas: Component = () => {
       createGridInFlight = null;
       const queued = pendingCreateGrid;
       pendingCreateGrid = null;
-      if (queued && engineInstance) {
+      if (queued && engineInstance && isEngineReady()) {
         createGridInFlight = runCreateGrid(queued.mapId);
       }
     }
@@ -745,7 +750,13 @@ export function getEngine(): BabylonEngine | null {
 export async function clearEngineState(): Promise<void> {
   console.log('[GameCanvas] clearEngineState called');
   if (engineInstance) {
+    // Flip isEngineReady off BEFORE we start tearing down, so the tiles /
+    // units reactive effects see a not-ready engine and bail early instead
+    // of racing a createGrid against a disposed scene.
+    setIsEngineReady(false);
     await engineInstance.clearAll();
+    // Mark ready again so subsequent startGame calls can repopulate the scene.
+    setIsEngineReady(true);
   }
 }
 
