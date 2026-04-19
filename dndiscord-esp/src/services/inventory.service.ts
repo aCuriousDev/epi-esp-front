@@ -63,13 +63,19 @@ export const InventoryService = {
   },
 
   /**
-   * Jeter un objet (supprime l'entrée complète).
+   * Jeter un objet (supprime l'entrée complète). Quand le MJ supprime depuis son
+   * panneau d'inspection, fournir campaignId pour que le back valide l'auth MJ.
+   * Le propriétaire du personnage peut appeler sans campaignId.
    */
-  async removeEntry(characterId: string, entryId: string): Promise<void> {
-    await axios.delete(
-      `${API_URL}/api/games/inventory/${characterId}/entry/${entryId}`,
-      { headers: getAuthHeaders() },
-    );
+  async removeEntry(
+    characterId: string,
+    entryId: string,
+    campaignId?: string,
+  ): Promise<void> {
+    const url = campaignId
+      ? `${API_URL}/api/games/inventory/${characterId}/entry/${entryId}?campaignId=${campaignId}`
+      : `${API_URL}/api/games/inventory/${characterId}/entry/${entryId}`;
+    await axios.delete(url, { headers: getAuthHeaders() });
   },
 
   /**

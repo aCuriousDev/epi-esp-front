@@ -8,6 +8,8 @@ import {
   For,
   createSignal,
   createMemo,
+  createEffect,
+  on,
   onMount,
   onCleanup,
 } from "solid-js";
@@ -105,7 +107,6 @@ export default function DmPlayerInspectPanel() {
   });
 
   // ── Load inventory when unit changes ──
-  let prevCharId: string | null = null;
   let unsubscribe: (() => void) | null = null;
 
   const loadInventory = async (charId: string) => {
@@ -121,29 +122,26 @@ export default function DmPlayerInspectPanel() {
     }
   };
 
-  // Watch for unit changes via a createMemo + effect pattern (we rely on reactivity of unit())
   const currentCharId = createMemo(() => characterId());
 
-  // Reactive effect: re-load inventory when inspected character changes
-  const watchCharacter = createMemo(() => {
-    const charId = currentCharId();
-    if (charId && charId !== prevCharId) {
-      prevCharId = charId;
-      loadInventory(charId);
-
-      // Subscribe to inventory changes for this character
-      if (unsubscribe) unsubscribe();
-      unsubscribe = InventoryService.onInventoryChanged(handleInventoryChanged);
-    }
-    if (!charId) {
-      prevCharId = null;
-      setInventory([]);
-      if (unsubscribe) { unsubscribe(); unsubscribe = null; }
-    }
-    return charId;
-  });
-  // Force the memo to evaluate
-  watchCharacter();
+  // Reload inventory + resubscribe whenever the inspected character changes.
+  // createEffect(on(...)) keeps side effects out of memos — the previous
+  // createMemo-with-side-effects pattern tripped a subtle bug where
+  // handleInventoryChanged was referenced before it was defined.
+  createEffect(
+    on(currentCharId, (charId) => {
+      if (unsubscribe) {
+        unsubscribe();
+        unsubscribe = null;
+      }
+      if (charId) {
+        loadInventory(charId);
+        unsubscribe = InventoryService.onInventoryChanged(handleInventoryChanged);
+      } else {
+        setInventory([]);
+      }
+    }),
+  );
 
   onCleanup(() => {
     if (unsubscribe) unsubscribe();
@@ -179,29 +177,43 @@ export default function DmPlayerInspectPanel() {
   };
 
   // ── Give item handler ──
+  // Single code path: the hub's DmGrantItem now persists via the inventory
+  // service and broadcasts both ItemGranted (toast) and InventoryChanged
+  // (state). A global in-flight guard stops the "click item A then B before A
+  // resolves" double-grant race — a per-item disable wasn't enough.
+  const feedbackTimer: { id: ReturnType<typeof setTimeout> | null } = { id: null };
+
   const handleGiveItem = async (item: Item) => {
+    if (grantingItemId() !== null) return;
     const charId = currentCharId();
     const player = playerInfo();
     if (!charId || !player) return;
+    setGrantingItemId(item.id);
     try {
-      setGrantingItemId(item.id);
-      await InventoryService.giveItem(charId, { itemId: item.id, quantity: grantQuantity() });
-      // Broadcast toast notification
       await dmGrantItem({
         targetUserId: player.userId,
         itemId: item.id,
         itemName: item.name,
         quantity: grantQuantity(),
         description: item.description,
-      }).catch(() => {});
+      });
       setGivenItemId(item.id);
       setGrantQuantity(1);
-      setTimeout(() => { setGivenItemId(null); setGrantingItemId(null); }, 1200);
+      if (feedbackTimer.id) clearTimeout(feedbackTimer.id);
+      feedbackTimer.id = setTimeout(() => {
+        setGivenItemId(null);
+        setGrantingItemId(null);
+        feedbackTimer.id = null;
+      }, 1200);
     } catch (e: any) {
-      console.error("[DM Inspect] Give item failed:", e);
+      console.error("[DM Inspect] Grant item failed:", e);
       setGrantingItemId(null);
     }
   };
+
+  onCleanup(() => {
+    if (feedbackTimer.id) clearTimeout(feedbackTimer.id);
+  });
 
   const close = () => setDmInspectedUnit(null);
 

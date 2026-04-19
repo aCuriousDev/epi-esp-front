@@ -40,6 +40,8 @@ export interface InventoryChangedEvent {
 export interface GiveItemRequest {
   itemId: string;
   quantity: number;
+  /** Required by the back so the server can verify the caller is the DM of this campaign. */
+  campaignId: string;
 }
 
 // ---- Wallet (monnaies D&D 5e) ----

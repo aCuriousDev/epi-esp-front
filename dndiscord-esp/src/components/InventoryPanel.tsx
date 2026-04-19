@@ -19,6 +19,7 @@ import {
 import { InventoryService } from "../services/inventory.service";
 import { signalRService } from "../services/signalr/SignalRService";
 import { getCategoryStyle } from "../services/itemVisuals";
+import { sessionState } from "../stores/session.store";
 import ItemIcon from "./common/ItemIcon";
 import type {
   InventoryChangedEvent,
@@ -72,6 +73,12 @@ export default function InventoryPanel(props: InventoryPanelProps) {
   const [removingId, setRemovingId] = createSignal<string | null>(null);
   const [highlightId, setHighlightId] = createSignal<string | null>(null);
   const [givenItemId, setGivenItemId] = createSignal<string | null>(null);
+  // Single in-flight guard so clicking item A then item B before A resolves
+  // can't trigger a second give — per-item disabled wasn't enough.
+  const [isGiving, setIsGiving] = createSignal(false);
+
+  /** Campaign id for the current session (if any). Required by give + MJ-remove. */
+  const currentCampaignId = () => sessionState.session?.campaignId ?? null;
 
   // Reveal overlay plein écran quand un objet est reçu
   const [reveal, setReveal] = createSignal<RevealItem | null>(null);
@@ -119,8 +126,12 @@ export default function InventoryPanel(props: InventoryPanelProps) {
 
   const handleDrop = async (entry: InventoryEntry) => {
     setRemovingId(entry.id);
+    // Pass campaignId when the MJ is removing from someone else's bag so the
+    // back-side auth check accepts us. Owner removing their own stuff doesn't
+    // need it.
+    const campaignId = props.isMJ ? currentCampaignId() ?? undefined : undefined;
     try {
-      await InventoryService.removeEntry(props.characterId, entry.id);
+      await InventoryService.removeEntry(props.characterId, entry.id, campaignId);
       setTimeout(() => {
         if (entry.quantity > 1) {
           setEntries((prev) =>
@@ -141,20 +152,35 @@ export default function InventoryPanel(props: InventoryPanelProps) {
   };
 
   const handleGive = async (item: Item) => {
+    if (isGiving()) return;
+    const campaignId = currentCampaignId();
+    if (!campaignId) {
+      setError("Vous devez être dans une session pour donner un objet.");
+      return;
+    }
+    setIsGiving(true);
+    setGivenItemId(item.id);
     try {
-      setGivenItemId(item.id);
       await InventoryService.giveItem(props.characterId, {
         itemId: item.id,
         quantity: 1,
+        campaignId,
       });
-      // Flash "Offert !" reste visible 1.2s, puis disparaît
-      setTimeout(() => setGivenItemId(null), 1200);
+      // Flash "Offert !" stays visible briefly before clearing.
+      feedbackTimer = window.setTimeout(() => {
+        setGivenItemId(null);
+        setIsGiving(false);
+        feedbackTimer = undefined;
+      }, 1200);
     } catch (err) {
       console.error("Failed to give item", err);
       setError("Impossible d'ajouter l'objet.");
       setGivenItemId(null);
+      setIsGiving(false);
     }
   };
+
+  let feedbackTimer: number | undefined;
 
   // ---- SignalR event handling ----
 
@@ -201,6 +227,8 @@ export default function InventoryPanel(props: InventoryPanelProps) {
   };
 
   let unsubscribe: (() => void) | null = null;
+  let retryInterval: number | undefined;
+  let retryTimeout: number | undefined;
 
   onMount(async () => {
     await loadInventory();
@@ -213,13 +241,21 @@ export default function InventoryPanel(props: InventoryPanelProps) {
     if (signalRService.isConnected) {
       subscribe();
     } else {
-      const retry = setInterval(() => {
+      // Poll for a connection up to 5 s. Track the timer ids so onCleanup can
+      // clear them if the component unmounts during the retry window.
+      retryInterval = window.setInterval(() => {
         if (signalRService.isConnected) {
-          clearInterval(retry);
+          if (retryInterval) window.clearInterval(retryInterval);
+          retryInterval = undefined;
+          if (retryTimeout) window.clearTimeout(retryTimeout);
+          retryTimeout = undefined;
           subscribe();
         }
       }, 500);
-      setTimeout(() => clearInterval(retry), 5000);
+      retryTimeout = window.setTimeout(() => {
+        if (retryInterval) window.clearInterval(retryInterval);
+        retryInterval = undefined;
+      }, 5000);
     }
   });
 
@@ -227,6 +263,9 @@ export default function InventoryPanel(props: InventoryPanelProps) {
     if (unsubscribe) unsubscribe();
     if (revealTimer1) clearTimeout(revealTimer1);
     if (revealTimer2) clearTimeout(revealTimer2);
+    if (feedbackTimer) window.clearTimeout(feedbackTimer);
+    if (retryInterval) window.clearInterval(retryInterval);
+    if (retryTimeout) window.clearTimeout(retryTimeout);
   });
 
   // ---- Derived ----
@@ -510,7 +549,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
                           </div>
                           <button
                             onClick={() => handleGive(item)}
-                            disabled={justGiven()}
+                            disabled={justGiven() || isGiving()}
                             class="mt-2 py-1 w-full rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-center text-[10px] font-semibold text-white flex items-center justify-center gap-1 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <Plus class="w-3 h-3" />
