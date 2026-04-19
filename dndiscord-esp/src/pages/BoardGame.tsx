@@ -44,7 +44,7 @@ import { getHubUserId } from "../stores/session.store";
 import { GamePhase, AppPhase, GameMode } from "../types";
 import { sessionState, clearSession } from "../stores/session.store";
 import { isDm } from "../stores/session.store";
-import { leaveSession, startGame as startGameHub } from "../services/signalr/multiplayer.service";
+import { leaveSession, dmRestartGame as dmRestartGameHub } from "../services/signalr/multiplayer.service";
 import { isInSession } from "../stores/session.store";
 import type { GameStartedPayload } from "../types/multiplayer";
 import { saveMap, type SavedMapData } from "../services/mapStorage";
@@ -206,10 +206,12 @@ const BoardGame: Component = () => {
     setSelectedMapId(payload.mapId === "default" ? null : payload.mapId);
     setAppPhase(AppPhase.IN_GAME);
 
-    const modeForSession = () => {
-      const s = sessionState.session;
-      return s?.campaignId ? GameMode.COMBAT : GameMode.FREE_ROAM;
-    };
+    // Every multiplayer game starts in Free Roam. The DM decides when to flip the
+    // session into COMBAT via DmPanel's "Démarrer combat" button, which broadcasts
+    // CombatStarted to every client. The old `campaignId ? COMBAT : FREE_ROAM`
+    // heuristic forced campaign sessions straight into prep phase, stranding
+    // turn order in an empty state (the "AI doesn't play" symptom).
+    const modeForSession = () => GameMode.FREE_ROAM;
 
     let attempts = 0;
     const checkEngine = () => {
@@ -260,17 +262,18 @@ const BoardGame: Component = () => {
     const currentMode = getCurrentMode();
     const currentMapId = selectedMapId();
 
-    // Multiplayer host restart: re-dispatch via the hub so every client re-runs
-    // onMultiplayerGameStart with the session's unitAssignments. The local
-    // startGame() falls into the single-player DEFAULT_ENEMIES path and would
-    // replace player characters with the hardcoded "Sir Roland / Elara / Theron"
-    // trio — the bug the user reported as "weird default characters on restart".
+    // Multiplayer host restart: use the dedicated DmRestartGame hub method,
+    // which rebuilds assignments and broadcasts GameStarted to every client.
+    // Plain StartGame would throw "Game already started" because the session
+    // is in InProgress state. The old local fallback silently regenerated the
+    // single-player DEFAULT_ENEMIES trio on the host only and left players
+    // stranded on their old state — that was the "weird defaults" bug.
     if (isInSession() && isSessionHost()) {
       try {
-        await startGameHub(currentMapId || "default");
+        await dmRestartGameHub(currentMapId || "default");
         return;
       } catch (err) {
-        console.warn("[BoardGame] multiplayer restart failed, falling back to local", err);
+        console.warn("[BoardGame] DmRestartGame failed, falling back to local", err);
         // fall through to the local restart path below
       }
     }
@@ -364,6 +367,16 @@ const BoardGame: Component = () => {
     if (gameState.phase !== GamePhase.PLAYER_TURN) return false;
     const current = getCurrentUnit();
     return !!current && current.team === "player" && isCurrentUnitMine();
+  };
+
+  // DM override: skip the current enemy turn. Needed because the DM has no
+  // unit of their own; without this surface, enemies that can't find a valid
+  // action would stall the turn order indefinitely.
+  const canDmEndEnemyTurn = () => {
+    if (!isDm()) return false;
+    if (gameState.phase !== GamePhase.ENEMY_TURN) return false;
+    const current = getCurrentUnit();
+    return !!current && current.team === "enemy";
   };
 
   // AP-spent derivation for the end-turn confirm prompt. If the player
@@ -942,6 +955,20 @@ const BoardGame: Component = () => {
                 >
                   <Flag class="w-4 h-4" />
                   <span>{endTurnPending() ? "Confirmer" : "Fin du tour"}</span>
+                </button>
+              </Show>
+
+              {/* DM-only fallback: skip a stuck enemy turn (e.g. no path, no
+                  target). Without this the whole turn order stalls because
+                  the DM has no player unit of their own. */}
+              <Show when={canDmEndEnemyTurn()}>
+                <button
+                  class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-lg transition-colors focus-ring-gold bg-red-600/90 hover:bg-red-500 text-white border border-red-400/40"
+                  onClick={() => endUnitTurn()}
+                  title="MJ : passer le tour de cet ennemi"
+                >
+                  <Flag class="w-4 h-4" />
+                  <span>Passer tour ennemi</span>
                 </button>
               </Show>
             </div>

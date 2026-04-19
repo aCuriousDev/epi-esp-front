@@ -123,11 +123,9 @@ export default function DmPlayerInspectPanel() {
   };
 
   const currentCharId = createMemo(() => characterId());
+  const currentUnitId = createMemo(() => dmInspectedUnit());
 
   // Reload inventory + resubscribe whenever the inspected character changes.
-  // createEffect(on(...)) keeps side effects out of memos — the previous
-  // createMemo-with-side-effects pattern tripped a subtle bug where
-  // handleInventoryChanged was referenced before it was defined.
   createEffect(
     on(currentCharId, (charId) => {
       if (unsubscribe) {
@@ -140,6 +138,18 @@ export default function DmPlayerInspectPanel() {
       } else {
         setInventory([]);
       }
+    }),
+  );
+
+  // Reset the sub-view + the in-flight grant guard when the DM clicks a
+  // different player's unit. Without this the panel stays on (e.g.) the
+  // "Donner" tab showing stale state from the previous inspect, which looked
+  // like "the panel doesn't switch" in testing.
+  createEffect(
+    on(currentUnitId, () => {
+      setView("stats");
+      setGrantingItemId(null);
+      setGivenItemId(null);
     }),
   );
 
@@ -357,7 +367,15 @@ export default function DmPlayerInspectPanel() {
             <Show when={view() === "give"}>
               <div class="space-y-1.5">
                 <Show when={!currentCharId()}>
-                  <p class="text-[9px] text-amber-300/60 text-center py-2">Ce joueur n'a pas de personnage sélectionné</p>
+                  {/* Distinguish "player exists but character selection hasn't
+                      reached us yet" (likely a timing issue after session join)
+                      vs "unit belongs to no session player". The first is a
+                      loading-state; the second is genuinely stuck. */}
+                  <p class="text-[9px] text-amber-300/60 text-center py-2">
+                    {playerInfo()
+                      ? "Chargement du personnage… (si persiste, le joueur doit resélectionner son personnage dans le lobby)"
+                      : "Impossible d'associer cette unité à un joueur de la session"}
+                  </p>
                 </Show>
                 <Show when={currentCharId()}>
                   {/* Search */}

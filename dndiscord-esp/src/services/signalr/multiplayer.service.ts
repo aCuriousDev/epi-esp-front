@@ -87,6 +87,7 @@ const HUB = {
   dmGrantItem: "DmGrantItem",
   dmSpawnUnit: "DmSpawnUnit",
   dmStartCombat: "DmStartCombat",
+  dmRestartGame: "DmRestartGame",
 } as const;
 
 async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
@@ -251,6 +252,20 @@ export async function startGame(mapId: string): Promise<void> {
     }
   }
   await signalRService.invoke(HUB.startGame, mapId, mapData);
+}
+
+/** DM-only: restart an in-progress session. Server rebuilds assignments and
+ * re-broadcasts GameStarted to every client. Unlike startGame, this doesn't
+ * require the session to be in Lobby state. */
+export async function dmRestartGame(mapId: string): Promise<void> {
+  let mapData: string | null = null;
+  if (mapId && mapId !== "default") {
+    const map = loadMap(mapId);
+    if (map) {
+      mapData = JSON.stringify(map);
+    }
+  }
+  await signalRService.invoke(HUB.dmRestartGame, mapId, mapData);
 }
 
 // --- Actions de jeu (E2.3, server-authoritative) ---

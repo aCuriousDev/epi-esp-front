@@ -99,7 +99,11 @@ export default function CampaignsPage() {
       navigate(`/campaigns/${joined.id}`);
     } catch (err: any) {
       console.error("Failed to join campaign:", err);
-      const msg = err?.response?.data?.title
+      // ASP.NET's ProblemDetails puts the human-readable reason in `detail`
+      // (lowercase). Reading only `title`/`error` silently swallowed the real
+      // message ("Invalid invite code", "You are already a member", etc.).
+      const msg = err?.response?.data?.detail
+        ?? err?.response?.data?.title
         ?? err?.response?.data?.error
         ?? "Code invalide ou campagne introuvable.";
       setJoinError(msg);
@@ -157,6 +161,10 @@ export default function CampaignsPage() {
           <label class="block text-sm text-slate-300 mb-2 font-medium">
             Rejoindre avec un code d'invitation
           </label>
+          <p class="text-xs text-slate-500 mb-2">
+            Ce code est généré par le MJ depuis la page de la campagne (bouton "Générer un code").
+            Il est distinct du code de session affiché en partie.
+          </p>
           <div class="flex flex-col sm:flex-row gap-2">
             <input
               type="text"
