@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
+  Swords,
   X,
 } from "lucide-solid";
 import { isDm, getOtherPlayers, getCurrentSession } from "../../stores/session.store";
@@ -33,12 +34,13 @@ import {
 import {
   dmHiddenRoll,
   dmSpawnUnit,
+  dmStartCombat,
 } from "../../services/signalr/multiplayer.service";
 import { units, addUnit } from "../../game/stores/UnitsStore";
 import { setTiles, updatePathfinder } from "../../game/stores/TilesStore";
-import { addCombatLog } from "../../game/stores/GameStateStore";
+import { addCombatLog, gameState } from "../../game/stores/GameStateStore";
 import { posToKey } from "../../game/utils/GridUtils";
-import { UnitType, Team } from "../../types";
+import { UnitType, Team, GamePhase } from "../../types";
 import type { Unit, GridPosition } from "../../types";
 import { ENEMY_ABILITIES, cloneAbilities } from "../../game/abilities/AbilityDefinitions";
 
@@ -185,6 +187,28 @@ export const DmPanel: Component = () => {
         </button>
 
         <Show when={isExpanded()}>
+          {/* Prominent combat trigger — only surfaced while the session is still
+              in free roam. Once triggered the backend broadcasts CombatStarted and
+              every client flips to COMBAT_PREPARATION; the button falls away. */}
+          <Show when={gameState.phase === GamePhase.FREE_ROAM}>
+            <button
+              onClick={async () => {
+                try {
+                  await dmStartCombat();
+                  flash("⚔️ Combat déclenché");
+                } catch (err) {
+                  console.warn("[DmPanel] dmStartCombat failed", err);
+                  flash("Échec : impossible de lancer le combat");
+                }
+              }}
+              class="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-red-600/80 to-rose-600/80 hover:from-red-500 hover:to-rose-500 text-white text-xs font-semibold border border-red-400/40 shadow-lg transition-colors cursor-pointer"
+              title="Démarrer la phase de combat — tous les joueurs passent en préparation"
+            >
+              <Swords class="w-3.5 h-3.5" />
+              Démarrer combat
+            </button>
+          </Show>
+
           {/* Tabs */}
           <div class="flex gap-0.5 mt-2">
             <DmTab active={activeTab() === "move"} onClick={() => switchTab("move")} label="Déplacer" />

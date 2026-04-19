@@ -86,6 +86,7 @@ const HUB = {
   dmHiddenRoll: "DmHiddenRoll",
   dmGrantItem: "DmGrantItem",
   dmSpawnUnit: "DmSpawnUnit",
+  dmStartCombat: "DmStartCombat",
 } as const;
 
 async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
@@ -345,6 +346,12 @@ export async function dmGrantItem(payload: DmGrantItemPayload): Promise<void> {
 /** DM spawns a new enemy unit. */
 export async function dmSpawnUnit(payload: DmSpawnUnitPayload): Promise<void> {
   await signalRService.invoke(HUB.dmSpawnUnit, payload);
+}
+
+/** DM flips the session from free-roam into combat preparation. Server broadcasts
+ * CombatStarted to every client in the session group. */
+export async function dmStartCombat(): Promise<void> {
+  await signalRService.invoke(HUB.dmStartCombat);
 }
 
 // --- Enregistrement des handlers d'événements ---

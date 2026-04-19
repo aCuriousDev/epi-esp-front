@@ -6,15 +6,16 @@
 import { signalRService } from "./SignalRService";
 import type { GameMessage, MoveResult, TurnEndedPayload, GameStateSnapshotPayload, DmMoveTokenPayload, DmSpawnUnitPayload } from "../../types/multiplayer";
 import type { GridPosition, Unit, UnitType } from "../../types";
-import { Team } from "../../types";
+import { GameMode, GamePhase, Team } from "../../types";
 import { units, setUnits } from "../../game/stores/UnitsStore";
 import { addUnit } from "../../game/stores/UnitsStore";
 import { tiles, setTiles } from "../../game/stores/TilesStore";
-import { setGameState } from "../../game/stores/GameStateStore";
+import { gameState, setGameState } from "../../game/stores/GameStateStore";
 import { updatePathfinder } from "../../game/stores/TilesStore";
 import { posToKey } from "../../game/utils/GridUtils";
 import { produce } from "solid-js/store";
 import { sessionState, isHost, sessionHasDm } from "../../stores/session.store";
+import { applyCombatStarted } from "./combatStarted";
 
 import { addCombatLog } from "../../game/stores/GameStateStore";
 import { addSpawnedEnemy } from "../../stores/dmTools.store";
@@ -177,5 +178,17 @@ export function registerGameSyncHandlers(): void {
 
     addCombatLog(`[MJ] ${unit.name} apparaît en (${pos.x}, ${pos.z}) !`, "system");
     addSpawnedEnemy({ name: unit.name, x: pos.x, z: pos.z });
+  });
+
+  // DM flipped the session from free roam into combat preparation.
+  signalRService.on("CombatStarted", (_message: unknown) => {
+    if (!sessionHasDm()) return;
+    const next = applyCombatStarted({
+      mode: gameState.mode,
+      phase: gameState.phase,
+    });
+    if (!next) return;
+    setGameState({ mode: next.mode, phase: next.phase });
+    addCombatLog("[MJ] Combat imminent — placez vos unités.", "system");
   });
 }
