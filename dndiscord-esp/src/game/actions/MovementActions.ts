@@ -24,6 +24,22 @@ import { playFootstepSound, playSelectSound } from '../audio/SoundIntegration';
 // UNIT SELECTION
 // ============================================
 
+/**
+ * Clear the current unit selection. Also clears ability targeting and
+ * range highlights so the board returns to its "nothing selected" state.
+ * Safe to call even when nothing is selected.
+ */
+export function deselectUnit(): void {
+  batch(() => {
+    setGameState({
+      selectedUnit: null,
+      selectedAbility: null,
+      highlightedTiles: [],
+      targetableTiles: [],
+    });
+  });
+}
+
 export function selectUnit(unitId: string): void {
   const unit = units[unitId];
   if (!unit || !unit.isAlive) return;
