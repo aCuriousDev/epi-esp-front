@@ -25,6 +25,8 @@ import { ItemReceivedToast } from "../components/dm/ItemReceivedToast";
 import { EnemySpawnToast } from "../components/dm/EnemySpawnToast";
 import InventoryPanel from "../components/InventoryPanel";
 import WalletPanel from "../components/WalletPanel";
+import { PlayerHotbar } from "../components/hotbar/PlayerHotbar";
+import { UnitInfoCardTop } from "../components/hotbar/UnitInfoCardPosition";
 import { clearAllDialogues } from "../stores/dialogue.store";
 import {
   gameState,
@@ -313,13 +315,15 @@ const BoardGame: Component = () => {
   const [leftDrawerOpen, setLeftDrawerOpen] = createSignal(false);
   const [rightDrawerOpen, setRightDrawerOpen] = createSignal(false);
 
-  // Auto-open the unit info drawer the first time a selection happens. We
-  // only force-open on a selection transition — any manual close by the
-  // user stays closed until they select a different unit.
+  // Auto-open the unit info drawer the first time a selection happens. Only
+  // applies to the DM — non-DM players get a compact UnitInfoCard floating
+  // at the top of the canvas plus the persistent bottom hotbar, so the
+  // drawer would be redundant noise. We still force-open on a selection
+  // transition for the DM; manual close stays closed until a new selection.
   let lastAutoOpenedFor: string | null = null;
   createEffect(() => {
     const sel = gameState.selectedUnit;
-    if (sel && sel !== lastAutoOpenedFor) {
+    if (sel && sel !== lastAutoOpenedFor && isDm()) {
       lastAutoOpenedFor = sel;
       setLeftDrawerOpen(true);
       setRightDrawerOpen(false);
@@ -721,6 +725,12 @@ const BoardGame: Component = () => {
             {/* Enemy spawn notification toasts */}
             <EnemySpawnToast />
 
+            {/* Compact unit info card (top-center) + persistent player hotbar
+                (bottom-center) — non-DM UX replacing the old auto-opening
+                drawer. DM keeps the drawer via the effect above. */}
+            <UnitInfoCardTop />
+            <PlayerHotbar />
+
             {/* Loading Overlay */}
             <Show when={!isEngineReady()}>
               <div class="absolute inset-0 bg-game-darker/95 flex items-center justify-center z-50">
@@ -938,7 +948,11 @@ const BoardGame: Component = () => {
                 mis-clicked with camera or help controls. Reset View
                 lives in the help cluster bottom-left instead. */}
             <div class="absolute bottom-4 right-3 sm:right-4 z-20 pr-safe-right pb-safe-bottom flex flex-col gap-2 items-end">
-              <Show when={canEndPlayerTurn()}>
+              {/* DM-only: players have a Fin-du-tour button inside the hotbar;
+                  this floating variant stays for the DM perspective where
+                  they still need to see whose end-turn is pending (for the
+                  visible-turn-order debug flow). */}
+              <Show when={canEndPlayerTurn() && isDm()}>
                 <Show when={endTurnPending()}>
                   <div class="px-3 py-1.5 rounded-lg bg-amber-600/90 text-white text-xs font-medium shadow-lg border border-white/10 animate-pulse">
                     Aucun AP dépensé — reclique pour confirmer
