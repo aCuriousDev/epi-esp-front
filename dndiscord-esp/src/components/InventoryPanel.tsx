@@ -15,6 +15,7 @@ import {
   Sparkles,
   Search,
   Check,
+  Beaker,
 } from "lucide-solid";
 import { InventoryService } from "../services/inventory.service";
 import { signalRService } from "../services/signalr/SignalRService";
@@ -73,6 +74,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
   const [removingId, setRemovingId] = createSignal<string | null>(null);
   const [highlightId, setHighlightId] = createSignal<string | null>(null);
   const [givenItemId, setGivenItemId] = createSignal<string | null>(null);
+  const [usingId, setUsingId] = createSignal<string | null>(null);
   // Single in-flight guard so clicking item A then item B before A resolves
   // can't trigger a second give — per-item disabled wasn't enough.
   const [isGiving, setIsGiving] = createSignal(false);
@@ -148,6 +150,24 @@ export default function InventoryPanel(props: InventoryPanelProps) {
       console.error("Failed to remove entry", err);
       setError("Impossible de jeter l'objet.");
       setRemovingId(null);
+    }
+  };
+
+  const handleUse = async (entry: InventoryEntry) => {
+    if (usingId()) return;
+    setUsingId(entry.id);
+    try {
+      await InventoryService.useEntry(
+        props.characterId,
+        entry.id,
+        currentCampaignId() ?? undefined,
+      );
+      // Success: InventoryChanged + InventoryItemUsed will update the UI via SignalR.
+    } catch (err) {
+      console.error("Failed to use entry", err);
+      setError("Impossible d'utiliser cet objet.");
+    } finally {
+      setUsingId(null);
     }
   };
 
@@ -425,6 +445,18 @@ export default function InventoryPanel(props: InventoryPanelProps) {
                           {entry.item.description}
                         </div>
                       </div>
+
+                      {/* Use button on consumables (owner-only — the back enforces) */}
+                      <Show when={entry.item.category === "Consumable"}>
+                        <button
+                          onClick={() => handleUse(entry)}
+                          disabled={usingId() === entry.id}
+                          class="mt-2 py-1 w-full rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/30 text-[10px] font-semibold text-emerald-200 flex items-center justify-center gap-1 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Beaker class="w-3 h-3" />
+                          {usingId() === entry.id ? "…" : "Utiliser"}
+                        </button>
+                      </Show>
                     </div>
                   );
                 }}

@@ -79,6 +79,20 @@ export const InventoryService = {
   },
 
   /**
+   * Consommer une unité d'un objet (potion bue, parchemin lu, …). Propriétaire uniquement.
+   * Fournir campaignId pour que le back puisse broadcast dans le groupe de session.
+   */
+  async useEntry(
+    characterId: string,
+    entryId: string,
+    campaignId?: string,
+  ): Promise<void> {
+    const base = `${API_URL}/api/games/inventory/${characterId}/entry/${entryId}/use`;
+    const url = campaignId ? `${base}?campaignId=${campaignId}` : base;
+    await axios.post(url, null, { headers: getAuthHeaders() });
+  },
+
+  /**
    * S'abonne aux événements InventoryChanged diffusés par le back.
    * Retourne une fonction de désabonnement.
    * Nécessite que signalRService.connect() ait déjà été appelé.
