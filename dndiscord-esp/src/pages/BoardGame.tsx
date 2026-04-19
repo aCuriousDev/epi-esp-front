@@ -1,6 +1,7 @@
-import { Component, Show, onMount, onCleanup, createSignal } from "solid-js";
+import { Component, Show, onMount, onCleanup, createSignal, createEffect } from "solid-js";
 import { useNavigate, useLocation } from "@solidjs/router";
-import { ArrowLeft, RotateCcw, Check, Hand, MousePointer, Move as MoveIcon } from "lucide-solid";
+import { ArrowLeft, RotateCcw, Check, Hand, MousePointer, Move as MoveIcon, Flag, HelpCircle, X, Settings as SettingsIcon } from "lucide-solid";
+import { InGameSettingsModal } from "../components/InGameSettingsModal";
 import { getPhaseIcon } from "../components/common/icons";
 import {
   GameCanvas,
@@ -33,7 +34,11 @@ import {
   resetGameState,
   clearUnits,
   clearTiles,
+  getCurrentUnit,
+  endUnitTurn,
+  selectUnit,
 } from "../game";
+import { getHubUserId } from "../stores/session.store";
 import { GamePhase, AppPhase, GameMode } from "../types";
 import { sessionState, clearSession } from "../stores/session.store";
 import { isDm } from "../stores/session.store";
@@ -235,25 +240,20 @@ const BoardGame: Component = () => {
     clearSession();
   };
 
-  const returnToMenu = () => {
+  const returnToMenu = async () => {
     console.log("[BoardGame] ========== RETURNING TO MENU ==========");
-    console.log("[BoardGame] Clearing engine state...");
+    // Wait for the 3D reset to finish before touching stores so the tiles
+    // effect doesn't race against an in-flight teardown.
+    await clearEngineState();
 
-    // FIRST: Clear the 3D engine (removes all meshes)
-    clearEngineState();
-
-    console.log("[BoardGame] Clearing units, tiles, and game state...");
-    // THEN: Clear all game state stores
     clearUnits();
     clearTiles();
     resetGameState();
 
-    console.log("[BoardGame] All state cleared, navigating to home");
-    // Navigate back to main menu
     navigate("/");
   };
 
-  const restartGame = () => {
+  const restartGame = async () => {
     const currentMode = getCurrentMode();
     const currentMapId = selectedMapId();
     console.log(
@@ -264,22 +264,16 @@ const BoardGame: Component = () => {
       "==========",
     );
 
-    console.log("[BoardGame] Clearing game state stores...");
+    // Explicit, awaited teardown — deterministic ordering replaces the old
+    // setTimeout(100) race window.
+    await clearEngineState();
+
     clearUnits();
     clearTiles();
     resetGameState();
 
-    // Wait a bit for cleanup effects to process, then reinitialize
-    setTimeout(() => {
-      console.log(
-        "[BoardGame] Re-initializing game in",
-        currentMode,
-        "mode with map:",
-        currentMapId || "default",
-      );
-      startGame(currentMode, currentMapId);
-      console.log("[BoardGame] Game restart complete");
-    }, 100);
+    await startGame(currentMode, currentMapId);
+    console.log("[BoardGame] Game restart complete");
   };
 
   const closeDrawers = () => {
@@ -305,6 +299,129 @@ const BoardGame: Component = () => {
 
   const [leftDrawerOpen, setLeftDrawerOpen] = createSignal(false);
   const [rightDrawerOpen, setRightDrawerOpen] = createSignal(false);
+
+  // Auto-open the unit info drawer the first time a selection happens. We
+  // only force-open on a selection transition — any manual close by the
+  // user stays closed until they select a different unit.
+  let lastAutoOpenedFor: string | null = null;
+  createEffect(() => {
+    const sel = gameState.selectedUnit;
+    if (sel && sel !== lastAutoOpenedFor) {
+      lastAutoOpenedFor = sel;
+      setLeftDrawerOpen(true);
+      setRightDrawerOpen(false);
+    }
+    if (!sel) {
+      lastAutoOpenedFor = null;
+    }
+  });
+
+  // Ownership check — in multiplayer, only the user who owns the current
+  // unit (or single-player, where ownership is undefined) sees the End
+  // Turn button and triggers auto-select on turn start.
+  const isCurrentUnitMine = (): boolean => {
+    const current = getCurrentUnit();
+    if (!current || current.team !== "player") return false;
+    const isOwned = !!current.ownerUserId;
+    const me = getHubUserId();
+    return !isOwned || current.ownerUserId === me;
+  };
+
+  // Auto-select the current player unit when a new PLAYER_TURN starts
+  // IF the local user owns it. Respects the ownership gate so remote
+  // players don't have another player's unit auto-selected. A manual
+  // deselect stays deselected until the turn advances again.
+  let lastAutoSelectedForIndex = -1;
+  createEffect(() => {
+    const phase = gameState.phase;
+    const idx = gameState.currentUnitIndex;
+    if (phase !== GamePhase.PLAYER_TURN) {
+      lastAutoSelectedForIndex = -1;
+      return;
+    }
+    if (idx === lastAutoSelectedForIndex) return;
+    lastAutoSelectedForIndex = idx;
+    const current = getCurrentUnit();
+    if (current && isCurrentUnitMine() && gameState.selectedUnit !== current.id) {
+      selectUnit(current.id);
+    }
+  });
+
+  // Floating End Turn is only visible and clickable when it matters.
+  // Ownership gated so remote players don't see "Fin du tour" on turns
+  // that aren't theirs.
+  const canEndPlayerTurn = () => {
+    if (gameState.phase !== GamePhase.PLAYER_TURN) return false;
+    const current = getCurrentUnit();
+    return !!current && current.team === "player" && isCurrentUnitMine();
+  };
+
+  // AP-spent derivation for the end-turn confirm prompt. If the player
+  // hasn't moved OR acted yet, the End Turn button asks for a second
+  // click to avoid accidental skip of a fresh turn.
+  const currentUnitHasSpentAP = () => {
+    const u = getCurrentUnit();
+    if (!u) return false;
+    return (
+      !!u.hasMoved ||
+      !!u.hasActed ||
+      u.stats.currentActionPoints < u.stats.maxActionPoints
+    );
+  };
+  // Controls-help panel: collapsed to a "?" icon by default to keep the
+  // canvas uncluttered. Auto-expands for a few seconds when a combat /
+  // dungeon run starts, then retracts so the user can reopen it on demand.
+  const [helpOpen, setHelpOpen] = createSignal(false);
+  let helpAutoRetractTimer: number | null = null;
+  let lastHelpAutoShownForPhase: GamePhase | null = null;
+  createEffect(() => {
+    const phase = gameState.phase;
+    const isCombatish =
+      phase === GamePhase.PLAYER_TURN ||
+      phase === GamePhase.ENEMY_TURN ||
+      phase === GamePhase.COMBAT_PREPARATION;
+    if (isCombatish && lastHelpAutoShownForPhase === null) {
+      lastHelpAutoShownForPhase = phase;
+      setHelpOpen(true);
+      if (helpAutoRetractTimer !== null) clearTimeout(helpAutoRetractTimer);
+      helpAutoRetractTimer = window.setTimeout(() => {
+        setHelpOpen(false);
+        helpAutoRetractTimer = null;
+      }, 5000);
+    }
+    // Reset the one-shot so a fresh combat after a return-to-menu triggers
+    // the help bubble again.
+    if (!isCombatish) {
+      lastHelpAutoShownForPhase = null;
+    }
+  });
+  onCleanup(() => {
+    if (helpAutoRetractTimer !== null) {
+      clearTimeout(helpAutoRetractTimer);
+      helpAutoRetractTimer = null;
+    }
+  });
+
+  const [endTurnPending, setEndTurnPending] = createSignal(false);
+  const [settingsOpen, setSettingsOpen] = createSignal(false);
+  let endTurnPendingTimer: number | null = null;
+  const handleEndTurnClick = () => {
+    if (!canEndPlayerTurn()) return;
+    if (currentUnitHasSpentAP() || endTurnPending()) {
+      if (endTurnPendingTimer !== null) {
+        clearTimeout(endTurnPendingTimer);
+        endTurnPendingTimer = null;
+      }
+      setEndTurnPending(false);
+      endUnitTurn();
+      return;
+    }
+    setEndTurnPending(true);
+    endTurnPendingTimer = window.setTimeout(() => {
+      setEndTurnPending(false);
+      endTurnPendingTimer = null;
+    }, 2500);
+  };
 
   const renderLeftPanelContent = () => (
     <>
@@ -335,14 +452,8 @@ const BoardGame: Component = () => {
         <DmPanel />
         <DmPlayerInspectPanel />
       </Show>
-      <Show
-        when={
-          getCurrentMode() === GameMode.COMBAT ||
-          getCurrentMode() === GameMode.DUNGEON
-        }
-      >
-        <TurnOrderDisplay />
-      </Show>
+      {/* TurnOrderDisplay is now rendered as an always-visible top banner
+          above the canvas, so it stays readable without opening a drawer. */}
       <UnitInfoPanel />
     </>
   );
@@ -512,13 +623,21 @@ const BoardGame: Component = () => {
       <div class="w-full h-screen-dynamic flex flex-col bg-game-darker overflow-hidden pb-safe-bottom">
         {/* Header */}
         <header class="h-14 shrink-0 bg-gradient-to-r from-brandStart/90 to-brandEnd/90 backdrop-blur-sm border-b border-white/10 flex items-center justify-between px-3 sm:px-4 pt-safe-top">
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => returnToMenu()}
               class="flex items-center justify-center w-9 h-9 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 transition-colors"
               aria-label="Retour au menu"
             >
               <ArrowLeft class="w-4 h-4 text-white" />
+            </button>
+            <button
+              onClick={() => setSettingsOpen(true)}
+              class="flex items-center justify-center w-9 h-9 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 transition-colors"
+              aria-label="Paramètres"
+              title="Paramètres rapides"
+            >
+              <SettingsIcon class="w-4 h-4 text-white" />
             </button>
             <h1 class="font-display text-white text-lg sm:text-xl tracking-wide">
               DnDiscord
@@ -535,13 +654,11 @@ const BoardGame: Component = () => {
           </div>
         </header>
 
-        {/* Main Game Area */}
+        {/* Main Game Area — the 3D canvas owns the full width on every
+            breakpoint. Info / log panels slide in as drawers on top of the
+            canvas (mobile-style) rather than stealing permanent layout
+            space, so the board stays the focus on laptops/desktops too. */}
         <div class="flex-1 flex overflow-hidden min-h-0 relative">
-          {/* Left Panel - Unit Info */}
-          <aside class="hidden lg:flex lg:w-72 xl:w-80 lg:min-w-[280px] lg:max-w-[400px] p-3 xl:p-4 flex-col gap-4 overflow-y-auto bg-game-darker/50">
-            {renderLeftPanelContent()}
-          </aside>
-
           {/* Center - Game Canvas */}
           <main class="flex-1 relative min-w-0">
             <GameCanvas />
@@ -570,8 +687,34 @@ const BoardGame: Component = () => {
               </div>
             </Show>
 
-            {/* Game Phase Indicator */}
-            <div class="absolute top-3 sm:top-4 left-1/2 -translate-x-1/2 z-10 flex flex-wrap items-center justify-center gap-2 sm:gap-3 px-3 max-w-[calc(100%-1rem)] sm:max-w-[calc(100%-2rem)]">
+            {/* Persistent turn-order banner — only in combat-ish modes,
+                where the initiative line matters. Rendered above the phase
+                pill so the player sees "whose turn" without opening a
+                drawer. Width-capped so it doesn't cover the whole canvas. */}
+            <Show
+              when={
+                (getCurrentMode() === GameMode.COMBAT ||
+                  getCurrentMode() === GameMode.DUNGEON) &&
+                gameState.turnOrder.length > 0
+              }
+            >
+              <div class="absolute top-3 sm:top-4 left-1/2 -translate-x-1/2 z-10 w-[min(92vw,560px)]">
+                <TurnOrderDisplay />
+              </div>
+            </Show>
+
+            {/* Game Phase Indicator — shifted down when the turn banner is
+                rendered above it (ternary keeps single-line modes at the
+                original top position). */}
+            <div
+              class={`absolute left-1/2 -translate-x-1/2 z-10 flex flex-wrap items-center justify-center gap-2 sm:gap-3 px-3 max-w-[calc(100%-1rem)] sm:max-w-[calc(100%-2rem)] ${
+                (getCurrentMode() === GameMode.COMBAT ||
+                  getCurrentMode() === GameMode.DUNGEON) &&
+                gameState.turnOrder.length > 0
+                  ? "top-[5.25rem] sm:top-24"
+                  : "top-3 sm:top-4"
+              }`}
+            >
               <Show when={gameState.dungeon}>
                 <div class="px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold bg-purple-600/80 text-white whitespace-nowrap flex items-center gap-1.5">
                   {getPhaseIcon("dungeon")}
@@ -579,22 +722,29 @@ const BoardGame: Component = () => {
                   {gameState.dungeon?.totalRooms}
                 </div>
               </Show>
-              <div
-                class={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap flex items-center gap-1.5 ${
-                  gameState.phase === GamePhase.COMBAT_PREPARATION
-                    ? "bg-amber-600/80 text-white"
-                    : gameState.phase === GamePhase.FREE_ROAM
-                      ? "bg-blue-600/80 text-white"
-                      : gameState.phase === GamePhase.PLAYER_TURN
-                        ? "bg-green-600/80 text-white"
-                        : gameState.phase === GamePhase.ENEMY_TURN
-                          ? "bg-red-600/80 text-white"
-                          : "bg-gray-600/80 text-white"
-                }`}
+              {/* Phase pill — hidden during PLAYER_TURN / ENEMY_TURN since
+                  the turn-order banner's coloured ring already encodes
+                  whose turn it is. Still shown for prep/free-roam/setup
+                  phases where the global state matters. */}
+              <Show
+                when={
+                  gameState.phase !== GamePhase.PLAYER_TURN &&
+                  gameState.phase !== GamePhase.ENEMY_TURN
+                }
               >
-                {getPhaseIcon(gameState.phase)}
-                {getPhaseText(gameState.phase)}
-              </div>
+                <div
+                  class={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap flex items-center gap-1.5 ${
+                    gameState.phase === GamePhase.COMBAT_PREPARATION
+                      ? "bg-amber-600/80 text-white"
+                      : gameState.phase === GamePhase.FREE_ROAM
+                        ? "bg-blue-600/80 text-white"
+                        : "bg-gray-600/80 text-white"
+                  }`}
+                >
+                  {getPhaseIcon(gameState.phase)}
+                  {getPhaseText(gameState.phase)}
+                </div>
+              </Show>
               {/* Bouton Prêt - Phase de préparation */}
               <Show when={gameState.phase === GamePhase.COMBAT_PREPARATION}>
                 <button
@@ -629,8 +779,9 @@ const BoardGame: Component = () => {
               </div>
             </Show>
 
-            {/* Mobile Drawer Toggles */}
-            <div class="lg:hidden absolute top-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
+            {/* Drawer toggles — visible on every breakpoint now that the
+                panels are drawers instead of permanent sidebars. */}
+            <div class="absolute top-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
               <button
                 class="pointer-events-auto px-3 py-2 rounded-lg border border-white/20 bg-game-dark/85 backdrop-blur text-xs text-white font-medium shadow-lg focus-ring-gold"
                 onClick={toggleLeftDrawer}
@@ -649,88 +800,125 @@ const BoardGame: Component = () => {
               </button>
             </div>
 
-            {/* Controls Help */}
-            <div class="absolute left-3 sm:left-4 bottom-20 sm:bottom-4 z-10 panel-game text-xs w-[min(16rem,calc(100vw-1.5rem))] lg:w-auto lg:max-w-xs">
-              <h4 class="font-semibold text-game-gold mb-3">Controls</h4>
-              <ul class="space-y-1.5 text-gray-400 lg:hidden">
-                <li class="flex items-start gap-2">
-                  <Hand class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
-                  <span>
-                    <span class="text-gray-300 font-medium">Tap</span> - Select
-                    unit / Move / Attack
-                  </span>
-                </li>
-                <li class="flex items-start gap-2">
-                  <MoveIcon class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
-                  <span>
-                    <span class="text-gray-300 font-medium">Drag</span> - Rotate
-                    / pan camera
-                  </span>
-                </li>
-                <li class="flex items-start gap-2">
-                  <MoveIcon class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
-                  <span>
-                    <span class="text-gray-300 font-medium">Pinch</span> - Zoom
-                    in/out
-                  </span>
-                </li>
-              </ul>
-              <ul class="space-y-1.5 text-gray-400 hidden lg:block">
-                <li class="flex items-start gap-2">
-                  <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
-                  <span>
-                    <span class="text-gray-300 font-medium">Left Click</span> -
-                    Select unit / Move / Attack
-                  </span>
-                </li>
-                <li class="flex items-start gap-2">
-                  <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
-                  <span>
-                    <span class="text-gray-300 font-medium">Right Drag</span> -
-                    Rotate camera
-                  </span>
-                </li>
-                <li class="flex items-start gap-2">
-                  <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
-                  <span>
-                    <span class="text-gray-300 font-medium">Scroll</span> - Zoom
-                    in/out
-                  </span>
-                </li>
-              </ul>
+            {/* Controls help cluster (bottom-left). Retracts to a "?"
+                + Reset View duo when closed so the canvas stays clean;
+                expands to a legend panel on click/hover. Auto-shows on
+                combat start then retracts after 5 s. */}
+            <div class="absolute left-3 sm:left-4 bottom-4 z-10 flex flex-col gap-2 items-start pl-safe-left pb-safe-bottom">
+              <Show when={helpOpen()}>
+                <div class="panel-game text-xs w-[min(16rem,calc(100vw-1.5rem))] lg:max-w-xs relative">
+                  <button
+                    class="absolute top-2 right-2 text-slate-400 hover:text-white"
+                    onClick={() => setHelpOpen(false)}
+                    aria-label="Fermer l'aide"
+                  >
+                    <X class="w-3.5 h-3.5" />
+                  </button>
+                  <h4 class="font-semibold text-game-gold mb-3 pr-5">Controls</h4>
+                  <ul class="space-y-1.5 text-gray-400 lg:hidden">
+                    <li class="flex items-start gap-2">
+                      <Hand class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
+                      <span>
+                        <span class="text-gray-300 font-medium">Tap</span> —
+                        sélectionner / déplacer / attaquer
+                      </span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                      <MoveIcon class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
+                      <span>
+                        <span class="text-gray-300 font-medium">Drag</span> —
+                        orbiter / panner la caméra
+                      </span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                      <MoveIcon class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
+                      <span>
+                        <span class="text-gray-300 font-medium">Pinch</span> —
+                        zoom
+                      </span>
+                    </li>
+                  </ul>
+                  <ul class="space-y-1.5 text-gray-400 hidden lg:block">
+                    <li class="flex items-start gap-2">
+                      <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
+                      <span>
+                        <span class="text-gray-300 font-medium">Clic</span> —
+                        sélectionner / déplacer / attaquer
+                      </span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                      <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
+                      <span>
+                        <span class="text-gray-300 font-medium">Clic droit + drag</span> —
+                        orbiter la caméra
+                      </span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                      <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
+                      <span>
+                        <span class="text-gray-300 font-medium">Molette</span> —
+                        zoom
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              </Show>
+
+              <div class="flex items-center gap-2">
+                <button
+                  class="w-9 h-9 flex items-center justify-center rounded-full border border-white/20 bg-game-dark/85 backdrop-blur text-white shadow-lg hover:bg-game-dark transition-colors focus-ring-gold"
+                  onClick={() => setHelpOpen((v) => !v)}
+                  title={helpOpen() ? "Fermer l'aide" : "Aide & contrôles"}
+                  aria-label={helpOpen() ? "Fermer l'aide" : "Ouvrir l'aide"}
+                  aria-expanded={helpOpen()}
+                >
+                  <HelpCircle class="w-4 h-4" />
+                </button>
+                <button
+                  class="btn-game text-xs sm:text-sm py-1.5 px-3 flex items-center gap-2"
+                  onClick={() => resetCamera()}
+                  title="Réinitialiser la caméra"
+                >
+                  <RotateCcw class="w-3.5 h-3.5" />
+                  <span>Reset View</span>
+                </button>
+              </div>
             </div>
 
-            {/* Reset View Button */}
-            <div class="absolute bottom-4 right-3 sm:right-4 z-20 pr-safe-right pb-safe-bottom">
-              <button
-                class="btn-game text-xs sm:text-sm py-2 px-3 sm:px-4 flex items-center gap-2"
-                onClick={() => resetCamera()}
-                title="Reset camera to default view"
-              >
-                <RotateCcw class="w-4 h-4" />
-                <span>Reset View</span>
-              </button>
+            {/* Floating End Turn (bottom-right) — alone so it can't be
+                mis-clicked with camera or help controls. Reset View
+                lives in the help cluster bottom-left instead. */}
+            <div class="absolute bottom-4 right-3 sm:right-4 z-20 pr-safe-right pb-safe-bottom flex flex-col gap-2 items-end">
+              <Show when={canEndPlayerTurn()}>
+                <Show when={endTurnPending()}>
+                  <div class="px-3 py-1.5 rounded-lg bg-amber-600/90 text-white text-xs font-medium shadow-lg border border-white/10 animate-pulse">
+                    Aucun AP dépensé — reclique pour confirmer
+                  </div>
+                </Show>
+                <button
+                  class={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-lg transition-colors focus-ring-gold ${
+                    endTurnPending()
+                      ? "bg-amber-500 hover:bg-amber-400 text-game-darker"
+                      : "bg-game-gold hover:bg-amber-400 text-game-darker"
+                  }`}
+                  onClick={handleEndTurnClick}
+                  title="Terminer le tour"
+                >
+                  <Flag class="w-4 h-4" />
+                  <span>{endTurnPending() ? "Confirmer" : "Fin du tour"}</span>
+                </button>
+              </Show>
             </div>
           </main>
 
-          {/* Right Panel - Combat Log or Free Roam Info */}
-          <aside class="hidden lg:flex lg:w-80 xl:w-96 lg:min-w-[320px] lg:max-w-[480px] p-3 xl:p-4 flex-col gap-4 overflow-y-auto bg-game-darker/50">
-            {renderRightPanelContent()}
-          </aside>
-
-          {/* Mobile Drawers */}
-          <div class="lg:hidden absolute inset-0 z-40 pointer-events-none">
-            <Show when={leftDrawerOpen() || rightDrawerOpen()}>
-              <button
-                class="absolute inset-0 bg-black/60 pointer-events-auto"
-                onClick={closeDrawers}
-                aria-label="Fermer les panneaux"
-              />
-            </Show>
-
+          {/* Drawers — same component on all sizes. Non-modal: no dim
+              backdrop so the map stays fully interactive while a drawer
+              is open. Users close via the toggle button or the drawer's
+              own "Fermer" button. */}
+          <div class="absolute inset-0 z-40 pointer-events-none">
             <div
               id="left-drawer"
-              class={`absolute inset-y-0 left-0 w-[min(86vw,360px)] bg-game-darker/95 backdrop-blur border-r border-white/10 p-3 flex flex-col gap-3 overflow-y-auto transition-transform duration-300 pointer-events-auto ${
+              class={`absolute inset-y-0 left-0 w-[min(88vw,380px)] md:w-[400px] lg:w-[420px] bg-game-darker/95 backdrop-blur border-r border-white/10 p-3 flex flex-col gap-3 overflow-y-auto transition-transform duration-300 pointer-events-auto ${
                 leftDrawerOpen() ? "translate-x-0" : "-translate-x-full"
               }`}
             >
@@ -750,7 +938,7 @@ const BoardGame: Component = () => {
 
             <div
               id="right-drawer"
-              class={`absolute inset-y-0 right-0 w-[min(88vw,400px)] bg-game-darker/95 backdrop-blur border-l border-white/10 p-3 flex flex-col gap-3 overflow-y-auto transition-transform duration-300 pointer-events-auto ${
+              class={`absolute inset-y-0 right-0 w-[min(90vw,420px)] md:w-[440px] lg:w-[460px] bg-game-darker/95 backdrop-blur border-l border-white/10 p-3 flex flex-col gap-3 overflow-y-auto transition-transform duration-300 pointer-events-auto ${
                 rightDrawerOpen() ? "translate-x-0" : "translate-x-full"
               }`}
             >
@@ -770,6 +958,12 @@ const BoardGame: Component = () => {
 
         {/* Game Over Modal */}
         <GameOverScreen />
+
+        {/* Quick settings overlay — opens over the canvas without
+            unmounting the engine. Game state persists. */}
+        <Show when={settingsOpen()}>
+          <InGameSettingsModal onClose={() => setSettingsOpen(false)} />
+        </Show>
       </div>
     </Show>
   );

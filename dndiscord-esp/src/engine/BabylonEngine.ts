@@ -27,6 +27,16 @@ import { HighlightRenderer } from './renderers/HighlightRenderer';
 // VFX & Post-processing
 import { VFXManager, SpellVFXParams, ImpactVFXParams } from './vfx/VFXManager';
 import { PostProcessingSetup } from './setup/PostProcessingSetup';
+import { FpsOverlay } from './debug/FpsOverlay';
+
+// Lifecycle & lights
+import { SceneResetManager } from './SceneResetManager';
+import { LightManager } from './managers/LightManager';
+import { loadMap } from '../services/mapStorage';
+
+// Reactive graphics settings
+import { createRoot, createEffect } from 'solid-js';
+import { graphicsSettings } from '../stores/graphics.store';
 
 /**
  * BabylonEngine - Main orchestrator for the 3D rendering engine
@@ -62,6 +72,16 @@ export class BabylonEngine {
   private vfxManager: VFXManager;
   private postProcessing: PostProcessingSetup;
   private selectionPulseMesh: Mesh | null = null;
+
+  // Lifecycle
+  private sceneResetManager: SceneResetManager;
+  private lightManager: LightManager;
+
+  // Debug / metrics
+  private fpsOverlay: FpsOverlay;
+
+  // Dispose callback for the reactive settings subscription
+  private graphicsSubscriptionDispose: (() => void) | null = null;
   
   // Unit position tracking for rotation
   private unitPreviousPositions: Map<string, GridPosition> = new Map();
@@ -73,10 +93,11 @@ export class BabylonEngine {
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     
-    // Initialize engine and scene
-    this.engine = new Engine(canvas, true, { 
-      preserveDrawingBuffer: true, 
-      stencil: true 
+    // Initialize engine and scene.
+    // preserveDrawingBuffer intentionally OFF — leaving it on keeps the prior
+    // framebuffer around and causes visible ghost/trail artifacts on scene resets.
+    this.engine = new Engine(canvas, true, {
+      stencil: true,
     });
     this.scene = new Scene(this.engine);
     this.scene.clearColor = new Color4(0.1, 0.1, 0.15, 1);
@@ -115,9 +136,17 @@ export class BabylonEngine {
     
     // Initialize VFX manager
     this.vfxManager = new VFXManager(this.scene, this.glowLayer);
-    
+
+    // Initialize scene-reset manager and bind VFX for ambient pause/resume
+    this.sceneResetManager = new SceneResetManager(this.scene, this.modelLoader);
+    this.sceneResetManager.setVFXManager(this.vfxManager);
+
+    // Lights manager (torches/lanterns placed on saved maps)
+    this.lightManager = new LightManager(this.scene, this.modelLoader, this.sceneResetManager);
+
     // Initialize debug controller (must be after unitRenderer)
     this.debugController = new DebugController(this.scene, this.unitRenderer);
+    this.fpsOverlay = new FpsOverlay(this.engine, this.scene);
     
     // Initialize post-processing (after scene setup creates camera)
     this.postProcessing = new PostProcessingSetup(
@@ -128,16 +157,71 @@ export class BabylonEngine {
     // Preload models asynchronously and track readiness
     this.readyPromise = this.preloadModels().then(() => {
       this.isReady = true;
-      // Start ambient VFX
-      this.vfxManager.startAmbientDust();
-      this.vfxManager.startAmbientMagic();
+      // Start ambient VFX. Respect the saved graphics setting — if ambient
+      // particles are disabled in settings, don't start them.
+      if (graphicsSettings.effects().ambientParticles) {
+        this.vfxManager.startAmbientDust();
+        this.vfxManager.startAmbientMagic();
+      }
       console.log('BabylonEngine is ready!');
     });
-    
+
+    // Subscribe to graphics settings and reflect changes into the pipeline.
+    this.subscribeToGraphicsSettings();
+
     // Handle window resize
     window.addEventListener('resize', () => {
       this.engine.resize();
     });
+  }
+
+  /**
+   * Bind graphics.store signals to their engine-side effects. Uses
+   * createRoot so we can tear the subscription down in dispose() without
+   * relying on a component owner.
+   */
+  private subscribeToGraphicsSettings(): void {
+    createRoot((dispose) => {
+      this.graphicsSubscriptionDispose = dispose;
+
+      createEffect(() => {
+        this.engine.setHardwareScalingLevel(graphicsSettings.hardwareScaling());
+      });
+
+      createEffect(() => {
+        const effects = graphicsSettings.effects();
+        this.postProcessing.applyEffects(effects);
+        this.glowLayer.isEnabled = effects.glow;
+        this.sceneSetup.setShadowsEnabled(effects.shadows);
+        this.scene.shadowsEnabled = effects.shadows;
+        this.vfxManager.setAmbientEnabled(effects.ambientParticles);
+      });
+
+      createEffect(() => {
+        this.sceneSetup.setShadowResolution(graphicsSettings.shadowResolution());
+      });
+
+      createEffect(() => {
+        this.vfxManager.setAmbientDensity(graphicsSettings.particleDensity());
+      });
+
+      createEffect(() => {
+        const debug = graphicsSettings.debug();
+        if (debug.fpsMeter) this.fpsOverlay.show();
+        else this.fpsOverlay.hide();
+        this.debugController.setWireframe(debug.wireframe);
+        this.debugController.setBoundingBoxes(debug.boundingBoxes);
+        this.debugController.setCollisionCells(debug.collisionCells);
+      });
+    });
+  }
+
+  /**
+   * Open the Babylon Inspector. Exposed so UI components (settings page)
+   * can trigger it without simulating an F9 keystroke.
+   */
+  public showInspector(): void {
+    this.debugController.showInspector();
   }
   
   /**
@@ -174,6 +258,15 @@ export class BabylonEngine {
     await this.gridRenderer.createGrid(tileData, mapId);
     // Add torch effects near walls for ambiance
     this.addTorchesNearWalls(tileData);
+    // Materialize saved user-placed lights for this map, if any.
+    if (mapId) {
+      const saved = loadMap(mapId);
+      if (saved?.lights && saved.lights.length > 0) {
+        await this.lightManager.materialize(saved.lights);
+      }
+    }
+    // New map is on screen — resume ambient VFX that resetForNewMap paused.
+    this.sceneResetManager.finishLoad();
   }
 
   /**
@@ -247,42 +340,29 @@ export class BabylonEngine {
     this.unitPreviousPositions.clear();
   }
   
-  public clearAll(): void {
-    console.log('[BabylonEngine] Clearing all game objects (units + grid + highlights)');
+  /**
+   * Deterministic reset of all map-scoped state. Safe to await before a
+   * restart or map switch — templates in ModelLoader's AssetContainers
+   * survive; only instances and map-owned extras are freed.
+   */
+  public async clearAll(): Promise<void> {
+    console.log('[BabylonEngine] Resetting scene for new map');
     this.clearAllUnits();
     this.gridRenderer.clearGrid();
     this.clearHighlights();
     this.clearPathPreview();
-    
-    // Nuclear cleanup: dispose remaining ENABLED game meshes
-    // Keep essential meshes (lights, camera, background) AND disabled meshes (cached templates)
-    const safePatterns = ['ground', 'BackgroundPlane', 'BackgroundHelper', 'light', 'camera', 'default'];
-    const meshesToDispose = this.scene.meshes.filter(m => {
-      // Skip disabled meshes - they're cached model templates
-      if (!m.isEnabled()) return false;
-      
-      const nameLower = m.name.toLowerCase();
-      return !safePatterns.some(pattern => nameLower.includes(pattern.toLowerCase()));
-    });
-    
-    if (meshesToDispose.length > 0) {
-      console.log('[BabylonEngine] Nuclear cleanup: disposing', meshesToDispose.length, 'remaining enabled meshes');
-      console.log('[BabylonEngine] Meshes to dispose:', meshesToDispose.map(m => m.name));
-      
-      // Dispose in reverse order to handle parent-child relationships
-      for (let i = meshesToDispose.length - 1; i >= 0; i--) {
-        const mesh = meshesToDispose[i];
-        if (mesh && !mesh.isDisposed()) {
-          try {
-            mesh.dispose(false, true); // Don't dispose materials/textures, do dispose children
-          } catch (e) {
-            console.warn('[BabylonEngine] Failed to dispose mesh:', mesh.name, e);
-          }
-        }
-      }
-    }
-    
-    console.log('[BabylonEngine] All game objects cleared, remaining scene meshes:', this.scene.meshes.length);
+    this.clearSelectionPulse();
+
+    await this.sceneResetManager.resetForNewMap();
+
+    console.log('[BabylonEngine] Scene reset complete, remaining meshes:', this.scene.meshes.length);
+  }
+
+  /**
+   * Signal that a new map has finished loading. Resumes ambient VFX.
+   */
+  public finishMapLoad(): void {
+    this.sceneResetManager.finishLoad();
   }
   
   // ============================================
@@ -458,6 +538,12 @@ export class BabylonEngine {
   
   public dispose(): void {
     this.stopRenderLoop();
+    if (this.graphicsSubscriptionDispose) {
+      this.graphicsSubscriptionDispose();
+      this.graphicsSubscriptionDispose = null;
+    }
+    this.fpsOverlay.dispose();
+    this.lightManager.dispose();
     this.vfxManager.dispose();
     this.postProcessing.dispose();
     this.clearSelectionPulse();

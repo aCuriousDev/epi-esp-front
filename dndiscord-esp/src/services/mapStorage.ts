@@ -4,6 +4,20 @@
 
 export type SpawnZoneType = "ally" | "enemy" | "teleport";
 
+/**
+ * A light placed by the user in the map editor. `presetId` references an
+ * entry in `src/config/lightPresets.ts`. Overrides are optional and only
+ * set when the user tweaks intensity or colour away from the preset.
+ */
+export interface SavedLightData {
+	presetId: "torch" | "lantern" | "magical_orb";
+	x: number;
+	z: number;
+	y?: number;
+	intensityOverride?: number;
+	colorOverride?: [number, number, number];
+}
+
 export interface SavedMapData {
 	id: string;
 	name: string;
@@ -18,6 +32,24 @@ export interface SavedMapData {
 	dungeonId?: string;
 	/** Index de la salle dans le donjon (0-based) */
 	roomIndex?: number;
+	/** Lumières placées (torches, lanternes, orbes magiques). */
+	lights?: SavedLightData[];
+	/** Schema version. Missing or <2 indicates a pre-lights map. */
+	version?: number;
+}
+
+/**
+ * Promote older map payloads to the current shape. Called by `loadMap` so
+ * consumers always receive a well-formed object.
+ */
+function migrateMap(raw: SavedMapData): SavedMapData {
+	const version = raw.version ?? 1;
+	if (version >= 2) return raw;
+	return {
+		...raw,
+		lights: raw.lights ?? [],
+		version: 2,
+	};
 }
 
 export interface DungeonData {
@@ -101,7 +133,7 @@ export function loadMap(mapId: string): SavedMapData | null {
 	try {
 		const data = localStorage.getItem(`${STORAGE_KEY}_${mapId}`);
 		if (!data) return null;
-		return JSON.parse(data);
+		return migrateMap(JSON.parse(data) as SavedMapData);
 	} catch (error) {
 		console.error(`Error loading map ${mapId}:`, error);
 		return null;

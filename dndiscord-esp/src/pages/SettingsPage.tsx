@@ -1,5 +1,5 @@
 import { useNavigate } from "@solidjs/router";
-import { createSignal, Show } from "solid-js";
+import { createSignal, Show, For } from "solid-js";
 import {
   ArrowLeft,
   Settings,
@@ -17,6 +17,10 @@ import {
   Palette,
   Gamepad2,
   BookOpen,
+  Sparkles,
+  Gauge,
+  Bug,
+  Sliders,
 } from "lucide-solid";
 import { authStore } from "../stores/auth.store";
 import { AuthService } from "../services/auth.service";
@@ -26,6 +30,55 @@ import {
   setMusicEnabled,
 } from "../stores/sound.store";
 import { restartTutorialTest } from "../stores/tutorial.store";
+import {
+  graphicsSettings,
+  setPreset,
+  setShadowResolution,
+  setHardwareScaling,
+  setEffect,
+  setDebug,
+  resetGraphicsDefaults,
+} from "../stores/graphics.store";
+import type {
+  QualityPreset,
+  ShadowResolution,
+  HardwareScaling,
+} from "../engine/quality/QualityPresets";
+import { getEngine } from "../components/GameCanvas";
+
+const PRESETS: { id: QualityPreset; label: string }[] = [
+  { id: "low", label: "Bas" },
+  { id: "medium", label: "Moyen" },
+  { id: "high", label: "Élevé" },
+  { id: "ultra", label: "Ultra" },
+  { id: "custom", label: "Perso." },
+];
+
+const EFFECT_ITEMS: {
+  key: keyof ReturnType<typeof graphicsSettings.effects>;
+  label: string;
+}[] = [
+  { key: "bloom", label: "Bloom" },
+  { key: "fxaa", label: "FXAA" },
+  { key: "vignette", label: "Vignette" },
+  { key: "chromaticAberration", label: "Aberration" },
+  { key: "glow", label: "Glow" },
+  { key: "ambientParticles", label: "Particules" },
+  { key: "shadows", label: "Ombres" },
+];
+
+const DEBUG_ITEMS: {
+  key: keyof ReturnType<typeof graphicsSettings.debug>;
+  label: string;
+}[] = [
+  { key: "fpsMeter", label: "FPS" },
+  { key: "wireframe", label: "Wireframe" },
+  { key: "boundingBoxes", label: "Bounding boxes" },
+  { key: "collisionCells", label: "Collisions" },
+];
+
+const SHADOW_RESOLUTIONS: ShadowResolution[] = [512, 1024, 2048, 4096];
+const HARDWARE_SCALINGS: HardwareScaling[] = [1.5, 1.0, 0.75, 0.5];
 
 export default function SettingsPage() {
   const navigate = useNavigate();
@@ -151,6 +204,160 @@ export default function SettingsPage() {
               enabled={musicEnabled()}
               onToggle={() => setMusicEnabled(!musicEnabled())}
             />
+          </div>
+        </section>
+
+        {/* Graphics Settings */}
+        <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
+          <div class="p-5 border-b border-white/10">
+            <h2 class="font-display text-lg text-white flex items-center gap-2">
+              <Sparkles class="w-5 h-5 text-pink-400" />
+              Graphique
+            </h2>
+          </div>
+          <div class="p-5 space-y-5">
+            {/* Preset picker */}
+            <div>
+              <div class="flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 rounded-xl bg-pink-500/20 flex items-center justify-center text-pink-400">
+                  <Gauge class="w-5 h-5" />
+                </div>
+                <div>
+                  <p class="text-white font-medium">Préréglage</p>
+                  <p class="text-slate-400 text-sm">
+                    Applique un jeu de valeurs équilibré pour votre machine
+                  </p>
+                </div>
+              </div>
+              <div class="grid grid-cols-5 gap-1 bg-white/5 rounded-xl p-1">
+                <For each={PRESETS}>
+                  {(p) => (
+                    <button
+                      onClick={() => setPreset(p.id)}
+                      class={`px-2 py-1.5 rounded-lg text-xs transition-all ${
+                        graphicsSettings.preset() === p.id
+                          ? "bg-pink-600 text-white"
+                          : "text-slate-400 hover:text-white hover:bg-white/10"
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  )}
+                </For>
+              </div>
+            </div>
+
+            {/* Effect toggles */}
+            <div class="space-y-3">
+              <p class="text-white text-sm font-medium flex items-center gap-2">
+                <Sliders class="w-4 h-4 text-pink-300" />
+                Effets visuels
+              </p>
+              <div class="grid grid-cols-2 gap-2">
+                <For each={EFFECT_ITEMS}>
+                  {(e) => (
+                    <label class="flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors cursor-pointer">
+                      <span class="text-slate-200 text-sm">{e.label}</span>
+                      <input
+                        type="checkbox"
+                        class="accent-pink-500"
+                        checked={graphicsSettings.effects()[e.key]}
+                        onChange={(ev) =>
+                          setEffect(e.key, ev.currentTarget.checked)
+                        }
+                      />
+                    </label>
+                  )}
+                </For>
+              </div>
+            </div>
+
+            {/* Shadow resolution */}
+            <div>
+              <p class="text-white text-sm font-medium mb-2">
+                Résolution des ombres
+              </p>
+              <div class="grid grid-cols-4 gap-1 bg-white/5 rounded-xl p-1">
+                <For each={SHADOW_RESOLUTIONS}>
+                  {(res) => (
+                    <button
+                      onClick={() => setShadowResolution(res)}
+                      class={`px-2 py-1.5 rounded-lg text-xs transition-all ${
+                        graphicsSettings.shadowResolution() === res
+                          ? "bg-pink-600 text-white"
+                          : "text-slate-400 hover:text-white hover:bg-white/10"
+                      }`}
+                    >
+                      {res}
+                    </button>
+                  )}
+                </For>
+              </div>
+            </div>
+
+            {/* Hardware scaling */}
+            <div>
+              <p class="text-white text-sm font-medium mb-2">
+                Échelle de rendu
+                <span class="text-slate-500 text-xs ml-2">
+                  (plus haut = plus rapide, moins net)
+                </span>
+              </p>
+              <div class="grid grid-cols-4 gap-1 bg-white/5 rounded-xl p-1">
+                <For each={HARDWARE_SCALINGS}>
+                  {(s) => (
+                    <button
+                      onClick={() => setHardwareScaling(s)}
+                      class={`px-2 py-1.5 rounded-lg text-xs transition-all ${
+                        graphicsSettings.hardwareScaling() === s
+                          ? "bg-pink-600 text-white"
+                          : "text-slate-400 hover:text-white hover:bg-white/10"
+                      }`}
+                    >
+                      {s.toFixed(2)}x
+                    </button>
+                  )}
+                </For>
+              </div>
+            </div>
+
+            {/* Debug */}
+            <div class="space-y-3 border-t border-white/10 pt-4">
+              <p class="text-white text-sm font-medium flex items-center gap-2">
+                <Bug class="w-4 h-4 text-amber-300" />
+                Outils de debug
+              </p>
+              <div class="grid grid-cols-2 gap-2">
+                <For each={DEBUG_ITEMS}>
+                  {(d) => (
+                    <label class="flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors cursor-pointer">
+                      <span class="text-slate-200 text-sm">{d.label}</span>
+                      <input
+                        type="checkbox"
+                        class="accent-amber-400"
+                        checked={graphicsSettings.debug()[d.key]}
+                        onChange={(ev) =>
+                          setDebug(d.key, ev.currentTarget.checked)
+                        }
+                      />
+                    </label>
+                  )}
+                </For>
+              </div>
+              <button
+                onClick={() => getEngine()?.showInspector()}
+                class="w-full px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-400/30 rounded-lg text-amber-200 text-sm transition-colors"
+              >
+                Ouvrir l'inspecteur Babylon
+              </button>
+            </div>
+
+            <button
+              onClick={resetGraphicsDefaults}
+              class="w-full px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-slate-300 text-sm transition-colors"
+            >
+              Réinitialiser aux valeurs par défaut
+            </button>
           </div>
         </section>
 

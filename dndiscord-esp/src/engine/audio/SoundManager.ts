@@ -863,6 +863,154 @@ export class SoundManager {
     fo.connect(fg).connect(this.uiBus); fo.start(ft); fo.stop(ft + 0.06);
   }
 
+  /** Single dice-against-table impact — volume 0..1 controls weight. */
+  playDiceImpact(volume = 0.7): void {
+    this.resume();
+    const now = this.ctx.currentTime;
+    const v = Math.max(0.05, Math.min(1, volume));
+    const baseF = 2600 + Math.random() * 2200;
+
+    this.noiseBurst(now, 0.008 + Math.random() * 0.01, 0.18 * v, this.uiBus, this.bp(baseF, 7));
+    const o = this.ctx.createOscillator(); o.type = 'sine';
+    o.frequency.value = 1400 + Math.random() * 1600;
+    const og = this.gain(0);
+    og.gain.setValueAtTime(0.14 * v, now);
+    og.gain.exponentialRampToValueAtTime(0.001, now + 0.05 + v * 0.05);
+    o.connect(og).connect(this.uiBus); o.start(now); o.stop(now + 0.08);
+
+    const sub = this.ctx.createOscillator(); sub.type = 'sine';
+    sub.frequency.setValueAtTime(90, now); sub.frequency.exponentialRampToValueAtTime(40, now + 0.09);
+    const sg = this.gain(0);
+    sg.gain.setValueAtTime(0.08 * v, now);
+    sg.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    sub.connect(sg).connect(this.uiBus); sub.start(now); sub.stop(now + 0.14);
+  }
+
+  /** Held-pressure wobble — a low rumbling shake while the user "charges" a throw. */
+  playDiceShake(): void {
+    this.resume();
+    const now = this.ctx.currentTime;
+    const rm = this.ctx.createBufferSource(); rm.buffer = this.pink(0.28);
+    const rg = this.gain(0);
+    rg.gain.setValueAtTime(0, now);
+    rg.gain.linearRampToValueAtTime(0.1, now + 0.04);
+    rg.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+    const rlp = this.lp(420);
+    rm.connect(rlp).connect(rg).connect(this.uiBus); rm.start(now);
+
+    for (let i = 0; i < 3; i++) {
+      const t = now + 0.02 + i * 0.07;
+      this.noiseBurst(t, 0.009, 0.05, this.uiBus, this.bp(2200 + i * 400, 5));
+    }
+  }
+
+  /** Nat-20 fanfare — bright triumphant flourish layered over the dice settle. */
+  playDiceCritSuccess(): void {
+    this.resume();
+    const now = this.ctx.currentTime;
+    ['C5','E5','G5','C6','E6'].forEach((n, i) => {
+      const t = now + i * 0.055;
+      this.note(nf(n), t, 0.42, this.uiBus, 'sine',
+        { attack: 0.003, decay: 0.06, sustain: 0.35, release: 0.22, peak: 0.18 });
+      this.note(nf(n) * 1.004, t, 0.42, this.uiBus, 'sine',
+        { attack: 0.003, decay: 0.06, sustain: 0.35, release: 0.22, peak: 0.1 });
+    });
+    const sh = this.ctx.createBufferSource(); sh.buffer = this.white(0.45);
+    const sg = this.gain(0);
+    sg.gain.setValueAtTime(0, now);
+    sg.gain.linearRampToValueAtTime(0.08, now + 0.06);
+    sg.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+    sh.connect(this.hp(6000)).connect(sg).connect(this.uiBus); sh.start(now);
+    // Deep, regal boom underneath
+    const boom = this.ctx.createOscillator(); boom.type = 'sine';
+    boom.frequency.setValueAtTime(90, now); boom.frequency.exponentialRampToValueAtTime(40, now + 0.4);
+    const bg = this.gain(0);
+    bg.gain.setValueAtTime(0.16, now); bg.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+    boom.connect(bg).connect(this.uiBus); boom.start(now); boom.stop(now + 0.55);
+  }
+
+  /** Low rising whoosh — plays at the start of a throw's windup. */
+  playDiceWindup(): void {
+    this.resume();
+    const now = this.ctx.currentTime;
+    const o = this.ctx.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(60, now);
+    o.frequency.exponentialRampToValueAtTime(220, now + 0.4);
+    const g = this.gain(0);
+    g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(0.1, now + 0.12);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+    o.connect(this.lp(900)).connect(g).connect(this.uiBus);
+    o.start(now); o.stop(now + 0.5);
+
+    const rm = this.ctx.createBufferSource(); rm.buffer = this.pink(0.45);
+    const rg = this.gain(0);
+    rg.gain.setValueAtTime(0, now); rg.gain.linearRampToValueAtTime(0.09, now + 0.12);
+    rg.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+    rm.connect(this.lp(380)).connect(rg).connect(this.uiBus); rm.start(now);
+  }
+
+  /** Punchy swoosh that fires the moment the die is flung. */
+  playDiceLaunch(): void {
+    this.resume();
+    const now = this.ctx.currentTime;
+    const sw = this.ctx.createBufferSource(); sw.buffer = this.white(0.35);
+    const sg = this.gain(0);
+    sg.gain.setValueAtTime(0.3, now);
+    sg.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+    const sf = this.bp(700, 1.1);
+    sf.frequency.setValueAtTime(700, now);
+    sf.frequency.exponentialRampToValueAtTime(4200, now + 0.2);
+    sw.connect(sf).connect(sg).connect(this.uiBus); sw.start(now);
+
+    const o = this.ctx.createOscillator(); o.type = 'triangle';
+    o.frequency.setValueAtTime(140, now);
+    o.frequency.exponentialRampToValueAtTime(680, now + 0.22);
+    const og = this.gain(0);
+    og.gain.setValueAtTime(0.14, now);
+    og.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+    o.connect(og).connect(this.uiBus); o.start(now); o.stop(now + 0.3);
+  }
+
+  /** Held breath: a sustained chime + shimmer that hangs as the die floats. */
+  playDiceSuspense(): void {
+    this.resume();
+    const now = this.ctx.currentTime;
+    ['G4','B4','D5'].forEach((n, i) => {
+      this.note(nf(n), now + i * 0.04, 0.55, this.uiBus, 'sine',
+        { attack: 0.08, decay: 0.1, sustain: 0.5, release: 0.3, peak: 0.08 });
+    });
+    const sh = this.ctx.createBufferSource(); sh.buffer = this.white(0.55);
+    const sg = this.gain(0);
+    sg.gain.setValueAtTime(0, now); sg.gain.linearRampToValueAtTime(0.05, now + 0.1);
+    sg.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+    sh.connect(this.hp(6000)).connect(sg).connect(this.uiBus); sh.start(now);
+  }
+
+  /** Nat-1 sting — dissonant fall + hollow thud. */
+  playDiceCritFail(): void {
+    this.resume();
+    const now = this.ctx.currentTime;
+    const o = this.ctx.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(340, now);
+    o.frequency.exponentialRampToValueAtTime(90, now + 0.55);
+    const g = this.gain(0);
+    g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(0.12, now + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+    o.connect(this.lp(1400)).connect(g).connect(this.uiBus); o.start(now); o.stop(now + 0.65);
+
+    this.note(nf('E3'), now + 0.08, 0.55, this.uiBus, 'sawtooth',
+      { attack: 0.02, decay: 0.1, sustain: 0.2, release: 0.3, peak: 0.07 });
+    this.note(nf('Bb3'), now + 0.08, 0.55, this.uiBus, 'sawtooth',
+      { attack: 0.02, decay: 0.1, sustain: 0.2, release: 0.3, peak: 0.07 });
+
+    const th = this.ctx.createOscillator(); th.type = 'sine';
+    th.frequency.setValueAtTime(120, now + 0.02); th.frequency.exponentialRampToValueAtTime(30, now + 0.25);
+    const tg = this.gain(0);
+    tg.gain.setValueAtTime(0.22, now + 0.02);
+    tg.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+    th.connect(tg).connect(this.uiBus); th.start(now + 0.02); th.stop(now + 0.34);
+  }
+
   // ============================================
   // ANIMAL CROSSING–STYLE BABBLE VOICE
   // ============================================

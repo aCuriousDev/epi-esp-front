@@ -11,6 +11,7 @@ import { gameState, setGameState, addCombatLog } from '../stores/GameStateStore'
 import { units, setUnits, getPlayerUnits, getEnemyUnits } from '../stores/UnitsStore';
 import { tiles, setTiles, pathfinder, updatePathfinder } from '../stores/TilesStore';
 import { posToKey } from '../utils/GridUtils';
+import { calculateDamage } from '../utils/DamageCalc';
 import { playSpellEffect, playDamageEffect, playDeathEffect, playHitReactionEffect, playCameraShake } from '../vfx/VFXIntegration';
 import { playSpellCastSound, playImpactSound, playDeathSound, playSwordHitSound, playVictorySound, playDefeatSound, playSelectSound, playArrowShotSound, playShieldBashSound, playClawAttackSound } from '../audio/SoundIntegration';
 
@@ -210,13 +211,7 @@ export function useAbility(targetPos: GridPosition): boolean {
 // DAMAGE CALCULATION
 // ============================================
 
-export function calculateDamage(attacker: Unit, defender: Unit, ability: Ability): number {
-  const baseDamage = ability.baseDamage + attacker.stats.attackDamage;
-  const defense = defender.stats.defense;
-  const reduction = defense / (defense + 50); // Diminishing returns formula
-  const damage = Math.floor(baseDamage * (1 - reduction));
-  return Math.max(1, damage); // Minimum 1 damage
-}
+export { calculateDamage } from '../utils/DamageCalc';
 
 // ============================================
 // GAME OVER CHECK

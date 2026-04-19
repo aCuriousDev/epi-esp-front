@@ -54,6 +54,8 @@ export class VFXManager {
   private idleAnimations: Map<string, Animation[]> = new Map();
   private selectionPulseObserver: any = null;
   private ambientSystems: ParticleSystem[] = [];
+  private ambientBaseEmitRates: Map<ParticleSystem, number> = new Map();
+  private ambientDensityMultiplier = 1.0;
   private activeParticleSystems: Set<ParticleSystem> = new Set();
 
   // Reusable particle texture (white radial gradient circle)
@@ -1640,6 +1642,8 @@ export class VFXManager {
     system.colorDead = new Color4(0.5, 0.5, 0.4, 0);
     system.minAngularSpeed = -0.5;
     system.maxAngularSpeed = 0.5;
+    this.ambientBaseEmitRates.set(system, system.emitRate);
+    system.emitRate = system.emitRate * this.ambientDensityMultiplier;
     system.start();
     this.ambientSystems.push(system);
   }
@@ -1671,6 +1675,8 @@ export class VFXManager {
     system.addSizeGradient(0.3, 0.04);
     system.addSizeGradient(0.7, 0.03);
     system.addSizeGradient(1, 0);
+    this.ambientBaseEmitRates.set(system, system.emitRate);
+    system.emitRate = system.emitRate * this.ambientDensityMultiplier;
     system.start();
     this.ambientSystems.push(system);
   }
@@ -1697,9 +1703,34 @@ export class VFXManager {
     system.addSizeGradient(0, 0.06);
     system.addSizeGradient(0.5, 0.04);
     system.addSizeGradient(1, 0);
+    this.ambientBaseEmitRates.set(system, system.emitRate);
+    system.emitRate = system.emitRate * this.ambientDensityMultiplier;
     system.start();
     this.ambientSystems.push(system);
     return system;
+  }
+
+  /**
+   * Scale ambient particle emission rate by `multiplier`. 0 stops emission;
+   * 1 is the authored default; 1.5 over-emits. Applies live to already-
+   * running systems and to any started afterwards.
+   */
+  public setAmbientDensity(multiplier: number): void {
+    this.ambientDensityMultiplier = multiplier;
+    this.ambientSystems.forEach((system) => {
+      const base = this.ambientBaseEmitRates.get(system);
+      if (base !== undefined) {
+        system.emitRate = base * multiplier;
+      }
+    });
+  }
+
+  public setAmbientEnabled(enabled: boolean): void {
+    if (enabled) {
+      this.resumeAmbient();
+    } else {
+      this.pauseAmbient();
+    }
   }
 
   // ========================================
@@ -1956,6 +1987,33 @@ export class VFXManager {
       s.dispose();
     });
     this.ambientSystems = [];
+    this.ambientBaseEmitRates.clear();
+  }
+
+  /**
+   * Pause ambient particle systems without disposing them so they can be
+   * resumed after a map reset. Also wipes the live particle buffer so we
+   * don't render trails from the previous map on the first frame of the
+   * next one.
+   */
+  public pauseAmbient(): void {
+    this.ambientSystems.forEach(s => {
+      s.stop();
+      // `reset` clears any particle that is currently alive.
+      s.reset();
+    });
+  }
+
+  /**
+   * Resume ambient systems paused by `pauseAmbient`. Called by
+   * SceneResetManager.finishLoad() once the new map is on screen.
+   */
+  public resumeAmbient(): void {
+    this.ambientSystems.forEach(s => {
+      if (!s.isStarted()) {
+        s.start();
+      }
+    });
   }
 
   public dispose(): void {
