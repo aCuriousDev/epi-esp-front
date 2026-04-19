@@ -191,4 +191,31 @@ export function registerGameSyncHandlers(): void {
     setGameState({ mode: next.mode, phase: next.phase });
     addCombatLog("[MJ] Combat imminent — placez vos unités.", "system");
   });
+
+  // DM switched the session to a different map. Per CLAUDE.md hard rules we
+  // tear down via clearEngineState + setGameState("mapId", ...) and let the
+  // GameCanvas tiles effect drive createGrid through SceneResetManager.
+  signalRService.on("MapSwitched", async (message: { mapId: string; name: string; data: string }) => {
+    if (!sessionHasDm()) return;
+    const payload = (message as any)?.payload ?? message;
+    if (!payload?.mapId || !payload?.data) return;
+
+    try {
+      const parsed = JSON.parse(payload.data);
+      // Cache locally so the map editor / solo flow can pick it up too.
+      (await import("../mapStorage")).saveMap(parsed);
+    } catch (err) {
+      console.warn("[gameSync] Failed to parse MapSwitched data", err);
+    }
+
+    const { clearEngineState } = await import("../../components/GameCanvas");
+    await clearEngineState();
+
+    // Force the tiles effect to fire by setting mapId — this is the single
+    // entry point the GameCanvas effect listens to. Never call createGrid
+    // directly here (CLAUDE.md hard rule).
+    setGameState("mapId", payload.mapId);
+
+    addCombatLog(`[MJ] Nouvelle carte : ${payload.name ?? "sans nom"}`, "system");
+  });
 }

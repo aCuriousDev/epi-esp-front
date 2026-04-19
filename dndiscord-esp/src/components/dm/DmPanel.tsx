@@ -35,7 +35,9 @@ import {
   dmHiddenRoll,
   dmSpawnUnit,
   dmStartCombat,
+  dmSwitchMap,
 } from "../../services/signalr/multiplayer.service";
+import { MapService, type CampaignMapRecord } from "../../services/map.service";
 import { units, addUnit } from "../../game/stores/UnitsStore";
 import { setTiles, updatePathfinder } from "../../game/stores/TilesStore";
 import { addCombatLog, gameState } from "../../game/stores/GameStateStore";
@@ -63,13 +65,19 @@ const ENEMY_CATALOGUE: EnemyTemplate[] = [
 
 export const DmPanel: Component = () => {
   const [isExpanded, setIsExpanded] = createSignal(true);
-  const [activeTab, setActiveTab] = createSignal<"move" | "roll" | "spawn">("move");
+  const [activeTab, setActiveTab] = createSignal<"move" | "roll" | "spawn" | "maps">("move");
 
   // Dice
   const [diceType, setDiceType] = createSignal(20);
   const [diceModifier, setDiceModifier] = createSignal(0);
   const [diceLabel, setDiceLabel] = createSignal("");
   const [isRolling, setIsRolling] = createSignal(false);
+
+  // Maps
+  const [campaignMaps, setCampaignMaps] = createSignal<CampaignMapRecord[]>([]);
+  const [mapsLoading, setMapsLoading] = createSignal(false);
+  const [mapsLoaded, setMapsLoaded] = createSignal(false);
+  const [switchingMapId, setSwitchingMapId] = createSignal<string | null>(null);
 
   // Status messages
   const [statusMsg, setStatusMsg] = createSignal<string | null>(null);
@@ -161,11 +169,42 @@ export const DmPanel: Component = () => {
     else { setDmSpawnTemplate(tplId); setDmDragUnit(null); }
   };
 
-  const switchTab = (tab: "move" | "roll" | "spawn") => {
+  const switchTab = (tab: "move" | "roll" | "spawn" | "maps") => {
     setActiveTab(tab);
     setDmDragUnit(null);
     setDmSpawnTemplate(null);
     setStatusMsg(null);
+  };
+
+  const loadMapsIfNeeded = async () => {
+    const session = getCurrentSession();
+    if (!session?.campaignId) return;
+    if (mapsLoaded() || mapsLoading()) return;
+    setMapsLoading(true);
+    try {
+      const maps = await MapService.list(session.campaignId);
+      setCampaignMaps(maps);
+      setMapsLoaded(true);
+    } catch (e) {
+      console.warn("[DmPanel] failed to load campaign maps", e);
+      flash("Impossible de charger les cartes");
+    } finally {
+      setMapsLoading(false);
+    }
+  };
+
+  const handleSwitchMap = async (mapId: string) => {
+    if (switchingMapId()) return;
+    setSwitchingMapId(mapId);
+    try {
+      await dmSwitchMap(mapId);
+      flash("🗺️ Changement de carte en cours…");
+    } catch (e) {
+      console.warn("[DmPanel] dmSwitchMap failed", e);
+      flash("Échec : impossible de changer de carte");
+    } finally {
+      setSwitchingMapId(null);
+    }
   };
 
   // ═══════════════════════════════════════════════════════════════════
@@ -214,6 +253,9 @@ export const DmPanel: Component = () => {
             <DmTab active={activeTab() === "move"} onClick={() => switchTab("move")} label="Déplacer" />
             <DmTab active={activeTab() === "spawn"} onClick={() => switchTab("spawn")} label="Invoquer" />
             <DmTab active={activeTab() === "roll"} onClick={() => switchTab("roll")} label="Dés" />
+            <Show when={getCurrentSession()?.campaignId}>
+              <DmTab active={activeTab() === "maps"} onClick={() => { switchTab("maps"); void loadMapsIfNeeded(); }} label="Cartes" />
+            </Show>
           </div>
 
           {/* Status flash */}
@@ -302,6 +344,47 @@ export const DmPanel: Component = () => {
                   </For>
                 </div>
               </Show>
+            </div>
+          </Show>
+
+          {/* ── MAPS TAB ── DM-only scene switcher pulling from persisted maps */}
+          <Show when={activeTab() === "maps"}>
+            <div class="mt-2 space-y-1.5">
+              <Show when={mapsLoading()}>
+                <p class="text-[10px] text-purple-300/50 text-center py-2">Chargement…</p>
+              </Show>
+              <Show when={!mapsLoading() && mapsLoaded() && campaignMaps().length === 0}>
+                <p class="text-[10px] text-purple-300/50 text-center py-2">
+                  Aucune carte enregistrée pour cette campagne. Ouvrez l'éditeur pour en créer et enregistrez-les côté serveur.
+                </p>
+              </Show>
+              <Show when={campaignMaps().length > 0}>
+                <div class="space-y-1">
+                  <For each={campaignMaps()}>
+                    {(m) => {
+                      const isSwitching = () => switchingMapId() === m.id;
+                      return (
+                        <button
+                          onClick={() => handleSwitchMap(m.id)}
+                          disabled={!!switchingMapId()}
+                          class="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <span class="text-xs text-white/90 truncate">{m.name}</span>
+                          <span class="text-[10px] text-purple-300/60">
+                            {isSwitching() ? "…" : "Charger"}
+                          </span>
+                        </button>
+                      );
+                    }}
+                  </For>
+                </div>
+              </Show>
+              <button
+                onClick={() => { setMapsLoaded(false); void loadMapsIfNeeded(); }}
+                class="text-[10px] text-purple-300/60 hover:text-purple-200 underline underline-offset-2"
+              >
+                Rafraîchir la liste
+              </button>
             </div>
           </Show>
 

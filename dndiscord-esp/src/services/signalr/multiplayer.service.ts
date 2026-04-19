@@ -88,6 +88,7 @@ const HUB = {
   dmSpawnUnit: "DmSpawnUnit",
   dmStartCombat: "DmStartCombat",
   dmRestartGame: "DmRestartGame",
+  dmSwitchMap: "DmSwitchMap",
 } as const;
 
 async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
@@ -266,6 +267,12 @@ export async function dmRestartGame(mapId: string): Promise<void> {
     }
   }
   await signalRService.invoke(HUB.dmRestartGame, mapId, mapData);
+}
+
+/** DM-only: swap the session's scene to another of the campaign's persisted maps.
+ * Server broadcasts MapSwitched to the session group. */
+export async function dmSwitchMap(mapId: string): Promise<void> {
+  await signalRService.invoke(HUB.dmSwitchMap, mapId);
 }
 
 // --- Actions de jeu (E2.3, server-authoritative) ---
