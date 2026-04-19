@@ -175,43 +175,47 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
             </div>
           </div>
 
-          {/* Character Selection */}
-          <div class="rounded-2xl border border-white/10 bg-gradient-to-br from-brandStart/80 to-brandEnd/80 backdrop-blur-sm p-6">
-            <h3 class="font-display text-xl text-white mb-4">
-              Votre personnage
-            </h3>
-            <div class="space-y-2">
-              <button
-                onClick={() => handleCharacterSelect(null)}
-                class={`w-full text-left px-4 py-3 rounded-lg border transition ${
-                  selectedCharId() === null
-                    ? "border-blue-400 bg-blue-500/20 text-white"
-                    : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
-                }`}
-              >
-                Guerrier par d&eacute;faut
-              </button>
-              <For each={characters()}>
-                {(char) => (
-                  <button
-                    onClick={() => handleCharacterSelect(char.id)}
-                    class={`w-full text-left px-4 py-3 rounded-lg border transition ${
-                      selectedCharId() === char.id
-                        ? "border-blue-400 bg-blue-500/20 text-white"
-                        : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
-                    }`}
-                  >
-                    <div class="flex justify-between items-center">
-                      <span class="font-medium">{char.name}</span>
-                      <span class="text-sm text-slate-400">
-                        {char.class} Nv.{char.level} - {char.maxHitPoints} PV
-                      </span>
-                    </div>
-                  </button>
-                )}
-              </For>
+          {/* Character Selection — not shown to the DM. The host is a pure overseer
+              and intentionally has no token on the board; picking a character would
+              be a no-op after the backend filters DM assignments out of the game. */}
+          <Show when={!amHost()}>
+            <div class="rounded-2xl border border-white/10 bg-gradient-to-br from-brandStart/80 to-brandEnd/80 backdrop-blur-sm p-6">
+              <h3 class="font-display text-xl text-white mb-4">
+                Votre personnage
+              </h3>
+              <div class="space-y-2">
+                <button
+                  onClick={() => handleCharacterSelect(null)}
+                  class={`w-full text-left px-4 py-3 rounded-lg border transition ${
+                    selectedCharId() === null
+                      ? "border-blue-400 bg-blue-500/20 text-white"
+                      : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+                  }`}
+                >
+                  Guerrier par d&eacute;faut
+                </button>
+                <For each={characters()}>
+                  {(char) => (
+                    <button
+                      onClick={() => handleCharacterSelect(char.id)}
+                      class={`w-full text-left px-4 py-3 rounded-lg border transition ${
+                        selectedCharId() === char.id
+                          ? "border-blue-400 bg-blue-500/20 text-white"
+                          : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+                      }`}
+                    >
+                      <div class="flex justify-between items-center">
+                        <span class="font-medium">{char.name}</span>
+                        <span class="text-sm text-slate-400">
+                          {char.class} Nv.{char.level} - {char.maxHitPoints} PV
+                        </span>
+                      </div>
+                    </button>
+                  )}
+                </For>
+              </div>
             </div>
-          </div>
+          </Show>
 
           {/* Host Controls: Map Selection + Start */}
           <Show when={amHost()}>

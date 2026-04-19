@@ -19,6 +19,7 @@ import {
   cloneAbilities,
 } from '../abilities/AbilityDefinitions';
 import { mapAssignmentToUnit } from '../utils/CharacterToUnit';
+import { sessionState, isDm } from '../../stores/session.store';
 
 const SPAWN_POSITIONS: GridPosition[] = [
   { x: 1, z: 1 },
@@ -41,8 +42,14 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
   console.log('[initializeFreeRoam] Creating player units...');
 
   if (unitAssignments && unitAssignments.length > 0) {
-    // Multiplayer: create units from server-provided assignments
-    unitAssignments.forEach((assignment, i) => {
+    // Multiplayer: create units from server-provided assignments.
+    // Belt-and-suspenders: drop any assignment that happens to match the DM
+    // (the backend already filters, this catches a stale pre-fix payload).
+    const hubId = sessionState.hubUserId;
+    const filtered = unitAssignments.filter(
+      (a) => !(isDm() && hubId && a.userId === hubId),
+    );
+    filtered.forEach((assignment, i) => {
       const spawnPos = SPAWN_POSITIONS[i % SPAWN_POSITIONS.length];
       const unit = mapAssignmentToUnit(assignment, spawnPos);
       newUnits[unit.id] = unit;

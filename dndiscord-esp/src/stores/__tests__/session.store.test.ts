@@ -13,14 +13,10 @@ function makeSession(partial?: Partial<SessionInfo>): SessionInfo {
     sessionId: "session-abc",
     joinCode: "ABCD-1234",
     campaignId: "campaign-xyz",
-    dmUserId: "dm-user",
     state: SessionState.Lobby,
     maxPlayers: 6,
     playerCount: 0,
     players: [],
-    createdAt: new Date().toISOString(),
-    lastActivityAt: new Date().toISOString(),
-    mapId: null,
     ...partial,
   };
 }

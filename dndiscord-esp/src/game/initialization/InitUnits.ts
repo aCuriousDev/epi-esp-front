@@ -18,6 +18,7 @@ import {
 } from '../abilities/AbilityDefinitions';
 import { loadMap } from '../../services/mapStorage';
 import { mapAssignmentToUnit } from '../utils/CharacterToUnit';
+import { sessionState, isDm } from '../../stores/session.store';
 
 /**
  * Obtient une position aléatoire depuis une liste de positions disponibles
@@ -142,8 +143,13 @@ export function initializeUnitsMultiplayer(
   const availableAllyPositions = [...spawnZones.ally];
   const availableEnemyPositions = [...spawnZones.enemy];
 
-  // Players from assignments
-  unitAssignments.forEach((assignment, i) => {
+  // Players from assignments. Belt-and-suspenders DM filter — backend already
+  // excludes the DM, this catches stale payloads from a pre-fix deploy.
+  const hubId = sessionState.hubUserId;
+  const playerAssignments = unitAssignments.filter(
+    (a) => !(isDm() && hubId && a.userId === hubId),
+  );
+  playerAssignments.forEach((assignment, i) => {
     const spawn =
       getRandomPosition(availableAllyPositions) ??
       assignment.userId
