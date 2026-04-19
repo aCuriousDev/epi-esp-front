@@ -1,4 +1,4 @@
-import { Component, Show } from "solid-js";
+import { Component, For, Show, createMemo } from "solid-js";
 import type { Unit } from "../../types";
 
 interface PlayerPortraitProps {
@@ -25,6 +25,14 @@ export const PlayerPortrait: Component<PlayerPortraitProps> = (props) => {
     if (!u || u.stats.maxHealth <= 0) return 0;
     return Math.max(0, Math.min(100, (u.stats.currentHealth / u.stats.maxHealth) * 100));
   };
+
+  // Reactive list of AP pip indices — using <For> rather than .map() keeps the
+  // rendered pips in sync if maxActionPoints ever changes at runtime (buff /
+  // debuff). .map() in JSX produces a static snapshot in SolidJS.
+  const apPipIndices = createMemo(() => {
+    const max = props.unit?.stats.maxActionPoints ?? 0;
+    return Array.from({ length: max }, (_, i) => i);
+  });
 
   return (
     <Show when={props.unit}>
@@ -60,15 +68,17 @@ export const PlayerPortrait: Component<PlayerPortraitProps> = (props) => {
                 PA
               </span>
               <div class="flex items-center gap-0.5">
-                {Array.from({ length: u().stats.maxActionPoints }).map((_, i) => (
-                  <span
-                    class={`w-1.5 h-3 rounded-sm border ${
-                      i < u().stats.currentActionPoints
-                        ? "bg-sky-400/90 border-sky-200/60 shadow-[0_0_4px_rgba(125,211,252,0.7)]"
-                        : "bg-sky-900/40 border-sky-700/40"
-                    }`}
-                  />
-                ))}
+                <For each={apPipIndices()}>
+                  {(i) => (
+                    <span
+                      class={`w-1.5 h-3 rounded-sm border ${
+                        i < u().stats.currentActionPoints
+                          ? "bg-sky-400/90 border-sky-200/60 shadow-[0_0_4px_rgba(125,211,252,0.7)]"
+                          : "bg-sky-900/40 border-sky-700/40"
+                      }`}
+                    />
+                  )}
+                </For>
               </div>
               <span class="text-[10px] font-mono text-white/60 tabular-nums ml-1">
                 {u().stats.currentActionPoints}/{u().stats.maxActionPoints}

@@ -121,6 +121,10 @@ export default function InventoryPanel(props: InventoryPanelProps) {
       setCatalog(items);
     } catch (err) {
       console.error("Failed to load catalog", err);
+      // Surface the failure so the MJ sees why the "Don du MJ" catalog is
+      // empty — without this the UI was indistinguishable from a backend
+      // that simply has zero items seeded.
+      setError("Impossible de charger le catalogue.");
     }
   };
 

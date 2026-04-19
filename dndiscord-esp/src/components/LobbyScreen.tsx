@@ -7,7 +7,7 @@ import {
   Show,
 } from "solid-js";
 import { ArrowLeft, Copy, Check } from "lucide-solid";
-import { sessionState, isHost } from "../stores/session.store";
+import { sessionState, isHost, clearSession } from "../stores/session.store";
 import { PlayerRole } from "../types/multiplayer";
 import {
   selectCharacter,
@@ -145,7 +145,14 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
   const handleLeave = async () => {
     try {
       await leaveSession();
-    } catch {}
+    } catch (err) {
+      // leaveSession calls clearSession after a successful hub invoke; if the
+      // hub throws we still want local state cleaned up, otherwise the user
+      // ends up on the menu screen with a ghost session banner. Log for dev
+      // visibility; clear unconditionally.
+      console.warn("[Lobby] leaveSession hub call failed, clearing local state", err);
+      clearSession();
+    }
     props.onLeave();
   };
 

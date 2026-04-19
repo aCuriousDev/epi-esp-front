@@ -62,6 +62,8 @@ export function normalizePlayer(raw: Record<string, unknown>): PlayerInfo {
       raw.SelectedCharacterId) as string | undefined,
     selectedCharacterName: (raw.selectedCharacterName ??
       raw.SelectedCharacterName) as string | undefined,
+    selectedDefaultTemplate: (raw.selectedDefaultTemplate ??
+      raw.SelectedDefaultTemplate) as string | undefined,
   };
 }
 

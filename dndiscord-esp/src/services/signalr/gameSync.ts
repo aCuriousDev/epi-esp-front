@@ -16,6 +16,7 @@ import { posToKey } from "../../game/utils/GridUtils";
 import { produce } from "solid-js/store";
 import { sessionState, isHost, sessionHasDm } from "../../stores/session.store";
 import { applyCombatStarted } from "./combatStarted";
+import { applyMapSwitched } from "./mapSwitched";
 import { getAllySpawnPositions } from "../../game/initialization/InitUnits";
 
 import { addCombatLog } from "../../game/stores/GameStateStore";
@@ -198,30 +199,43 @@ export function registerGameSyncHandlers(): void {
     addCombatLog("[MJ] Combat imminent — placez vos unités.", "system");
   });
 
-  // DM switched the session to a different map. Per CLAUDE.md hard rules we
-  // tear down via clearEngineState + setGameState("mapId", ...) and let the
-  // GameCanvas tiles effect drive createGrid through SceneResetManager.
-  signalRService.on("MapSwitched", async (message: { mapId: string; name: string; data: string }) => {
-    if (!sessionHasDm()) return;
-    const payload = (message as any)?.payload ?? message;
-    if (!payload?.mapId || !payload?.data) return;
-
-    try {
-      const parsed = JSON.parse(payload.data);
-      // Cache locally so the map editor / solo flow can pick it up too.
-      (await import("../mapStorage")).saveMap(parsed);
-    } catch (err) {
-      console.warn("[gameSync] Failed to parse MapSwitched data", err);
-    }
-
-    const { clearEngineState } = await import("../../components/GameCanvas");
-    await clearEngineState();
-
-    // Force the tiles effect to fire by setting mapId — this is the single
-    // entry point the GameCanvas effect listens to. Never call createGrid
-    // directly here (CLAUDE.md hard rule).
-    setGameState("mapId", payload.mapId);
-
-    addCombatLog(`[MJ] Nouvelle carte : ${payload.name ?? "sans nom"}`, "system");
+  // DM switched the session to a different map. SignalR's `on(...)` registers
+  // a synchronous callback — if we made it `async` directly the returned
+  // promise would be dropped and any failure in clearEngineState / JSON parse
+  // / setGameState would surface as an unhandled rejection. Wrap the async
+  // body in a named helper and attach an explicit .catch.
+  signalRService.on("MapSwitched", (message: unknown) => {
+    void handleMapSwitched(message).catch((err) =>
+      console.error("[gameSync] MapSwitched handler threw", err),
+    );
   });
+}
+
+async function handleMapSwitched(message: unknown): Promise<void> {
+  if (!sessionHasDm()) return;
+
+  const parsed = applyMapSwitched(message);
+  if (!parsed) {
+    console.warn("[gameSync] MapSwitched payload rejected by applyMapSwitched");
+    return;
+  }
+
+  // Cache locally so the map editor / solo flow can pick it up too. Narrow
+  // type to SavedMapData via the dynamic import — applyMapSwitched keeps the
+  // parsed data as unknown so it can stay engine-free.
+  try {
+    const { saveMap } = await import("../mapStorage");
+    saveMap(parsed.parsedData as any);
+  } catch (err) {
+    console.warn("[gameSync] Failed to cache switched map locally", err);
+  }
+
+  const { clearEngineState } = await import("../../components/GameCanvas");
+  await clearEngineState();
+
+  // Force the tiles effect to fire by setting mapId — this is the single
+  // entry point the GameCanvas effect listens to. Never call createGrid
+  // directly here (CLAUDE.md hard rule).
+  setGameState("mapId", parsed.mapId);
+  addCombatLog(`[MJ] Nouvelle carte : ${parsed.name}`, "system");
 }

@@ -1,7 +1,6 @@
 import { Component, For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import { Beaker } from "lucide-solid";
 import { InventoryService } from "../../services/inventory.service";
-import { signalRService } from "../../services/signalr/SignalRService";
 import { sessionState } from "../../stores/session.store";
 import ItemIcon from "../common/ItemIcon";
 import type { InventoryEntry, InventoryChangedEvent } from "../../types/inventory";
@@ -57,9 +56,10 @@ export const HotbarConsumables: Component<HotbarConsumablesProps> = (props) => {
 
   onMount(async () => {
     await load();
-    if (signalRService.isConnected) {
-      unsubscribe = InventoryService.onInventoryChanged(handleInventoryChanged);
-    }
+    // Subscribe unconditionally — InventoryService.onInventoryChanged handles
+    // the not-yet-connected case internally. Gating on isConnected here raced
+    // with a reconnect between mount and the async load completing.
+    unsubscribe = InventoryService.onInventoryChanged(handleInventoryChanged);
   });
 
   onCleanup(() => {

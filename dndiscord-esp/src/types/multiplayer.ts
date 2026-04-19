@@ -27,6 +27,8 @@ export interface PlayerInfo {
   status: ConnectionStatus;
   selectedCharacterId?: string;
   selectedCharacterName?: string;
+  /** Lobby quickstart preset — "warrior" | "mage" | "archer" | undefined. */
+  selectedDefaultTemplate?: string;
 }
 
 export interface SessionInfo {

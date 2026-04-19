@@ -367,14 +367,18 @@ export default function DmPlayerInspectPanel() {
             <Show when={view() === "give"}>
               <div class="space-y-1.5">
                 <Show when={!currentCharId()}>
-                  {/* Distinguish "player exists but character selection hasn't
-                      reached us yet" (likely a timing issue after session join)
-                      vs "unit belongs to no session player". The first is a
-                      loading-state; the second is genuinely stuck. */}
+                  {/* Three distinct cases to communicate:
+                      1. Unit has no matching session player (genuinely orphan).
+                      2. Player picked a default template — items can't persist,
+                         so gifting is disabled by design.
+                      3. Player has a real character slot but selection hasn't
+                         reached us yet (timing / reconnect). */}
                   <p class="text-[9px] text-amber-300/60 text-center py-2">
-                    {playerInfo()
-                      ? "Chargement du personnage… (si persiste, le joueur doit resélectionner son personnage dans le lobby)"
-                      : "Impossible d'associer cette unité à un joueur de la session"}
+                    {!playerInfo()
+                      ? "Impossible d'associer cette unité à un joueur de la session"
+                      : playerInfo()!.selectedDefaultTemplate
+                        ? "Départ rapide : les objets ne peuvent être donnés qu'à un personnage persisté. Le joueur doit créer un personnage pour recevoir des objets."
+                        : "Chargement du personnage… (si persiste, le joueur doit resélectionner son personnage dans le lobby)"}
                   </p>
                 </Show>
                 <Show when={currentCharId()}>
