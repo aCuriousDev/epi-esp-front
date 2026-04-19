@@ -159,4 +159,68 @@ describe("mapCampaignResponse", () => {
     const result = mapCampaignResponse(detail);
     expect(result.players).toEqual([]);
   });
+
+  it("propagates isDungeonMaster=true", () => {
+    const result = mapCampaignResponse(makeCampaignDetail({ isDungeonMaster: true }));
+    expect(result.isDungeonMaster).toBe(true);
+  });
+
+  it("propagates isDungeonMaster=false", () => {
+    const result = mapCampaignResponse(makeCampaignDetail({ isDungeonMaster: false }));
+    expect(result.isDungeonMaster).toBe(false);
+  });
+
+  it("does not fabricate dungeonMasterName — leaves it undefined for the UI to fall back", () => {
+    const result = mapCampaignResponse(makeCampaignDetail());
+    expect(result.dungeonMasterName).toBeUndefined();
+  });
+
+  it("uses member.nickname when present", () => {
+    const detail = makeCampaignDetail({
+      members: [
+        {
+          id: "m1",
+          userId: "11111111-2222-3333-4444-555555555555",
+          nickname: "Alyssa",
+          role: CampaignMemberRole.Player,
+          status: MembershipStatus.Active,
+          joinedAt: "2024-01-01T00:00:00Z",
+        },
+      ],
+    });
+    const result = mapCampaignResponse(detail);
+    expect(result.players![0].username).toBe("Alyssa");
+  });
+
+  it("falls back to 'Joueur #{short}' when nickname is missing and userId is a GUID", () => {
+    const detail = makeCampaignDetail({
+      members: [
+        {
+          id: "m1",
+          userId: "11111111-2222-3333-4444-555555555555",
+          role: CampaignMemberRole.Player,
+          status: MembershipStatus.Active,
+          joinedAt: "2024-01-01T00:00:00Z",
+        },
+      ],
+    });
+    const result = mapCampaignResponse(detail);
+    expect(result.players![0].username).toBe("Joueur #111111");
+  });
+
+  it("keeps raw userId when nickname is missing and userId is not GUID-shaped", () => {
+    const detail = makeCampaignDetail({
+      members: [
+        {
+          id: "m1",
+          userId: "raw-discord-snowflake",
+          role: CampaignMemberRole.Player,
+          status: MembershipStatus.Active,
+          joinedAt: "2024-01-01T00:00:00Z",
+        },
+      ],
+    });
+    const result = mapCampaignResponse(detail);
+    expect(result.players![0].username).toBe("raw-discord-snowflake");
+  });
 });
