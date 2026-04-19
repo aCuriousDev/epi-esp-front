@@ -23,6 +23,8 @@ import { DmPanel } from "../components/dm/DmPanel";
 import DmPlayerInspectPanel from "../components/dm/DmPlayerInspectPanel";
 import { ItemReceivedToast } from "../components/dm/ItemReceivedToast";
 import { EnemySpawnToast } from "../components/dm/EnemySpawnToast";
+import InventoryPanel from "../components/InventoryPanel";
+import WalletPanel from "../components/WalletPanel";
 import { clearAllDialogues } from "../stores/dialogue.store";
 import {
   gameState,
@@ -423,6 +425,18 @@ const BoardGame: Component = () => {
     }, 2500);
   };
 
+  /**
+   * Character id of the current (non-DM) player for board-side inventory/wallet.
+   * null when outside a session, when we're the DM, or when no character is yet selected.
+   */
+  const myBoardCharacterId = (): string | null => {
+    const session = sessionState.session;
+    const hubId = getHubUserId();
+    if (!session || !hubId || isDm()) return null;
+    const me = session.players.find((p) => p.userId === hubId);
+    return me?.selectedCharacterId ?? null;
+  };
+
   const renderLeftPanelContent = () => (
     <>
       <Show when={sessionState.session}>
@@ -451,6 +465,16 @@ const BoardGame: Component = () => {
       <Show when={sessionState.session && isDm()}>
         <DmPanel />
         <DmPlayerInspectPanel />
+      </Show>
+      {/* Board-side inventory + wallet for the current player (not DM), so they
+          can browse items granted by the DM without leaving the board. */}
+      <Show when={sessionState.session && !isDm() && myBoardCharacterId()}>
+        {(charId) => (
+          <>
+            <WalletPanel characterId={charId()} isMJ={false} />
+            <InventoryPanel characterId={charId()} isMJ={false} />
+          </>
+        )}
       </Show>
       {/* TurnOrderDisplay is now rendered as an always-visible top banner
           above the canvas, so it stays readable without opening a drawer. */}
