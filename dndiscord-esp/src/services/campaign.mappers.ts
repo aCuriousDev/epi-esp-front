@@ -125,8 +125,6 @@ export const mapCampaignResponse = (apiCampaign: CampaignDetailResponse): Campai
     // session" button, which falls back to comparing dungeonMasterId to the
     // Discord snowflake — never equal (back's DungeonMasterId is an MD5-derived Guid).
     isDungeonMaster: apiCampaign.isDungeonMaster,
-    dungeonMasterName: "Maître du Jeu",
-    dungeonMasterAvatar: "",
     maxPlayers: apiCampaign.maxPlayers,
     currentPlayers: apiCampaign.memberCount,
     players: apiCampaign.members?.map(m => ({
@@ -136,12 +134,6 @@ export const mapCampaignResponse = (apiCampaign: CampaignDetailResponse): Campai
       characterName: m.nickname,
       joinedAt: m.joinedAt,
     })) || [],
-    sessions: [],
-    totalSessions: apiCampaign.snapshotCount || 0,
-    setting: undefined,
-    startingLevel: 1,
-    currentLevel: 1,
-    tags: [],
     createdAt: apiCampaign.createdAt,
     updatedAt: apiCampaign.updatedAt,
     campaignTreeDefinition: apiCampaign.campaignTreeDefinition,

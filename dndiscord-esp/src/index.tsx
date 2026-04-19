@@ -19,7 +19,9 @@ import CharactersComponent from "./pages/CharactersComponent";
 import { AuthCallback, ProtectedRoute } from "./components/auth";
 import { authStore } from "./stores/auth.store";
 import { initDiscordSDK } from "./services/discord";
-import CampaignManagerPage from "./pages/CampaignManagerPage";
+// CampaignManagerPage intentionally unimported: the story-tree authoring UI is
+// disconnected from gameplay today. File kept for a future revival.
+// import CampaignManagerPage from "./pages/CampaignManagerPage";
 import SessionInviteListener from "./components/SessionInviteListener";
 import EditCampaign from "./pages/EditCampaign";
 import TutorialOverlay from "./components/TutorialOverlay";
@@ -126,14 +128,7 @@ render(
           </Protected>
         )}
       />
-      <Route
-        path="/campaigns/:id/manager"
-        component={() => (
-          <Protected>
-            <CampaignManagerPage />
-          </Protected>
-        )}
-      />
+      {/* /campaigns/:id/manager route removed — story tree is a follow-up */}
       <Route
         path="/campaigns/create"
         component={() => (

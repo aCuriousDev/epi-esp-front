@@ -383,16 +383,8 @@ export default function CampaignView() {
                       </h1>
                       <div class="flex flex-wrap items-center gap-3 text-slate-400 mb-4">
                         <span class="flex items-center gap-1.5">
-                          <MapPin class="w-4 h-4" />
-                          {camp().setting || "Univers personnalisé"}
-                        </span>
-                        <span class="flex items-center gap-1.5">
                           <Users class="w-4 h-4" />
                           {camp().currentPlayers}/{camp().maxPlayers} joueurs
-                        </span>
-                        <span class="flex items-center gap-1.5">
-                          <BookOpen class="w-4 h-4" />
-                          {camp().totalSessions} sessions
                         </span>
                       </div>
 
@@ -400,19 +392,6 @@ export default function CampaignView() {
                         <p class="text-slate-300/80 leading-relaxed">
                           {camp().description}
                         </p>
-                      </Show>
-
-                      {/* Tags */}
-                      <Show when={camp().tags && camp().tags!.length > 0}>
-                        <div class="flex flex-wrap gap-2 mt-4">
-                          <For each={camp().tags}>
-                            {(tag) => (
-                              <span class="px-2.5 py-1 text-xs bg-white/10 text-slate-300 rounded-full">
-                                {tag}
-                              </span>
-                            )}
-                          </For>
-                        </div>
                       </Show>
                     </div>
 
@@ -427,17 +406,11 @@ export default function CampaignView() {
                             Maître du Jeu
                           </p>
                           <p class="text-white font-semibold">
-                            {camp().dungeonMasterName}
+                            {camp().dungeonMasterName ?? "Maître du Jeu"}
                           </p>
                         </div>
                       </div>
                       <div class="text-sm text-slate-400">
-                        <p>
-                          Niveau actuel:{" "}
-                          <span class="text-purple-400 font-semibold">
-                            {camp().currentLevel || camp().startingLevel}
-                          </span>
-                        </p>
                         <p>Démarré le {formatDate(camp().createdAt)}</p>
                       </div>
                     </div>
@@ -494,20 +467,16 @@ export default function CampaignView() {
                   label="Joueurs"
                   count={camp().currentPlayers}
                 />
-                <TabButton
-                  active={activeTab() === "sessions"}
-                  onClick={() => setActiveTab("sessions")}
-                  icon={<Calendar class="w-4 h-4" />}
-                  label="Sessions"
-                  count={camp().totalSessions}
-                />
+                {/* Sessions tab removed — the backend doesn't persist session
+                    history yet. Follow-up: reintroduce when CampaignSessionService
+                    state is surfaced via a read endpoint. */}
               </div>
 
               {/* Tab Content */}
               <div class="space-y-6">
                 {/* Overview Tab */}
                 <Show when={activeTab() === "overview"}>
-                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <StatCard
                       icon={<Users class="w-5 h-5" />}
                       label="Joueurs"
@@ -515,50 +484,11 @@ export default function CampaignView() {
                       color="purple"
                     />
                     <StatCard
-                      icon={<BookOpen class="w-5 h-5" />}
-                      label="Sessions jouées"
-                      value={camp().totalSessions.toString()}
-                      color="blue"
-                    />
-                    <StatCard
-                      icon={<Crown class="w-5 h-5" />}
-                      label="Niveau actuel"
-                      value={(
-                        camp().currentLevel || camp().startingLevel
-                      ).toString()}
-                      color="amber"
-                    />
-                    <StatCard
                       icon={<Clock class="w-5 h-5" />}
                       label="Durée"
                       value={`${Math.ceil((Date.now() - new Date(camp().createdAt).getTime()) / (1000 * 60 * 60 * 24 * 30))} mois`}
                       color="green"
                     />
-                  </div>
-
-                  {/* Recent Activity */}
-                  <div class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
-                    <h3 class="font-display text-lg text-white mb-4 flex items-center gap-2">
-                      <MessageSquare class="w-5 h-5 text-purple-400" />
-                      Activité récente
-                    </h3>
-                    <div class="space-y-3">
-                      <ActivityItem
-                        icon={<ScrollText class="w-5 h-5 text-amber-300" />}
-                        text="Session 12 terminée: Les Tours d'Argent"
-                        time="Il y a 4 jours"
-                      />
-                      <ActivityItem
-                        icon={<Swords class="w-5 h-5 text-red-300" />}
-                        text="Le groupe a atteint le niveau 6"
-                        time="Il y a 1 semaine"
-                      />
-                      <ActivityItem
-                        icon={<User class="w-5 h-5 text-purple-300" />}
-                        text="DragonSlayer a rejoint la campagne"
-                        time="Il y a 2 semaines"
-                      />
-                    </div>
                   </div>
                 </Show>
 
@@ -592,7 +522,7 @@ export default function CampaignView() {
                         </div>
                         <div class="flex-1">
                           <p class="text-white font-semibold">
-                            {camp().dungeonMasterName}
+                            {camp().dungeonMasterName ?? "Maître du Jeu"}
                           </p>
                           <p class="text-amber-400 text-sm">Maître du Jeu</p>
                         </div>
@@ -647,59 +577,7 @@ export default function CampaignView() {
                   </div>
                 </Show>
 
-                {/* Sessions Tab */}
-                <Show when={activeTab() === "sessions"}>
-                  <div class="space-y-4">
-                    <Show when={isOwner()}>
-                      <button class="w-full p-4 bg-game-dark/60 backdrop-blur-xl border border-dashed border-purple-500/30 rounded-2xl hover:bg-purple-500/10 transition-colors flex items-center justify-center gap-2 text-purple-400">
-                        <Plus class="w-5 h-5" />
-                        Planifier une nouvelle session
-                      </button>
-                    </Show>
-
-                    <For each={camp().sessions}>
-                      {(session) => (
-                        <div class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-4 hover:border-white/20 transition-colors">
-                          <div class="flex items-start gap-4">
-                            <div
-                              class={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                                session.completed
-                                  ? "bg-green-500/20 text-green-400"
-                                  : "bg-blue-500/20 text-blue-400"
-                              }`}
-                            >
-                              <Show
-                                when={session.completed}
-                                fallback={<Calendar class="w-5 h-5" />}
-                              >
-                                <Check class="w-5 h-5" />
-                              </Show>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                              <div class="flex items-center gap-2 mb-1">
-                                <span class="text-purple-400 font-semibold">
-                                  #{session.number}
-                                </span>
-                                <h4 class="text-white font-semibold truncate">
-                                  {session.title}
-                                </h4>
-                              </div>
-                              <p class="text-slate-400 text-sm">
-                                {formatDate(session.date)}
-                              </p>
-                              <Show when={session.summary}>
-                                <p class="text-slate-500 text-sm mt-2 line-clamp-2">
-                                  {session.summary}
-                                </p>
-                              </Show>
-                            </div>
-                            <ChevronRight class="w-5 h-5 text-slate-500" />
-                          </div>
-                        </div>
-                      )}
-                    </For>
-                  </div>
-                </Show>
+                {/* Sessions Tab removed with its TabButton — follow-up work. */}
               </div>
 
               {/* Erreur création de session */}
