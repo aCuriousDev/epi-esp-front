@@ -5,7 +5,8 @@
 
 import { signalRService } from "./SignalRService";
 import type { GameMessage, MoveResult, TurnEndedPayload, GameStateSnapshotPayload, DmMoveTokenPayload, DmSpawnUnitPayload } from "../../types/multiplayer";
-import type { GridPosition, Unit, UnitType, Team } from "../../types";
+import type { GridPosition, Unit, UnitType } from "../../types";
+import { Team } from "../../types";
 import { units, setUnits } from "../../game/stores/UnitsStore";
 import { addUnit } from "../../game/stores/UnitsStore";
 import { tiles, setTiles } from "../../game/stores/TilesStore";
@@ -13,7 +14,7 @@ import { setGameState } from "../../game/stores/GameStateStore";
 import { updatePathfinder } from "../../game/stores/TilesStore";
 import { posToKey } from "../../game/utils/GridUtils";
 import { produce } from "solid-js/store";
-import { sessionState, isHost } from "../../stores/session.store";
+import { sessionState, isHost, sessionHasDm } from "../../stores/session.store";
 
 import { addCombatLog } from "../../game/stores/GameStateStore";
 import { addSpawnedEnemy } from "../../stores/dmTools.store";
@@ -103,6 +104,9 @@ export function registerGameSyncHandlers(): void {
   // DM force-moved a token — apply to all clients except the DM (who already updated optimistically)
   signalRService.on("DmTokenMoved", (message: GameMessage<DmMoveTokenPayload>) => {
     if (isHost()) return; // DM already applied optimistically
+    // Defence-in-depth: drop Dm* events when the session has no DM — the server
+    // should already block them but we don't want to mutate state on a spoofed event.
+    if (!sessionHasDm()) return;
 
     const payload = message?.payload ?? message;
     if (!payload?.unitId || !payload?.target) return;
@@ -137,6 +141,7 @@ export function registerGameSyncHandlers(): void {
   // DM spawned a new enemy unit — materialise it on all clients
   signalRService.on("DmUnitSpawned", (message: GameMessage<DmSpawnUnitPayload>) => {
     if (isHost()) return; // DM already added the unit locally before broadcasting
+    if (!sessionHasDm()) return;
 
     const payload = message?.payload ?? message;
     if (!payload?.unitId || !payload?.target) return;
@@ -156,7 +161,7 @@ export function registerGameSyncHandlers(): void {
       id: payload.unitId,
       name: payload.name,
       type: payload.unitType as UnitType,
-      team: "enemy" as Team,
+      team: Team.ENEMY,
       position: pos,
       stats,
       abilities: [],

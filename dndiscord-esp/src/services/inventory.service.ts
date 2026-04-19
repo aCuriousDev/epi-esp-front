@@ -1,6 +1,7 @@
 import axios from "axios";
 import { getApiUrl } from "./config";
 import { signalRService } from "./signalr/SignalRService";
+import { isCharacterInCurrentSession } from "../stores/session.store";
 import type {
   GiveItemRequest,
   InventoryChangedEvent,
@@ -79,7 +80,13 @@ export const InventoryService = {
   onInventoryChanged(
     handler: (evt: InventoryChangedEvent) => void,
   ): () => void {
-    const wrapped = (evt: InventoryChangedEvent) => handler(evt);
+    // Defence-in-depth: the back session-scopes these events, but if a stray
+    // event arrives for a character that isn't in the current session we drop it
+    // rather than exposing another player's inventory to this UI.
+    const wrapped = (evt: InventoryChangedEvent) => {
+      if (!isCharacterInCurrentSession(evt.characterId)) return;
+      handler(evt);
+    };
     try {
       signalRService.on("InventoryChanged", wrapped);
     } catch (err) {
@@ -123,7 +130,10 @@ export const InventoryService = {
   onWalletChanged(
     handler: (evt: WalletChangedEvent) => void,
   ): () => void {
-    const wrapped = (evt: WalletChangedEvent) => handler(evt);
+    const wrapped = (evt: WalletChangedEvent) => {
+      if (!isCharacterInCurrentSession(evt.characterId)) return;
+      handler(evt);
+    };
     try {
       signalRService.on("WalletChanged", wrapped);
     } catch (err) {

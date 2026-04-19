@@ -221,3 +221,22 @@ export function getOtherPlayers() {
 export function getHubUserId(): string | null {
   return sessionState.hubUserId;
 }
+
+/**
+ * True if the given characterId is selected by any player in the current session.
+ * Used as a defence-in-depth filter on SignalR events that carry a characterId —
+ * rejects stray broadcasts from another session if the back ever leaks them.
+ */
+export function isCharacterInCurrentSession(characterId: string | undefined | null): boolean {
+  if (!characterId) return false;
+  const session = sessionState.session;
+  if (!session) return false;
+  return session.players.some((p) => p.selectedCharacterId === characterId);
+}
+
+/** True when the current session has a player in the DungeonMaster role. */
+export function sessionHasDm(): boolean {
+  const session = sessionState.session;
+  if (!session) return false;
+  return session.players.some((p) => p.role === PlayerRole.DungeonMaster);
+}
