@@ -147,9 +147,16 @@ export function startCombatFromPreparation(): void {
     TurnManager.debugTurnOrder(turnOrder, units),
   );
 
+  // Derive the opening phase from whichever unit goes first by initiative.
+  // The old code hardcoded PLAYER_TURN here, which skipped the ENEMY_TURN
+  // entirely when an enemy's initiative beat the players' — the AI tick
+  // never fired, manual control had nothing to grab, combat looked stuck.
+  const firstUnit = turnOrder.length > 0 ? units[turnOrder[0]] : null;
+  const openingPhase = TurnManager.determinePhase(firstUnit);
+
   batch(() => {
     setGameState({
-      phase: GamePhase.PLAYER_TURN,
+      phase: openingPhase,
       turnPhase: TurnPhase.SELECT_UNIT,
       currentTurn: 1,
       turnOrder,

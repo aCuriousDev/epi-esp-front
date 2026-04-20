@@ -25,8 +25,8 @@ import { setVFXEngine } from '../game/vfx/VFXIntegration';
 import { SoundManager } from '../engine/audio/SoundManager';
 import { setSoundEngine } from '../game/audio/SoundIntegration';
 import { soundSettings } from '../stores/sound.store';
-import { isHost as getIsHost, isDm } from '../stores/session.store';
-import { dmDragUnit, setDmDragUnit, dmSpawnTemplate, setDmSpawnTemplate, dmActiveMode, setDmInspectedUnit } from '../stores/dmTools.store';
+import { isHost as getIsHost, isDm, isInSession } from '../stores/session.store';
+import { dmDragUnit, setDmDragUnit, dmSpawnTemplate, setDmSpawnTemplate, dmActiveMode, setDmInspectedUnit, dmToolsState } from '../stores/dmTools.store';
 import { GamePhase, TurnPhase, Team, Unit, GridPosition, GameMode } from '../types';
 
 let engineInstance: BabylonEngine | null = null;
@@ -498,32 +498,32 @@ export const GameCanvas: Component = () => {
     engineInstance.setCombatMode(isCombat);
   });
   
-  // Handle enemy turn
+  // Handle enemy turn. In solo the embedded AI drives enemies; in multiplayer
+  // we disable it and let the DM play enemies manually via the EnemyHotbar —
+  // running the AI independently on each client led to drift (moves computed
+  // on client A weren't seen on client B, turn indices desynchronised, and
+  // combat state stopped advancing).
   let enemyTurnTimeout: number | null = null;
-  
+
   createEffect(() => {
-    // Track both phase and currentUnitIndex to trigger on each new enemy unit
     const isEnemyTurn = gameState.phase === GamePhase.ENEMY_TURN;
     const currentIndex = gameState.currentUnitIndex;
-    
-    // Clear any pending timeout when phase or index changes
+
     if (enemyTurnTimeout !== null) {
       clearTimeout(enemyTurnTimeout);
       enemyTurnTimeout = null;
     }
-    
-    // Only execute if it's enemy turn and we haven't executed this specific index yet
-    if (isEnemyTurn && lastExecutedEnemyIndex !== currentIndex) {
+
+    const autoAiEnabled = !isInSession();
+    if (autoAiEnabled && isEnemyTurn && lastExecutedEnemyIndex !== currentIndex) {
       lastExecutedEnemyIndex = currentIndex;
       enemyTurnTimeout = setTimeout(async () => {
-        // Double-check we're still in enemy turn before executing
         if (gameState.phase === GamePhase.ENEMY_TURN && gameState.currentUnitIndex === currentIndex) {
           await executeEnemyTurn();
         }
         enemyTurnTimeout = null;
       }, 500) as unknown as number;
     } else if (!isEnemyTurn) {
-      // Reset when it's player turn
       lastExecutedEnemyIndex = null;
     }
   });

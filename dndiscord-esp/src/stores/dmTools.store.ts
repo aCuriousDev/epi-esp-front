@@ -19,13 +19,23 @@ export interface DmToolsState {
   grantedItems: ItemGrantedPayload[];
   /** Recently spawned enemies (for toast notifications). */
   spawnedEnemies: SpawnedEnemyEntry[];
+  /** DM's choice of whether the enemy AI auto-plays on its turn. When false,
+   * the DM controls enemies manually via the EnemyHotbar. In solo mode this
+   * toggle is ignored — the AI always runs. */
+  aiAutoPlay: boolean;
 }
 
 const [state, setState] = createStore<DmToolsState>({
   hiddenRolls: [],
   grantedItems: [],
   spawnedEnemies: [],
+  aiAutoPlay: true,
 });
+
+/** Toggle whether enemy AI auto-plays. DM-facing control. */
+export function setAiAutoPlay(next: boolean): void {
+  setState("aiAutoPlay", next);
+}
 
 export { state as dmToolsState };
 
@@ -64,7 +74,7 @@ export function addSpawnedEnemy(entry: SpawnedEnemyEntry): void {
 
 /** Clear all DM tools state (on session leave/end). */
 export function clearDmToolsState(): void {
-  setState({ hiddenRolls: [], grantedItems: [], spawnedEnemies: [] });
+  setState({ hiddenRolls: [], grantedItems: [], spawnedEnemies: [], aiAutoPlay: true });
   setDmActiveMode(null);
   setDmDragUnit(null);
   setDmSpawnTemplate(null);

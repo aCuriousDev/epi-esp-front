@@ -26,6 +26,7 @@ import { EnemySpawnToast } from "../components/dm/EnemySpawnToast";
 import InventoryPanel from "../components/InventoryPanel";
 import WalletPanel from "../components/WalletPanel";
 import { PlayerHotbar } from "../components/hotbar/PlayerHotbar";
+import { EnemyHotbar } from "../components/hotbar/EnemyHotbar";
 import { UnitInfoCardTop } from "../components/hotbar/UnitInfoCardPosition";
 import { clearAllDialogues } from "../stores/dialogue.store";
 import {
@@ -727,9 +728,13 @@ const BoardGame: Component = () => {
 
             {/* Compact unit info card (top-center) + persistent player hotbar
                 (bottom-center) — non-DM UX replacing the old auto-opening
-                drawer. DM keeps the drawer via the effect above. */}
+                drawer. DM keeps the drawer via the effect above. The
+                EnemyHotbar self-gates on isDm + ENEMY_TURN so the DM can
+                actively play whichever enemy's turn is active when the
+                auto-AI toggle is off. */}
             <UnitInfoCardTop />
             <PlayerHotbar />
+            <EnemyHotbar />
 
             {/* Loading Overlay */}
             <Show when={!isEngineReady()}>
@@ -838,17 +843,26 @@ const BoardGame: Component = () => {
               </div>
             </Show>
 
-            {/* Drawer toggles — visible on every breakpoint now that the
-                panels are drawers instead of permanent sidebars. */}
+            {/* Drawer toggles — the "Infos" drawer is DM-only now; non-DM
+                players get the persistent hotbar + Inventory/Wallet modals
+                from HotbarUtilities instead, so the drawer toggle would be
+                redundant UI crowding. Solo play (no session) keeps it. */}
             <div class="absolute top-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
-              <button
-                class="pointer-events-auto px-3 py-2 rounded-lg border border-white/20 bg-game-dark/85 backdrop-blur text-xs text-white font-medium shadow-lg focus-ring-gold"
-                onClick={toggleLeftDrawer}
-                aria-expanded={leftDrawerOpen()}
-                aria-controls="left-drawer"
-              >
-                {leftDrawerOpen() ? "Fermer infos" : "Infos"}
-              </button>
+              <Show when={!isInSession() || isDm()}>
+                <button
+                  class="pointer-events-auto px-3 py-2 rounded-lg border border-white/20 bg-game-dark/85 backdrop-blur text-xs text-white font-medium shadow-lg focus-ring-gold"
+                  onClick={toggleLeftDrawer}
+                  aria-expanded={leftDrawerOpen()}
+                  aria-controls="left-drawer"
+                >
+                  {leftDrawerOpen() ? "Fermer infos" : "Infos"}
+                </button>
+              </Show>
+              <Show when={isInSession() && !isDm()}>
+                {/* Placeholder keeps the flex-between spacing so the right
+                    drawer toggle stays anchored. */}
+                <span class="pointer-events-none" />
+              </Show>
               <button
                 class="pointer-events-auto px-3 py-2 rounded-lg border border-white/20 bg-game-dark/85 backdrop-blur text-xs text-white font-medium shadow-lg focus-ring-gold"
                 onClick={toggleRightDrawer}

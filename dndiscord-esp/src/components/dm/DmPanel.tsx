@@ -30,6 +30,7 @@ import {
   setDmSpawnTemplate,
   setDmActiveMode,
   addSpawnedEnemy,
+  setAiAutoPlay,
 } from "../../stores/dmTools.store";
 import {
   dmHiddenRoll,
@@ -286,6 +287,26 @@ export const DmPanel: Component = () => {
               <Swords class="w-3.5 h-3.5" />
               Démarrer combat
             </button>
+          </Show>
+
+          {/* AI auto-play toggle — surfaces only during combat, since free
+              roam has no enemy turns. When off the DM controls enemies
+              manually via the EnemyHotbar that appears during ENEMY_TURN. */}
+          <Show when={gameState.phase !== GamePhase.FREE_ROAM}>
+            <label class="mt-2 flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border border-purple-500/20 bg-purple-500/5 text-[11px] text-purple-100 cursor-pointer">
+              <span class="flex items-center gap-1.5">
+                <span class="font-semibold">IA auto</span>
+                <span class="text-[9px] text-purple-300/60">
+                  {dmToolsState.aiAutoPlay ? "activée" : "manuelle"}
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={dmToolsState.aiAutoPlay}
+                onChange={(e) => setAiAutoPlay(e.currentTarget.checked)}
+                class="w-3.5 h-3.5 accent-purple-500 cursor-pointer"
+              />
+            </label>
           </Show>
 
           {/* Tabs */}
