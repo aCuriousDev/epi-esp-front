@@ -17,7 +17,11 @@ import { produce } from "solid-js/store";
 import { sessionState, isHost, sessionHasDm } from "../../stores/session.store";
 import { applyCombatStarted } from "./combatStarted";
 import { applyMapSwitched } from "./mapSwitched";
-import { getAllySpawnPositions } from "../../game/initialization/InitUnits";
+import {
+  getAllySpawnPositions,
+  getEnemySpawnPositions,
+} from "../../game/initialization/InitUnits";
+import { buildDefaultEnemies } from "../../game/initialization/enemyPlacement";
 
 import { addCombatLog } from "../../game/stores/GameStateStore";
 import { addSpawnedEnemy } from "../../stores/dmTools.store";
@@ -197,6 +201,17 @@ export function registerGameSyncHandlers(): void {
       highlightedTiles: next.highlightedTiles,
     });
     addCombatLog("[MJ] Combat imminent — placez vos unités.", "system");
+
+    // The DM client is authoritative for enemy placement. Every client flips
+    // FREE_ROAM → COMBAT_PREPARATION on this event, but without a DM-driven
+    // spawn pass the roster is empty — combat started with no enemies and no
+    // enemy turn order entries (BUG-A, regression since Round 2 when this
+    // path switched from "start in COMBAT mode" to "start in FREE_ROAM and
+    // flip later"). Mirroring the DmPanel spawn flow (local add + dmSpawnUnit
+    // broadcast) keeps positions identical across clients.
+    if (isHost()) {
+      spawnDefaultEnemiesAsDm(gameState.mapId);
+    }
   });
 
   // DM switched the session to a different map. SignalR's `on(...)` registers
@@ -209,6 +224,61 @@ export function registerGameSyncHandlers(): void {
       console.error("[gameSync] MapSwitched handler threw", err),
     );
   });
+}
+
+/**
+ * DM-side spawn for the default enemy roster at combat start. Commits locally,
+ * then fires <c>DmSpawnUnit</c> per enemy so every other client materialises
+ * the exact same unit through the existing <c>DmUnitSpawned</c> handler.
+ * Fire-and-forget — a failed broadcast is logged but must not abort the local
+ * commit, otherwise the DM ends up staring at a fight only they can see.
+ */
+function spawnDefaultEnemiesAsDm(mapId: string | null): void {
+  const occupiedKeys = new Set<string>();
+  for (const key of Object.keys(tiles)) {
+    if (tiles[key]?.occupiedBy) occupiedKeys.add(key);
+  }
+
+  const enemies = buildDefaultEnemies(
+    getEnemySpawnPositions(mapId),
+    occupiedKeys,
+  );
+
+  for (const unit of enemies) {
+    const tileKey = posToKey(unit.position);
+    // Idempotency: if the DM re-enters combat for the same session this event
+    // could fire twice. Skip anything already placed.
+    if (units[unit.id] || tiles[tileKey]?.occupiedBy) continue;
+
+    addUnit(unit);
+    setTiles(tileKey, "occupiedBy", unit.id);
+    addCombatLog(
+      `[MJ] ${unit.name} apparaît en (${unit.position.x}, ${unit.position.z}) !`,
+      "system",
+    );
+    addSpawnedEnemy({
+      name: unit.name,
+      x: unit.position.x,
+      z: unit.position.z,
+    });
+
+    // Backend DmSpawnUnitPayload uses (x, y) coords; the front stores (x, z).
+    const payload: DmSpawnUnitPayload = {
+      unitId: unit.id,
+      templateId: unit.id,
+      name: unit.name,
+      unitType: unit.type as string,
+      target: { x: unit.position.x, y: unit.position.z } as any,
+      statsJson: JSON.stringify(unit.stats),
+    };
+    signalRService
+      .invoke("DmSpawnUnit", payload)
+      .catch((err) =>
+        console.warn("[gameSync] DmSpawnUnit broadcast failed", err),
+      );
+  }
+
+  updatePathfinder();
 }
 
 async function handleMapSwitched(message: unknown): Promise<void> {
