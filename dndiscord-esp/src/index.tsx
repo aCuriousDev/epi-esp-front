@@ -14,6 +14,10 @@ import CampaignsPage from "./pages/CampaignsPage";
 import CreateCampaign from "./pages/CreateCampaign";
 import CampaignView from "./pages/CampaignView";
 import SettingsPage from "./pages/SettingsPage";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
+import MentionsLegales from "./pages/MentionsLegales";
+import CookiesPolicy from "./pages/CookiesPolicy";
 import type {} from "solid-styled-jsx";
 import CharactersComponent from "./pages/CharactersComponent";
 import { AuthCallback, ProtectedRoute } from "./components/auth";
@@ -23,6 +27,7 @@ import CampaignManagerPage from "./pages/CampaignManagerPage";
 import SessionInviteListener from "./components/SessionInviteListener";
 import EditCampaign from "./pages/EditCampaign";
 import TutorialOverlay from "./components/TutorialOverlay";
+import CookieConsent from "./components/CookieConsent";
 
 // Initialize auth state on app load
 authStore.init();
@@ -63,11 +68,17 @@ async function initDiscord() {
 // Rend l'application immédiatement, puis initialise Discord en arrière-plan
 render(
   () => (
+    <>
+    <CookieConsent />
     <Router>
       {/* Public routes */}
       <Route path="/login" component={LoginPage} />
       <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/rules" component={Rules} />
+      <Route path="/privacy" component={PrivacyPolicy} />
+      <Route path="/terms" component={TermsOfService} />
+      <Route path="/legal" component={MentionsLegales} />
+      <Route path="/cookies" component={CookiesPolicy} />
 
       {/* Protected routes - require authentication */}
       <Route
@@ -183,6 +194,7 @@ render(
         )}
       />
     </Router>
+    </>
   ),
   document.getElementById("root") as HTMLElement,
 );

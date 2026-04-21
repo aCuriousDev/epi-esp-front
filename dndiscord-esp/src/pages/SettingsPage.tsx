@@ -21,9 +21,14 @@ import {
   Gauge,
   Bug,
   Sliders,
+  ShieldCheck,
+  Download,
+  Scale,
+  Cookie,
 } from "lucide-solid";
 import { authStore } from "../stores/auth.store";
 import { AuthService } from "../services/auth.service";
+import { consentStore } from "../stores/consent.store";
 import {
   soundSettings,
   setSfxEnabled,
@@ -91,6 +96,55 @@ export default function SettingsPage() {
   const [language, setLanguage] = createSignal("fr");
   const [showDeleteConfirm, setShowDeleteConfirm] = createSignal(false);
   const [isLoggingOut, setIsLoggingOut] = createSignal(false);
+  const [isDeletingAccount, setIsDeletingAccount] = createSignal(false);
+  const [isExporting, setIsExporting] = createSignal(false);
+  const [deleteError, setDeleteError] = createSignal<string | null>(null);
+  const [exportError, setExportError] = createSignal<string | null>(null);
+
+  async function handleDeleteAccount() {
+    setDeleteError(null);
+    setIsDeletingAccount(true);
+    try {
+      await AuthService.deleteAccount();
+      // Suppression effective : on vide l'état front et on renvoie au login.
+      consentStore.clearPreferenceStorage();
+      await authStore.logout();
+      navigate("/login", { replace: true });
+    } catch (err) {
+      setDeleteError(
+        typeof err === "string"
+          ? err
+          : "La suppression a échoué. Merci de réessayer ou de contacter le support.",
+      );
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  }
+
+  async function handleExportData() {
+    setExportError(null);
+    setIsExporting(true);
+    try {
+      const blob = await AuthService.exportData();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const ts = new Date().toISOString().slice(0, 10);
+      a.download = `dndiscord-export-${ts}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(
+        typeof err === "string"
+          ? err
+          : "L'export a échoué. Merci de réessayer ou de contacter le support.",
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  }
 
   const user = () => authStore.user();
   const avatarUrl = () => {
@@ -494,6 +548,97 @@ export default function SettingsPage() {
           </div>
         </section>
 
+        {/* Privacy & Data (RGPD) */}
+        <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
+          <div class="p-5 border-b border-white/10">
+            <h2 class="font-display text-lg text-white flex items-center gap-2">
+              <ShieldCheck class="w-5 h-5 text-purple-400" />
+              Confidentialité & données
+            </h2>
+          </div>
+          <div class="p-5 space-y-4">
+            <Show when={authStore.isAuthenticated()}>
+              <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-3 min-w-0">
+                  <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
+                    <Download class="w-5 h-5" />
+                  </div>
+                  <div class="min-w-0">
+                    <p class="text-white font-medium">Exporter mes données</p>
+                    <p class="text-slate-400 text-sm">
+                      Télécharge un fichier JSON de votre compte, personnages
+                      et campagnes (droit à la portabilité — RGPD art. 20).
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleExportData}
+                  disabled={isExporting()}
+                  class="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-xl text-purple-200 transition-all text-sm whitespace-nowrap disabled:opacity-50"
+                >
+                  {isExporting() ? "Export..." : "Exporter"}
+                </button>
+              </div>
+              <Show when={exportError()}>
+                <p class="text-red-400 text-xs">{exportError()}</p>
+              </Show>
+            </Show>
+
+            <div class="flex items-center justify-between gap-3 pt-4 border-t border-white/10">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
+                  <Cookie class="w-5 h-5" />
+                </div>
+                <div class="min-w-0">
+                  <p class="text-white font-medium">Stockage local</p>
+                  <p class="text-slate-400 text-sm">
+                    Consultez et effacez vos préférences locales.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => consentStore.openPreferences()}
+                class="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-slate-200 transition-all text-sm whitespace-nowrap"
+              >
+                Gérer
+              </button>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3 pt-4 border-t border-white/10">
+              <a
+                href="/privacy"
+                class="inline-flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200 transition-colors"
+              >
+                <ShieldCheck class="w-4 h-4" />
+                Politique de confidentialité
+              </a>
+              <span class="text-slate-600">·</span>
+              <a
+                href="/terms"
+                class="inline-flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200 transition-colors"
+              >
+                <Scale class="w-4 h-4" />
+                Conditions générales
+              </a>
+              <span class="text-slate-600">·</span>
+              <a
+                href="/legal"
+                class="inline-flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200 transition-colors"
+              >
+                Mentions légales
+              </a>
+              <span class="text-slate-600">·</span>
+              <a
+                href="/cookies"
+                class="inline-flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200 transition-colors"
+              >
+                <Cookie class="w-4 h-4" />
+                Politique cookies
+              </a>
+            </div>
+          </div>
+        </section>
+
         {/* Danger Zone */}
         <Show when={authStore.isAuthenticated()}>
           <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-red-500/20 rounded-2xl overflow-hidden">
@@ -533,7 +678,8 @@ export default function SettingsPage() {
                   <div>
                     <p class="text-white font-medium">Supprimer le compte</p>
                     <p class="text-slate-400 text-sm">
-                      Cette action est irréversible
+                      Cette action est irréversible (droit à l'effacement —
+                      RGPD art. 17).
                     </p>
                   </div>
                 </div>
@@ -544,6 +690,9 @@ export default function SettingsPage() {
                   Supprimer
                 </button>
               </div>
+              <Show when={deleteError()}>
+                <p class="text-red-400 text-xs">{deleteError()}</p>
+              </Show>
             </div>
           </section>
         </Show>
@@ -572,15 +721,25 @@ export default function SettingsPage() {
                 irréversible.
               </p>
             </div>
+            <Show when={deleteError()}>
+              <p class="text-red-400 text-xs mb-3 text-center">
+                {deleteError()}
+              </p>
+            </Show>
             <div class="flex gap-3">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                class="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white transition-all"
+                disabled={isDeletingAccount()}
+                class="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white transition-all disabled:opacity-50"
               >
                 Annuler
               </button>
-              <button class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-500 rounded-xl text-white transition-all">
-                Supprimer
+              <button
+                onClick={handleDeleteAccount}
+                disabled={isDeletingAccount()}
+                class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-500 rounded-xl text-white transition-all disabled:opacity-50"
+              >
+                {isDeletingAccount() ? "Suppression..." : "Supprimer"}
               </button>
             </div>
           </div>

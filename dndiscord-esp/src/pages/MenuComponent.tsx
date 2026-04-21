@@ -187,12 +187,28 @@ export default function MenuComponent() {
 						</div>
 					</section>
 				</Show>
+				{/* Footer dans le flux de main (mt-auto le pousse en bas) */}
+				<footer class="mt-auto w-full pt-10 text-center text-xs text-slate-400/60 space-y-2">
+					<p>Appuyez sur un bouton pour commencer votre aventure</p>
+					<p class="flex items-center justify-center gap-2 text-[11px] text-slate-500/70 flex-wrap">
+						<a href="/privacy" class="hover:text-slate-300 transition-colors">
+							Confidentialité
+						</a>
+						<span>·</span>
+						<a href="/terms" class="hover:text-slate-300 transition-colors">
+							CGU
+						</a>
+						<span>·</span>
+						<a href="/legal" class="hover:text-slate-300 transition-colors">
+							Mentions légales
+						</a>
+						<span>·</span>
+						<a href="/cookies" class="hover:text-slate-300 transition-colors">
+							Cookies
+						</a>
+					</p>
+				</footer>
 			</main>
-
-			{/* Footer hint */}
-			<footer class="absolute bottom-4 left-0 right-0 text-center text-xs text-slate-400/60">
-				Appuyez sur un bouton pour commencer votre aventure
-			</footer>
 
 			<style jsx>{`
 				.menu-page {

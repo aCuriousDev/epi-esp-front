@@ -107,9 +107,26 @@ export default function LoginPage() {
           </div>
 
           {/* Footer */}
-          <footer class="mt-8 text-center">
+          <footer class="mt-8 text-center space-y-2">
             <p class="text-slate-400/60 text-xs">
-              En vous connectant, vous acceptez nos conditions d'utilisation.
+              En vous connectant, vous acceptez nos{" "}
+              <a href="/terms" class="text-slate-300 hover:text-white underline">
+                conditions d'utilisation
+              </a>{" "}
+              et notre{" "}
+              <a href="/privacy" class="text-slate-300 hover:text-white underline">
+                politique de confidentialité
+              </a>
+              .
+            </p>
+            <p class="flex items-center justify-center gap-2 text-[11px] text-slate-400/50">
+              <a href="/legal" class="hover:text-slate-300 transition-colors">
+                Mentions légales
+              </a>
+              <span>·</span>
+              <a href="/cookies" class="hover:text-slate-300 transition-colors">
+                Politique cookies
+              </a>
             </p>
           </footer>
         </div>
