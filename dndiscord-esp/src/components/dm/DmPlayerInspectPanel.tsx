@@ -26,6 +26,8 @@ import {
   Minus,
   Package,
   Sparkles,
+  BookOpen,
+  Gauge,
 } from "lucide-solid";
 import { units } from "../../game/stores/UnitsStore";
 import {
@@ -37,8 +39,18 @@ import { dmGrantItem } from "../../services/signalr/multiplayer.service";
 import { InventoryService } from "../../services/inventory.service";
 import { getCategoryStyle } from "../../services/itemVisuals";
 import ItemIcon from "../common/ItemIcon";
-import { Team } from "../../types";
+import { Team, UnitType } from "../../types";
 import type { Item, ItemCategory, InventoryEntry, InventoryChangedEvent } from "../../types/inventory";
+
+const UNIT_TYPE_LABELS: Record<UnitType, string> = {
+  [UnitType.WARRIOR]: "Guerrier",
+  [UnitType.MAGE]: "Mage",
+  [UnitType.ROGUE]: "Voleur",
+  [UnitType.ARCHER]: "Archer",
+  [UnitType.HEALER]: "Soigneur",
+  [UnitType.ENEMY_SKELETON]: "Squelette",
+  [UnitType.ENEMY_MAGE]: "Squelette Mage",
+};
 
 const CATEGORY_FILTERS: Array<{ value: "all" | ItemCategory; label: string }> = [
   { value: "all", label: "Tous" },
@@ -288,6 +300,17 @@ export default function DmPlayerInspectPanel() {
             {/* ── STATS VIEW ── */}
             <Show when={view() === "stats"}>
               <div class="space-y-1.5">
+                {/* Class row — replaces the previously-missing class/level block. */}
+                {/* Level is deferred until PHASE-B lands CampaignCharacter. */}
+                <div class="flex items-center justify-between text-[10px] px-2 py-1 rounded-md bg-white/5 border border-white/5">
+                  <span class="flex items-center gap-1 text-purple-300">
+                    <BookOpen class="w-3 h-3" /> Classe
+                  </span>
+                  <span class="text-white/80 font-semibold">
+                    {UNIT_TYPE_LABELS[u().type] ?? u().type}
+                  </span>
+                </div>
+
                 {/* HP bar */}
                 <div class="space-y-0.5">
                   <div class="flex items-center justify-between text-[10px]">
@@ -310,13 +333,37 @@ export default function DmPlayerInspectPanel() {
                   </div>
                 </div>
 
-                {/* Stat grid */}
+                {/* Stat grid — Défense is the unit's AC (backend maps Defense = ArmorClass). */}
                 <div class="grid grid-cols-2 gap-1 mt-1">
                   <StatRow icon={<Swords class="w-3 h-3 text-orange-300" />} label="Attaque" value={s().attackDamage} />
-                  <StatRow icon={<Shield class="w-3 h-3 text-sky-300" />} label="Défense" value={s().defense} />
+                  <StatRow icon={<Shield class="w-3 h-3 text-sky-300" />} label="CA" value={s().defense} />
                   <StatRow icon={<Footprints class="w-3 h-3 text-emerald-300" />} label="Déplacement" value={s().movementRange} />
                   <StatRow icon={<Swords class="w-3 h-3 text-purple-300" />} label="Portée" value={s().attackRange} />
+                  <StatRow icon={<Gauge class="w-3 h-3 text-cyan-300" />} label="Initiative" value={s().initiative} />
                 </div>
+
+                {/* Abilities — names only, enough context for DM narration. */}
+                <Show when={u().abilities.length > 0}>
+                  <div class="mt-2">
+                    <div class="text-[9px] uppercase tracking-wider text-purple-300/60 mb-1">
+                      Capacités
+                    </div>
+                    <div class="space-y-0.5">
+                      <For each={u().abilities}>
+                        {(ability) => (
+                          <div class="flex items-center justify-between gap-2 text-[10px] px-2 py-1 rounded-md bg-white/5 border border-white/5">
+                            <span class="text-white/80 truncate" title={ability.description}>
+                              {ability.name}
+                            </span>
+                            <span class="text-[9px] font-mono text-purple-300/60 whitespace-nowrap">
+                              {ability.apCost} PA
+                            </span>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                </Show>
 
                 {/* Position */}
                 <div class="text-[9px] text-purple-300/40 text-center mt-1">

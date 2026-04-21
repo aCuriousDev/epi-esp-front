@@ -674,20 +674,30 @@ export const GameCanvas: Component = () => {
     const isFreeRoam = getIsFreeRoamMode();
     const isPreparation = gameState.phase === GamePhase.COMBAT_PREPARATION;
 
-    // DM move mode: clicking a unit on the map selects/deselects it for teleport
+    // DM clicks a player unit → open the inspect panel regardless of active
+    // DmPanel tab. Previously guarded by `!dmActiveMode()`, but DmPanel
+    // defaults activeTab to "move" so dmActiveMode becomes "move" the
+    // instant the panel mounts — the inspect panel was silently blocked
+    // from ever opening on a fresh session (BUG-D). In move mode we still
+    // stage the unit for a drag teleport so the legacy move UX is preserved
+    // alongside the panel.
+    if (isDm() && unit.team === Team.PLAYER) {
+      setDmInspectedUnit(unitId);
+      selectUnit(unitId);
+      if (dmActiveMode() === "move") {
+        if (dmDragUnit() === unitId) setDmDragUnit(null);
+        else setDmDragUnit(unitId);
+      }
+      return;
+    }
+
+    // DM move mode for non-player units (enemies): stage for teleport.
     if (dmActiveMode() === "move") {
       if (dmDragUnit() === unitId) {
         setDmDragUnit(null);
       } else {
         setDmDragUnit(unitId);
       }
-      return;
-    }
-
-    // DM inspect: clicking a player unit opens stats/inventory panel
-    if (isDm() && unit.team === Team.PLAYER && !dmActiveMode()) {
-      setDmInspectedUnit(unitId);
-      selectUnit(unitId);
       return;
     }
 
