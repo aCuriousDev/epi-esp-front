@@ -1,4 +1,4 @@
-import { Component, Show, onMount, onCleanup, createSignal, createEffect } from "solid-js";
+import { Component, Show, onMount, onCleanup, createSignal, createEffect, on } from "solid-js";
 import { useNavigate, useLocation } from "@solidjs/router";
 import { ArrowLeft, RotateCcw, Check, Hand, MousePointer, Move as MoveIcon, Flag, HelpCircle, X, Settings as SettingsIcon } from "lucide-solid";
 import { InGameSettingsModal } from "../components/InGameSettingsModal";
@@ -238,6 +238,26 @@ const BoardGame: Component = () => {
     };
     checkEngine();
   };
+
+  // React to subsequent GameStarted payloads while already in-game — the DM's
+  // Recommencer button routes through `DmRestartGame` on the hub, which
+  // broadcasts a fresh GameStarted to every client. LobbyScreen handles the
+  // initial transition but is unmounted by the time Recommencer fires; without
+  // this effect the DM's click updated session state silently and nothing
+  // ever re-initialised the board (BUG-Q). `defer: true` skips the first
+  // setting on mount (that one was already consumed by LobbyScreen or
+  // RoomJoinScreen's recovery path).
+  createEffect(
+    on(
+      () => sessionState.gameStartedPayload,
+      (payload) => {
+        if (!payload) return;
+        if (appPhase() !== AppPhase.IN_GAME) return;
+        onMultiplayerGameStart(payload);
+      },
+      { defer: true },
+    ),
+  );
 
   const backToModeSelection = () => {
     setAppPhase(AppPhase.MODE_SELECTION);

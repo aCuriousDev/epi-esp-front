@@ -67,7 +67,12 @@ const ENEMY_CATALOGUE: EnemyTemplate[] = [
 
 export const DmPanel: Component = () => {
   const [isExpanded, setIsExpanded] = createSignal(true);
-  const [activeTab, setActiveTab] = createSignal<"move" | "roll" | "spawn" | "maps">("move");
+  // Default to "select": clicking a unit in this mode opens the inspect
+  // panel via GameCanvas.handleUnitClick (BUG-D) without staging a drag or
+  // enabling tile-click-to-move. Decouples selection from the move tool —
+  // earlier "move" default meant every click risked a teleport. The DM now
+  // switches to "Déplacer" explicitly when they want drag-to-move.
+  const [activeTab, setActiveTab] = createSignal<"select" | "move" | "roll" | "spawn" | "maps">("select");
 
   // Dice
   const [diceType, setDiceType] = createSignal(20);
@@ -171,7 +176,7 @@ export const DmPanel: Component = () => {
     else { setDmSpawnTemplate(tplId); setDmDragUnit(null); }
   };
 
-  const switchTab = (tab: "move" | "roll" | "spawn" | "maps") => {
+  const switchTab = (tab: "select" | "move" | "roll" | "spawn" | "maps") => {
     setActiveTab(tab);
     setDmDragUnit(null);
     setDmSpawnTemplate(null);
@@ -309,8 +314,11 @@ export const DmPanel: Component = () => {
             </label>
           </Show>
 
-          {/* Tabs */}
+          {/* Tabs — Sélection is the default neutral mode: clicking a unit
+              selects/inspects without drag-staging; clicking a tile is a
+              no-op. Déplacer explicitly enables the click-to-teleport UX. */}
           <div class="flex gap-0.5 mt-2">
+            <DmTab active={activeTab() === "select"} onClick={() => switchTab("select")} label="Sélection" />
             <DmTab active={activeTab() === "move"} onClick={() => switchTab("move")} label="Déplacer" />
             <DmTab active={activeTab() === "spawn"} onClick={() => switchTab("spawn")} label="Invoquer" />
             <DmTab active={activeTab() === "roll"} onClick={() => switchTab("roll")} label="Dés" />
@@ -318,6 +326,14 @@ export const DmPanel: Component = () => {
               <DmTab active={activeTab() === "maps"} onClick={() => { switchTab("maps"); void loadMapsIfNeeded(); }} label="Cartes" />
             </Show>
           </div>
+
+          {/* ── SELECT TAB ── */}
+          <Show when={activeTab() === "select"}>
+            <p class="text-[10px] text-purple-300/50 text-center py-3">
+              Cliquez un jeton pour l'inspecter sans le déplacer. Passez en
+              <span class="text-purple-200/80"> Déplacer</span> pour téléporter.
+            </p>
+          </Show>
 
           {/* Status flash */}
           <Show when={statusMsg()}>
