@@ -42,6 +42,7 @@ import {
   CampaignMemberResponse,
   APICampaignStatus,
   mapCampaignResponse,
+  displayDungeonMasterName,
   mapToAPICampaignStatus,
 } from "../services/campaign.service";
 import {
@@ -406,7 +407,7 @@ export default function CampaignView() {
                             Maître du Jeu
                           </p>
                           <p class="text-white font-semibold">
-                            {camp().dungeonMasterName ?? "Maître du Jeu"}
+                            {displayDungeonMasterName(camp(), authStore.user()?.username)}
                           </p>
                         </div>
                       </div>
@@ -522,7 +523,7 @@ export default function CampaignView() {
                         </div>
                         <div class="flex-1">
                           <p class="text-white font-semibold">
-                            {camp().dungeonMasterName ?? "Maître du Jeu"}
+                            {displayDungeonMasterName(camp(), authStore.user()?.username)}
                           </p>
                           <p class="text-amber-400 text-sm">Maître du Jeu</p>
                         </div>

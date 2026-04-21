@@ -125,6 +125,26 @@ export const mapCampaignStatus = (apiStatus: number): CampaignStatus => {
   }
 };
 
+/**
+ * Resolves the user-facing DM name for a campaign card / detail view.
+ *
+ * The back doesn't currently expose a `dungeonMasterName` (see comment on
+ * Campaign.dungeonMasterName). But when the current user IS the DM of the
+ * campaign, we already know their Discord handle from the auth store — no
+ * round-trip needed. For other viewers we fall back to the literal label
+ * until a future iteration denormalises the DM's username onto the Campaign
+ * row (or a user-lookup service is introduced). Pure so it's trivially
+ * testable.
+ */
+export const displayDungeonMasterName = (
+  campaign: Pick<Campaign, "dungeonMasterName" | "isDungeonMaster">,
+  currentUsername?: string | null,
+): string => {
+  if (campaign.dungeonMasterName) return campaign.dungeonMasterName;
+  if (campaign.isDungeonMaster && currentUsername) return currentUsername;
+  return "Maître du Jeu";
+};
+
 export const mapCampaignResponse = (apiCampaign: CampaignDetailResponse): Campaign => {
   return {
     id: apiCampaign.id,

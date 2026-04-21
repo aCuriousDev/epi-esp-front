@@ -9,6 +9,7 @@ export {
   mapToAPICampaignStatus,
   mapCampaignStatus,
   mapCampaignResponse,
+  displayDungeonMasterName,
 } from "./campaign.mappers";
 export type {
   CampaignResponse,

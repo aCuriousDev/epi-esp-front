@@ -694,6 +694,26 @@ const BoardGame: Component = () => {
             </h1>
           </div>
           <div class="flex items-center gap-2">
+            {/* Quitter la session — visible to every connected participant so
+                players have an exit path even though the Infos drawer is
+                DM-only (Round 5). Uses the same clearSession + returnToMenu
+                sequence as the drawer's button so state tears down cleanly
+                (BUG-I). */}
+            <Show when={isInSession()}>
+              <button
+                class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 text-white text-sm transition-colors"
+                onClick={async () => {
+                  try {
+                    await leaveSession();
+                  } catch (_) {}
+                  returnToMenu();
+                }}
+                title="Quitter la session"
+              >
+                <LogOut class="w-3.5 h-3.5" />
+                <span class="hidden sm:inline">Quitter</span>
+              </button>
+            </Show>
             {/* Restart is solo-only or DM-only — non-host players in a session
                 shouldn't be able to blow up the game for everyone else. */}
             <Show when={!isInSession() || isSessionHost()}>

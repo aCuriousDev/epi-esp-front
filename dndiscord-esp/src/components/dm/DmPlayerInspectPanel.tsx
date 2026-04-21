@@ -32,7 +32,7 @@ import {
   dmInspectedUnit,
   setDmInspectedUnit,
 } from "../../stores/dmTools.store";
-import { isDm, getOtherPlayers } from "../../stores/session.store";
+import { isDm, getOtherPlayers, sessionState } from "../../stores/session.store";
 import { dmGrantItem } from "../../services/signalr/multiplayer.service";
 import { InventoryService } from "../../services/inventory.service";
 import { getCategoryStyle } from "../../services/itemVisuals";
@@ -112,7 +112,11 @@ export default function DmPlayerInspectPanel() {
   const loadInventory = async (charId: string) => {
     setLoadingInv(true);
     try {
-      const entries = await InventoryService.getCharacterInventory(charId);
+      // Pass the current campaign id so the back applies the DM auth path
+      // (`CanAccessCharacterAsync` accepts owner OR DM-of-campaign). Without
+      // it the DM isn't the owner and the endpoint 403s (BUG-L).
+      const campaignId = sessionState.session?.campaignId;
+      const entries = await InventoryService.getCharacterInventory(charId, campaignId);
       setInventory(entries);
     } catch (err) {
       console.error("[DM Inspect] Failed to load inventory:", err);

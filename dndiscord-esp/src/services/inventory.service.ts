@@ -37,11 +37,19 @@ export const InventoryService = {
   },
 
   /**
-   * Inventaire d'un personnage.
+   * Inventaire d'un personnage. Le propriétaire peut lire sans paramètre ;
+   * le MJ doit passer `campaignId` pour que le back applique la voie d'auth
+   * MJ (sinon 403 — BUG-L).
    */
-  async getCharacterInventory(characterId: string): Promise<InventoryEntry[]> {
+  async getCharacterInventory(
+    characterId: string,
+    campaignId?: string,
+  ): Promise<InventoryEntry[]> {
+    const url = campaignId
+      ? `${API_URL}/api/games/inventory/${characterId}?campaignId=${campaignId}`
+      : `${API_URL}/api/games/inventory/${characterId}`;
     const res = await axios.get<InventoryEntry[]>(
-      `${API_URL}/api/games/inventory/${characterId}`,
+      url,
       { headers: getAuthHeaders() },
     );
     return res.data;

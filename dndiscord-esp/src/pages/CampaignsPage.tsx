@@ -18,7 +18,9 @@ import {
 import {
   CampaignService,
   CampaignResponse,
+  displayDungeonMasterName,
 } from "../services/campaign.service";
+import { authStore } from "../stores/auth.store";
 
 /**
  * Map backend campaign status to frontend status
@@ -342,7 +344,7 @@ function CampaignCard(props: { campaign: Campaign; onClick: () => void }) {
           <Crown class="w-4 h-4 text-amber-400" />
           <span class="text-sm text-slate-500">MJ</span>
           <span class="text-sm text-white font-medium">
-            {campaign().dungeonMasterName ?? "Maître du Jeu"}
+            {displayDungeonMasterName(campaign(), authStore.user()?.username)}
           </span>
         </div>
       </div>

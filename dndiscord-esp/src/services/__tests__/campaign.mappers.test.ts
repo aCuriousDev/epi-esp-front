@@ -7,6 +7,7 @@ import {
   mapCampaignStatus,
   mapToAPICampaignStatus,
   mapCampaignResponse,
+  displayDungeonMasterName,
   type CampaignDetailResponse,
 } from "../campaign.mappers";
 
@@ -222,5 +223,58 @@ describe("mapCampaignResponse", () => {
     });
     const result = mapCampaignResponse(detail);
     expect(result.players![0].username).toBe("raw-discord-snowflake");
+  });
+});
+
+describe("displayDungeonMasterName", () => {
+  it("uses campaign.dungeonMasterName when the API provides it", () => {
+    expect(
+      displayDungeonMasterName(
+        { dungeonMasterName: "Thorgar", isDungeonMaster: false },
+        "quentest123",
+      ),
+    ).toBe("Thorgar");
+  });
+
+  it("substitutes the current user's handle when they are the DM and no API name is set", () => {
+    // Core BUG-P case: the API doesn't (yet) carry a DM display name, but
+    // the current user is known to be the DM via `isDungeonMaster` — no need
+    // to show the generic "Maître du Jeu" label when the auth store already
+    // has the concrete handle.
+    expect(
+      displayDungeonMasterName(
+        { isDungeonMaster: true },
+        "quentest123",
+      ),
+    ).toBe("quentest123");
+  });
+
+  it("falls back to 'Maître du Jeu' when the viewer is not the DM and no name is provided", () => {
+    expect(
+      displayDungeonMasterName(
+        { isDungeonMaster: false },
+        "someoneElse",
+      ),
+    ).toBe("Maître du Jeu");
+  });
+
+  it("falls back when the viewer is the DM but the auth store has no username yet", () => {
+    expect(
+      displayDungeonMasterName({ isDungeonMaster: true }, null),
+    ).toBe("Maître du Jeu");
+    expect(
+      displayDungeonMasterName({ isDungeonMaster: true }, undefined),
+    ).toBe("Maître du Jeu");
+  });
+
+  it("prefers the explicit dungeonMasterName even when the viewer is the DM", () => {
+    // Defensive: a future API that denormalises the name wins over the
+    // auth-store shortcut — one source of truth.
+    expect(
+      displayDungeonMasterName(
+        { dungeonMasterName: "Thorgar", isDungeonMaster: true },
+        "quentest123",
+      ),
+    ).toBe("Thorgar");
   });
 });
