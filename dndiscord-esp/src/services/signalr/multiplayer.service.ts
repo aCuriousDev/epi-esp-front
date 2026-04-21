@@ -43,6 +43,9 @@ import {
   sessionState,
 } from "../../stores/session.store";
 import { registerGameSyncHandlers } from "./gameSync";
+import { clearUnits } from "../../game/stores/UnitsStore";
+import { clearTiles } from "../../game/stores/TilesStore";
+import { resetGameState } from "../../game/stores/GameStateStore";
 import { authStore } from "../../stores/auth.store";
 import { AuthService } from "../auth.service";
 import { loadMap } from "../mapStorage";
@@ -208,6 +211,14 @@ export async function leaveSession(): Promise<void> {
   clearSession();
   clearPartyChat();
   resetHandlersRegistered();
+  // Drop the board state bound to the session that was just left. Without
+  // this, joining a new session from the same tab inherits the previous
+  // roster — the `DmUnitSpawned` broadcast from the new session then lands
+  // on top of stale units and the cross-client roster ends up desynced
+  // (BUG-E). Engine disposal happens separately via GameCanvas unmount.
+  clearUnits();
+  clearTiles();
+  resetGameState();
 }
 
 /** Exclure un joueur (DM uniquement). */

@@ -220,9 +220,8 @@ async function handleMapSwitched(message: unknown): Promise<void> {
     return;
   }
 
-  // Cache locally so the map editor / solo flow can pick it up too. Narrow
-  // type to SavedMapData via the dynamic import — applyMapSwitched keeps the
-  // parsed data as unknown so it can stay engine-free.
+  // Cache the new map locally so mapStorage.loadMap can resolve it by id
+  // during the re-init below.
   try {
     const { saveMap } = await import("../mapStorage");
     saveMap(parsed.parsedData as any);
@@ -233,9 +232,22 @@ async function handleMapSwitched(message: unknown): Promise<void> {
   const { clearEngineState } = await import("../../components/GameCanvas");
   await clearEngineState();
 
-  // Force the tiles effect to fire by setting mapId — this is the single
-  // entry point the GameCanvas effect listens to. Never call createGrid
-  // directly here (CLAUDE.md hard rule).
-  setGameState("mapId", parsed.mapId);
+  // Full re-init through startGame. The previous implementation only set
+  // gameState.mapId and relied on the GameCanvas tiles effect to rebuild
+  // the grid — but `tiles` and `units` were never cleared, so the effect
+  // rebuilt from the old map's tile data and stacked any new units on top
+  // of the stale ones (BUG-E: "default map + duplicate tokens"). Routing
+  // through startGame reuses clearUnits + clearTiles + initializeGrid +
+  // initializeFreeRoam, which repopulates tiles for the new map and
+  // respawns players from the persisted GameStarted payload.
+  //
+  // POC tradeoff: mid-combat map switches always drop back to free roam;
+  // the DM re-clicks Démarrer combat to respawn enemies. Preserving turn
+  // order across a map switch is tracked in BUG-E's acceptance follow-ups
+  // but is deferred — POC scope prefers a simple, correct reset.
+  const assignments = sessionState.gameStartedPayload?.unitAssignments;
+  const { startGame } = await import("../../game");
+  startGame(GameMode.FREE_ROAM, parsed.mapId, null, assignments);
+
   addCombatLog(`[MJ] Nouvelle carte : ${parsed.name}`, "system");
 }
