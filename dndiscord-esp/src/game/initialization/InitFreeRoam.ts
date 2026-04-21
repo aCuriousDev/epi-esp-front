@@ -41,8 +41,13 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
   const newUnits: Record<string, Unit> = {};
   console.log('[initializeFreeRoam] Creating player units...');
 
-  if (unitAssignments && unitAssignments.length > 0) {
-    // Multiplayer: create units from server-provided assignments.
+  if (unitAssignments !== undefined) {
+    // Multiplayer: create units from server-provided assignments. The gate
+    // is "caller passed an array" — even an empty array means multiplayer
+    // (DM-alone session, or a map switch whose session has no non-DM
+    // players yet). The previous `length > 0` guard fell into the solo
+    // branch on `[]` and stamped Sir Roland / Elara / Theron onto every
+    // empty multiplayer reset (BUG-K).
     // Belt-and-suspenders: drop any assignment that happens to match the DM
     // (the backend already filters, this catches a stale pre-fix payload).
     const hubId = sessionState.hubUserId;

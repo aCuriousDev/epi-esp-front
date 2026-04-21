@@ -221,10 +221,18 @@ async function handleMapSwitched(message: unknown): Promise<void> {
   }
 
   // Cache the new map locally so mapStorage.loadMap can resolve it by id
-  // during the re-init below.
+  // during the re-init below. The payload's `data.id` is the SavedMapData
+  // id the DM generated in the Map Editor; `parsed.mapId` is the backend
+  // campaign-map GUID. loadMap later keys off parsed.mapId, so normalise
+  // the embedded id to match — otherwise initializeGrid falls through to
+  // the default grid and the DM's chosen map never renders (BUG-J).
   try {
+    const data = parsed.parsedData as { id?: string } | null;
+    if (data && typeof data === "object") {
+      data.id = parsed.mapId;
+    }
     const { saveMap } = await import("../mapStorage");
-    saveMap(parsed.parsedData as any);
+    saveMap(data as any);
   } catch (err) {
     console.warn("[gameSync] Failed to cache switched map locally", err);
   }
