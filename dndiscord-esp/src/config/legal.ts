@@ -13,9 +13,10 @@ export const LEGAL_ORG = {
   siret: "880 432 190 00010",
   rcs: "RCS Lyon 880 432 190",
   codeApe: "5829C — Édition de logiciels applicatifs",
-  // TODO Mentions légales : numéro TVA intracommunautaire à confirmer
-  // par le service comptable (clé algorithmique = FR65).
-  tvaIntra: "À compléter — FR•• 880 432 190",
+  // TVA intracommunautaire = FR + clé (12 + 3 × (SIREN mod 97)) mod 97
+  // = FR + ((12 + 3 × 50) mod 97) = FR65. Déterministe, pas besoin de
+  // validation comptable.
+  tvaIntra: "FR65 880 432 190",
   address: "2 Rue du Professeur Charles Appleton, 69007 Lyon, France",
   website: "https://studio-ixx.fr",
   contactEmail: "contact@studio-ixx.fr",
@@ -51,4 +52,25 @@ export const LEGAL_HOSTING = {
 export const LEGAL_MEDIATOR = {
   name: "À désigner — médiateur de la consommation (art. L611-1 C. conso.)",
   url: "https://www.economie.gouv.fr/mediation-conso",
+} as const;
+
+/** Autorité de contrôle française (RGPD art. 77 — droit de réclamation). */
+export const LEGAL_DPA = {
+  name: "CNIL — Commission Nationale de l'Informatique et des Libertés",
+  address: "3 place de Fontenoy, TSA 80715",
+  city: "75334 Paris Cedex 07",
+  complaintsUrl: "https://www.cnil.fr/fr/plaintes",
+} as const;
+
+/** Plateformes de signalement / services tiers mentionnés de façon récurrente. */
+export const LEGAL_EXTERNAL = {
+  pharosUrl: "https://www.internet-signalement.gouv.fr",
+  odrUrl: "https://ec.europa.eu/consumers/odr/",
+  dpfUrl: "https://www.dataprivacyframework.gov/",
+  discordPrivacy: "https://discord.com/privacy",
+  discordTerms: "https://discord.com/terms",
+  discordDevPolicy:
+    "https://support-dev.discord.com/hc/en-us/articles/8563934450327-Discord-Developer-Policy",
+  discordAuthorizedAppsDeepLink: "discord://users/@me/settings/authorized-apps",
+  discordAuthorizedAppsWeb: "https://discord.com/channels/@me",
 } as const;

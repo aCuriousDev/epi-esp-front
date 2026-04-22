@@ -1,10 +1,11 @@
-import { useNavigate } from "@solidjs/router";
+import { A, useNavigate } from "@solidjs/router";
 import { ArrowLeft, FileText } from "lucide-solid";
 import { onMount, type JSX } from "solid-js";
 import {
   LEGAL_ORG as ORG,
   LEGAL_HOSTING as HOSTING,
   LEGAL_MEDIATOR as MEDIATOR,
+  LEGAL_EXTERNAL as EXT,
 } from "../config/legal";
 
 export default function MentionsLegales() {
@@ -142,17 +143,17 @@ export default function MentionsLegales() {
           </dl>
           <p class="pt-2">
             Conditions d'utilisation du service :{" "}
-            <a href="/terms" class="text-purple-300 underline">
+            <A href="/terms" class="text-purple-300 underline">
               Conditions générales d'utilisation
-            </a>{" "}
+            </A>{" "}
             ·{" "}
-            <a href="/privacy" class="text-purple-300 underline">
+            <A href="/privacy" class="text-purple-300 underline">
               Politique de confidentialité
-            </a>{" "}
+            </A>{" "}
             ·{" "}
-            <a href="/cookies" class="text-purple-300 underline">
+            <A href="/cookies" class="text-purple-300 underline">
               Politique cookies
-            </a>
+            </A>
             .
           </p>
         </Card>
@@ -278,8 +279,8 @@ export default function MentionsLegales() {
             <strong>PHAROS</strong> — Pour les contenus pénalement
             répréhensibles, un signalement peut également être effectué sur
             la plateforme officielle{" "}
-            <ExternalLink href="https://www.internet-signalement.gouv.fr">
-              www.internet-signalement.gouv.fr
+            <ExternalLink href={EXT.pharosUrl}>
+              {EXT.pharosUrl.replace(/^https?:\/\//, "")}
             </ExternalLink>
             .
           </p>
@@ -293,9 +294,9 @@ export default function MentionsLegales() {
         <Card title="8. Données personnelles">
           <p>
             Le traitement de vos données personnelles est décrit dans la{" "}
-            <a href="/privacy" class="text-purple-300 underline">
+            <A href="/privacy" class="text-purple-300 underline">
               Politique de confidentialité
-            </a>
+            </A>
             . Contact RGPD :{" "}
             <a
               href={`mailto:${ORG.privacyEmail}`}
@@ -330,8 +331,8 @@ export default function MentionsLegales() {
           </p>
           <p>
             Plateforme européenne de règlement en ligne des litiges :{" "}
-            <ExternalLink href="https://ec.europa.eu/consumers/odr/">
-              ec.europa.eu/consumers/odr
+            <ExternalLink href={EXT.odrUrl}>
+              {EXT.odrUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}
             </ExternalLink>
             .
           </p>
@@ -350,17 +351,17 @@ export default function MentionsLegales() {
         </Card>
 
         <nav class="flex flex-wrap items-center gap-x-3 gap-y-2 pt-6 text-sm text-slate-400">
-          <a href="/privacy" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
+          <A href="/privacy" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
             Politique de confidentialité
-          </a>
+          </A>
           <span class="text-slate-600">·</span>
-          <a href="/terms" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
+          <A href="/terms" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
             Conditions générales
-          </a>
+          </A>
           <span class="text-slate-600">·</span>
-          <a href="/cookies" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
+          <A href="/cookies" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
             Politique cookies
-          </a>
+          </A>
         </nav>
         <p class="pt-2 text-xs text-slate-500">
           En vigueur depuis le {ORG.lastUpdated}.

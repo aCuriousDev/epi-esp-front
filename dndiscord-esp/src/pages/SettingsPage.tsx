@@ -1,4 +1,4 @@
-import { useNavigate } from "@solidjs/router";
+import { A, useNavigate } from "@solidjs/router";
 import { createSignal, Show, For } from "solid-js";
 import {
   ArrowLeft,
@@ -29,6 +29,7 @@ import {
 import { authStore } from "../stores/auth.store";
 import { AuthService } from "../services/auth.service";
 import { consentStore } from "../stores/consent.store";
+import { useEscapeToClose } from "../hooks/useModalAccessibility";
 import {
   soundSettings,
   setSfxEnabled,
@@ -101,14 +102,24 @@ export default function SettingsPage() {
   const [deleteError, setDeleteError] = createSignal<string | null>(null);
   const [exportError, setExportError] = createSignal<string | null>(null);
 
+  // ESC ferme le modal de confirmation de suppression (tant qu'on n'est
+  // pas déjà en cours de suppression — un ESC pendant la requête serait
+  // trompeur).
+  useEscapeToClose(
+    () => showDeleteConfirm() && !isDeletingAccount(),
+    () => setShowDeleteConfirm(false),
+  );
+
   async function handleDeleteAccount() {
     setDeleteError(null);
     setIsDeletingAccount(true);
     try {
       await AuthService.deleteAccount();
-      // Suppression effective : on vide l'état front et on renvoie au login.
+      // Suppression effective : on vide l'état front, on pose un flag
+      // one-shot pour afficher la confirmation côté /login, puis redirect.
       consentStore.clearPreferenceStorage();
       await authStore.logout();
+      try { sessionStorage.setItem("account_just_deleted", "1"); } catch { /* ignore */ }
       navigate("/login", { replace: true });
     } catch (err) {
       setDeleteError(
@@ -129,18 +140,33 @@ export default function SettingsPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const ts = new Date().toISOString().slice(0, 10);
-      a.download = `dndiscord-export-${ts}.json`;
+      // Préfixe DiscordId + horodatage ms pour éviter la collision en cas
+      // d'export multiple rapproché (avant/après édition de profil).
+      const idPrefix = authStore.user()?.discordId?.slice(0, 8) ?? "user";
+      const ts = new Date().toISOString().replace(/[:.]/g, "-");
+      a.download = `dndiscord-export-${idPrefix}-${ts}.json`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch (err) {
-      setExportError(
-        typeof err === "string"
-          ? err
-          : "L'export a échoué. Merci de réessayer ou de contacter le support.",
-      );
+    } catch (err: any) {
+      // En cas d'erreur 5xx, axios résout tout de même le body en Blob
+      // (à cause de responseType: "blob"). On tente de le lire en texte
+      // pour récupérer le message d'erreur JSON serveur (sinon fallback).
+      let msg = "L'export a échoué. Merci de réessayer ou de contacter le support.";
+      try {
+        const blob = err?.response?.data;
+        if (blob instanceof Blob) {
+          const text = await blob.text();
+          const parsed = JSON.parse(text);
+          if (parsed?.error) msg = parsed.error;
+        } else if (typeof err === "string") {
+          msg = err;
+        }
+      } catch {
+        /* on garde le fallback */
+      }
+      setExportError(msg);
     } finally {
       setIsExporting(false);
     }
@@ -548,7 +574,11 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Privacy & Data (RGPD) */}
+        {/* Privacy & Data (RGPD) — section entièrement gatée : le bouton
+            "Exporter" et la section "Supprimer le compte" (Danger Zone)
+            nécessitent un compte authentifié. Les liens légaux restent
+            accessibles via le footer de LoginPage pour les non-loggués. */}
+        <Show when={authStore.isAuthenticated()}>
         <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
           <div class="p-5 border-b border-white/10">
             <h2 class="font-display text-lg text-white flex items-center gap-2">
@@ -557,7 +587,6 @@ export default function SettingsPage() {
             </h2>
           </div>
           <div class="p-5 space-y-4">
-            <Show when={authStore.isAuthenticated()}>
               <div class="flex items-center justify-between gap-3">
                 <div class="flex items-center gap-3 min-w-0">
                   <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
@@ -582,7 +611,6 @@ export default function SettingsPage() {
               <Show when={exportError()}>
                 <p class="text-red-400 text-xs">{exportError()}</p>
               </Show>
-            </Show>
 
             <div class="flex items-center justify-between gap-3 pt-4 border-t border-white/10">
               <div class="flex items-center gap-3 min-w-0">
@@ -605,39 +633,40 @@ export default function SettingsPage() {
             </div>
 
             <div class="flex flex-wrap items-center gap-3 pt-4 border-t border-white/10">
-              <a
+              <A
                 href="/privacy"
                 class="inline-flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200 transition-colors"
               >
                 <ShieldCheck class="w-4 h-4" />
                 Politique de confidentialité
-              </a>
+              </A>
               <span class="text-slate-600">·</span>
-              <a
+              <A
                 href="/terms"
                 class="inline-flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200 transition-colors"
               >
                 <Scale class="w-4 h-4" />
                 Conditions générales
-              </a>
+              </A>
               <span class="text-slate-600">·</span>
-              <a
+              <A
                 href="/legal"
                 class="inline-flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200 transition-colors"
               >
                 Mentions légales
-              </a>
+              </A>
               <span class="text-slate-600">·</span>
-              <a
+              <A
                 href="/cookies"
                 class="inline-flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200 transition-colors"
               >
                 <Cookie class="w-4 h-4" />
                 Politique cookies
-              </a>
+              </A>
             </div>
           </div>
         </section>
+        </Show>
 
         {/* Danger Zone */}
         <Show when={authStore.isAuthenticated()}>
@@ -720,6 +749,33 @@ export default function SettingsPage() {
                 personnages et toutes vos données. Cette action est
                 irréversible.
               </p>
+              <div class="mt-4 rounded-lg bg-purple-500/10 border border-purple-500/20 p-3 text-left">
+                <p class="text-purple-200 text-xs font-medium mb-1">
+                  Révoquer aussi l'accès Discord ?
+                </p>
+                <p class="text-slate-300 text-xs leading-relaxed">
+                  Supprimer votre compte chez nous ne révoque pas
+                  l'autorisation OAuth côté Discord. Pour retirer
+                  complètement l'accès :{" "}
+                  <strong>Paramètres Discord → Applications autorisées →
+                  DnDiscord → Désautoriser</strong>.{" "}
+                  <a
+                    href="discord://users/@me/settings/authorized-apps"
+                    class="text-purple-300 underline hover:text-purple-200"
+                  >
+                    Ouvrir dans Discord
+                  </a>{" "}
+                  ·{" "}
+                  <a
+                    href="https://discord.com/channels/@me"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-purple-300 underline hover:text-purple-200"
+                  >
+                    Web
+                  </a>
+                </p>
+              </div>
             </div>
             <Show when={deleteError()}>
               <p class="text-red-400 text-xs mb-3 text-center">
@@ -728,6 +784,11 @@ export default function SettingsPage() {
             </Show>
             <div class="flex gap-3">
               <button
+                ref={(el) => {
+                  // Autofocus sur "Annuler" plutôt que "Supprimer" — choix
+                  // destructif ne doit pas être le défaut clavier.
+                  if (showDeleteConfirm()) queueMicrotask(() => el?.focus());
+                }}
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={isDeletingAccount()}
                 class="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white transition-all disabled:opacity-50"

@@ -65,12 +65,22 @@ async function initDiscord() {
   }
 }
 
+// Wrapper du Router : CookieConsent doit être à l'intérieur du contexte
+// Router pour utiliser <A> et useLocation (cacher la bannière sur les
+// pages légales). `root` est le point d'extension propre de Solid Router.
+function RouterRoot(props: { children: any }) {
+  return (
+    <>
+      <CookieConsent />
+      {props.children}
+    </>
+  );
+}
+
 // Rend l'application immédiatement, puis initialise Discord en arrière-plan
 render(
   () => (
-    <>
-    <CookieConsent />
-    <Router>
+    <Router root={RouterRoot}>
       {/* Public routes */}
       <Route path="/login" component={LoginPage} />
       <Route path="/auth/callback" component={AuthCallback} />
@@ -194,7 +204,6 @@ render(
         )}
       />
     </Router>
-    </>
   ),
   document.getElementById("root") as HTMLElement,
 );

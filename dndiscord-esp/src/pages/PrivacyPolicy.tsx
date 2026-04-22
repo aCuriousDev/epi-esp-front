@@ -1,4 +1,4 @@
-import { useNavigate } from "@solidjs/router";
+import { A, useNavigate } from "@solidjs/router";
 import { For, onMount, type JSX } from "solid-js";
 import {
   ArrowLeft,
@@ -16,7 +16,12 @@ import {
   Sparkles,
 } from "lucide-solid";
 import { consentStore } from "../stores/consent.store";
-import { LEGAL_ORG as ORG, LEGAL_HOSTING as HOSTING } from "../config/legal";
+import {
+  LEGAL_ORG as ORG,
+  LEGAL_HOSTING as HOSTING,
+  LEGAL_DPA as DPA,
+  LEGAL_EXTERNAL as EXT,
+} from "../config/legal";
 
 type Section = {
   id: string;
@@ -160,11 +165,11 @@ export default function PrivacyPolicy() {
               , la loi française « Informatique et Libertés » modifiée, la{" "}
               <strong>Directive ePrivacy</strong> (via les recommandations CNIL),
               ainsi qu'avec la{" "}
-              <ExternalLink href="https://support-dev.discord.com/hc/en-us/articles/8563934450327-Discord-Developer-Policy">
+              <ExternalLink href={EXT.discordDevPolicy}>
                 Discord Developer Policy
               </ExternalLink>{" "}
               et la{" "}
-              <ExternalLink href="https://discord.com/privacy">
+              <ExternalLink href={EXT.discordPrivacy}>
                 Politique de confidentialité de Discord
               </ExternalLink>
               .
@@ -343,16 +348,19 @@ export default function PrivacyPolicy() {
 
             <h3 class="text-white font-semibold text-base mt-5">4.4 Données de paiement (abonnements)</h3>
             <p>
-              Le service DnDiscord propose un modèle <strong>freemium</strong>{" "}
-              avec des abonnements payants. Les données de paiement (numéro de
-              carte, cryptogramme, expiration) ne transitent <strong>jamais</strong>{" "}
-              par nos serveurs : elles sont saisies directement sur
-              l'infrastructure d'un prestataire certifié{" "}
-              <strong>PCI-DSS</strong> (par exemple Stripe — à confirmer en
-              fonction du prestataire retenu). Nous ne recevons que des
-              métadonnées de transaction (identifiant de paiement,
-              horodatage, statut, 4 derniers chiffres de la carte, montant,
-              devise) nécessaires à la facturation et à la comptabilité.
+              DnDiscord est pensé comme un service{" "}
+              <strong>freemium</strong> : un socle gratuit et, à terme, des
+              abonnements payants. <strong>Aucun paiement n'est encore
+              activé</strong> à la date de la présente politique. Lorsque
+              les abonnements seront mis en service, les données de
+              paiement (numéro de carte, cryptogramme, expiration) ne
+              transiteront <strong>jamais</strong> par nos serveurs :
+              elles seront saisies directement sur l'infrastructure d'un
+              prestataire certifié <strong>PCI-DSS</strong> (par exemple
+              Stripe). Nous ne recevrions alors que des métadonnées de
+              transaction (identifiant de paiement, horodatage, statut,
+              4 derniers chiffres de la carte, montant, devise) nécessaires
+              à la facturation et à la comptabilité.
             </p>
 
             <p class="bg-purple-500/5 border border-purple-500/20 rounded-lg p-3 text-sm text-slate-300 mt-4">
@@ -434,7 +442,7 @@ export default function PrivacyPolicy() {
                 <strong>Discord Inc.</strong> (États-Unis) — fournisseur
                 d'authentification OAuth 2.0, plateforme Activité et hébergement
                 du client qui intègre DnDiscord. Voir la{" "}
-                <ExternalLink href="https://discord.com/privacy">
+                <ExternalLink href={EXT.discordPrivacy}>
                   Politique de confidentialité de Discord
                 </ExternalLink>
                 .
@@ -511,7 +519,7 @@ export default function PrivacyPolicy() {
             </ul>
             <p>
               Ces transferts sont encadrés par l'adhésion de ces entités au{" "}
-              <ExternalLink href="https://www.dataprivacyframework.gov/">
+              <ExternalLink href={EXT.dpfUrl}>
                 EU-US Data Privacy Framework
               </ExternalLink>{" "}
               (décision d'adéquation de la Commission européenne du 10 juillet
@@ -686,7 +694,7 @@ export default function PrivacyPolicy() {
               le traitement n'est licite que si le consentement est donné ou
               autorisé par le(s) titulaire(s) de l'autorité parentale. Par
               ailleurs, Discord applique son propre seuil (13 ans, voir les{" "}
-              <ExternalLink href="https://discord.com/terms">
+              <ExternalLink href={EXT.discordTerms}>
                 Conditions d'utilisation de Discord
               </ExternalLink>
               ) : DnDiscord s'appuie sur l'authentification Discord comme
@@ -754,31 +762,29 @@ export default function PrivacyPolicy() {
               contrôle française :
             </p>
             <div class="bg-white/5 border border-white/10 rounded-xl p-4 text-sm space-y-1">
-              <p class="text-white font-semibold">
-                CNIL — Commission Nationale de l'Informatique et des Libertés
-              </p>
-              <p class="text-slate-300">3 place de Fontenoy, TSA 80715</p>
-              <p class="text-slate-300">75334 Paris Cedex 07</p>
+              <p class="text-white font-semibold">{DPA.name}</p>
+              <p class="text-slate-300">{DPA.address}</p>
+              <p class="text-slate-300">{DPA.city}</p>
               <p class="text-slate-300">
-                <ExternalLink href="https://www.cnil.fr/fr/plaintes">
-                  www.cnil.fr/fr/plaintes
+                <ExternalLink href={DPA.complaintsUrl}>
+                  {DPA.complaintsUrl.replace(/^https?:\/\//, "")}
                 </ExternalLink>
               </p>
             </div>
           </Card>
 
           <nav class="flex flex-wrap items-center gap-x-3 gap-y-2 pt-6 text-sm text-slate-400">
-            <a href="/terms" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
+            <A href="/terms" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
               Conditions générales
-            </a>
+            </A>
             <span class="text-slate-600">·</span>
-            <a href="/legal" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
+            <A href="/legal" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
               Mentions légales
-            </a>
+            </A>
             <span class="text-slate-600">·</span>
-            <a href="/cookies" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
+            <A href="/cookies" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
               Politique cookies
-            </a>
+            </A>
           </nav>
           <p class="pt-2 text-xs text-slate-500">
             En vigueur depuis le {ORG.lastUpdated}.
@@ -795,13 +801,10 @@ export default function PrivacyPolicy() {
             var(--ink-900) 100%
           );
         }
-        .privacy-card :global(p),
-        .privacy-card :global(ul),
-        .privacy-card :global(dl),
-        .privacy-card :global(table) {
-          color: rgb(203 213 225 / 0.9);
-          line-height: 1.6;
-        }
+        /* Les règles typographiques sont portées directement par les
+           classes Tailwind des Card (text-slate-300 leading-relaxed).
+           Pas besoin de :global() — de toute façon le support est
+           incomplet côté solid-styled-jsx. */
       `}</style>
     </div>
   );

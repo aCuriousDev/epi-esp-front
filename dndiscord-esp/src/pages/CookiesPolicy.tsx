@@ -1,4 +1,4 @@
-import { useNavigate } from "@solidjs/router";
+import { A, useNavigate } from "@solidjs/router";
 import { ArrowLeft, Check, Cookie, Sliders } from "lucide-solid";
 import { createSignal, For, onMount, Show, type JSX } from "solid-js";
 import { consentStore } from "../stores/consent.store";
@@ -321,17 +321,17 @@ export default function CookiesPolicy() {
         </Card>
 
         <nav class="flex flex-wrap items-center gap-x-3 gap-y-2 pt-6 text-sm text-slate-400">
-          <a href="/privacy" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
+          <A href="/privacy" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
             Politique de confidentialité
-          </a>
+          </A>
           <span class="text-slate-600">·</span>
-          <a href="/terms" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
+          <A href="/terms" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
             Conditions générales
-          </a>
+          </A>
           <span class="text-slate-600">·</span>
-          <a href="/legal" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
+          <A href="/legal" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
             Mentions légales
-          </a>
+          </A>
         </nav>
         <p class="pt-2 text-xs text-slate-500">
           En vigueur depuis le {ORG.lastUpdated}.

@@ -1,4 +1,4 @@
-import { useNavigate } from "@solidjs/router";
+import { A, useNavigate } from "@solidjs/router";
 import { createSignal, For, JSX, onCleanup, onMount, Show } from "solid-js";
 import { Settings, ScrollText, Swords, Users } from "lucide-solid";
 
@@ -112,7 +112,12 @@ export default function MenuComponent() {
 				</div>
 			</nav>
 
-			<main class="relative z-10 mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center gap-8 p-6 sm:p-10">
+			<main class="relative z-10 mx-auto flex min-h-screen max-w-5xl flex-col items-center p-6 sm:p-10">
+				{/* Bloc centré : héro + menu + stats. flex-1 le laisse manger
+				    l'espace vertical disponible ; justify-center recentre son
+				    contenu à l'intérieur. Le footer (mt-auto en frère) se cale
+				    ainsi en bas sans chevauchement possible. */}
+				<div class="flex flex-1 w-full flex-col items-center justify-center gap-8">
 				{/* Logo and Title Section */}
 				<header class="text-center hero-section">
 					{/* Animated D20 dice - click, hold-and-shake, or flick to roll */}
@@ -187,25 +192,28 @@ export default function MenuComponent() {
 						</div>
 					</section>
 				</Show>
-				{/* Footer dans le flux de main (mt-auto le pousse en bas) */}
-				<footer class="mt-auto w-full pt-10 text-center text-xs text-slate-400/60 space-y-2">
+				</div>
+				{/* Footer en fin de <main> — l'espace est déjà mangé par le
+				    bloc flex-1 ci-dessus, donc le footer vit en bas, dans
+				    le flux, sans absolute ni chevauchement. */}
+				<footer class="w-full pt-10 text-center text-xs text-slate-400/60 space-y-2">
 					<p>Appuyez sur un bouton pour commencer votre aventure</p>
 					<p class="flex items-center justify-center gap-2 text-[11px] text-slate-500/70 flex-wrap">
-						<a href="/privacy" class="hover:text-slate-300 transition-colors">
+						<A href="/privacy" class="hover:text-slate-300 transition-colors">
 							Confidentialité
-						</a>
+						</A>
 						<span>·</span>
-						<a href="/terms" class="hover:text-slate-300 transition-colors">
+						<A href="/terms" class="hover:text-slate-300 transition-colors">
 							CGU
-						</a>
+						</A>
 						<span>·</span>
-						<a href="/legal" class="hover:text-slate-300 transition-colors">
+						<A href="/legal" class="hover:text-slate-300 transition-colors">
 							Mentions légales
-						</a>
+						</A>
 						<span>·</span>
-						<a href="/cookies" class="hover:text-slate-300 transition-colors">
+						<A href="/cookies" class="hover:text-slate-300 transition-colors">
 							Cookies
-						</a>
+						</A>
 					</p>
 				</footer>
 			</main>

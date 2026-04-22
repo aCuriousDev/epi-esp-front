@@ -1,7 +1,13 @@
-import { Show, For } from "solid-js";
+import { Show, For, createMemo } from "solid-js";
 import { Portal } from "solid-js/web";
+import { A, useLocation } from "@solidjs/router";
 import { Cookie, Shield, Sliders, X } from "lucide-solid";
 import { consentStore } from "../stores/consent.store";
+import { useEscapeToClose } from "../hooks/useModalAccessibility";
+
+// Routes sur lesquelles la bannière n'a pas lieu d'être (l'utilisateur
+// est par définition déjà en train de consulter la divulgation complète).
+const LEGAL_PATHS = ["/privacy", "/terms", "/legal", "/cookies"];
 
 /**
  * Bannière d'information RGPD.
@@ -68,9 +74,19 @@ const CATEGORIES: StorageCategory[] = [
 ];
 
 export default function CookieConsent() {
+  const location = useLocation();
+  // On masque la bannière sur les pages légales : l'utilisateur est
+  // manifestement déjà informé puisqu'il y navigue, et l'overlay bottom
+  // occulte une partie de la page de divulgation sur mobile.
+  const shouldShowBanner = createMemo(
+    () =>
+      consentStore.bannerOpen() &&
+      !LEGAL_PATHS.some((p) => location.pathname.startsWith(p)),
+  );
+
   return (
     <>
-      <Show when={consentStore.bannerOpen()}>
+      <Show when={shouldShowBanner()}>
         <Portal>
           <ConsentBanner />
         </Portal>
@@ -111,14 +127,23 @@ function ConsentBanner() {
               votre navigateur pour vous authentifier via Discord et mémoriser
               vos préférences de jeu. Aucun traceur publicitaire ni outil
               d'analyse tiers.{" "}
-              <a
+              <A
                 href="/privacy"
                 class="text-purple-300 hover:text-purple-200 underline underline-offset-2"
               >
                 En savoir plus
-              </a>
+              </A>
               .
             </p>
+
+            <Show when={consentStore.storageUnavailable()}>
+              <p class="mt-3 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                ⚠ Le stockage local de votre navigateur est indisponible
+                (navigation privée Safari ou quota d'iframe restreint). Votre
+                acquittement ne sera pas mémorisé et la bannière pourra
+                réapparaître à chaque visite.
+              </p>
+            </Show>
 
             <div class="mt-4 flex flex-col sm:flex-row gap-2 sm:gap-3">
               <button
@@ -143,6 +168,12 @@ function ConsentBanner() {
 }
 
 function PreferencesModal() {
+  useEscapeToClose(consentStore.preferencesOpen, consentStore.closePreferences);
+  let closeBtn: HTMLButtonElement | undefined;
+  // Autofocus sur le bouton de fermeture au montage pour que Tab / Enter
+  // / ESC fonctionnent directement sans click préalable.
+  queueMicrotask(() => closeBtn?.focus());
+
   function handleClearPreferences() {
     consentStore.clearPreferenceStorage();
   }
@@ -166,6 +197,7 @@ function PreferencesModal() {
             Stockage local — détails
           </h2>
           <button
+            ref={closeBtn}
             onClick={() => consentStore.closePreferences()}
             class="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
             aria-label="Fermer"

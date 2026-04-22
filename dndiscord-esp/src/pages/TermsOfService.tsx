@@ -1,10 +1,11 @@
-import { useNavigate } from "@solidjs/router";
+import { A, useNavigate } from "@solidjs/router";
 import { ArrowLeft, Scale } from "lucide-solid";
 import { onMount, type JSX } from "solid-js";
 import {
   LEGAL_ORG as ORG,
   LEGAL_HOSTING as HOSTING,
   LEGAL_MEDIATOR as MEDIATOR,
+  LEGAL_EXTERNAL as EXT,
 } from "../config/legal";
 
 export default function TermsOfService() {
@@ -83,7 +84,7 @@ export default function TermsOfService() {
           </p>
           <p>
             L'utilisation de DnDiscord est également soumise aux{" "}
-            <ExternalLink href="https://discord.com/terms">
+            <ExternalLink href={EXT.discordTerms}>
               Conditions d'utilisation de Discord
             </ExternalLink>{" "}
             et aux{" "}
@@ -95,7 +96,7 @@ export default function TermsOfService() {
               Discord Developer Terms of Service
             </ExternalLink>{" "}
             et à la{" "}
-            <ExternalLink href="https://support-dev.discord.com/hc/en-us/articles/8563934450327-Discord-Developer-Policy">
+            <ExternalLink href={EXT.discordDevPolicy}>
               Discord Developer Policy
             </ExternalLink>
             . En cas de contradiction irréductible, les règles propres à la
@@ -162,6 +163,12 @@ export default function TermsOfService() {
             La poursuite de l'utilisation après cette date vaut acceptation
             des nouvelles CGU. À défaut, l'Utilisateur peut résilier son
             compte dans les conditions de l'article 14.
+          </p>
+          <p>
+            <strong>Langue faisant foi</strong> — Les présentes CGU sont
+            rédigées en français. Toute traduction proposée à titre
+            informatif ne saurait primer sur la version française, qui
+            constitue la seule version contractuellement opposable.
           </p>
         </Card>
 
@@ -331,9 +338,9 @@ export default function TermsOfService() {
           <p>
             Le traitement de vos données personnelles est décrit en détail
             dans notre{" "}
-            <a href="/privacy" class="text-purple-300 underline hover:text-purple-200">
+            <A href="/privacy" class="text-purple-300 underline hover:text-purple-200">
               Politique de confidentialité
-            </a>
+            </A>
             , qui précise notamment les finalités, les bases légales, les
             destinataires, les durées de conservation et vos droits (accès,
             rectification, effacement, portabilité, opposition,
@@ -362,9 +369,9 @@ export default function TermsOfService() {
             DnDiscord n'utilise aucun cookie HTTP et aucun traceur tiers.
             L'usage du stockage local du navigateur et ses modalités de
             gestion sont détaillés dans notre{" "}
-            <a href="/cookies" class="text-purple-300 underline hover:text-purple-200">
+            <A href="/cookies" class="text-purple-300 underline hover:text-purple-200">
               Politique cookies
-            </a>
+            </A>
             .
           </p>
         </Card>
@@ -421,8 +428,8 @@ export default function TermsOfService() {
           <p>
             Pour les contenus pénalement répréhensibles, un signalement
             peut également être effectué sur la plateforme officielle{" "}
-            <ExternalLink href="https://www.internet-signalement.gouv.fr">
-              PHAROS (internet-signalement.gouv.fr)
+            <ExternalLink href={EXT.pharosUrl}>
+              PHAROS ({EXT.pharosUrl.replace(/^https?:\/\//, "")})
             </ExternalLink>
             .
           </p>
@@ -609,7 +616,7 @@ export default function TermsOfService() {
           <p>
             Pour les litiges transfrontaliers au sein de l'Union
             européenne, la plateforme{" "}
-            <ExternalLink href="https://ec.europa.eu/consumers/odr/">
+            <ExternalLink href={EXT.odrUrl}>
               de règlement en ligne des litiges (RLL)
             </ExternalLink>{" "}
             de la Commission européenne est également disponible.
@@ -626,17 +633,17 @@ export default function TermsOfService() {
         </Card>
 
         <nav class="flex flex-wrap items-center gap-x-3 gap-y-2 pt-6 text-sm text-slate-400">
-          <a href="/privacy" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
+          <A href="/privacy" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
             Politique de confidentialité
-          </a>
+          </A>
           <span class="text-slate-600">·</span>
-          <a href="/legal" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
+          <A href="/legal" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
             Mentions légales
-          </a>
+          </A>
           <span class="text-slate-600">·</span>
-          <a href="/cookies" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
+          <A href="/cookies" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
             Politique cookies
-          </a>
+          </A>
         </nav>
         <p class="pt-2 text-xs text-slate-500">
           En vigueur depuis le {ORG.lastUpdated}.
