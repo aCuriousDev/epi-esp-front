@@ -201,6 +201,29 @@ export interface CombatEndedPayload {
   rewards?: { experienceGained: number; goldGained: number; itemsObtained: string[] };
 }
 
+/**
+ * Wire-level ability-use event. Emitted when a unit fires an ability (attack
+ * or spell) in a multiplayer session. Both the attacker and peers apply the
+ * resulting HP / AP / cooldown changes via the gameSync handler — no client
+ * computes damage independently.
+ */
+export interface AbilityUsedPayload {
+  unitId: string;
+  abilityId: string;
+  targets: string[];
+  effects: AbilityEffectPayload[];
+  apCost?: number;
+  cooldown?: number;
+  diceResult?: { diceType: number; roll: number; modifier: number };
+}
+
+export interface AbilityEffectPayload {
+  /** "Damage" | "Heal" | "Buff" | "Debuff" (server casing) */
+  type: string;
+  targetId: string;
+  value: number;
+}
+
 // --- Message séquencé (backend) ---
 export interface GameMessage<T> {
   type: string;

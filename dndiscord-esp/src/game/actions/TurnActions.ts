@@ -142,6 +142,15 @@ function initializeCombat(
  * Démarre le combat après la phase de préparation (bouton "Prêt" cliqué)
  */
 export function startCombatFromPreparation(): void {
+  // In a multiplayer session the hub's CombatManager owns this transition —
+  // DmStartCombat rolls initiative server-side and broadcasts CombatStarted
+  // with the authoritative turn order. Running the local computation here would
+  // recreate the original BUG-C desync (every client computing its own order).
+  if (isInSession()) {
+    console.log("[startCombatFromPreparation] No-op in multiplayer — server owns the transition");
+    return;
+  }
+
   const turnOrder = TurnManager.calculateTurnOrder(units);
 
   console.log(

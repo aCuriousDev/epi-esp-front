@@ -4,7 +4,7 @@
  */
 
 import { signalRService } from "./SignalRService";
-import type { GameMessage, MoveResult, TurnEndedPayload, GameStateSnapshotPayload, DmMoveTokenPayload, DmSpawnUnitPayload, CombatStartedPayload, CombatEndedPayload } from "../../types/multiplayer";
+import type { GameMessage, MoveResult, TurnEndedPayload, GameStateSnapshotPayload, DmMoveTokenPayload, DmSpawnUnitPayload, CombatStartedPayload, CombatEndedPayload, AbilityUsedPayload } from "../../types/multiplayer";
 import type { GridPosition, Unit, UnitType } from "../../types";
 import { GameMode, GamePhase, Team } from "../../types";
 import { mapServerPhase } from "./serverPhase";
@@ -252,6 +252,53 @@ export function registerGameSyncHandlers(): void {
       highlightedTiles: next.highlightedTiles,
     });
     addCombatLog("[MJ] Combat imminent — placez vos unités.", "system");
+  });
+
+  // A unit used an ability (attack or spell). Every client — including the
+  // attacker — applies HP / AP / cooldown from this payload. Keeps HP in sync
+  // across peers (was the root of the useAbility desync in CombatActions.ts).
+  signalRService.on("AbilityUsed", (message: GameMessage<AbilityUsedPayload> | AbilityUsedPayload | unknown) => {
+    const payload = (message && typeof message === "object" && "payload" in (message as any))
+      ? (message as GameMessage<AbilityUsedPayload>).payload
+      : (message as AbilityUsedPayload);
+    if (!payload?.unitId || !Array.isArray(payload.effects)) return;
+
+    // Apply damage / heal effects to each target.
+    for (const effect of payload.effects) {
+      const target = units[effect.targetId];
+      if (!target) continue;
+      const kind = (effect.type ?? "").toLowerCase();
+      const delta = kind === "heal" ? effect.value : -effect.value;
+      setUnits(effect.targetId, produce((t) => {
+        t.stats.currentHealth = Math.max(0, Math.min(t.stats.maxHealth, t.stats.currentHealth + delta));
+        if (t.stats.currentHealth <= 0 && t.isAlive) {
+          t.isAlive = false;
+          const tileKey = posToKey(t.position);
+          if (tiles[tileKey]?.occupiedBy === t.id) {
+            setTiles(tileKey, "occupiedBy", null);
+          }
+        }
+      }));
+      if (kind === "damage") {
+        addCombatLog(`${target.name} subit ${effect.value} dégâts.`, "damage");
+      }
+    }
+
+    // Apply AP cost + cooldown to the attacker.
+    if (units[payload.unitId]) {
+      setUnits(payload.unitId, produce((u) => {
+        if (typeof payload.apCost === "number" && payload.apCost > 0) {
+          u.stats.currentActionPoints = Math.max(0, u.stats.currentActionPoints - payload.apCost);
+        }
+        if (typeof payload.cooldown === "number" && payload.cooldown > 0) {
+          const idx = u.abilities.findIndex((a) => a.id === payload.abilityId);
+          if (idx >= 0) u.abilities[idx].currentCooldown = payload.cooldown ?? 0;
+        }
+        u.hasActed = true;
+      }));
+    }
+
+    updatePathfinder();
   });
 
   // DM forcibly ended combat — clear the turn state, return to free roam.

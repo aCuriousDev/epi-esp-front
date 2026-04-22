@@ -11,7 +11,7 @@ import { gameState, setGameState, addCombatLog, getIsFreeRoamMode, getIsDungeonM
 import { units, setUnits } from '../stores/UnitsStore';
 import { tiles, setTiles, pathfinder, updatePathfinder } from '../stores/TilesStore';
 import { posToKey } from '../utils/GridUtils';
-import { getCurrentSession, getHubUserId } from '../../stores/session.store';
+import { getCurrentSession, getHubUserId, isInSession } from '../../stores/session.store';
 import { isHost as getIsHost } from '../../stores/session.store';
 import { sendUnitMove, dmMoveToken } from '../../services/signalr/multiplayer.service';
 import { getAllySpawnPositions, getEnemySpawnPositions } from '../initialization/InitUnits';
@@ -144,6 +144,12 @@ export function moveUnit(targetPos: GridPosition): boolean {
   
   // Phase de préparation : placement direct sur une case de spawn (sans pathfinding)
   if (isPreparation && (unit.team === Team.PLAYER || unit.team === Team.ENEMY)) {
+    // In multiplayer the preparation phase is skipped — the server's
+    // authoritative CombatStarted transitions straight to PlayerTurn. If this
+    // branch is ever reached in a session it's a leftover UI state and
+    // mutating tiles locally would desync peers. No-op defensively.
+    if (isInSession()) return false;
+
     const isHost = getIsHost();
     if (unit.team === Team.ENEMY && !isHost) return false;
 
