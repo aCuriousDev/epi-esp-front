@@ -84,59 +84,15 @@ export interface GridPosition {
   y: number;
 }
 
-// --- Requêtes / résultats d'actions (E2.3) ---
-export interface MoveRequest {
-  unitId: string;
-  targetX: number;
-  targetY: number;
-  path?: GridPosition[];
-}
-
+/**
+ * Outcome shape for the legacy SendUnitMove broadcast — the hub forwards this
+ * verbatim to OthersInGroup. Kept as the live move-broadcast contract.
+ */
 export interface MoveResult {
   unitId: string;
   path: GridPosition[];
   apCost: number;
   success: boolean;
-  error?: string;
-}
-
-export interface AttackRequest {
-  attackerId: string;
-  targetId: string;
-  abilityId: string;
-}
-
-export interface AttackResult {
-  attackerId: string;
-  targetId: string;
-  abilityId: string;
-  diceRoll: number;
-  modifier: number;
-  total: number;
-  hit: boolean;
-  damage?: number;
-  effects?: { type: string; targetId: string; value: number }[];
-  success: boolean;
-  error?: string;
-}
-
-export interface AbilityTargetInfo {
-  targetUnitId?: string;
-  targetX?: number;
-  targetY?: number;
-}
-
-export interface UseAbilityRequest {
-  unitId: string;
-  abilityId: string;
-  target: AbilityTargetInfo;
-}
-
-export interface UseAbilityResult {
-  unitId: string;
-  abilityId: string;
-  success: boolean;
-  effect?: { type: string; targetId: string; value: number };
   error?: string;
 }
 
@@ -233,28 +189,6 @@ export interface GameMessage<T> {
   timestamp: string;
   sessionId: string;
   payload: T;
-}
-
-// --- Snapshot état (simplifié pour le front) ---
-export interface GameStateSnapshotPayload {
-  sessionId: string;
-  combatState?: {
-    isActive: boolean;
-    currentRound: number;
-    currentUnitId: string;
-    initiativeOrder: { unitId: string; initiative: number; controllerId: string }[];
-  };
-  units: Array<{
-    unitId: string;
-    name: string;
-    hp: number;
-    maxHp: number;
-    position: GridPosition;
-    controllerId: string;
-    statusEffects: string[];
-  }>;
-  mapState?: { width: number; height: number; tiles: unknown[] };
-  lastSequenceNumber: number;
 }
 
 // --- DM Tools Payloads ---

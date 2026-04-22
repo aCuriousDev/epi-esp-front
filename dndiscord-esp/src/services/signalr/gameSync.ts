@@ -1,10 +1,11 @@
 /**
  * Synchronisation état de jeu avec les événements SignalR.
- * Applique UnitMoved, TurnEnded, FullStateSync aux stores du jeu.
+ * Applique UnitMoved, TurnEnded, CombatStarted, CombatEnded, AbilityUsed,
+ * DmTokenMoved, DmUnitSpawned, MapSwitched aux stores du jeu.
  */
 
 import { signalRService } from "./SignalRService";
-import type { GameMessage, MoveResult, TurnEndedPayload, GameStateSnapshotPayload, DmMoveTokenPayload, DmSpawnUnitPayload, CombatStartedPayload, CombatEndedPayload, AbilityUsedPayload } from "../../types/multiplayer";
+import type { GameMessage, MoveResult, TurnEndedPayload, DmMoveTokenPayload, DmSpawnUnitPayload, CombatStartedPayload, CombatEndedPayload, AbilityUsedPayload } from "../../types/multiplayer";
 import type { GridPosition, Unit, UnitType } from "../../types";
 import { GameMode, GamePhase, Team } from "../../types";
 import { mapServerPhase } from "./serverPhase";
@@ -133,28 +134,6 @@ export function registerGameSyncHandlers(): void {
     // local reset so the UI doesn't get stuck.
     setGameState("selectedUnit", null);
     setGameState("turnPhase", "SELECT_UNIT" as any);
-  });
-
-  signalRService.on("FullStateSync", (message: GameMessage<GameStateSnapshotPayload>) => {
-    const payload = message?.payload ?? message;
-    if (!payload?.units?.length) return;
-
-    for (const u of payload.units) {
-      const pos = toFrontendPos(u.position as { x: number; y: number });
-      if (!units[u.unitId]) continue;
-
-      setUnits(u.unitId, produce((unit) => {
-        unit.position = pos;
-        unit.stats.currentHealth = u.hp;
-        unit.stats.maxHealth = u.maxHp;
-      }));
-
-      const tileKey = posToKey(pos);
-      if (tiles[tileKey]) {
-        setTiles(tileKey, "occupiedBy", u.unitId);
-      }
-    }
-    updatePathfinder();
   });
 
   // DM force-moved a token — apply to all clients except the DM (who already updated optimistically)

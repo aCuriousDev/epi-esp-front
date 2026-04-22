@@ -10,15 +10,7 @@ import {
   type SessionInfo,
   type JoinResult,
   type KickResult,
-  type MoveRequest,
-  type MoveResult,
-  type AttackRequest,
-  type AttackResult,
-  type UseAbilityRequest,
-  type UseAbilityResult,
   type TurnEndedPayload,
-  type GameMessage,
-  type GameStateSnapshotPayload,
   type PlayerInfo,
   type GameStartedPayload,
   type DmMoveTokenPayload,
@@ -75,15 +67,9 @@ const HUB = {
   unsubscribeActivity: "UnsubscribeActivity",
   selectCharacter: "SelectCharacter",
   startGame: "StartGame",
-  move: "Move",
-  attack: "Attack",
-  useAbility: "UseAbility",
   endTurn: "EndTurn",
-  requestFullState: "RequestFullState",
-  sendGameStateSnapshot: "SendGameStateSnapshot",
   sendUnitMove: "SendUnitMove",
   sendAbilityUsed: "SendAbilityUsed",
-  sendEndTurn: "SendEndTurn",
   // DM Tools
   dmMoveToken: "DmMoveToken",
   dmHiddenRoll: "DmHiddenRoll",
@@ -295,45 +281,13 @@ export async function dmSwitchMap(mapId: string): Promise<void> {
   await signalRService.invoke(HUB.dmSwitchMap, mapId);
 }
 
-// --- Actions de jeu (E2.3, server-authoritative) ---
-
-export async function move(request: MoveRequest): Promise<MoveResult> {
-  return signalRService.invoke(HUB.move, request) as Promise<MoveResult>;
-}
-
-export async function attack(request: AttackRequest): Promise<AttackResult> {
-  return signalRService.invoke(HUB.attack, request) as Promise<AttackResult>;
-}
-
-export async function useAbility(
-  request: UseAbilityRequest,
-): Promise<UseAbilityResult> {
-  return signalRService.invoke(
-    HUB.useAbility,
-    request,
-  ) as Promise<UseAbilityResult>;
-}
+// --- Actions de jeu (server-authoritative via hub) ---
 
 export async function endTurn(payload: TurnEndedPayload): Promise<void> {
   await signalRService.invoke(HUB.endTurn, payload);
 }
 
-export async function requestFullState(): Promise<
-  GameMessage<GameStateSnapshotPayload>
-> {
-  return signalRService.invoke(HUB.requestFullState) as Promise<
-    GameMessage<GameStateSnapshotPayload>
-  >;
-}
-
-/** Envoyer un snapshot d'état (legacy / sync manuelle). */
-export async function sendGameStateSnapshot(
-  snapshot: GameStateSnapshotPayload,
-): Promise<void> {
-  await signalRService.invoke(HUB.sendGameStateSnapshot, snapshot);
-}
-
-/** Legacy: broadcast mouvement sans validation serveur. */
+/** Broadcast a player/DM movement — server validates ownership + phase. */
 export async function sendUnitMove(payload: {
   unitId: string;
   path: { x: number; y: number }[];
@@ -352,11 +306,6 @@ export async function sendAbilityUsed(payload: {
   effects: unknown[];
 }): Promise<void> {
   await signalRService.invoke(HUB.sendAbilityUsed, payload);
-}
-
-/** Legacy: broadcast fin de tour. */
-export async function sendEndTurn(payload: TurnEndedPayload): Promise<void> {
-  await signalRService.invoke(HUB.sendEndTurn, payload);
 }
 
 // --- DM Tools (E-MJ) ---
@@ -562,13 +511,10 @@ export async function rejoinSession(sessionId: string): Promise<boolean> {
 
   if (!result.success) return false;
 
-  if (result.session?.state === SessionState.InProgress) {
-    try {
-      await signalRService.invoke(HUB.requestFullState);
-    } catch (e) {
-      console.warn("RequestFullState failed after rejoin:", e);
-    }
-  }
+  // Post-rework the server replays GameStarted + CombatStarted automatically
+  // via SendRejoinSnapshotAsync (triggered by OnConnectedAsync or RejoinSession).
+  // No explicit state-request call needed — dead code path removed with
+  // StateManager + RequestFullState hub method.
   return true;
 }
 
