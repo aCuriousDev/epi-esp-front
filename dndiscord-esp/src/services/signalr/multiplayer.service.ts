@@ -622,6 +622,18 @@ export function ensureMultiplayerHandlersRegistered(): void {
   });
 
   signalRService.onReconnected(async () => {
+    // Server owns the user→session mapping post-rework (SessionManager.FindSessionByUser).
+    // Invoking RejoinSession with no args triggers SendRejoinSnapshotAsync on the back,
+    // which re-adds the caller to the SignalR group + pushes GameStarted + CombatStarted
+    // (when in combat) as replay events. The existing front handlers consume those and
+    // rehydrate the board. Closes BUG-R.
+    try {
+      const rejoined = await signalRService.invoke("RejoinSession");
+      if (rejoined) return;
+    } catch (err) {
+      console.warn("RejoinSession (server-side lookup) failed, falling back:", err);
+    }
+    // Legacy fallback: rejoin by sessionId from local/persisted state.
     const sid =
       sessionState.session?.sessionId ?? getPersistedSession()?.sessionId;
     if (!sid) return;
