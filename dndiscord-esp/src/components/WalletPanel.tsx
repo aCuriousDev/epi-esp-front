@@ -111,11 +111,11 @@ export default function WalletPanel(props: WalletPanelProps) {
         platinumPieces: 0,
       };
       request[coinKey] = delta;
-      const updated = await InventoryService.modifyWallet(
-        props.characterId,
-        request,
-      );
-      setWallet(updated);
+      // Fire-and-forget: the back applies the delta then broadcasts
+      // WalletChanged, which the handler below picks up as the authoritative
+      // update. Setting wallet from the REST response too would race the
+      // broadcast and, on rapid clicks, apply an older snapshot last.
+      await InventoryService.modifyWallet(props.characterId, request);
     } catch (err) {
       console.error("Failed to modify wallet", err);
     } finally {

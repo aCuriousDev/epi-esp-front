@@ -9,17 +9,15 @@ import type { GameMessage, MoveResult, TurnEndedPayload, DmMoveTokenPayload, DmS
 import type { GridPosition, Unit, UnitType } from "../../types";
 import { GameMode, GamePhase, Team } from "../../types";
 import { mapServerPhase } from "./serverPhase";
-import { units, setUnits } from "../../game/stores/UnitsStore";
-import { addUnit } from "../../game/stores/UnitsStore";
-import { tiles, setTiles } from "../../game/stores/TilesStore";
+import { units, addUnit } from "../../game/stores/UnitsStore";
+import { tiles, setTiles, updatePathfinder } from "../../game/stores/TilesStore";
 import { gameState, setGameState } from "../../game/stores/GameStateStore";
-import { updatePathfinder } from "../../game/stores/TilesStore";
 import { posToKey } from "../../game/utils/GridUtils";
-import { produce } from "solid-js/store";
 import { sessionState, isHost, sessionHasDm } from "../../stores/session.store";
 import { applyCombatStarted, applyAuthoritativeCombatStarted } from "./combatStarted";
 import { applyMapSwitched } from "./mapSwitched";
 import { getAllySpawnPositions } from "../../game/initialization/InitUnits";
+import { applyUnitsSnapshot, applyCombatStateSlice, applyUnitMove, applyAbilityOutcome } from "./applyState";
 
 import { addCombatLog } from "../../game/stores/GameStateStore";
 import { addSpawnedEnemy } from "../../stores/dmTools.store";
@@ -39,38 +37,22 @@ export function registerGameSyncHandlers(): void {
     if (!payload.unitId || !payload.path?.length) return;
     const unitId = payload.unitId;
 
+    // Mover's own client applied the move optimistically; skip the echo.
     const unitData = units[unitId];
     if (unitData?.ownerUserId && unitData.ownerUserId === sessionState.hubUserId) return;
 
     const path = payload.path.map((pos) => toFrontendPos(pos as { x: number; y: number }));
     const dest = path[path.length - 1];
-    const start = path[0];
-    if (!dest) return;
+    if (!dest || !unitData) return;
 
-    // Tile grid may not be initialized yet (reconnection before game board mounts).
-    // FullStateSync will reconcile once the board is ready.
-    const destTile = tiles[posToKey(dest)];
-    if (!destTile) return;
+    // Tile grid not yet initialised (reconnection race) — skip; CombatStarted
+    // replay on rejoin will reconcile.
+    if (!tiles[posToKey(dest)]) return;
 
-    if (start && (start.x !== dest.x || start.z !== dest.z)) {
-      const startTile = tiles[posToKey(start)];
-      if (startTile) {
-        setTiles(posToKey(start), "occupiedBy", null);
-      }
-    }
-    setTiles(posToKey(dest), "occupiedBy", unitId);
-
-    if (!unitData) return;
-
-    setUnits(unitId, produce((u) => {
-      u.position = dest;
-      u.stats.currentActionPoints = Math.max(0, u.stats.currentActionPoints - (payload.apCost ?? 1));
-      u.hasMoved = true;
-    }));
+    applyUnitMove(unitId, dest.x, dest.z, payload.apCost ?? 1);
 
     setGameState("pathPreview", []);
     setGameState("highlightedTiles", []);
-    updatePathfinder();
   });
 
   signalRService.on("TurnEnded", (message: GameMessage<TurnEndedPayload> | TurnEndedPayload) => {
@@ -80,13 +62,14 @@ export function registerGameSyncHandlers(): void {
     if (!payload?.unitId) return;
 
     // Server-authoritative: the hub's CombatManager has already advanced the
-    // cursor and told us who acts next. Apply verbatim. This closes BUG-C
-    // (peers never advancing currentUnitIndex locally) and BUG-H (enemy-turn
-    // state never reaching the player client).
+    // cursor and told us who acts next. Apply verbatim through applyState
+    // helpers — single source of truth, deterministic for all clients.
     if (payload.nextUnitId !== undefined && gameState.turnOrder.length > 0) {
       const nextIdx = gameState.turnOrder.indexOf(payload.nextUnitId ?? "");
       const mapped = mapServerPhase(payload.phase);
-      setGameState({
+      const roundChanged = typeof payload.round === "number" && payload.round > gameState.currentTurn;
+
+      applyCombatStateSlice({
         currentUnitIndex: nextIdx >= 0 ? nextIdx : gameState.currentUnitIndex,
         currentTurn: payload.round ?? gameState.currentTurn,
         phase: mapped ?? gameState.phase,
@@ -94,28 +77,10 @@ export function registerGameSyncHandlers(): void {
       });
       setGameState("turnPhase", "SELECT_UNIT" as any);
 
-      // Apply AP / HP from the server's post-advance snapshot so the round-wrap
-      // AP reset actually reaches clients. Without this AP stays at 0 forever.
-      const roundChanged = typeof payload.round === "number" && payload.round > gameState.currentTurn;
-      if (Array.isArray(payload.units)) {
-        for (const su of payload.units) {
-          if (!units[su.unitId]) continue;
-          setUnits(su.unitId, produce((u) => {
-            u.stats.currentActionPoints = su.currentAp;
-            u.stats.currentHealth = su.currentHp;
-            u.stats.maxHealth = su.maxHp;
-            u.isAlive = su.isAlive;
-            u.hasActed = false;
-            u.hasMoved = false;
-            // Cooldowns tick once per round wrap — matches the solo TurnManager.resetUnitForNewRound.
-            if (roundChanged) {
-              for (const ability of u.abilities) {
-                if (ability.currentCooldown > 0) ability.currentCooldown--;
-              }
-            }
-          }));
-        }
-      }
+      applyUnitsSnapshot(payload.units, {
+        decrementCooldowns: roundChanged,
+        resetActivityFlags: true,
+      });
 
       if (payload.outcome) {
         addCombatLog(
@@ -138,9 +103,7 @@ export function registerGameSyncHandlers(): void {
 
   // DM force-moved a token — apply to all clients except the DM (who already updated optimistically)
   signalRService.on("DmTokenMoved", (message: GameMessage<DmMoveTokenPayload>) => {
-    if (isHost()) return; // DM already applied optimistically
-    // Defence-in-depth: drop Dm* events when the session has no DM — the server
-    // should already block them but we don't want to mutate state on a spoofed event.
+    if (isHost()) return;
     if (!sessionHasDm()) return;
 
     const payload = message?.payload ?? message;
@@ -149,26 +112,12 @@ export function registerGameSyncHandlers(): void {
     const unitId = payload.unitId;
     const dest = toFrontendPos(payload.target as { x: number; y: number });
     const unitData = units[unitId];
-    if (!unitData) return;
+    if (!unitData || !tiles[posToKey(dest)]) return;
 
-    const destTile = tiles[posToKey(dest)];
-    if (!destTile) return;
-
-    // Clear old tile
-    const oldKey = posToKey(unitData.position);
-    if (tiles[oldKey]) {
-      setTiles(oldKey, "occupiedBy", null);
-    }
-    // Set new tile
-    setTiles(posToKey(dest), "occupiedBy", unitId);
-
-    setUnits(unitId, produce((u) => {
-      u.position = dest;
-    }));
+    applyUnitMove(unitId, dest.x, dest.z); // no AP deduction for DM force-move
 
     setGameState("pathPreview", []);
     setGameState("highlightedTiles", []);
-    updatePathfinder();
 
     addCombatLog(`[MJ] ${unitData.name} déplacé en (${dest.x}, ${dest.z})`, "system");
   });
@@ -265,42 +214,22 @@ export function registerGameSyncHandlers(): void {
       : (message as AbilityUsedPayload);
     if (!payload?.unitId || !Array.isArray(payload.effects)) return;
 
-    // Apply damage / heal effects to each target.
+    applyAbilityOutcome(
+      payload.unitId,
+      payload.abilityId,
+      payload.effects,
+      payload.apCost,
+      payload.cooldown,
+    );
+
+    // Combat-log lines are local presentation — each client logs for itself.
     for (const effect of payload.effects) {
       const target = units[effect.targetId];
       if (!target) continue;
-      const kind = (effect.type ?? "").toLowerCase();
-      const delta = kind === "heal" ? effect.value : -effect.value;
-      setUnits(effect.targetId, produce((t) => {
-        t.stats.currentHealth = Math.max(0, Math.min(t.stats.maxHealth, t.stats.currentHealth + delta));
-        if (t.stats.currentHealth <= 0 && t.isAlive) {
-          t.isAlive = false;
-          const tileKey = posToKey(t.position);
-          if (tiles[tileKey]?.occupiedBy === t.id) {
-            setTiles(tileKey, "occupiedBy", null);
-          }
-        }
-      }));
-      if (kind === "damage") {
+      if ((effect.type ?? "").toLowerCase() === "damage") {
         addCombatLog(`${target.name} subit ${effect.value} dégâts.`, "damage");
       }
     }
-
-    // Apply AP cost + cooldown to the attacker.
-    if (units[payload.unitId]) {
-      setUnits(payload.unitId, produce((u) => {
-        if (typeof payload.apCost === "number" && payload.apCost > 0) {
-          u.stats.currentActionPoints = Math.max(0, u.stats.currentActionPoints - payload.apCost);
-        }
-        if (typeof payload.cooldown === "number" && payload.cooldown > 0) {
-          const idx = u.abilities.findIndex((a) => a.id === payload.abilityId);
-          if (idx >= 0) u.abilities[idx].currentCooldown = payload.cooldown ?? 0;
-        }
-        u.hasActed = true;
-      }));
-    }
-
-    updatePathfinder();
   });
 
   // Silent ack for the server's peer-reconnect notice. No UI yet — suppresses
