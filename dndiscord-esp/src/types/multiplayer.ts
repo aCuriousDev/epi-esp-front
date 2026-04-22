@@ -147,6 +147,8 @@ export interface TurnEndedPayload {
   phase?: ServerCombatPhase;
   round?: number;
   outcome?: ServerCombatOutcome | null;
+  /** Full unit roster with AP / HP reset info after the server advances the cursor. */
+  units?: ServerUnitRuntimeState[];
 }
 
 /**

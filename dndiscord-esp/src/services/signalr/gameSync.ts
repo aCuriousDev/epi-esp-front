@@ -93,6 +93,22 @@ export function registerGameSyncHandlers(): void {
       });
       setGameState("turnPhase", "SELECT_UNIT" as any);
 
+      // Apply AP / HP from the server's post-advance snapshot so the round-wrap
+      // AP reset actually reaches clients. Without this AP stays at 0 forever.
+      if (Array.isArray(payload.units)) {
+        for (const su of payload.units) {
+          if (!units[su.unitId]) continue;
+          setUnits(su.unitId, produce((u) => {
+            u.stats.currentActionPoints = su.currentAp;
+            u.stats.currentHealth = su.currentHp;
+            u.stats.maxHealth = su.maxHp;
+            u.isAlive = su.isAlive;
+            u.hasActed = false;
+            u.hasMoved = false;
+          }));
+        }
+      }
+
       if (payload.outcome) {
         addCombatLog(
           payload.outcome === "Victory"
@@ -300,6 +316,10 @@ export function registerGameSyncHandlers(): void {
 
     updatePathfinder();
   });
+
+  // Silent ack for the server's peer-reconnect notice. No UI yet — suppresses
+  // the "No client method with the name 'playerreconnected' found" warning.
+  signalRService.on("PlayerReconnected", (_message: unknown) => { /* noop */ });
 
   // DM forcibly ended combat — clear the turn state, return to free roam.
   signalRService.on("CombatEnded", (_message: GameMessage<CombatEndedPayload> | CombatEndedPayload | unknown) => {
