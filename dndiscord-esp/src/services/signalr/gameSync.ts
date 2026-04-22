@@ -18,6 +18,7 @@ import { applyCombatStarted, applyAuthoritativeCombatStarted } from "./combatSta
 import { applyMapSwitched } from "./mapSwitched";
 import { getAllySpawnPositions } from "../../game/initialization/InitUnits";
 import { applyUnitsSnapshot, applyCombatStateSlice, applyUnitMove, applyAbilityOutcome } from "./applyState";
+import { applyTurnEnded } from "./turnEndedLogic";
 
 import { addCombatLog } from "../../game/stores/GameStateStore";
 import { addSpawnedEnemy } from "../../stores/dmTools.store";
@@ -62,41 +63,36 @@ export function registerGameSyncHandlers(): void {
     if (!payload?.unitId) return;
 
     // Server-authoritative: the hub's CombatManager has already advanced the
-    // cursor and told us who acts next. Apply verbatim through applyState
-    // helpers — single source of truth, deterministic for all clients.
-    if (payload.nextUnitId !== undefined && gameState.turnOrder.length > 0) {
-      const nextIdx = gameState.turnOrder.indexOf(payload.nextUnitId ?? "");
-      const mapped = mapServerPhase(payload.phase);
-      const roundChanged = typeof payload.round === "number" && payload.round > gameState.currentTurn;
+    // cursor. Compute the applied slice via the pure `applyTurnEnded` helper
+    // (unit-tested), then route the store writes through `applyState`.
+    const decision = applyTurnEnded({
+      nextUnitId: payload.nextUnitId,
+      phase: payload.phase,
+      round: payload.round,
+      outcome: payload.outcome,
+      turnOrder: gameState.turnOrder,
+      currentTurn: gameState.currentTurn,
+      currentUnitIndex: gameState.currentUnitIndex,
+      currentPhase: gameState.phase,
+    });
 
+    if (decision) {
       applyCombatStateSlice({
-        currentUnitIndex: nextIdx >= 0 ? nextIdx : gameState.currentUnitIndex,
-        currentTurn: payload.round ?? gameState.currentTurn,
-        phase: mapped ?? gameState.phase,
+        currentUnitIndex: decision.currentUnitIndex,
+        currentTurn: decision.currentTurn,
+        phase: decision.phase,
         selectedUnit: null,
       });
       setGameState("turnPhase", "SELECT_UNIT" as any);
-
       applyUnitsSnapshot(payload.units, {
-        decrementCooldowns: roundChanged,
+        decrementCooldowns: decision.roundChanged,
         resetActivityFlags: true,
       });
-
-      if (payload.outcome) {
-        addCombatLog(
-          payload.outcome === "Victory"
-            ? "🏆 Victoire !"
-            : payload.outcome === "Defeat"
-            ? "💀 Défaite…"
-            : "🚪 Combat interrompu.",
-          "system",
-        );
-      }
+      if (decision.outcomeText) addCombatLog(decision.outcomeText, "system");
       return;
     }
 
-    // Legacy broadcast (pre-rework server or solo play) — keep the minimal
-    // local reset so the UI doesn't get stuck.
+    // Legacy broadcast — minimal UI reset so the client doesn't hang.
     setGameState("selectedUnit", null);
     setGameState("turnPhase", "SELECT_UNIT" as any);
   });
