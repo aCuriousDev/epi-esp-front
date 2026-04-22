@@ -291,18 +291,19 @@ const BoardGame: Component = () => {
     // is in InProgress state. The old local fallback silently regenerated the
     // single-player DEFAULT_ENEMIES trio on the host only and left players
     // stranded on their old state — that was the "weird defaults" bug.
-    if (isInSession() && isSessionHost()) {
+    if (isInSession()) {
+      if (!isSessionHost()) return;
       try {
         await dmRestartGameHub(currentMapId || "default");
-        return;
       } catch (err) {
-        console.warn("[BoardGame] DmRestartGame failed, falling back to local", err);
-        // fall through to the local restart path below
+        console.error("[BoardGame] DmRestartGame failed — game not restarted:", err);
       }
+      // Never fall through to the local path in multiplayer. Forking the host
+      // to solo while peers stayed on the old state was BUG-K / BUG-N.
+      return;
     }
 
-    // Explicit, awaited teardown — deterministic ordering replaces the old
-    // setTimeout(100) race window.
+    // Solo path only: explicit, awaited teardown then local re-init.
     await clearEngineState();
 
     clearUnits();
@@ -849,8 +850,13 @@ const BoardGame: Component = () => {
                   {getPhaseText(gameState.phase)}
                 </div>
               </Show>
-              {/* Bouton Prêt - Phase de préparation */}
-              <Show when={gameState.phase === GamePhase.COMBAT_PREPARATION}>
+              {/* Bouton Prêt - Phase de préparation. Hidden in multiplayer:
+                  the hub's DmStartCombat transitions straight to PlayerTurn
+                  (no preparation phase exists server-side). The button's
+                  startCombatFromPreparation action is now a no-op in session,
+                  but rendering it would still mislead players into thinking
+                  they need to click something. */}
+              <Show when={gameState.phase === GamePhase.COMBAT_PREPARATION && !isInSession()}>
                 <button
                   data-tutorial="prep-ready"
                   class="px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold bg-game-gold text-game-darker hover:bg-amber-400 transition shadow-lg whitespace-nowrap"

@@ -64,18 +64,23 @@ export const GameOverScreen: Component = () => {
               onClick={async () => {
                 // In multiplayer, route through the hub's DmRestartGame so
                 // every client receives a fresh GameStarted broadcast and
-                // re-initialises via the hub-authoritative path. Calling
-                // startGame() directly triggers the solo fallback that
-                // stamps Sir Roland / Elara / Theron on the board.
-                if (isInSession() && isSessionHost()) {
+                // re-initialises via the hub-authoritative path. On hub
+                // failure, surface the error and bail — do NOT silently fall
+                // back to startGame(), that forks the DM into a solo game
+                // while peers stay on the victory screen (the old regression
+                // that stamped Sir Roland / Elara / Theron).
+                if (isInSession()) {
+                  if (!isSessionHost()) return;
                   const mapId = sessionState.session?.mapId ?? gameState.mapId ?? "default";
                   try {
                     await dmRestartGame(mapId);
-                    return;
                   } catch (err) {
-                    console.warn("[GameOverScreen] dmRestartGame failed, falling back:", err);
+                    console.error("[GameOverScreen] dmRestartGame failed — game not restarted:", err);
+                    alert("Impossible de relancer la partie — la session est peut-être terminée. Essayez de rafraîchir.");
                   }
+                  return;
                 }
+                // Solo: local restart only.
                 startGame();
               }}
             >

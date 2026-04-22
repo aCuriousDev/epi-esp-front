@@ -247,6 +247,14 @@ export { calculateDamage } from '../utils/DamageCalc';
 // ============================================
 
 export function checkGameOver(): void {
+  // Defensive: in multiplayer, the server's CombatManager.CheckOutcome is the
+  // only authority for victory/defeat — it broadcasts the Resolved phase via
+  // TurnEnded.outcome, which the gameSync handler applies. Running this
+  // locally per-client would fork the GAME_OVER transition on an intermediate
+  // state (e.g. before the server has seen an attack), leaving peers on
+  // different phases.
+  if (isInSession()) return;
+
   const playerUnits = getPlayerUnits();
   const enemyUnits = getEnemyUnits();
   

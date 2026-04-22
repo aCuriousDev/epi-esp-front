@@ -471,6 +471,15 @@ function initializeDungeon(dungeonId: string): void {
  * All player units are moved to the next room's ally spawn positions.
  */
 export function transitionToNextRoom(): void {
+  // Dungeon mode is currently solo-only. In a session every client would hit
+  // the teleport tile at different moments and re-initialise their own room,
+  // forking the board. If dungeon is ever exposed to multiplayer, this
+  // transition needs a hub broadcast (a new DmSwitchRoom or similar).
+  if (isInSession()) {
+    console.warn("[transitionToNextRoom] No-op in multiplayer — dungeon room changes must be hub-driven");
+    return;
+  }
+
   const dungeon = gameState.dungeon;
   if (!dungeon) return;
 
