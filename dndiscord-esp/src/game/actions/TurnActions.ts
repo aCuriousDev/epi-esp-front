@@ -14,6 +14,8 @@ import {
   Team,
 } from "../../types";
 import type { UnitAssignment } from "../../types/multiplayer";
+import { isInSession } from "../../stores/session.store";
+import { signalRService } from "../../services/signalr/SignalRService";
 import {
   gameState,
   setGameState,
@@ -335,6 +337,7 @@ function updateGamePhase(): void {
 
 export function endUnitTurn(): void {
   const unit = gameState.selectedUnit ? units[gameState.selectedUnit] : null;
+  const currentUnitId = gameState.turnOrder[gameState.currentUnitIndex] ?? unit?.id ?? null;
 
   console.log(
     "[endUnitTurn] Called for unit:",
@@ -346,7 +349,7 @@ export function endUnitTurn(): void {
   // If no unit is selected, still proceed to next turn (handles edge cases)
   if (!unit) {
     console.log("[endUnitTurn] No unit selected, advancing turn anyway");
-    nextTurn();
+    maybeAdvanceTurn(currentUnitId);
     return;
   }
 
@@ -370,6 +373,27 @@ export function endUnitTurn(): void {
     addCombatLog(`${unit.name} ends their turn.`, "system");
   });
 
+  maybeAdvanceTurn(currentUnitId ?? unit.id);
+}
+
+/**
+ * In a multiplayer session, the hub's CombatManager owns the turn cursor — we
+ * invoke `EndTurn` and wait for the `TurnEnded` broadcast (applied by gameSync)
+ * to advance locally. Running `nextTurn` optimistically here would race the
+ * broadcast and desync the two clients (classic BUG-C).
+ *
+ * In solo, there's no hub — run the local advance as before.
+ */
+function maybeAdvanceTurn(unitId: string | null): void {
+  if (isInSession() && unitId) {
+    signalRService
+      .invoke("EndTurn", { unitId })
+      .catch((err) => {
+        console.warn("[endUnitTurn] Hub EndTurn failed, falling back to local advance:", err);
+        nextTurn();
+      });
+    return;
+  }
   nextTurn();
 }
 
