@@ -514,7 +514,13 @@ export const GameCanvas: Component = () => {
       enemyTurnTimeout = null;
     }
 
-    const autoAiEnabled = !isInSession();
+    // AI tick runs on the DM's client only in multiplayer — the DM is
+    // authoritative for enemy actions, and executeEnemyTurn submits its
+    // moves / attacks / end-turn through the hub, which broadcasts to the
+    // whole group. Players would double-submit if they also ran the tick.
+    // Solo play has no session, so `!isInSession()` lets the single client
+    // drive AI. Closes BUG-H (enemies never acted in multiplayer).
+    const autoAiEnabled = !isInSession() || getIsHost();
     if (autoAiEnabled && isEnemyTurn && lastExecutedEnemyIndex !== currentIndex) {
       lastExecutedEnemyIndex = currentIndex;
       enemyTurnTimeout = setTimeout(async () => {
