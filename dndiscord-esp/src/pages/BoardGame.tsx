@@ -38,6 +38,12 @@ import { getHubUserId } from "../stores/session.store";
 import { GamePhase, AppPhase, GameMode } from "../types";
 import { sessionState, clearSession } from "../stores/session.store";
 import { leaveSession } from "../services/signalr/multiplayer.service";
+import {
+  getSessionMapConfig,
+  clearSessionMapConfig,
+  setSessionExitCallback,
+  clearSessionExitCallback,
+} from "../stores/session-map.store";
 import type { GameStartedPayload } from "../types/multiplayer";
 import { saveMap, type SavedMapData } from "../services/mapStorage";
 import { LogOut } from "lucide-solid";
@@ -58,9 +64,13 @@ const BoardGame: Component = () => {
     null,
   );
   const [isMultiplayer, setIsMultiplayer] = createSignal(false);
+  const [fromSession, setFromSession]     = createSignal(false);
 
   onMount(() => {
-    if (new URLSearchParams(location.search).get("demo") === "1") {
+    const qs = new URLSearchParams(location.search);
+
+    // ── Demo mode ───────────────────────────────────────────────────────────
+    if (qs.get("demo") === "1") {
       setSelectedMode(GameMode.COMBAT);
       setSelectedMapId(null);
       setAppPhase(AppPhase.IN_GAME);
@@ -76,6 +86,37 @@ const BoardGame: Component = () => {
       };
       checkEngine();
       return;
+    }
+
+    // ── Session map mode (launched from CampaignSessionPage) ────────────────
+    if (qs.get("fromSession") === "1") {
+      const cfg = getSessionMapConfig();
+      if (cfg) {
+        console.log("[BoardGame] Session map mode — mapId:", cfg.mapId);
+        setFromSession(true);
+        setSelectedMode(GameMode.FREE_ROAM);
+        setSelectedMapId(cfg.mapId);
+        setAppPhase(AppPhase.IN_GAME);
+
+        // Register the exit callback so MovementActions can navigate back
+        setSessionExitCallback(() => backToSession());
+
+        let attempts = 0;
+        const checkEngine = () => {
+          if (++attempts > 50) {
+            console.error("[BoardGame] Engine failed to initialize (session map)");
+            backToSession();
+            return;
+          }
+          if (isEngineReady()) {
+            setTimeout(() => startGame(GameMode.FREE_ROAM, cfg.mapId), 150);
+          } else {
+            setTimeout(checkEngine, 100);
+          }
+        };
+        checkEngine();
+        return;
+      }
     }
 
     const s = sessionState.session;
@@ -232,7 +273,21 @@ const BoardGame: Component = () => {
     setSelectedMapId(null);
     setSelectedDungeonId(null);
     setIsMultiplayer(false);
+    setFromSession(false);
     clearSession();
+  };
+
+  /** Return to the campaign session page after playing a session map. */
+  const backToSession = () => {
+    const cfg = getSessionMapConfig();
+    clearSessionExitCallback();
+    clearSessionMapConfig();
+    clearEngineState();
+    if (cfg) {
+      navigate(`/campaigns/${cfg.campaignId}/session`);
+    } else {
+      backToModeSelection();
+    }
   };
 
   const returnToMenu = async () => {
@@ -615,9 +670,9 @@ const BoardGame: Component = () => {
         <header class="h-14 shrink-0 bg-gradient-to-r from-brandStart/90 to-brandEnd/90 backdrop-blur-sm border-b border-white/10 flex items-center justify-between px-3 sm:px-4 pt-safe-top">
           <div class="flex items-center gap-2 sm:gap-3">
             <button
-              onClick={() => returnToMenu()}
+              onClick={() => fromSession() ? backToSession() : returnToMenu()}
               class="flex items-center justify-center w-9 h-9 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 transition-colors"
-              aria-label="Retour au menu"
+              aria-label={fromSession() ? "Retour à la session" : "Retour au menu"}
             >
               <ArrowLeft class="w-4 h-4 text-white" />
             </button>
@@ -634,6 +689,16 @@ const BoardGame: Component = () => {
             </h1>
           </div>
           <div class="flex items-center gap-2">
+            {/* Session back button (prominent) */}
+            <Show when={fromSession()}>
+              <button
+                onClick={() => backToSession()}
+                class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-purple-500/40 bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 text-sm transition-colors"
+              >
+                <ArrowLeft class="w-3.5 h-3.5" />
+                <span class="hidden sm:inline">Retour à la session</span>
+              </button>
+            </Show>
             <button
               class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 text-white text-sm transition-colors"
               onClick={() => restartGame()}

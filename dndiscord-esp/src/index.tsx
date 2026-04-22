@@ -20,6 +20,10 @@ import { AuthCallback, ProtectedRoute } from "./components/auth";
 import { authStore } from "./stores/auth.store";
 import { initDiscordSDK } from "./services/discord";
 import CampaignManagerPage from "./pages/CampaignManagerPage";
+import CampaignLobbyPage from "./pages/CampaignLobbyPage";
+import CampaignSessionPage from "./pages/CampaignSessionPage";
+import CampaignSessionsListPage from "./pages/CampaignSessionsListPage";
+import CampaignSessionReplayPage from "./pages/CampaignSessionReplayPage";
 import SessionInviteListener from "./components/SessionInviteListener";
 import EditCampaign from "./pages/EditCampaign";
 import TutorialOverlay from "./components/TutorialOverlay";
@@ -131,6 +135,38 @@ render(
         component={() => (
           <Protected>
             <CampaignManagerPage />
+          </Protected>
+        )}
+      />
+      <Route
+        path="/campaigns/:id/lobby"
+        component={() => (
+          <Protected>
+            <CampaignLobbyPage />
+          </Protected>
+        )}
+      />
+      <Route
+        path="/campaigns/:id/session"
+        component={() => (
+          <Protected>
+            <CampaignSessionPage />
+          </Protected>
+        )}
+      />
+      <Route
+        path="/campaigns/:id/sessions"
+        component={() => (
+          <Protected>
+            <CampaignSessionsListPage />
+          </Protected>
+        )}
+      />
+      <Route
+        path="/campaigns/:id/sessions/:sessionId"
+        component={() => (
+          <Protected>
+            <CampaignSessionReplayPage />
           </Protected>
         )}
       />

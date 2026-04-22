@@ -139,6 +139,7 @@ export const mapCampaignResponse = (apiCampaign: CampaignDetailResponse): Campai
     tags: [],
     createdAt: apiCampaign.createdAt,
     updatedAt: apiCampaign.updatedAt,
-    campaignTreeDefinition: apiCampaign.campaignTreeDefinition
+    campaignTreeDefinition: apiCampaign.campaignTreeDefinition,
+    isDungeonMaster: apiCampaign.isDungeonMaster,
   };
 };
