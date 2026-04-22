@@ -2,7 +2,8 @@ import { Component, Show } from 'solid-js';
 import { Trophy, Skull, Hourglass } from 'lucide-solid';
 import { gameState, units, startGame } from '../game';
 import { Team, GamePhase } from '../types';
-import { isInSession, isHost as isSessionHost } from '../stores/session.store';
+import { isInSession, isHost as isSessionHost, sessionState } from '../stores/session.store';
+import { dmRestartGame } from '../services/signalr/multiplayer.service';
 
 export const GameOverScreen: Component = () => {
   const isVictory = () => {
@@ -60,7 +61,23 @@ export const GameOverScreen: Component = () => {
           >
             <button
               class="btn-game text-lg px-8 py-3 focus-ring-gold"
-              onClick={() => startGame()}
+              onClick={async () => {
+                // In multiplayer, route through the hub's DmRestartGame so
+                // every client receives a fresh GameStarted broadcast and
+                // re-initialises via the hub-authoritative path. Calling
+                // startGame() directly triggers the solo fallback that
+                // stamps Sir Roland / Elara / Theron on the board.
+                if (isInSession() && isSessionHost()) {
+                  const mapId = sessionState.session?.mapId ?? gameState.mapId ?? "default";
+                  try {
+                    await dmRestartGame(mapId);
+                    return;
+                  } catch (err) {
+                    console.warn("[GameOverScreen] dmRestartGame failed, falling back:", err);
+                  }
+                }
+                startGame();
+              }}
             >
               Play Again
             </button>
