@@ -1,5 +1,5 @@
 import { render } from "solid-js/web";
-import { Router, Route } from "@solidjs/router";
+import { Router, Route, type RouteSectionProps } from "@solidjs/router";
 import "./index.css";
 import App from "./App";
 import CreateCharacter from "./pages/CreateCharacter";
@@ -68,7 +68,7 @@ async function initDiscord() {
 // Wrapper du Router : CookieConsent doit être à l'intérieur du contexte
 // Router pour utiliser <A> et useLocation (cacher la bannière sur les
 // pages légales). `root` est le point d'extension propre de Solid Router.
-function RouterRoot(props: { children: any }) {
+function RouterRoot(props: RouteSectionProps) {
   return (
     <>
       <CookieConsent />
