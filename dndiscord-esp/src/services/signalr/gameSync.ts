@@ -95,6 +95,7 @@ export function registerGameSyncHandlers(): void {
 
       // Apply AP / HP from the server's post-advance snapshot so the round-wrap
       // AP reset actually reaches clients. Without this AP stays at 0 forever.
+      const roundChanged = typeof payload.round === "number" && payload.round > gameState.currentTurn;
       if (Array.isArray(payload.units)) {
         for (const su of payload.units) {
           if (!units[su.unitId]) continue;
@@ -105,6 +106,12 @@ export function registerGameSyncHandlers(): void {
             u.isAlive = su.isAlive;
             u.hasActed = false;
             u.hasMoved = false;
+            // Cooldowns tick once per round wrap — matches the solo TurnManager.resetUnitForNewRound.
+            if (roundChanged) {
+              for (const ability of u.abilities) {
+                if (ability.currentCooldown > 0) ability.currentCooldown--;
+              }
+            }
           }));
         }
       }
