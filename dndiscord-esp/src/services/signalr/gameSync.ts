@@ -4,9 +4,10 @@
  */
 
 import { signalRService } from "./SignalRService";
-import type { GameMessage, MoveResult, TurnEndedPayload, GameStateSnapshotPayload, DmMoveTokenPayload, DmSpawnUnitPayload } from "../../types/multiplayer";
+import type { GameMessage, MoveResult, TurnEndedPayload, GameStateSnapshotPayload, DmMoveTokenPayload, DmSpawnUnitPayload, CombatStartedPayload, CombatEndedPayload } from "../../types/multiplayer";
 import type { GridPosition, Unit, UnitType } from "../../types";
 import { GameMode, GamePhase, Team } from "../../types";
+import { mapServerPhase } from "./serverPhase";
 import { units, setUnits } from "../../game/stores/UnitsStore";
 import { addUnit } from "../../game/stores/UnitsStore";
 import { tiles, setTiles } from "../../game/stores/TilesStore";
@@ -15,7 +16,7 @@ import { updatePathfinder } from "../../game/stores/TilesStore";
 import { posToKey } from "../../game/utils/GridUtils";
 import { produce } from "solid-js/store";
 import { sessionState, isHost, sessionHasDm } from "../../stores/session.store";
-import { applyCombatStarted } from "./combatStarted";
+import { applyCombatStarted, applyAuthoritativeCombatStarted } from "./combatStarted";
 import { applyMapSwitched } from "./mapSwitched";
 import { getAllySpawnPositions } from "../../game/initialization/InitUnits";
 
@@ -76,8 +77,37 @@ export function registerGameSyncHandlers(): void {
       ? (message as GameMessage<TurnEndedPayload>).payload
       : (message as TurnEndedPayload);
     if (!payload?.unitId) return;
-    // Le tour est passé à l'unité suivante côté serveur ; on peut avancer l'index local
-    // pour garder l'UI en phase (ou attendre un événement TurnChanged du backend)
+
+    // Server-authoritative: the hub's CombatManager has already advanced the
+    // cursor and told us who acts next. Apply verbatim. This closes BUG-C
+    // (peers never advancing currentUnitIndex locally) and BUG-H (enemy-turn
+    // state never reaching the player client).
+    if (payload.nextUnitId !== undefined && gameState.turnOrder.length > 0) {
+      const nextIdx = gameState.turnOrder.indexOf(payload.nextUnitId ?? "");
+      const mapped = mapServerPhase(payload.phase);
+      setGameState({
+        currentUnitIndex: nextIdx >= 0 ? nextIdx : gameState.currentUnitIndex,
+        currentTurn: payload.round ?? gameState.currentTurn,
+        phase: mapped ?? gameState.phase,
+        selectedUnit: null,
+      });
+      setGameState("turnPhase", "SELECT_UNIT" as any);
+
+      if (payload.outcome) {
+        addCombatLog(
+          payload.outcome === "Victory"
+            ? "🏆 Victoire !"
+            : payload.outcome === "Defeat"
+            ? "💀 Défaite…"
+            : "🚪 Combat interrompu.",
+          "system",
+        );
+      }
+      return;
+    }
+
+    // Legacy broadcast (pre-rework server or solo play) — keep the minimal
+    // local reset so the UI doesn't get stuck.
     setGameState("selectedUnit", null);
     setGameState("turnPhase", "SELECT_UNIT" as any);
   });
@@ -182,9 +212,34 @@ export function registerGameSyncHandlers(): void {
     addSpawnedEnemy({ name: unit.name, x: pos.x, z: pos.z });
   });
 
-  // DM flipped the session from free roam into combat preparation.
-  signalRService.on("CombatStarted", (_message: unknown) => {
+  // DM started combat. Post-rework the server seeds the combat state, rolls
+  // initiative, and broadcasts the full turn order + current unit in the
+  // payload — we apply it verbatim (closes BUG-C). Legacy payload (no turnOrder
+  // field) falls back to the old free-roam → preparation transition.
+  signalRService.on("CombatStarted", (message: GameMessage<CombatStartedPayload> | CombatStartedPayload | unknown) => {
     if (!sessionHasDm()) return;
+    const payload = (message && typeof message === "object" && "payload" in (message as any))
+      ? (message as GameMessage<CombatStartedPayload>).payload
+      : (message as CombatStartedPayload);
+
+    const authoritative = applyAuthoritativeCombatStarted(
+      payload ?? {},
+      getAllySpawnPositions(gameState.mapId),
+    );
+    if (authoritative) {
+      setGameState({
+        mode: authoritative.mode,
+        phase: authoritative.phase,
+        turnOrder: authoritative.turnOrder,
+        currentUnitIndex: authoritative.currentUnitIndex,
+        currentTurn: authoritative.currentTurn,
+        highlightedTiles: authoritative.highlightedTiles,
+      });
+      addCombatLog("⚔️ Combat lancé — initiative roulée côté serveur.", "system");
+      return;
+    }
+
+    // Legacy path
     const next = applyCombatStarted({
       mode: gameState.mode,
       phase: gameState.phase,
@@ -197,6 +252,21 @@ export function registerGameSyncHandlers(): void {
       highlightedTiles: next.highlightedTiles,
     });
     addCombatLog("[MJ] Combat imminent — placez vos unités.", "system");
+  });
+
+  // DM forcibly ended combat — clear the turn state, return to free roam.
+  signalRService.on("CombatEnded", (_message: GameMessage<CombatEndedPayload> | CombatEndedPayload | unknown) => {
+    if (!sessionHasDm()) return;
+    setGameState({
+      mode: GameMode.FREE_ROAM,
+      phase: GamePhase.FREE_ROAM,
+      turnOrder: [],
+      currentUnitIndex: 0,
+      selectedUnit: null,
+      highlightedTiles: [],
+    });
+    setGameState("turnPhase", "SELECT_UNIT" as any);
+    addCombatLog("[MJ] Combat terminé — retour en exploration.", "system");
   });
 
   // DM switched the session to a different map. SignalR's `on(...)` registers

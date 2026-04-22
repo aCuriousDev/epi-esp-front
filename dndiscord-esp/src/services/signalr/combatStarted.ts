@@ -9,6 +9,8 @@
 
 import { GameMode, GamePhase } from "../../types";
 import type { GridPosition } from "../../types";
+import type { CombatStartedPayload } from "../../types/multiplayer";
+import { mapServerPhase } from "./serverPhase";
 
 export interface CombatStartedInput {
   mode: GameMode;
@@ -36,5 +38,44 @@ export function applyCombatStarted(
     // Surface ally spawn positions so the "Placement" UI has somewhere to
     // highlight — without this the player sees a blank grid and can't pick.
     highlightedTiles: current.allySpawnPositions,
+  };
+}
+
+export interface AuthoritativeCombatStartedOutput {
+  mode: GameMode;
+  phase: GamePhase;
+  turnOrder: string[];
+  currentUnitIndex: number;
+  currentTurn: number;
+  highlightedTiles: GridPosition[];
+}
+
+/**
+ * Server-authoritative variant used when the `CombatStarted` payload carries
+ * the server-owned combat state (phase, turnOrder, currentUnitId). Bypasses
+ * the "only from FREE_ROAM" gate because the server's word is final.
+ *
+ * Returns null if the payload doesn't carry the new fields — caller should
+ * fall back to the legacy {@link applyCombatStarted}.
+ */
+export function applyAuthoritativeCombatStarted(
+  payload: CombatStartedPayload,
+  allySpawnPositions: GridPosition[],
+): AuthoritativeCombatStartedOutput | null {
+  if (!payload.turnOrder || !payload.phase) return null;
+
+  const mappedPhase = mapServerPhase(payload.phase) ?? GamePhase.PLAYER_TURN;
+  const currentUnitIndex = payload.currentUnitId
+    ? Math.max(0, payload.turnOrder.indexOf(payload.currentUnitId))
+    : 0;
+
+  return {
+    mode: GameMode.COMBAT,
+    phase: mappedPhase,
+    turnOrder: payload.turnOrder,
+    currentUnitIndex,
+    currentTurn: payload.round ?? 1,
+    highlightedTiles:
+      mappedPhase === GamePhase.COMBAT_PREPARATION ? allySpawnPositions : [],
   };
 }

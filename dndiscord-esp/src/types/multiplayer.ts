@@ -142,6 +142,63 @@ export interface UseAbilityResult {
 
 export interface TurnEndedPayload {
   unitId: string;
+  /** Server-authoritative fields from the hub-authoritative rework. Absent on legacy broadcasts. */
+  nextUnitId?: string | null;
+  phase?: ServerCombatPhase;
+  round?: number;
+  outcome?: ServerCombatOutcome | null;
+}
+
+/**
+ * Matches `Multiplayer.Define.CombatPhase` on the back via `JsonStringEnumConverter`.
+ */
+export type ServerCombatPhase =
+  | "FreeRoam"
+  | "Preparation"
+  | "PlayerTurn"
+  | "EnemyTurn"
+  | "Resolved";
+
+/**
+ * Matches `Multiplayer.Define.CombatResult`.
+ */
+export type ServerCombatOutcome = "Victory" | "Defeat" | "Fled";
+
+export interface ServerUnitRuntimeState {
+  unitId: string;
+  ownerUserId: string | null;
+  team: number; // 0=Player, 1=Enemy, 2=Ally, 3=Neutral (Multiplayer.Define.UnitTeam)
+  name: string;
+  positionX: number;
+  positionY: number;
+  currentHp: number;
+  maxHp: number;
+  currentAp: number;
+  maxAp: number;
+  initiative: number;
+  isAlive: boolean;
+}
+
+/**
+ * Server-authoritative payload broadcast when the DM starts combat. Added with
+ * the hub-authoritative rework. Clients apply fields verbatim — no local
+ * initiative rolling, no local phase transition.
+ */
+export interface CombatStartedPayload {
+  phase?: ServerCombatPhase;
+  round?: number;
+  currentUnitId?: string | null;
+  turnOrder?: string[];
+  units?: ServerUnitRuntimeState[];
+  // Legacy fields (pre-rework) kept for back-compat when the server skips the
+  // new payload shape — still populated today by the rewritten DmStartCombat.
+  initiativeOrder?: { unitId: string; initiative: number; controllerId: string }[];
+  enemies?: unknown[];
+}
+
+export interface CombatEndedPayload {
+  result?: ServerCombatOutcome;
+  rewards?: { experienceGained: number; goldGained: number; itemsObtained: string[] };
 }
 
 // --- Message séquencé (backend) ---
