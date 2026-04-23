@@ -232,30 +232,38 @@ export const GameCanvas: Component = () => {
     // Use the snapshot data captured synchronously above
     isProcessingUnits = true;
     pendingRerun = false;
+    // Capture the engine reference at task start so a mid-flight dispose
+    // (returnToMenu / leaveSession) doesn't turn every .hasUnit / .createUnit
+    // into an unhandled null deref. Each iteration bails early if the engine
+    // was swapped out for null between awaits.
+    const engine = engineInstance;
     (async () => {
       try {
+        if (!engine) return;
         // Dispose engine meshes whose store entry has been removed (e.g.
         // Play Again wiped the units store but the skeleton mesh would
         // otherwise linger as a ghost on the map).
         const liveIds = new Set(unitIds);
-        for (const id of engineInstance.getTrackedUnitIds()) {
+        for (const id of engine.getTrackedUnitIds()) {
           if (!liveIds.has(id)) {
-            engineInstance.removeUnit(id);
+            engine.removeUnit(id);
             prevPositions.delete(id);
           }
         }
 
         for (const { id, unit, currentPos } of unitSnapshots) {
-          const exists = engineInstance.hasUnit(id);
+          if (engineInstance !== engine) return;
+          const exists = engine.hasUnit(id);
           const prevPos = prevPositions.get(id);
-          
+
           if (!exists) {
-            await engineInstance.createUnit(unit);
+            await engine.createUnit(unit);
+            if (engineInstance !== engine) return;
             // After async load, check if position changed in the store while loading
             // (e.g. DM moved the unit right after spawning it)
             const liveUnit = units[id];
             if (liveUnit && (liveUnit.position.x !== currentPos.x || liveUnit.position.z !== currentPos.z)) {
-              engineInstance.updateUnit(liveUnit);
+              engine.updateUnit(liveUnit);
               prevPositions.set(id, { x: liveUnit.position.x, z: liveUnit.position.z });
             } else {
               prevPositions.set(id, { ...currentPos });
@@ -263,44 +271,47 @@ export const GameCanvas: Component = () => {
           } else {
             const positionChanged = prevPos && (prevPos.x !== currentPos.x || prevPos.z !== currentPos.z);
             if (positionChanged) {
-              engineInstance.updateUnit(unit);
+              engine.updateUnit(unit);
               prevPositions.set(id, { ...currentPos });
             }
             // Skip updateUnit when position hasn't changed to avoid
             // animation stacking that causes units to float upward
           }
         }
-        
+
+        if (engineInstance !== engine) return;
         // Mettre à jour la visibilité des ennemis après création/mise à jour des unités
         const phase = gameState.phase;
         const enemyUnits = getEnemyUnits();
         const enemyUnitIds = enemyUnits.map(u => u.id);
         const shouldBeVisible = phase !== GamePhase.COMBAT_PREPARATION;
-        
-        if (enemyUnitIds.length > 0 && engineInstance) {
-          engineInstance.setEnemyVisibility(shouldBeVisible, enemyUnitIds);
+
+        if (enemyUnitIds.length > 0) {
+          engine.setEnemyVisibility(shouldBeVisible, enemyUnitIds);
         }
       } finally {
         isProcessingUnits = false;
         // If the effect was triggered while we were processing, re-process now
         // to pick up any units that were missed (e.g. DM spawned while processing)
-        if (pendingRerun) {
+        if (pendingRerun && engineInstance === engine && engine) {
           pendingRerun = false;
           const freshIds = Object.keys(units);
           for (const id of freshIds) {
+            if (engineInstance !== engine) break;
             const u = units[id];
-            if (u && !engineInstance.hasUnit(id)) {
-              await engineInstance.createUnit(u);
+            if (u && !engine.hasUnit(id)) {
+              await engine.createUnit(u);
               prevPositions.set(id, { x: u.position.x, z: u.position.z });
             }
           }
-          // Update visibility for any freshly created enemies
-          const freshPhase = gameState.phase;
-          const freshEnemies = getEnemyUnits();
-          const freshEnemyIds = freshEnemies.map(u => u.id);
-          const freshVisible = freshPhase !== GamePhase.COMBAT_PREPARATION;
-          if (freshEnemyIds.length > 0 && engineInstance) {
-            engineInstance.setEnemyVisibility(freshVisible, freshEnemyIds);
+          if (engineInstance === engine) {
+            const freshPhase = gameState.phase;
+            const freshEnemies = getEnemyUnits();
+            const freshEnemyIds = freshEnemies.map(u => u.id);
+            const freshVisible = freshPhase !== GamePhase.COMBAT_PREPARATION;
+            if (freshEnemyIds.length > 0) {
+              engine.setEnemyVisibility(freshVisible, freshEnemyIds);
+            }
           }
         }
       }
@@ -689,7 +700,18 @@ export const GameCanvas: Component = () => {
   
   function handleUnitClick(unitId: string): void {
     const unit = units[unitId];
-    if (!unit || !unit.isAlive) return;
+    if (!unit) return;
+
+    // DM inspect works on any unit — alive OR dead — so the DM can revive
+    // downed units via the HP-adjust tool. Other interactions (move, attack,
+    // combat targeting) still require the target to be alive.
+    if (isDm() && !dmActiveMode()) {
+      setDmInspectedUnit(unitId);
+      selectUnit(unitId);
+      return;
+    }
+
+    if (!unit.isAlive) return;
 
     const isFreeRoam = getIsFreeRoamMode();
     const isPreparation = gameState.phase === GamePhase.COMBAT_PREPARATION;
@@ -701,15 +723,6 @@ export const GameCanvas: Component = () => {
       } else {
         setDmDragUnit(unitId);
       }
-      return;
-    }
-
-    // DM inspect: clicking any unit (player OR enemy) opens the inspect
-    // panel. Stats + HP-adjust tools work for every team; the inventory /
-    // give tabs gate themselves to player units internally.
-    if (isDm() && !dmActiveMode()) {
-      setDmInspectedUnit(unitId);
-      selectUnit(unitId);
       return;
     }
 
