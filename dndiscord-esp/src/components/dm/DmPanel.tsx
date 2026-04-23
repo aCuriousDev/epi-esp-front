@@ -36,6 +36,7 @@ import {
   dmHiddenRoll,
   dmSpawnUnit,
   dmStartCombat,
+  dmEndCombat,
   dmSwitchMap,
 } from "../../services/signalr/multiplayer.service";
 import { MapService, type CampaignMapRecord } from "../../services/map.service";
@@ -272,9 +273,10 @@ export const DmPanel: Component = () => {
         </button>
 
         <Show when={isExpanded()}>
-          {/* Prominent combat trigger — only surfaced while the session is still
-              in free roam. Once triggered the backend broadcasts CombatStarted and
-              every client flips to COMBAT_PREPARATION; the button falls away. */}
+          {/* Combat trigger / kill-switch — mirror pair.
+              Start is shown in free roam; End (BUG-O) is shown once combat
+              is running. Both invoke the hub; every client receives the
+              corresponding broadcast and transitions together. */}
           <Show when={gameState.phase === GamePhase.FREE_ROAM}>
             <button
               onClick={async () => {
@@ -287,32 +289,48 @@ export const DmPanel: Component = () => {
                 }
               }}
               class="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-red-600/80 to-rose-600/80 hover:from-red-500 hover:to-rose-500 text-white text-xs font-semibold border border-red-400/40 shadow-lg transition-colors cursor-pointer"
-              title="Démarrer la phase de combat — tous les joueurs passent en préparation"
+              title="Démarrer la phase de combat — tous les clients flippent immédiatement"
             >
               <Swords class="w-3.5 h-3.5" />
               Démarrer combat
             </button>
           </Show>
 
-          {/* AI auto-play toggle — surfaces only during combat, since free
-              roam has no enemy turns. When off the DM controls enemies
-              manually via the EnemyHotbar that appears during ENEMY_TURN. */}
-          <Show when={gameState.phase !== GamePhase.FREE_ROAM}>
-            <label class="mt-2 flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border border-purple-500/20 bg-purple-500/5 text-[11px] text-purple-100 cursor-pointer">
-              <span class="flex items-center gap-1.5">
-                <span class="font-semibold">IA auto</span>
-                <span class="text-[9px] text-purple-300/60">
-                  {dmToolsState.aiAutoPlay ? "activée" : "manuelle"}
-                </span>
-              </span>
-              <input
-                type="checkbox"
-                checked={dmToolsState.aiAutoPlay}
-                onChange={(e) => setAiAutoPlay(e.currentTarget.checked)}
-                class="w-3.5 h-3.5 accent-purple-500 cursor-pointer"
-              />
-            </label>
+          <Show when={gameState.phase !== GamePhase.FREE_ROAM && gameState.phase !== GamePhase.GAME_OVER}>
+            <button
+              onClick={async () => {
+                try {
+                  await dmEndCombat();
+                  flash("🕊️ Combat interrompu");
+                } catch (err) {
+                  console.warn("[DmPanel] dmEndCombat failed", err);
+                  flash("Échec : impossible d'arrêter le combat");
+                }
+              }}
+              class="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold border border-white/20 shadow-lg transition-colors cursor-pointer"
+              title="Interrompre le combat — session revient en exploration libre"
+            >
+              Arrêter combat
+            </button>
           </Show>
+
+          {/* AI auto-play toggle — reachable at all times in session so the DM
+              can configure it BEFORE starting combat (user request). When off
+              the DM drives enemies manually via EnemyHotbar during ENEMY_TURN. */}
+          <label class="mt-2 flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border border-purple-500/20 bg-purple-500/5 text-[11px] text-purple-100 cursor-pointer">
+            <span class="flex items-center gap-1.5">
+              <span class="font-semibold">IA auto</span>
+              <span class="text-[9px] text-purple-300/60">
+                {dmToolsState.aiAutoPlay ? "activée" : "manuelle"}
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={dmToolsState.aiAutoPlay}
+              onChange={(e) => setAiAutoPlay(e.currentTarget.checked)}
+              class="w-3.5 h-3.5 accent-purple-500 cursor-pointer"
+            />
+          </label>
 
           {/* Tabs — Sélection is the default neutral mode: clicking a unit
               selects/inspects without drag-staging; clicking a tile is a

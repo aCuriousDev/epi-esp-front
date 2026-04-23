@@ -76,6 +76,7 @@ const HUB = {
   dmGrantItem: "DmGrantItem",
   dmSpawnUnit: "DmSpawnUnit",
   dmStartCombat: "DmStartCombat",
+  dmEndCombat: "DmEndCombat",
   dmRestartGame: "DmRestartGame",
   dmSwitchMap: "DmSwitchMap",
   selectDefaultTemplate: "SelectDefaultTemplate",
@@ -343,6 +344,11 @@ export async function dmSpawnUnit(payload: DmSpawnUnitPayload): Promise<void> {
  * CombatStarted to every client in the session group. */
 export async function dmStartCombat(): Promise<void> {
   await signalRService.invoke(HUB.dmStartCombat);
+}
+
+/** DM-only: forcibly end combat and return the session to free roam. */
+export async function dmEndCombat(): Promise<void> {
+  await signalRService.invoke(HUB.dmEndCombat);
 }
 
 // --- Enregistrement des handlers d'événements ---
