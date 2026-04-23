@@ -20,7 +20,7 @@ import { applyMapSwitched } from "./mapSwitched";
 import { getAllySpawnPositions } from "../../game/initialization/InitUnits";
 import { applyUnitsSnapshot, applyCombatStateSlice, applyUnitMove, applyAbilityOutcome } from "./applyState";
 import { applyTurnEnded } from "./turnEndedLogic";
-import { playDeathEffect, playCameraShake } from "../../game/vfx/VFXIntegration";
+import { playDeathEffect, playCameraShake, playReviveEffect } from "../../game/vfx/VFXIntegration";
 import { playDeathSound } from "../../game/audio/SoundIntegration";
 
 import { addCombatLog } from "../../game/stores/GameStateStore";
@@ -264,7 +264,8 @@ export function registerGameSyncHandlers(): void {
 
   // DM used the heal/damage tool on a unit. Server broadcasts the clamped
   // result + isAlive transition; every client applies verbatim, plays death
-  // VFX on alive->dead, logs to combat feed.
+  // VFX on alive->dead, revive VFX on dead->alive (DM resurrect), logs to
+  // combat feed.
   signalRService.on("UnitHpAdjusted", (message: GameMessage<UnitHpAdjustedPayload> | UnitHpAdjustedPayload | unknown) => {
     const payload = (message && typeof message === "object" && "payload" in (message as any))
       ? (message as GameMessage<UnitHpAdjustedPayload>).payload
@@ -273,6 +274,8 @@ export function registerGameSyncHandlers(): void {
     const unit = units[payload.unitId];
     if (!unit) return;
 
+    const revived = !payload.wasAlive && payload.isAlive;
+
     setUnits(payload.unitId, produce((u) => {
       u.stats.currentHealth = payload.hp;
       u.stats.maxHealth = payload.maxHp;
@@ -280,6 +283,9 @@ export function registerGameSyncHandlers(): void {
       if (!payload.isAlive) {
         const key = posToKey(u.position);
         if (tiles[key]?.occupiedBy === u.id) setTiles(key, "occupiedBy", null);
+      } else if (revived) {
+        const key = posToKey(u.position);
+        if (tiles[key] && !tiles[key]?.occupiedBy) setTiles(key, "occupiedBy", u.id);
       }
     }));
     updatePathfinder();
@@ -295,6 +301,9 @@ export function registerGameSyncHandlers(): void {
       playDeathEffect(payload.unitId, unit.team as string);
       playDeathSound();
       playCameraShake(0.15, 300);
+    } else if (revived) {
+      addCombatLog(`[MJ] ${name} ressuscité·e.`, "system");
+      playReviveEffect(payload.unitId);
     }
   });
 

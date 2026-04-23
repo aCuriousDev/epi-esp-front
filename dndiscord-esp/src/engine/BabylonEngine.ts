@@ -451,6 +451,15 @@ export class BabylonEngine {
       await this.vfxManager.playDeathVFX(mesh, team);
     }
   }
+
+  /** DM revived a dead unit — upright the rig and restore idle animation so
+   *  the body doesn't stay laid out on the tile. */
+  public playReviveVFX(unitId: string): void {
+    const mesh = this.unitRenderer.getUnitMesh(unitId);
+    if (!mesh) return;
+    this.vfxManager.playReviveVFX(mesh);
+    this.vfxManager.addIdleAnimation(mesh, unitId);
+  }
   
   /**
    * Show/hide selection pulse ring under a unit

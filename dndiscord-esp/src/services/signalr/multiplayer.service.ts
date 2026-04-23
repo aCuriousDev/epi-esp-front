@@ -139,6 +139,16 @@ export async function createSession(campaignId: string): Promise<SessionInfo> {
   );
   syncHubUserId();
   const result = normalizeSession(raw as Record<string, unknown>);
+  // Purge any board state left over from a previous session in this tab —
+  // without this, the old session's DM-spawned enemies stayed in the units
+  // store and contaminated the new session (isVictory() returned false
+  // because ghost enemies kept isAlive=true, so every win was reported as
+  // defeat; ghost enemies were also selectable in free roam but invisible
+  // during combat since the server's new Combat.Units roster didn't include
+  // them).
+  clearUnits();
+  clearTiles();
+  resetGameState();
   setSession(result);
   clearPartyChat();
   await tryBindDiscordVoiceToSession(result.sessionId);
@@ -174,6 +184,12 @@ export async function unsubscribeActivity(
 /** Rejoindre une session par son ID. */
 export async function joinSession(sessionId: string): Promise<JoinResult> {
   syncHubUserId();
+  // Same cross-session cleanup as createSession — stale units from a prior
+  // session in this tab will otherwise survive into the new one and break
+  // the victory/defeat outcome + ghost-selectable-but-invisible units.
+  clearUnits();
+  clearTiles();
+  resetGameState();
   const raw = (await signalRService.invoke(
     HUB.joinSession,
     sessionId,
