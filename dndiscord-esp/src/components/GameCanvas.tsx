@@ -723,10 +723,23 @@ export const GameCanvas: Component = () => {
     // DM inspect works on any unit — alive OR dead — so the DM can revive
     // downed units via the HP-adjust tool. Other interactions (move, attack,
     // combat targeting) still require the target to be alive.
+    //
+    // Exception: when the DM clicks the CURRENT combat unit (its turn), we
+    // skip the short-circuit and fall through to the combat-turn select
+    // path below. That path shows the AP-gated blue reach tiles and lets
+    // the DM pilot the enemy like a player instead of forcing them into
+    // the force-move tool. Non-current units still open inspect.
     if (isDm() && !dmActiveMode()) {
-      setDmInspectedUnit(unitId);
-      selectUnit(unitId);
-      return;
+      const isCurrentCombatUnit =
+        unit.isAlive &&
+        gameState.phase !== GamePhase.FREE_ROAM &&
+        gameState.phase !== GamePhase.GAME_OVER &&
+        gameState.turnOrder[gameState.currentUnitIndex] === unitId;
+      if (!isCurrentCombatUnit) {
+        setDmInspectedUnit(unitId);
+        selectUnit(unitId);
+        return;
+      }
     }
 
     if (!unit.isAlive) return;
@@ -768,10 +781,16 @@ export const GameCanvas: Component = () => {
       return;
     }
 
-    // Combat Mode
-    if (gameState.phase === GamePhase.PLAYER_TURN) {
-      // Ability targeting: click an enemy in the targetable set to fire.
-      if (gameState.selectedAbility && unit.team === Team.ENEMY) {
+    // Combat Mode — include ENEMY_TURN when the DM is the one clicking so
+    // the DM can drive enemies with AP-gated movement + abilities via the
+    // same blue-reach UX players get on PLAYER_TURN.
+    const isDmCombatTurn =
+      getIsHost() && gameState.phase === GamePhase.ENEMY_TURN;
+    if (gameState.phase === GamePhase.PLAYER_TURN || isDmCombatTurn) {
+      // Ability targeting: click a legal target to fire. On PLAYER_TURN
+      // targets are enemies; on ENEMY_TURN (DM piloting), targets are
+      // players/allies. Accept anything the selectedAbility marked reachable.
+      if (gameState.selectedAbility) {
         const pos = unit.position;
         const isValidTarget = gameState.targetableTiles.some(
           (t) => t.x === pos.x && t.z === pos.z

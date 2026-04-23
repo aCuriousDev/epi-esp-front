@@ -519,11 +519,27 @@ export function registerMultiplayerHandlers(): void {
     addGrantedItem(payload);
   });
 
-  // Optionnel: SessionEnded
+  // SessionEnded — DM left / host closed the session / back dropped it.
+  // Tear the whole board state down so the remaining players don't stay
+  // on an orphaned /board view (which was falling back to the solo roster
+  // — Sir Roland / Elara / Theron — the moment they hit Recommencer
+  // because isInSession() just flipped false). Navigate home on the next
+  // tick; the clearSession/clearUnits/clearTiles combo guarantees no
+  // session-scoped state leaks into whatever the player does next.
   signalRService.on("SessionEnded", (_reason: string) => {
     clearSession();
     resetHandlersRegistered();
+    clearUnits();
+    clearTiles();
+    resetGameState();
     setSessionError("La session a été terminée.");
+    try {
+      if (typeof window !== "undefined" && window.location && window.location.pathname !== "/") {
+        window.location.assign("/");
+      }
+    } catch (err) {
+      console.warn("[multiplayer] SessionEnded navigate failed", err);
+    }
   });
 }
 
