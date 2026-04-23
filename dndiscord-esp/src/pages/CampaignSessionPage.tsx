@@ -57,6 +57,7 @@ const CampaignSessionPage: Component = () => {
   const [error, setError]                   = createSignal<string | null>(null);
   const [campaignTitle, setCampaignTitle]   = createSignal('');
   const [sessionId, setSessionId]           = createSignal<string | null>(null);
+  const [isOffline, setIsOffline]           = createSignal(false);
   const [isSaving, setIsSaving]             = createSignal(false);
   const [parsedTree, setParsedTree]         = createSignal<ParsedTree | null>(null);
   const [currentNodeId, setCurrentNodeId]   = createSignal<string | undefined>();
@@ -92,7 +93,8 @@ const CampaignSessionPage: Component = () => {
         const session = await CampaignService.createSession(params.id);
         setSessionId(session.id);
       } catch (e) {
-        console.warn('Could not create session in backend (continuing offline):', e);
+        console.warn('[CampaignSession] Could not create session in backend (offline mode):', e);
+        setIsOffline(true);
       }
 
       setCurrentNodeId(tree.firstNodeId);
@@ -112,9 +114,9 @@ const CampaignSessionPage: Component = () => {
   };
 
   // ─── Map metadata lookup (name from localStorage) ─────────────────────────
-  const allMapsMeta = getAllMaps();
+  // Deferred to call-time so it never runs inside a reactive tracking scope.
   const getMapName = (mapId: string) =>
-    allMapsMeta.find(m => m.id === mapId)?.name ?? mapId;
+    getAllMaps().find(m => m.id === mapId)?.name ?? mapId;
 
   // ─── Launch map node in BoardGame ──────────────────────────────────────────
   const launchMap = () => {
@@ -211,6 +213,14 @@ const CampaignSessionPage: Component = () => {
       color: '#d4d4d4', 'font-family': 'system-ui, sans-serif',
       display: 'flex', 'flex-direction': 'column',
     }}>
+      {/* Offline mode banner — shown when backend session creation failed */}
+      <Show when={isOffline()}>
+        <div class="flex-shrink-0 flex items-center justify-center gap-2 px-4 py-2 bg-amber-600/20 border-b border-amber-500/30 text-amber-300 text-xs">
+          <span>⚠</span>
+          <span>Mode hors-ligne — la progression ne sera pas sauvegardée sur le serveur.</span>
+        </div>
+      </Show>
+
       {/* Header */}
       <header class="sticky top-0 z-20 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-black/40 backdrop-blur-md">
         <button onClick={() => navigate(`/campaigns/${params.id}`)} class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors">

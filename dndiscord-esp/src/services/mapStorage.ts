@@ -288,15 +288,14 @@ export function deleteDungeon(dungeonId: string): void {
  */
 export function exportMapToFile(mapData: SavedMapData): void {
 	const json = JSON.stringify(mapData, null, 2);
-	const blob = new Blob([json], { type: 'application/json' });
-	const url  = URL.createObjectURL(blob);
+	// Use a data: URI instead of URL.createObjectURL — blob: URLs are blocked
+	// by the Discord Activity CSP (connect-src / script-src restrictions).
 	const a    = document.createElement('a');
-	a.href     = url;
+	a.href     = `data:application/json;charset=utf-8,${encodeURIComponent(json)}`;
 	a.download = `${mapData.name.replace(/[^a-z0-9_\-]/gi, '_')}.dndmap.json`;
 	document.body.appendChild(a);
 	a.click();
 	document.body.removeChild(a);
-	URL.revokeObjectURL(url);
 }
 
 /**

@@ -55,6 +55,13 @@ import { randomizePreparationPlacement } from "../game/actions/PreparationAction
 const BoardGame: Component = () => {
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Tracks whether the component is still mounted.  Every checkEngine loop
+  // reads this flag before scheduling the next tick so orphaned timeouts
+  // that fire after an unmount are no-ops.
+  let mounted = true;
+  onCleanup(() => { mounted = false; });
+
   const [appPhase, setAppPhase] = createSignal<AppPhase>(
     AppPhase.MODE_SELECTION,
   );
@@ -81,7 +88,7 @@ const BoardGame: Component = () => {
         if (isEngineReady()) {
           setTimeout(() => startGame(GameMode.COMBAT, null), 150);
         } else {
-          setTimeout(checkEngine, 100);
+          if (mounted) setTimeout(checkEngine, 100);
         }
       };
       checkEngine();
@@ -111,7 +118,7 @@ const BoardGame: Component = () => {
           if (isEngineReady()) {
             setTimeout(() => startGame(GameMode.FREE_ROAM, cfg.mapId), 150);
           } else {
-            setTimeout(checkEngine, 100);
+            if (mounted) setTimeout(checkEngine, 100);
           }
         };
         checkEngine();

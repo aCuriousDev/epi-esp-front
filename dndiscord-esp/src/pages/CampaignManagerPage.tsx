@@ -66,13 +66,13 @@ const CampaignManager: Component = () => {
   // ─── Export / Import ─────────────────────────────────────────────────────
   const handleExport = async () => {
     const data = await canvasRef()?.exportData();
-    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
+    if (data == null) return;
+    // Use a data: URI — blob: URLs are blocked by the Discord Activity CSP.
+    const json = typeof data === 'string' ? data : JSON.stringify(data);
     const a = document.createElement('a');
-    a.href = url;
+    a.href = `data:application/json;charset=utf-8,${encodeURIComponent(json)}`;
     a.download = `${campaign()?.title ?? 'campaign'}.json`;
     a.click();
-    URL.revokeObjectURL(url);
   };
 
   const handleImport = (json: string | undefined) => {

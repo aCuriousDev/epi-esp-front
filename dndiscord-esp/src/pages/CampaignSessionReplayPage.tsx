@@ -11,6 +11,7 @@ import {
 } from 'lucide-solid';
 import {
   CampaignService,
+  type CampaignDetailResponse,
   type GameSessionResponse,
   GameSessionStatus,
   type SessionHistoryEntryResponse,
@@ -79,19 +80,17 @@ const CampaignSessionReplayPage: Component = () => {
     canvasRef = ref;
   };
 
-  // Once the canvas is ready AND the session is loaded, import tree + highlight
-  const applyHighlight = (sess: GameSessionResponse) => {
-    const campaignId = params.id;
-
-    // Try to find saved draw2d canvas data (per-campaign first, then global)
-    const raw =
-      localStorage.getItem(`dnd-campaign-${campaignId}`) ??
-      localStorage.getItem('dnd-campaign') ??
-      null;
-
-    if (raw && canvasRef) {
+  /**
+   * Once the canvas is ready AND the session is loaded, import tree + highlight.
+   * @param treeDefinition  Raw draw2d canvas JSON from campaignTreeDefinition (backend).
+   *                        Do NOT pass the `dnd-campaign-tree-*` custom format —
+   *                        it is incompatible with importData().
+   */
+  const applyHighlight = (sess: GameSessionResponse, treeDefinition: string | null | undefined) => {
+    // Import the draw2d canvas data so the visual tree is rendered
+    if (treeDefinition && canvasRef) {
       try {
-        canvasRef.importData(JSON.parse(raw));
+        canvasRef.importData(JSON.parse(treeDefinition));
       } catch (e) {
         console.warn('[Replay] Failed to import canvas data:', e);
       }
@@ -110,8 +109,14 @@ const CampaignSessionReplayPage: Component = () => {
 
     // Small delay to let draw2d render the imported figures before colouring them
     setTimeout(() => {
-      canvasRef?.highlightVisited(visitedIds, traversedEdges);
-      setCanvasLoaded(true);
+      try {
+        canvasRef?.highlightVisited(visitedIds, traversedEdges);
+      } catch (e) {
+        console.warn('[Replay] Failed to highlight visited nodes:', e);
+      } finally {
+        // Always unblock the canvas spinner, even if highlighting threw
+        setCanvasLoaded(true);
+      }
     }, 300);
   };
 
@@ -123,9 +128,14 @@ const CampaignSessionReplayPage: Component = () => {
       ]);
       setCampaignName(camp.name);
       setSession(sess);
-      applyHighlight(sess);
-    } catch {
+      // Use the draw2d canvas definition from the backend — the per-campaign
+      // localStorage key (`dnd-campaign-tree-*`) stores a different custom
+      // format that is incompatible with canvas.importData().
+      applyHighlight(sess, camp.campaignTreeDefinition);
+    } catch (e) {
+      console.error('[Replay] Failed to load session:', e);
       setError('Impossible de charger la session.');
+      setCanvasLoaded(true); // unblock spinner on error too
     } finally {
       setLoading(false);
     }

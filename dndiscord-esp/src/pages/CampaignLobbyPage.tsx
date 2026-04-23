@@ -33,6 +33,12 @@ const CampaignLobbyPage: Component = () => {
   const amHost = () => isHost();
   const players = () => session()?.players ?? [];
 
+  // Snapshot of any payload that was already set when this lobby mounted.
+  // This can happen if the user navigates back to the lobby after a previous
+  // session without the store being cleared — the old payload must not
+  // trigger an immediate navigation to /session.
+  const stalePayload = sessionState.gameStartedPayload;
+
   onMount(async () => {
     // Assurer que les handlers sont actifs
     if (!signalRService.isConnected) {
@@ -43,15 +49,17 @@ const CampaignLobbyPage: Component = () => {
     try {
       const chars = await CharacterService.getMyCharacters();
       setCharacters(chars);
-    } catch {
-      // Pas de personnages disponibles
+    } catch (e) {
+      console.warn('[CampaignLobby] Failed to load characters:', e);
     }
   });
 
-  // Quand le MJ lance la session → tout le monde navigue vers la page session
+  // Quand le MJ lance la session → tout le monde navigue vers la page session.
+  // Guard against stalePayload: only react to a payload that arrived AFTER
+  // this component mounted (reference inequality with the snapshot above).
   createEffect(() => {
     const payload = sessionState.gameStartedPayload;
-    if (payload) {
+    if (payload && payload !== stalePayload) {
       navigate(`/campaigns/${params.id}/session`);
     }
   });
@@ -90,7 +98,9 @@ const CampaignLobbyPage: Component = () => {
     setLeaving(true);
     try {
       await leaveSession();
-    } catch {}
+    } catch (e) {
+      console.warn('[CampaignLobby] leaveSession failed (navigating anyway):', e);
+    }
     navigate(`/campaigns/${params.id}`);
   };
 

@@ -66,7 +66,8 @@ const CampaignSessionsListPage: Component = () => {
       setCampaignName(camp.name);
       // API already returns desc order; keep it
       setSessions(list.items);
-    } catch {
+    } catch (e) {
+      console.error('[SessionsList] Failed to load sessions:', e);
       setError('Impossible de charger les sessions.');
     } finally {
       setLoading(false);
