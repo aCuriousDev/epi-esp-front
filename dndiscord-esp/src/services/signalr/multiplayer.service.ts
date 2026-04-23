@@ -402,11 +402,13 @@ export function registerMultiplayerHandlers(): void {
 
   signalRService.on("PlayerDisconnected", (data: Record<string, unknown>) => {
     const userId = data.userId ?? data.UserId;
-    if (userId != null) {
-      // Option: marquer le joueur comme Disconnected au lieu de le retirer
-      removePlayerFromSession(String(userId));
-      removeUnitsByOwnerUserId(String(userId));
-    }
+    if (userId == null) return;
+    // Intentional: on a transient disconnect (page refresh, tab reload), keep
+    // both the player entry and their unit mesh in place. The back marks the
+    // player as Disconnected and runs a grace period before tearing down;
+    // when they reconnect their token is still on the map so the DM never
+    // sees a "player vanished" state. Voluntary leave (PlayerLeft) and DM
+    // kick (PlayerKicked) still remove both — those handlers stay as-is.
   });
 
   // PlayerUpdated (character selection in lobby)

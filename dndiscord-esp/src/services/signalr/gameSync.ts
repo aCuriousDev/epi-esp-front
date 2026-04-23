@@ -80,10 +80,19 @@ export function registerGameSyncHandlers(): void {
     });
 
     if (decision) {
+      // On resolved outcome (Victory / Defeat / Fled) the turn is over; clear
+      // the turn order + current-unit cursor so the TurnOrderDisplay strip
+      // disappears immediately instead of displaying a stale round count +
+      // dead-unit skulls after the GameOverScreen closes. mode flips back to
+      // FREE_ROAM so DmPanel's Free-Roam-only controls (like Démarrer combat)
+      // become available again without waiting for Play Again.
+      const resolved = decision.outcomeText !== null;
       applyCombatStateSlice({
-        currentUnitIndex: decision.currentUnitIndex,
+        currentUnitIndex: resolved ? 0 : decision.currentUnitIndex,
         currentTurn: decision.currentTurn,
         phase: decision.phase,
+        turnOrder: resolved ? [] : undefined,
+        mode: resolved ? GameMode.FREE_ROAM : undefined,
         selectedUnit: null,
       });
       setGameState("turnPhase", "SELECT_UNIT" as any);
