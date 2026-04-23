@@ -764,6 +764,12 @@ export class UnitRenderer {
     return this.unitMeshes.get(unitId);
   }
 
+  /** Snapshot of every tracked unit id. Callers diff against the UnitsStore
+   *  to dispose meshes whose store entry has been removed. */
+  public getTrackedUnitIds(): string[] {
+    return Array.from(this.unitMeshes.keys());
+  }
+
   /**
    * Preload all character models (player and enemy)
    * 

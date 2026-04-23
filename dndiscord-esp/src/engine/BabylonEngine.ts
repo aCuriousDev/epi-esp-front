@@ -333,6 +333,14 @@ export class BabylonEngine {
   public hasUnit(unitId: string): boolean {
     return this.unitRenderer.getUnitMesh(unitId) !== undefined;
   }
+
+  /** Every unit id the renderer currently has a mesh for. Used by the
+   *  GameCanvas units effect to diff the store vs the engine and dispose
+   *  meshes for units that were removed (e.g. Play Again cleared the store
+   *  but the ghost skeleton mesh stuck around). */
+  public getTrackedUnitIds(): string[] {
+    return this.unitRenderer.getTrackedUnitIds();
+  }
   
   public clearAllUnits(): void {
     console.log('[BabylonEngine] Clearing all units and position tracking');

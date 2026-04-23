@@ -1375,8 +1375,12 @@ export class VFXManager {
   // ========================================
 
   /**
-   * Play a death dissolve effect on a unit
-   * Fades out mesh + emits soul particles rising
+   * Play a death effect on a unit: soul particles rise, then the rig tips
+   * over onto its back and stays laid on the ground as a corpse. User asked
+   * for a visible body rather than a full fade-out — the fade path left dead
+   * units without any on-map indicator; the skull overlay lives only in the
+   * turn order strip. The corpse is cleaned up by the GameCanvas diff-dispose
+   * loop when the store entry is removed (e.g. Play Again clearUnits).
    */
   public async playDeathVFX(mesh: AbstractMesh, team: string): Promise<void> {
     return new Promise<void>((resolve) => {
@@ -1413,10 +1417,16 @@ export class VFXManager {
       system.start();
       this.activeParticleSystems.add(system);
 
-      // Fade out mesh over 0.8s
-      this.fadeOutMesh(mesh, 800);
+      // Tip the rig over so the body lies on the ground. The rig
+      // (`unit_<id>__Rig_*`) carries the per-unit orientation; rotating
+      // its x-axis by ~90deg drops the character on its back. Fallback to
+      // the root mesh if the rig naming doesn't match.
+      const rig = this.findRig(mesh) ?? mesh;
+      this.layDown(rig, 700);
 
-      // Stop after 1.2 seconds
+      // Stop particles after 1.2s; resolve after they fade. Do NOT dispose
+      // the mesh — the corpse is a visible indicator that stays until the
+      // unit is removed from the store (Play Again / map switch / cleanup).
       setTimeout(() => {
         system.stop();
         setTimeout(() => {
@@ -1426,6 +1436,42 @@ export class VFXManager {
         }, 1500);
       }, 1200);
     });
+  }
+
+  /** Locate the `__Rig_*` transform under a unit root. Returns null if the
+   *  unit uses a plain mesh with no rig child (shouldn't happen for imported
+   *  character glTFs but we stay defensive). */
+  private findRig(root: AbstractMesh): AbstractMesh | null {
+    for (const child of root.getChildren()) {
+      if ((child as any).name && String((child as any).name).includes('__Rig_')) {
+        return child as AbstractMesh;
+      }
+    }
+    return null;
+  }
+
+  /** Animate a transform rotation.x from current to +PI/2 (fall backward)
+   *  and drop it slightly to sit on the ground plane. */
+  private layDown(target: AbstractMesh, durationMs: number): void {
+    const fps = 30;
+    const totalFrames = Math.round((durationMs / 1000) * fps);
+    const startX = target.rotation.x;
+    const endX = startX + Math.PI / 2;
+
+    const rotAnim = new Animation(
+      'death_layDown_rot', 'rotation.x', fps,
+      Animation.ANIMATIONTYPE_FLOAT,
+      Animation.ANIMATIONLOOPMODE_CONSTANT,
+    );
+    const ease = new QuadraticEase();
+    ease.setEasingMode(EasingFunction.EASINGMODE_EASEIN);
+    rotAnim.setEasingFunction(ease);
+    rotAnim.setKeys([
+      { frame: 0, value: startX },
+      { frame: totalFrames, value: endX },
+    ]);
+    target.animations.push(rotAnim);
+    this.scene.beginAnimation(target, 0, totalFrames, false);
   }
 
   /**
