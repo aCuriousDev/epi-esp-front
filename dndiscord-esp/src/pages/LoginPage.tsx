@@ -1,6 +1,6 @@
-import { Show, createEffect, type JSX } from "solid-js";
-import { useNavigate } from "@solidjs/router";
-import { Swords, Drama, ScrollText } from "lucide-solid";
+import { Show, createEffect, createSignal, type JSX } from "solid-js";
+import { A, useNavigate } from "@solidjs/router";
+import { Check, Swords, Drama, ScrollText } from "lucide-solid";
 import { authStore } from "../stores/auth.store";
 import { LoginButton } from "../components/auth";
 import { AnimatedD20 } from "../components/common/AnimatedD20";
@@ -11,7 +11,18 @@ import { AnimatedD20 } from "../components/common/AnimatedD20";
 export default function LoginPage() {
   const navigate = useNavigate();
 
-  // Redirect to home if already authenticated
+  // Flag one-shot positionné par SettingsPage juste avant le redirect après
+  // suppression du compte (RGPD art. 17). On le lit puis on l'efface
+  // immédiatement — la bannière ne réapparaîtra pas au reload.
+  const [showDeleted, setShowDeleted] = createSignal(false);
+  try {
+    if (sessionStorage.getItem("account_just_deleted") === "1") {
+      sessionStorage.removeItem("account_just_deleted");
+      setShowDeleted(true);
+    }
+  } catch { /* sessionStorage indisponible : pas de bannière, pas grave */ }
+
+  // Redirect to home if already authenticated.
   createEffect(() => {
     if (!authStore.isLoading() && authStore.isAuthenticated()) {
       navigate("/", { replace: true });
@@ -47,6 +58,46 @@ export default function LoginPage() {
               Votre aventure commence ici
             </p>
           </header>
+
+          {/* Bannière de confirmation après suppression de compte (RGPD art. 17) */}
+          <Show when={showDeleted()}>
+            <div
+              role="status"
+              class="mb-6 flex gap-3 items-start rounded-2xl bg-emerald-500/15 border border-emerald-400/40 p-4 text-sm"
+            >
+              <span class="mt-0.5 flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                <Check class="w-5 h-5 text-emerald-300" />
+              </span>
+              <div class="flex-1 space-y-1">
+                <p class="text-emerald-100 font-semibold">
+                  Compte supprimé
+                </p>
+                <p class="text-emerald-100/80 text-xs leading-relaxed">
+                  Vos personnages, campagnes possédées et adhésions ont été
+                  effacés. Pour révoquer aussi l'accès OAuth côté Discord :{" "}
+                  <a
+                    href="discord://users/@me/settings/authorized-apps"
+                    class="underline hover:text-white"
+                  >
+                    Applications autorisées
+                  </a>{" "}
+                  (ou <a
+                    href="https://discord.com/channels/@me"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="underline hover:text-white"
+                  >via le web</a>).
+                </p>
+              </div>
+              <button
+                onClick={() => setShowDeleted(false)}
+                aria-label="Fermer"
+                class="flex-shrink-0 text-emerald-200/70 hover:text-emerald-100 text-xl leading-none px-1"
+              >
+                ×
+              </button>
+            </div>
+          </Show>
 
           {/* Login card */}
           <div class="login-card relative bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl shadow-black/30">
@@ -107,9 +158,26 @@ export default function LoginPage() {
           </div>
 
           {/* Footer */}
-          <footer class="mt-8 text-center">
+          <footer class="mt-8 text-center space-y-2">
             <p class="text-slate-400/60 text-xs">
-              En vous connectant, vous acceptez nos conditions d'utilisation.
+              En vous connectant, vous acceptez nos{" "}
+              <A href="/terms" class="text-slate-300 hover:text-white underline">
+                conditions d'utilisation
+              </A>{" "}
+              et notre{" "}
+              <A href="/privacy" class="text-slate-300 hover:text-white underline">
+                politique de confidentialité
+              </A>
+              .
+            </p>
+            <p class="flex items-center justify-center gap-2 text-[11px] text-slate-400/50">
+              <A href="/legal" class="hover:text-slate-300 transition-colors">
+                Mentions légales
+              </A>
+              <span>·</span>
+              <A href="/cookies" class="hover:text-slate-300 transition-colors">
+                Politique cookies
+              </A>
             </p>
           </footer>
         </div>
