@@ -11,7 +11,6 @@ import {
 } from 'lucide-solid';
 import {
   CampaignService,
-  type CampaignDetailResponse,
   type GameSessionResponse,
   GameSessionStatus,
   type SessionHistoryEntryResponse,

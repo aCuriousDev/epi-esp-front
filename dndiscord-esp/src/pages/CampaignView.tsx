@@ -243,7 +243,7 @@ export default function CampaignView() {
     navigate(`/campaigns/${params.id}/edit`);
   };
 
-  const handleCampagnManager = () => {
+  const handleCampaignManager = () => {
     navigate(`/campaigns/${params.id}/manager`);
   };
 
@@ -777,11 +777,11 @@ export default function CampaignView() {
                     Modifier
                   </button>
                   <button
-                    onClick={handleCampagnManager}
+                    onClick={handleCampaignManager}
                     class="py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-white font-semibold hover:bg-white/10 transition-all flex items-center justify-center gap-2"
                   >
                     <MapIcon class="w-5 h-5" />
-                    Campagn Manager
+                    Campaign Manager
                   </button>
                   <button
                     onClick={handleLaunchCampaignSession}

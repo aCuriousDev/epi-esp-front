@@ -32,13 +32,33 @@ interface ParsedTree {
 // ─── Parser ───────────────────────────────────────────────────────────────────
 
 function parseTree(json: string): ParsedTree {
-  const tree: { nodes: Array<{ type: string; x: number; y: number; data: NodeData }>; connections: TreeConn[] } = JSON.parse(json);
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch {
+    throw new Error('Scénario corrompu — rouvrir et resauvegarder dans le Campaign Manager.');
+  }
+
+  // Validate top-level shape so downstream code never silently iterates over
+  // non-arrays (which would produce an empty nodeMap / no start-node, giving
+  // the confusing "pas de point de départ" error instead of a real diagnosis).
+  if (typeof raw !== 'object' || raw === null) {
+    throw new Error('Scénario invalide : format inattendu (objet attendu).');
+  }
+  const tree = raw as { nodes?: unknown; connections?: unknown };
+  if (!Array.isArray(tree.nodes)) {
+    throw new Error('Scénario invalide : le champ "nodes" est absent ou n\'est pas un tableau.');
+  }
+  if (!Array.isArray(tree.connections)) {
+    throw new Error('Scénario invalide : le champ "connections" est absent ou n\'est pas un tableau.');
+  }
+
   const nodeMap = new Map<string, NodeData>();
-  for (const n of tree.nodes ?? []) {
+  for (const n of tree.nodes as Array<{ type: string; x: number; y: number; data: NodeData }>) {
     if (n.data?.id) nodeMap.set(n.data.id, n.data);
   }
   const edges = new Map<string, string>();
-  for (const conn of tree.connections ?? []) {
+  for (const conn of tree.connections as TreeConn[]) {
     edges.set(`${conn.source.node}::${conn.source.port}`, conn.target.node);
   }
   const firstNodeId =
@@ -69,11 +89,12 @@ const CampaignSessionPage: Component = () => {
       const response = await CampaignService.getCampaign(params.id);
       setCampaignTitle(response.name);
 
-      // Try backend field first (future), then per-campaign localStorage, then global localStorage
+      // Backend field takes priority; fall back to per-campaign then global localStorage.
+      // Use || (falsy) so an empty string from the API is treated the same as null.
       const treeJson: string | null =
-        (response as any).campaignTreeDefinition ??
-        localStorage.getItem(`dnd-campaign-tree-${params.id}`) ??
-        localStorage.getItem('dnd-campaign-tree') ??
+        response.campaignTreeDefinition ||
+        localStorage.getItem(`dnd-campaign-tree-${params.id}`) ||
+        localStorage.getItem('dnd-campaign-tree') ||
         null;
 
       if (!treeJson) {

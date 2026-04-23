@@ -181,7 +181,7 @@ const BoardGame: Component = () => {
           startGame(selectedMode()!, mapId);
         }, 150);
       } else {
-        setTimeout(checkEngine, 100);
+        if (mounted) setTimeout(checkEngine, 100);
       }
     };
     checkEngine();
@@ -208,7 +208,7 @@ const BoardGame: Component = () => {
           startGame(GameMode.DUNGEON, null, dungeonId);
         }, 150);
       } else {
-        setTimeout(checkEngine, 100);
+        if (mounted) setTimeout(checkEngine, 100);
       }
     };
     checkEngine();
@@ -268,7 +268,7 @@ const BoardGame: Component = () => {
           );
         }, 150);
       } else {
-        setTimeout(checkEngine, 100);
+        if (mounted) setTimeout(checkEngine, 100);
       }
     };
     checkEngine();

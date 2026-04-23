@@ -755,7 +755,9 @@ function loadUserFavoritePaths(): string[] {
 function saveUserFavoritePaths(paths: string[]): void {
 	try {
 		localStorage.setItem(USER_FAVORITES_KEY, JSON.stringify(paths));
-	} catch { /* ignore */ }
+	} catch (e) {
+		console.warn('[MapEditor] Failed to persist favorites:', e);
+	}
 }
 
 export default function MapEditor() {
