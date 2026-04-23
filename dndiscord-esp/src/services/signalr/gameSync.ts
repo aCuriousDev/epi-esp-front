@@ -19,6 +19,8 @@ import { applyMapSwitched } from "./mapSwitched";
 import { getAllySpawnPositions } from "../../game/initialization/InitUnits";
 import { applyUnitsSnapshot, applyCombatStateSlice, applyUnitMove, applyAbilityOutcome } from "./applyState";
 import { applyTurnEnded } from "./turnEndedLogic";
+import { playDeathEffect, playCameraShake } from "../../game/vfx/VFXIntegration";
+import { playDeathSound } from "../../game/audio/SoundIntegration";
 
 import { addCombatLog } from "../../game/stores/GameStateStore";
 import { addSpawnedEnemy } from "../../stores/dmTools.store";
@@ -210,6 +212,16 @@ export function registerGameSyncHandlers(): void {
       : (message as AbilityUsedPayload);
     if (!payload?.unitId || !Array.isArray(payload.effects)) return;
 
+    // Snapshot of each target's "alive before apply" so we can detect the
+    // alive→dead transition after applyAbilityOutcome mutates state. Death
+    // VFX + sound fire once per actually-killing effect — not on every
+    // damage tick, not if the target was already dead.
+    const wasAliveBefore: Record<string, boolean> = {};
+    for (const effect of payload.effects) {
+      const u = units[effect.targetId];
+      if (u) wasAliveBefore[effect.targetId] = u.isAlive;
+    }
+
     applyAbilityOutcome(
       payload.unitId,
       payload.abilityId,
@@ -218,12 +230,20 @@ export function registerGameSyncHandlers(): void {
       payload.cooldown,
     );
 
-    // Combat-log lines are local presentation — each client logs for itself.
+    // Combat log + death VFX run on every client so the death animation
+    // plays regardless of who owns the target. (Solo path did this inline
+    // in useAbility; moved here so the multiplayer path also gets it.)
     for (const effect of payload.effects) {
       const target = units[effect.targetId];
       if (!target) continue;
       if ((effect.type ?? "").toLowerCase() === "damage") {
         addCombatLog(`${target.name} subit ${effect.value} dégâts.`, "damage");
+      }
+      if (wasAliveBefore[effect.targetId] && !target.isAlive) {
+        addCombatLog(`${target.name} est vaincu·e !`, "system");
+        playDeathEffect(effect.targetId, target.team as string);
+        playDeathSound();
+        playCameraShake(0.2, 400);
       }
     }
   });

@@ -37,7 +37,8 @@ import {
 import { registerGameSyncHandlers } from "./gameSync";
 import { clearUnits } from "../../game/stores/UnitsStore";
 import { clearTiles } from "../../game/stores/TilesStore";
-import { resetGameState } from "../../game/stores/GameStateStore";
+import { resetGameState, gameState, setGameState } from "../../game/stores/GameStateStore";
+import { GamePhase } from "../../types";
 import { authStore } from "../../stores/auth.store";
 import { AuthService } from "../auth.service";
 import { loadMap } from "../mapStorage";
@@ -405,8 +406,18 @@ export function registerMultiplayerHandlers(): void {
     updateSession(normalizeSession(data));
   });
 
-  // GameStarted (host started the game)
+  // GameStarted (host started the game, or DmRestartGame after defeat/victory).
+  // Safety net: force phase out of GAME_OVER the instant the event arrives so
+  // the GameOverScreen modal (gated on phase === GAME_OVER) unmounts
+  // independent of whether the BoardGame createEffect fires or the re-init
+  // pipeline succeeds downstream. This is the first-line defence; the
+  // full reset (stores clear + startGame) runs afterwards through the
+  // BoardGame effect's onMultiplayerGameStart.
   signalRService.on("GameStarted", (data: GameStartedPayload) => {
+    if (gameState.phase === GamePhase.GAME_OVER) {
+      console.log("[multiplayer] GameStarted received during GAME_OVER — forcing phase to FREE_ROAM");
+      setGameState("phase", GamePhase.FREE_ROAM);
+    }
     setGameStarted(data);
   });
 
