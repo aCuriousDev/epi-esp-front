@@ -1470,38 +1470,26 @@ export class VFXManager {
       { frame: 0, value: startX },
       { frame: totalFrames, value: endX },
     ]);
-    target.animations.push(rotAnim);
+    // Replace the animations array (not push) so repeated death→revive→
+    // death cycles don't accumulate Animation instances that all re-fire
+    // every time we call beginAnimation on this target.
+    this.scene.stopAnimation(target);
+    target.animations = [rotAnim];
     this.scene.beginAnimation(target, 0, totalFrames, false);
   }
 
-  /** Reverse of playDeathVFX's lay-down pose: rotate the rig back upright
-   *  over ~400ms when the DM revives a dead unit via DmAdjustHp. No
-   *  particles — revival is a quiet operation, not a spell event. */
+  /** Reverse of playDeathVFX's lay-down pose: drop the rig back to
+   *  rotation.x = 0 when the DM revives a dead unit via DmAdjustHp. We
+   *  snap the rotation instantly (no animation) because the accumulated
+   *  death animation in rig.animations kept replaying the PI/2 keyframe
+   *  every time we tried to tween through beginAnimation — the mesh would
+   *  briefly look upright then flop back down. Instant snap is reliable
+   *  and visually fine for a quiet DM-only operation. */
   public playReviveVFX(mesh: AbstractMesh): void {
     const rig = this.findRig(mesh) ?? mesh;
-    const fps = 30;
-    const durationMs = 400;
-    const totalFrames = Math.round((durationMs / 1000) * fps);
-    const startX = rig.rotation.x;
-    // Snap back to the nearest multiple of 2π so the upright pose matches
-    // whatever rotation the model had before the death animation ran.
-    const endX = Math.round(startX / (Math.PI * 2)) * (Math.PI * 2);
-    if (Math.abs(endX - startX) < 0.01) return;
-
-    const rotAnim = new Animation(
-      'revive_rise_rot', 'rotation.x', fps,
-      Animation.ANIMATIONTYPE_FLOAT,
-      Animation.ANIMATIONLOOPMODE_CONSTANT,
-    );
-    const ease = new QuadraticEase();
-    ease.setEasingMode(EasingFunction.EASINGMODE_EASEOUT);
-    rotAnim.setEasingFunction(ease);
-    rotAnim.setKeys([
-      { frame: 0, value: startX },
-      { frame: totalFrames, value: endX },
-    ]);
-    rig.animations.push(rotAnim);
-    this.scene.beginAnimation(rig, 0, totalFrames, false);
+    this.scene.stopAnimation(rig);
+    rig.animations = [];
+    rig.rotation.x = 0;
   }
 
   /**
