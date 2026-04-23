@@ -50,7 +50,6 @@ export function selectUnit(unitId: string): void {
   const isPreparation = gameState.phase === GamePhase.COMBAT_PREPARATION;
   const currentUnitId = gameState.turnOrder[gameState.currentUnitIndex];
   const isCurrentUnit = unitId === currentUnitId;
-  const isPlayerTurn = gameState.phase === GamePhase.PLAYER_TURN || isFreeRoam;
 
   // Multiplayer ownership check: if the unit has an owner, only its owner can control it
   const session = getCurrentSession();
@@ -59,6 +58,17 @@ export function selectUnit(unitId: string): void {
   const isOwned = !!unit.ownerUserId;
   const isMine = !isOwned || unit.ownerUserId === myUserId;
   const canControl = !session || isMine || isHost; // DM (host) can control any unit
+
+  // DM piloting an enemy during ENEMY_TURN needs the same reach-tile UX the
+  // player gets on PLAYER_TURN — the "it's MY turn to act on this unit"
+  // check. Without this the isPlayerTurn gate below stayed false and
+  // shouldShowMovement collapsed to false, so clicking the current enemy
+  // opened the inspect panel but painted no blue reach tiles and the
+  // tile-click path couldn't move the unit.
+  const isPlayerTurn =
+    gameState.phase === GamePhase.PLAYER_TURN ||
+    isFreeRoam ||
+    (gameState.phase === GamePhase.ENEMY_TURN && isHost);
 
   console.log('[selectUnit]', unit.name, '| mode:', isFreeRoam ? 'Free Roam' : isPreparation ? 'Preparation' : 'Combat', '| isCurrentUnit:', isCurrentUnit, '| isPlayerTurn:', isPlayerTurn, '| canControl:', canControl);
 
