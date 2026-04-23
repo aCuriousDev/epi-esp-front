@@ -279,6 +279,60 @@ export function deleteDungeon(dungeonId: string): void {
 	}
 }
 
+// ============================================
+// EXPORT / IMPORT
+// ============================================
+
+/**
+ * Déclenche le téléchargement d'une map au format JSON (.dndmap.json).
+ */
+export function exportMapToFile(mapData: SavedMapData): void {
+	const json = JSON.stringify(mapData, null, 2);
+	// Use a data: URI instead of URL.createObjectURL — blob: URLs are blocked
+	// by the Discord Activity CSP (connect-src / script-src restrictions).
+	const a    = document.createElement('a');
+	a.href     = `data:application/json;charset=utf-8,${encodeURIComponent(json)}`;
+	a.download = `${mapData.name.replace(/[^a-z0-9_\-]/gi, '_')}.dndmap.json`;
+	document.body.appendChild(a);
+	a.click();
+	document.body.removeChild(a);
+}
+
+/**
+ * Importe une map depuis une chaîne JSON.
+ * Assigne un nouvel ID unique (évite toute collision), sauvegarde en localStorage
+ * et retourne la map créée.
+ * @throws {Error} si le JSON est invalide ou que le champ `cells` est absent.
+ */
+export function importMapFromJson(jsonString: string): SavedMapData {
+	let parsed: SavedMapData;
+	try {
+		parsed = JSON.parse(jsonString);
+	} catch {
+		throw new Error('Fichier invalide : JSON malformé.');
+	}
+
+	if (!parsed || !Array.isArray(parsed.cells)) {
+		throw new Error('Format invalide : champ "cells" manquant ou incorrect.');
+	}
+
+	const imported: SavedMapData = {
+		...parsed,
+		// Nouvel ID pour éviter tout écrasement de carte existante
+		id:        generateMapId(),
+		name:      parsed.name ?? 'Carte importée',
+		createdAt: Date.now(),
+		updatedAt: Date.now(),
+		// La carte importée devient standalone (pas liée à un donjon)
+		mapType:   parsed.mapType === 'dungeon-room' ? 'classique' : (parsed.mapType ?? 'classique'),
+		dungeonId: undefined,
+		roomIndex: undefined,
+	};
+
+	saveMap(imported);
+	return imported;
+}
+
 /**
  * Obtient les positions des cellules de téléportation d'une map
  */

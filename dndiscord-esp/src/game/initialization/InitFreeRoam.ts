@@ -5,6 +5,7 @@
  */
 
 import { Unit, UnitType, Team, GameMode, GamePhase, GridPosition } from '../../types';
+import { GRID_SIZE } from '../constants';
 import type { UnitAssignment } from '../../types/multiplayer';
 import { setUnits } from '../stores/UnitsStore';
 import { setTiles, tiles } from '../stores/TilesStore';
@@ -12,6 +13,7 @@ import { posToKey } from '../utils/GridUtils';
 import { setGameState } from '../stores/GameStateStore';
 import { initializeGrid } from './InitGrid';
 import { playAmbientMusic } from '../audio/SoundIntegration';
+import { getSessionMapConfig } from '../../stores/session-map.store';
 import {
   WARRIOR_ABILITIES,
   MAGE_ABILITIES,
@@ -20,7 +22,7 @@ import {
 } from '../abilities/AbilityDefinitions';
 import { mapAssignmentToUnit } from '../utils/CharacterToUnit';
 
-const SPAWN_POSITIONS: GridPosition[] = [
+const DEFAULT_SPAWN_POSITIONS: GridPosition[] = [
   { x: 1, z: 1 },
   { x: 1, z: 3 },
   { x: 3, z: 1 },
@@ -29,10 +31,37 @@ const SPAWN_POSITIONS: GridPosition[] = [
   { x: 5, z: 3 },
 ];
 
+/**
+ * Returns the spawn positions for free roam — uses the campaign MapNode's spawnPoint
+ * as the primary position (offset by small deltas for multi-unit placement) when a
+ * session map config is active, otherwise falls back to hardcoded defaults.
+ */
+function getSpawnPositions(): GridPosition[] {
+  const cfg = getSessionMapConfig();
+  if (cfg?.spawnPoint) {
+    const { x, z } = cfg.spawnPoint;
+    // Place the party in a small cluster around the designated spawn point
+    const candidates: GridPosition[] = [
+      { x,         z         },
+      { x: x + 1,  z         },
+      { x,         z: z + 1  },
+      { x: x + 1,  z: z + 1  },
+      { x: x - 1,  z         },
+      { x,         z: z - 1  },
+    ];
+    return candidates.filter(p => p.x >= 0 && p.z >= 0 && p.x < GRID_SIZE && p.z < GRID_SIZE);
+  }
+  return DEFAULT_SPAWN_POSITIONS;
+}
+
 export function initializeFreeRoam(mapId: string | null = null, unitAssignments?: UnitAssignment[]): void {
   console.log('[initializeFreeRoam] Starting Free Roam initialization...');
   
   // Initialize the grid (reuse existing logic)
+  // Pre-set mapId before initializeGrid so the GameCanvas createEffect sees the
+  // correct mapId when it reacts to the setTiles call inside initializeGrid.
+  setGameState('mapId', mapId);
+
   console.log('[initializeFreeRoam] Initializing grid...');
   initializeGrid(mapId);
   console.log('[initializeFreeRoam] Grid initialized');
@@ -40,15 +69,17 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
   const newUnits: Record<string, Unit> = {};
   console.log('[initializeFreeRoam] Creating player units...');
 
+  const spawnPositions = getSpawnPositions();
+
   if (unitAssignments && unitAssignments.length > 0) {
     // Multiplayer: create units from server-provided assignments
     unitAssignments.forEach((assignment, i) => {
-      const spawnPos = SPAWN_POSITIONS[i % SPAWN_POSITIONS.length];
+      const spawnPos = spawnPositions[i % spawnPositions.length];
       const unit = mapAssignmentToUnit(assignment, spawnPos);
       newUnits[unit.id] = unit;
 
       const tileKey = posToKey(unit.position);
-      setTiles(tileKey, 'occupiedBy', unit.id);
+      if (tiles[tileKey]) setTiles(tileKey, 'occupiedBy', unit.id);
     });
   } else {
     // Solo: default 3 hardcoded units
@@ -109,13 +140,19 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
       },
     ];
 
-    playerUnits.forEach((unitData) => {
+    playerUnits.forEach((unitData, i) => {
+      // Use the session spawn point when available (set by CampaignSessionPage),
+      // otherwise fall back to the hardcoded default position for this unit.
+      const position = spawnPositions.length > 0
+        ? spawnPositions[i % spawnPositions.length]
+        : unitData.position!;
+
       const unit: Unit = {
         id: unitData.id!,
         name: unitData.name!,
         type: unitData.type!,
         team: Team.PLAYER,
-        position: unitData.position!,
+        position,
         stats: unitData.stats!,
         abilities: unitData.abilities!,
         statusEffects: [],
@@ -127,10 +164,10 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
       newUnits[unit.id] = unit;
 
       const tileKey = posToKey(unit.position);
-      setTiles(tileKey, 'occupiedBy', unit.id);
+      if (tiles[tileKey]) setTiles(tileKey, 'occupiedBy', unit.id);
     });
   }
-  
+
   console.log('[initializeFreeRoam] Created', Object.keys(newUnits).length, 'player units');
   setUnits(newUnits);
   console.log('[initializeFreeRoam] Units set in store');

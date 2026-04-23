@@ -24,6 +24,10 @@ export enum TileType {
   WATER = 'water',
   LAVA = 'lava',
   PIT = 'pit',
+  /** Defined by MapNode.exitCells — stepping here advances the scenario */
+  EXIT = 'exit',
+  /** Defined by MapNode.trapCells — stepping here triggers trap effects */
+  TRAP = 'trap',
 }
 
 export interface Tile {

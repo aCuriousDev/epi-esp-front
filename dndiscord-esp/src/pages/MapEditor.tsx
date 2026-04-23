@@ -1,7 +1,8 @@
-import { Component, onMount, onCleanup, createSignal, For, Show, createEffect } from "solid-js";
+import { Component, onMount, onCleanup, createSignal, For, Show, createEffect, createMemo } from "solid-js";
+import { Portal } from "solid-js/web";
 import { A, useParams, useSearchParams, useNavigate } from "@solidjs/router";
 import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-solid";
-import { saveMap, loadMap, generateMapId, loadDungeon, saveDungeon, type SavedMapData, type SavedCellData, type SavedAssetData, type SavedLightData, type DungeonData } from "../services/mapStorage";
+import { saveMap, loadMap, generateMapId, loadDungeon, saveDungeon, exportMapToFile, importMapFromJson, type SavedMapData, type SavedCellData, type SavedAssetData, type SavedLightData, type DungeonData } from "../services/mapStorage";
 import {
 	Engine,
 	Scene,
@@ -292,12 +293,17 @@ class GridCell {
 	public exportData(getAffectedCells?: (meshName: string) => { x: number; z: number }[]): { x: number; z: number; ground?: any; stackedAssets: any[] } {
 		const stackedAssets = this.stackedAssets.map(sa => {
 			const metadata = sa.mesh.metadata as any;
+			// When rotationQuaternion is set Babylon ignores rotation; convert to euler
+			// so we always read the true Y rotation regardless of which path was used.
+			const rotationY = sa.mesh.rotationQuaternion
+				? sa.mesh.rotationQuaternion.toEulerAngles().y
+				: sa.mesh.rotation.y;
 			const data: any = {
 				assetId: metadata?.assetId || sa.asset.id,
 				assetPath: metadata?.assetPath || sa.asset.path,
 				assetType: metadata?.assetType || sa.asset.type,
 				scale: sa.mesh.scaling.x, // Assume uniform scaling
-				rotationY: sa.mesh.rotation.y,
+				rotationY,
 				positionY: sa.mesh.position.y,
 			};
 			// Inclure les cellules affectées pour les assets multi-cases
@@ -313,12 +319,15 @@ class GridCell {
 		let ground: any = undefined;
 		if (this.groundMesh) {
 			const metadata = this.groundMesh.metadata as any;
+			const groundRotationY = this.groundMesh.rotationQuaternion
+				? this.groundMesh.rotationQuaternion.toEulerAngles().y
+				: this.groundMesh.rotation.y;
 			ground = {
 				assetId: metadata?.assetId || "unknown",
 				assetPath: metadata?.assetPath || "unknown",
 				assetType: metadata?.assetType || "floor",
 				scale: this.groundMesh.scaling.x,
-				rotationY: this.groundMesh.rotation.y,
+				rotationY: groundRotationY,
 				positionY: this.groundMesh.position.y,
 			};
 			// Inclure les cellules affectées pour les sols multi-cases
@@ -725,6 +734,32 @@ class AssetStackManager {
 // Palette data (CHARACTER_ASSETS / ENEMY_ASSETS / ASSET_CATEGORIES) lives in
 // src/components/map-editor/PaletteData.ts and is imported at the top.
 
+// Flat list of every available asset — used by the library search
+const ALL_ASSETS: MapAsset[] = ASSET_CATEGORIES.flatMap(c => c.assets);
+
+// ── User-managed favorites (localStorage) ─────────────────────────────────
+const USER_FAVORITES_KEY = 'dndiscord_editor_favorites';
+
+function loadUserFavoritePaths(): string[] {
+	try {
+		const raw = localStorage.getItem(USER_FAVORITES_KEY);
+		if (raw) {
+			const parsed = JSON.parse(raw) as string[];
+			if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+		}
+	} catch { /* ignore */ }
+	// First launch: seed with the curated default list
+	return [...ASSET_FAVORITE_PATHS];
+}
+
+function saveUserFavoritePaths(paths: string[]): void {
+	try {
+		localStorage.setItem(USER_FAVORITES_KEY, JSON.stringify(paths));
+	} catch (e) {
+		console.warn('[MapEditor] Failed to persist favorites:', e);
+	}
+}
+
 export default function MapEditor() {
 	const params = useParams<{ mapId?: string }>();
 	const [searchParams] = useSearchParams();
@@ -757,7 +792,7 @@ export default function MapEditor() {
 
 	const visibleCategories = () => {
 		const base = activePaletteTab() === "favoris"
-			? [pickFavoritesCategory(ASSET_CATEGORIES, ASSET_FAVORITE_PATHS)]
+			? [pickFavoritesCategory(ASSET_CATEGORIES, userFavoritePaths())]
 			: ASSET_CATEGORIES;
 		return filterCategories(base, searchQuery());
 	};
@@ -848,7 +883,30 @@ export default function MapEditor() {
 	const [selectionEnd, setSelectionEnd] = createSignal<{ x: number; z: number } | null>(null);
 	const [isSelecting, setIsSelecting] = createSignal(false);
 	const [isCameraLocked, setIsCameraLocked] = createSignal(false);
-	
+	const [cameraMode, setCameraMode] = createSignal<'free' | 'top'>('free');
+	const [rubberBandRect, setRubberBandRect] = createSignal<{ left: number; top: number; width: number; height: number } | null>(null);
+	const [placedAssets, setPlacedAssets] = createSignal<MapAsset[]>([]);
+	const [showLibrary, setShowLibrary] = createSignal(false);
+	const [librarySearch, setLibrarySearch] = createSignal('');
+	const [libraryCategory, setLibraryCategory] = createSignal<string>('');
+	// User-managed favorites — paths stored in localStorage
+	const [userFavoritePaths, setUserFavoritePaths] = createSignal<string[]>(loadUserFavoritePaths());
+	const isFavorite = (path: string) => userFavoritePaths().includes(path);
+	const toggleFavorite = (path: string) => {
+		const current = userFavoritePaths();
+		const next = current.includes(path)
+			? current.filter(p => p !== path)
+			: [...current, path];
+		setUserFavoritePaths(next);
+		saveUserFavoritePaths(next);
+	};
+	// 'auto' = always stack on top of existing pile; number = force Y placement height
+	const [workingHeight, setWorkingHeight] = createSignal<'auto' | number>('auto');
+	// Feedback d'import (null = idle, 'ok' | 'error')
+	const [importStatus, setImportStatus] = createSignal<{ type: 'ok' | 'error'; message: string } | null>(null);
+
+	let importFileInputRef: HTMLInputElement | undefined;
+
 	// Zones de placement pour combats et téléportation
 	const [spawnZones, setSpawnZones] = createSignal<Map<string, "ally" | "enemy" | "teleport">>(new Map());
 	const [contextMenuCell, setContextMenuCell] = createSignal<{ x: number; z: number; screenX: number; screenY: number } | null>(null);
@@ -856,6 +914,11 @@ export default function MapEditor() {
 	let previewMesh: AbstractMesh | null = null;
 	let previewAssetId: string | null = null;
 	let previewLoadToken = 0; // guards against races when the selected asset changes mid-load
+	// Base Y rotation baked into the GLTF model (captured once on load).
+	// Both the ghost preview and the placement mesh use the same model, so we
+	// store it here and add it back on every rotation update so the ghost
+	// always matches the placed asset exactly.
+	let previewBaseRotationY = 0;
 
 	// Edit mode keeps the original mesh visible with a blue emissive tint
 	// while a ghost preview follows the cursor. The original is only
@@ -908,7 +971,29 @@ export default function MapEditor() {
 		untintEditingMesh();
 		editingOriginalMesh = null;
 	};
+
+	// Tracks which asset types are currently placed on the map (for the sidebar list)
+	let usedAssetsTracker = new Map<string, MapAsset>();
+
+	const addToPlacedAssets = (asset: MapAsset) => {
+		usedAssetsTracker.set(asset.id, asset);
+		setPlacedAssets(Array.from(usedAssetsTracker.values()));
+	};
+
+	const refreshPlacedAssets = () => {
+		usedAssetsTracker.clear();
+		if (gridManager) {
+			gridManager.getAllCells().forEach(cell => {
+				cell.getStackedAssets().forEach(sa => {
+					usedAssetsTracker.set(sa.asset.id, sa.asset);
+				});
+			});
+		}
+		setPlacedAssets(Array.from(usedAssetsTracker.values()));
+	};
 	let selectionOverlays: Map<string, Mesh> = new Map(); // Map des overlays de sélection par cellule
+	let selectionMaterial: StandardMaterial | null = null; // Shared material for selection overlays (reused, not recreated every frame)
+	let rubberBandStart: { x: number; y: number } | null = null; // DOM coords for CSS rubber-band start
 	let previewUpdateTimeout: number | null = null;
 	let isUpdatingPreview: boolean = false; // Flag pour éviter les mises à jour multiples simultanées
 	let collisionOverlays: Map<string, Mesh> = new Map(); // Map des overlays de collision par cellule
@@ -1012,12 +1097,16 @@ export default function MapEditor() {
 					overlay.parent = cellNode;
 					overlay.isPickable = false;
 
-					const material = new StandardMaterial(`selectionMat_${x}_${z}`, scene);
-					material.diffuseColor = new Color3(0.2, 0.6, 1); // Bleu clair
-					material.emissiveColor = new Color3(0.1, 0.3, 0.5);
-					material.alpha = 0.5;
-					material.disableLighting = true;
-					overlay.material = material;
+					// Lazy-create a single shared material (reused for all cells, avoids O(n) GPU allocs per frame)
+					if (!selectionMaterial && scene) {
+						selectionMaterial = new StandardMaterial('selectionSharedMat', scene);
+						selectionMaterial.diffuseColor = new Color3(0.2, 0.6, 1);
+						selectionMaterial.emissiveColor = new Color3(0.1, 0.3, 0.5);
+						selectionMaterial.alpha = 0.5;
+						selectionMaterial.disableLighting = true;
+						selectionMaterial.backFaceCulling = false;
+					}
+					if (selectionMaterial) overlay.material = selectionMaterial;
 
 					selectionOverlays.set(`${x},${z}`, overlay);
 				}
@@ -1049,13 +1138,8 @@ export default function MapEditor() {
 		// repositionPreviewOnCell picks up the current angle.
 		const rotationRad = (rotationAngle() * Math.PI) / 180;
 		if (previewMesh && !previewMesh.isDisposed() && scene && (selectedAsset() || editingAsset() || lightMode())) {
-			if (previewMesh.rotationQuaternion) {
-				const euler = previewMesh.rotationQuaternion.toEulerAngles();
-				previewMesh.rotationQuaternion = null;
-				previewMesh.rotation.y = euler.y + rotationRad;
-			} else {
-				previewMesh.rotation.y = rotationRad;
-			}
+			// Always include the GLTF base offset so the ghost matches the placed mesh.
+			previewMesh.rotation.y = previewBaseRotationY + rotationRad;
 			previewMesh.computeWorldMatrix(true);
 			previewMesh.getChildMeshes(false).forEach((child) => child.computeWorldMatrix(true));
 		}
@@ -1102,6 +1186,10 @@ export default function MapEditor() {
 						const mesh = await assetStackManager.loadModel(groundAsset, uniqueName);
 						
 						mesh.scaling.setAll(cellData.ground.scale);
+						// BabylonJS GLTF loader sets rotationQuaternion on every mesh.
+						// When rotationQuaternion is non-null it overrides rotation entirely,
+						// so we must null it out before assigning rotation.y.
+						if (mesh.rotationQuaternion) mesh.rotationQuaternion = null;
 						mesh.rotation.y = cellData.ground.rotationY;
 						
 						const cellNode = cell.getCellNode();
@@ -1136,6 +1224,8 @@ export default function MapEditor() {
 						const mesh = await assetStackManager.loadModel(asset, uniqueName);
 						
 						mesh.scaling.setAll(assetData.scale);
+						// Same fix: null out rotationQuaternion before setting rotation.y
+						if (mesh.rotationQuaternion) mesh.rotationQuaternion = null;
 						mesh.rotation.y = assetData.rotationY;
 						
 						const cellNode = cell.getCellNode();
@@ -1179,6 +1269,8 @@ export default function MapEditor() {
 			if (showCollisions() || collisionPreviewMode()) {
 				updateCollisionOverlays();
 			}
+			// Rebuild placed-assets sidebar from loaded data
+			refreshPlacedAssets();
 		}
 	};
 
@@ -1244,6 +1336,47 @@ export default function MapEditor() {
 		}
 	};
 
+	/** Exporte l'état courant de la carte en fichier JSON téléchargeable. */
+	const exportCurrentMap = () => {
+		if (!gridManager) return;
+		const name = mapName().trim() || 'carte';
+
+		const cellsData = gridManager.exportData();
+		const spawnZonesRecord: Record<string, "ally" | "enemy" | "teleport"> = {};
+		spawnZones().forEach((type, key) => { spawnZonesRecord[key] = type; });
+
+		const existingMap = mapId() ? loadMap(mapId()!) : null;
+		const mapData: SavedMapData = {
+			id:          mapId() ?? 'exported',
+			name,
+			createdAt:   existingMap?.createdAt ?? Date.now(),
+			updatedAt:   Date.now(),
+			cells:       cellsData,
+			spawnZones:  Object.keys(spawnZonesRecord).length > 0 ? spawnZonesRecord : undefined,
+			mapType:     existingMap?.mapType,
+			dungeonId:   existingMap?.dungeonId,
+			roomIndex:   existingMap?.roomIndex,
+		};
+		exportMapToFile(mapData);
+	};
+
+	/** Lit le fichier sélectionné, importe la carte et navigue vers le nouvel ID. */
+	const handleImportFile = async (file: File) => {
+		setImportStatus(null);
+		try {
+			const text = await file.text();
+			const imported = importMapFromJson(text);
+			setImportStatus({ type: 'ok', message: `"${imported.name}" importée !` });
+			// Naviguer vers la carte importée après un court délai pour que le feedback soit visible
+			setTimeout(() => {
+				navigate(`/map-editor/${imported.id}`);
+			}, 1200);
+		} catch (err: any) {
+			setImportStatus({ type: 'error', message: err?.message ?? 'Erreur inconnue.' });
+			setTimeout(() => setImportStatus(null), 4000);
+		}
+	};
+
 	onMount(() => {
 		if (!canvasRef) return;
 
@@ -1285,6 +1418,9 @@ export default function MapEditor() {
 		camera.upperRadiusLimit = 100;
 		camera.wheelDeltaPercentage = 0.01;
 		scene.activeCamera = camera;
+
+		// Store the free-view defaults so we can restore them when switching back
+		const FREE_VIEW = { alpha: Math.PI / 3, beta: Math.PI / 3, radius: 30 };
 
 		// Ambient baseline — dim so placed PointLights have visible contrast.
 		// 0.8 was blasting the whole scene flat; 0.35 leaves headroom for
@@ -1646,6 +1782,17 @@ export default function MapEditor() {
 			mesh.getChildMeshes().forEach((c) => { c.metadata = { isPreview: true }; });
 
 			mesh.setEnabled(false); // start hidden; shown once we position it
+
+			// Capture and discard the GLTF base rotation immediately so that
+			// repositionPreviewOnCell and the rotation-change createEffect can
+			// always apply (previewBaseRotationY + userRotation) consistently,
+			// matching what placeAssetOnCell does for the committed mesh.
+			previewBaseRotationY = mesh.rotationQuaternion
+				? mesh.rotationQuaternion.toEulerAngles().y
+				: 0;
+			if (mesh.rotationQuaternion) mesh.rotationQuaternion = null;
+			mesh.rotation.y = previewBaseRotationY;
+
 			previewMesh = mesh;
 			previewAssetId = asset.id;
 			return mesh;
@@ -1665,15 +1812,9 @@ export default function MapEditor() {
 	const repositionPreviewOnCell = (cell: GridCell, asset: MapAsset) => {
 		if (!previewMesh || previewMesh.isDisposed() || !assetStackManager) return;
 
-		// Latest rotation from the UI.
+		// Latest rotation from the UI — always include the GLTF base offset.
 		const rotationRad = (rotationAngle() * Math.PI) / 180;
-		if (previewMesh.rotationQuaternion) {
-			const euler = previewMesh.rotationQuaternion.toEulerAngles();
-			previewMesh.rotationQuaternion = null;
-			previewMesh.rotation.y = euler.y + rotationRad;
-		} else {
-			previewMesh.rotation.y = rotationRad;
-		}
+		previewMesh.rotation.y = previewBaseRotationY + rotationRad;
 
 		const cellNode = cell.getCellNode();
 		if (!cellNode) return;
@@ -2006,6 +2147,42 @@ export default function MapEditor() {
 		setContextMenuCell(null);
 	};
 
+	// ── Camera view helpers ───────────────────────────────────────────────────
+
+	/** Smooth-animate the ArcRotateCamera to a target alpha/beta/radius over `duration` ms. */
+	const animateCamera = (targetAlpha: number, targetBeta: number, targetRadius: number, duration = 400) => {
+		if (!camera) return;
+		const startAlpha  = camera.alpha;
+		const startBeta   = camera.beta;
+		const startRadius = camera.radius;
+		const startTime   = performance.now();
+
+		const easeInOut = (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+		const lerp      = (a: number, b: number, t: number) => a + (b - a) * t;
+
+		const step = (now: number) => {
+			if (!camera) return;
+			const t    = Math.min((now - startTime) / duration, 1);
+			const ease = easeInOut(t);
+			camera.alpha  = lerp(startAlpha,  targetAlpha,  ease);
+			camera.beta   = lerp(startBeta,   targetBeta,   ease);
+			camera.radius = lerp(startRadius, targetRadius, ease);
+			if (t < 1) requestAnimationFrame(step);
+		};
+		requestAnimationFrame(step);
+	};
+
+	const switchToTopView = () => {
+		if (!camera) return;
+		setCameraMode('top');
+		animateCamera(camera.alpha, 0.01, 50);
+	};
+
+	const switchToFreeView = () => {
+		setCameraMode('free');
+		animateCamera(Math.PI / 3, Math.PI / 3, 30);
+	};
+
 	/**
 	 * Pointer-move observer — load-once, reposition-always.
 	 *
@@ -2084,6 +2261,7 @@ export default function MapEditor() {
 			repositionPreviewOnCell(cell, currentAsset);
 		});
 	};
+
 
 	// Place asset on a single cell
 	const placeAsset = async (asset: MapAsset, gridX: number, gridZ: number) => {
@@ -2204,26 +2382,27 @@ export default function MapEditor() {
 				// Recalculer les positions de tous les assets empilés au-dessus du nouveau sol
 				cell.restackAssets(assetStackManager);
 			} else {
-				// Pour les autres assets, les empiler
-				// Calculer la hauteur effective en tenant compte des assets multi-cases
-				let effectiveStackHeight = cell.getStackHeight();
-				
-				// Vérifier les assets d'autres cellules qui débordent sur celle-ci
-				const externalAssets = gridManager.getAssetsAffectingCell(gridX, gridZ);
-				for (const extMesh of externalAssets) {
-					// Ignorer les assets déjà dans la pile de cette cellule
-					const isInStack = cell.getStackedAssets().some(sa => sa.mesh === extMesh);
-					const isGround = cell.getGround() === extMesh;
-					if (isInStack || isGround) continue;
-					
-					// Utiliser le topY world de l'asset externe
-					const extTopY = assetStackManager.calculateWorldTopY(extMesh);
-					effectiveStackHeight = Math.max(effectiveStackHeight, extTopY);
+				const wh = workingHeight();
+				if (wh === 'auto') {
+					// Auto: empiler au-dessus de la pile effective (comportement par défaut)
+					let effectiveStackHeight = cell.getStackHeight();
+
+					// Vérifier les assets d'autres cellules qui débordent sur celle-ci
+					const externalAssets = gridManager.getAssetsAffectingCell(gridX, gridZ);
+					for (const extMesh of externalAssets) {
+						const isInStack = cell.getStackedAssets().some(sa => sa.mesh === extMesh);
+						const isGround = cell.getGround() === extMesh;
+						if (isInStack || isGround) continue;
+						const extTopY = assetStackManager.calculateWorldTopY(extMesh);
+						effectiveStackHeight = Math.max(effectiveStackHeight, extTopY);
+					}
+
+					assetStackManager.positionMeshAtHeight(mesh, effectiveStackHeight, 0);
+				} else {
+					// Hauteur manuelle: placer exactement à la hauteur demandée
+					assetStackManager.positionMeshAtHeight(mesh, wh, 0);
 				}
-				
-				// Positionner au-dessus de la pile effective
-				assetStackManager.positionMeshAtHeight(mesh, effectiveStackHeight, 0);
-				
+
 				// Créer le StackedAsset et l'ajouter à la pile
 				const stackedAsset = assetStackManager.createStackedAsset(mesh, asset, 0);
 				cell.addAsset(stackedAsset);
@@ -2295,6 +2474,9 @@ export default function MapEditor() {
 			if (showCollisions() || collisionPreviewMode()) {
 				updateCollisionOverlays();
 			}
+
+			// Track this asset in the sidebar list
+			addToPlacedAssets(asset);
 
 		} catch (error) {
 			console.error(`Failed to place asset ${asset.name}:`, error);
@@ -2477,6 +2659,19 @@ export default function MapEditor() {
 					setSelectionEnd(coords);
 					updateSelectionOverlay();
 				}
+				// Update CSS rubber-band overlay
+				if (rubberBandStart && canvasRef) {
+					const r = canvasRef.getBoundingClientRect();
+					const ev = pointerInfo.event as PointerEvent;
+					const domX = ev.clientX - r.left;
+					const domY = ev.clientY - r.top;
+					setRubberBandRect({
+						left: Math.min(rubberBandStart.x, domX),
+						top: Math.min(rubberBandStart.y, domY),
+						width: Math.abs(domX - rubberBandStart.x),
+						height: Math.abs(domY - rubberBandStart.y),
+					});
+				}
 			}
 		});
 
@@ -2488,7 +2683,7 @@ export default function MapEditor() {
 					const assetToPlace = selectedAsset() || editingAsset()?.asset;
 					if (assetToPlace) {
 						placeAssetOnZone(assetToPlace, start.x, start.z, end.x, end.z);
-						
+
 						if (editingAsset()) {
 							setEditingAsset(null);
 							setEditMode(false);
@@ -2498,6 +2693,10 @@ export default function MapEditor() {
 				setIsSelecting(false);
 				setSelectionStart(null);
 				setSelectionEnd(null);
+				// Clear rubber-band overlay and release pointer capture
+				rubberBandStart = null;
+				setRubberBandRect(null);
+				try { canvasRef?.releasePointerCapture((pointerInfo.event as PointerEvent).pointerId); } catch (_) {}
 				updateSelectionOverlay();
 				return;
 			}
@@ -2775,12 +2974,13 @@ export default function MapEditor() {
 									cell.restackAssets(assetStackManager);
 								}
 							}
-							
+							refreshPlacedAssets();
+
 							// Update collision overlays if enabled
 							if (showCollisions() || collisionPreviewMode()) {
 								updateCollisionOverlays();
 							}
-							
+
 							if (MAPEDITOR_DEBUG) console.log('[DELETE] Successfully deleted mesh');
 						}
 					} else {
@@ -2971,6 +3171,8 @@ export default function MapEditor() {
 
 	// Clear map
 	const clearMap = () => {
+		usedAssetsTracker.clear();
+		setPlacedAssets([]);
 		cleanupPreviewMesh();
 		clearCollisionPreview();
 		clearAllLightFixtures();
@@ -3110,8 +3312,18 @@ export default function MapEditor() {
 					/>
 				</div>
 
+				{/* ── Asset palette ─────────────────────────────────── */}
 				<div class="mb-4">
-					<label class="block text-sm text-slate-300 mb-2">Sélectionner un asset</label>
+					<div class="flex items-center justify-between mb-2">
+						<label class="text-sm text-slate-300">Sélectionner un asset</label>
+						<button
+							type="button"
+							onClick={() => { setShowLibrary(true); setLibrarySearch(""); setLibraryCategory(""); }}
+							class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600/40 hover:bg-indigo-500/60 border border-indigo-500/30 text-indigo-200 text-xs transition"
+						>
+							📚 Bibliothèque
+						</button>
+					</div>
 
 					{/* Tab switcher */}
 					<div class="flex gap-1 bg-black/40 rounded-lg p-1 mb-2">
@@ -3147,6 +3359,20 @@ export default function MapEditor() {
 						onInput={(e) => setSearchQuery(e.currentTarget.value)}
 						class="w-full px-3 py-2 mb-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:border-brandStart transition"
 					/>
+
+					{/* Empty-favorites hint */}
+					<Show when={activePaletteTab() === "favoris" && userFavoritePaths().length === 0}>
+						<div class="flex flex-col items-center gap-2 py-5 px-3 text-center">
+							<span class="text-2xl">⭐</span>
+							<p class="text-slate-400 text-xs leading-relaxed">
+								Ouvrez la <button
+									type="button"
+									class="text-indigo-300 underline underline-offset-2 hover:text-indigo-200"
+									onClick={() => { setShowLibrary(true); setLibrarySearch(""); setLibraryCategory(""); }}
+								>Bibliothèque</button> et cliquez ⭐ sur un asset pour l'ajouter ici.
+							</p>
+						</div>
+					</Show>
 
 					<div class="space-y-2">
 						<For each={visibleCategories()}>
@@ -3265,6 +3491,55 @@ export default function MapEditor() {
 							Raccourcis Q / D. La rotation est appliquée au preview
 							et enregistrée avec l'objet posé.
 						</p>
+					</div>
+				)}
+
+				{/* ── Working Height ─────────────────────────────────── */}
+				{(selectedAsset() || editingAsset()) && selectedAsset()?.type !== 'floor' && (
+					<div class="mb-4">
+						<div class="flex items-center justify-between mb-2">
+							<label class="text-sm text-slate-300">Hauteur de travail</label>
+							<button
+								onClick={() => setWorkingHeight('auto')}
+								class={`text-xs px-2 py-0.5 rounded border transition ${
+									workingHeight() === 'auto'
+										? 'bg-emerald-600/40 border-emerald-500/50 text-emerald-300'
+										: 'bg-black/30 border-white/10 text-slate-400 hover:text-slate-200'
+								}`}
+							>Auto</button>
+						</div>
+
+						<div class="flex items-center gap-2">
+							<button
+								class="w-8 h-8 rounded-lg bg-black/40 hover:bg-black/60 border border-white/10 text-slate-200 text-lg leading-none transition flex items-center justify-center"
+								onClick={() => setWorkingHeight(prev => {
+									const cur = prev === 'auto' ? 0 : prev;
+									return Math.max(0, parseFloat((cur - 0.25).toFixed(2)));
+								})}
+							>−</button>
+
+							<div class={`flex-1 text-center font-mono text-sm py-1 rounded-lg border ${
+								workingHeight() === 'auto'
+									? 'bg-emerald-900/20 border-emerald-700/30 text-emerald-400'
+									: 'bg-black/30 border-white/10 text-white'
+							}`}>
+								{workingHeight() === 'auto' ? 'Auto ↑ pile' : `Y = ${(workingHeight() as number).toFixed(2)}`}
+							</div>
+
+							<button
+								class="w-8 h-8 rounded-lg bg-black/40 hover:bg-black/60 border border-white/10 text-slate-200 text-lg leading-none transition flex items-center justify-center"
+								onClick={() => setWorkingHeight(prev => {
+									const cur = prev === 'auto' ? 0 : prev;
+									return parseFloat((cur + 0.25).toFixed(2));
+								})}
+							>+</button>
+						</div>
+
+						<Show when={workingHeight() !== 'auto'}>
+							<p class="mt-1.5 text-[10px] text-slate-500">
+								L'asset sera placé avec son bas à Y = {(workingHeight() as number).toFixed(2)} — indépendamment des assets déjà présents.
+							</p>
+						</Show>
 					</div>
 				)}
 
@@ -3485,6 +3760,55 @@ export default function MapEditor() {
 					</Show>
 				</div>
 
+				{/* ── Export / Import ─────────────────────────────── */}
+				<div class="flex gap-2 mb-2">
+					<button
+						class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-sky-700/60 hover:bg-sky-600/80 border border-sky-500/30 text-sky-200 text-xs font-medium transition"
+						onClick={exportCurrentMap}
+						title="Télécharger la carte en JSON"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+						</svg>
+						Exporter
+					</button>
+					<button
+						class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-violet-700/60 hover:bg-violet-600/80 border border-violet-500/30 text-violet-200 text-xs font-medium transition"
+						onClick={() => importFileInputRef?.click()}
+						title="Importer une carte depuis un fichier JSON"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+						</svg>
+						Importer
+					</button>
+					{/* Hidden file picker */}
+					<input
+						ref={importFileInputRef}
+						type="file"
+						accept=".json,.dndmap.json"
+						class="hidden"
+						onChange={(e) => {
+							const file = e.currentTarget.files?.[0];
+							if (file) handleImportFile(file);
+							e.currentTarget.value = '';
+						}}
+					/>
+				</div>
+
+				{/* Import feedback toast */}
+				<Show when={importStatus()}>
+					{(s) => (
+						<div class={`mb-2 px-3 py-2 rounded-lg text-xs font-medium ${
+							s().type === 'ok'
+								? 'bg-emerald-900/60 border border-emerald-500/40 text-emerald-300'
+								: 'bg-red-900/60 border border-red-500/40 text-red-300'
+						}`}>
+							{s().type === 'ok' ? '✓ ' : '✕ '}{s().message}
+						</div>
+					)}
+				</Show>
+
 				<div class="flex gap-2">
 					<button
 						class="flex-1 px-4 py-2 rounded-lg bg-red-600/80 hover:bg-red-600 text-white text-sm transition"
@@ -3508,6 +3832,230 @@ export default function MapEditor() {
 				class="w-full h-full"
 				style={{ width: "100%", height: "100vh" }}
 			/>
+
+			{/* ── Camera view controls — bottom-left ───────────────────────────── */}
+			<div class="absolute bottom-4 left-4 z-20 flex gap-2">
+				<button
+					onClick={switchToTopView}
+					title="Vue du dessus"
+					class={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border backdrop-blur-sm shadow-lg transition ${
+						cameraMode() === 'top'
+							? 'bg-indigo-600/70 border-indigo-400/50 text-white'
+							: 'bg-black/60 border-white/10 text-slate-300 hover:bg-black/80 hover:text-white'
+					}`}
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+					</svg>
+					Dessus
+				</button>
+				<button
+					onClick={switchToFreeView}
+					title="Vue libre (perspective)"
+					class={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border backdrop-blur-sm shadow-lg transition ${
+						cameraMode() === 'free'
+							? 'bg-indigo-600/70 border-indigo-400/50 text-white'
+							: 'bg-black/60 border-white/10 text-slate-300 hover:bg-black/80 hover:text-white'
+					}`}
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M1 6l11 6 11-6"/><path d="M1 12l11 6 11-6"/>
+					</svg>
+					Libre
+				</button>
+			</div>
+
+			{/* CSS rubber-band selection rectangle — shown while dragging in zone selection mode */}
+			<Show when={rubberBandRect()}>
+				{(r) => (
+					<div
+						class="absolute pointer-events-none border-2 border-blue-400 bg-blue-400/10 rounded-sm"
+						style={{
+							left: `${r().left}px`,
+							top: `${r().top}px`,
+							width: `${r().width}px`,
+							height: `${r().height}px`,
+							"z-index": "40",
+						}}
+					/>
+				)}
+			</Show>
+
+			{/* ═══════════════════════════════════════════════════════════
+			    Library modal — full-screen asset browser
+			    ═══════════════════════════════════════════════════════════ */}
+			<Show when={showLibrary()}>
+				<Portal mount={document.body}>
+					<div
+						class="fixed inset-0 bg-black/85 backdrop-blur-md z-[200] flex items-center justify-center p-4"
+						onClick={(e) => { if (e.target === e.currentTarget) setShowLibrary(false); }}
+					>
+						<div class="bg-[#0c1422] border border-white/10 rounded-2xl shadow-2xl w-[820px] max-w-[95vw] flex flex-col overflow-hidden"
+							style={{ "max-height": "88vh" }}>
+
+							{/* Header */}
+							<div class="flex items-center gap-3 px-5 py-4 border-b border-white/10 shrink-0">
+								<span class="text-xl">📚</span>
+								<div class="flex-1">
+									<h2 class="text-white font-display text-lg leading-tight">Bibliothèque d'assets</h2>
+									<p class="text-slate-500 text-xs mt-0.5">Sélectionnez un asset pour le placer sur la carte</p>
+								</div>
+								<button
+									onClick={() => setShowLibrary(false)}
+									class="px-3 py-1.5 rounded-lg bg-black/40 hover:bg-white/10 border border-white/10 text-slate-400 text-sm transition"
+								>✕</button>
+							</div>
+
+							{/* Search */}
+							<div class="px-5 py-3 border-b border-white/10 shrink-0">
+								<input
+									type="text"
+									placeholder="🔍  Rechercher un asset… (affiche les 10 premiers résultats)"
+									value={librarySearch()}
+									onInput={(e) => setLibrarySearch(e.currentTarget.value)}
+									class="w-full px-4 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/60 transition"
+								/>
+							</div>
+
+							{/* Body */}
+							<div class="flex flex-1 overflow-hidden">
+
+								{/* Category sidebar */}
+								<div class="w-44 shrink-0 border-r border-white/10 overflow-y-auto p-2 space-y-0.5">
+									<button
+										onClick={() => { setLibraryCategory(''); setLibrarySearch(''); }}
+										class={`w-full text-left px-3 py-2 rounded-lg text-sm transition ${
+											libraryCategory() === '' && !librarySearch()
+												? 'bg-indigo-600/40 text-indigo-200 border border-indigo-500/30'
+												: 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+										}`}
+									>
+										Toutes les catégories
+									</button>
+									<For each={ASSET_CATEGORIES}>
+										{(cat) => (
+											<button
+												onClick={() => { setLibraryCategory(cat.id); setLibrarySearch(''); }}
+												class={`w-full text-left px-3 py-2 rounded-lg text-sm transition truncate ${
+													libraryCategory() === cat.id && !librarySearch()
+														? 'bg-indigo-600/40 text-indigo-200 border border-indigo-500/30'
+														: 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+												}`}
+												title={cat.name}
+											>
+												{cat.name}
+											</button>
+										)}
+									</For>
+								</div>
+
+								{/* Asset grid */}
+								<div class="flex-1 overflow-y-auto p-4">
+
+									{/* Search results */}
+									<Show when={librarySearch().trim().length > 0}>
+										<p class="text-xs text-slate-500 mb-3">
+											{ALL_ASSETS.filter(a => a.name.toLowerCase().includes(librarySearch().toLowerCase().trim())).slice(0, 10).length} résultat{ALL_ASSETS.filter(a => a.name.toLowerCase().includes(librarySearch().toLowerCase().trim())).slice(0, 10).length !== 1 ? 's' : ''} pour « {librarySearch().trim()} »
+										</p>
+										<Show when={ALL_ASSETS.filter(a => a.name.toLowerCase().includes(librarySearch().toLowerCase().trim())).length === 0}>
+											<p class="text-slate-600 text-sm text-center py-8">Aucun asset trouvé.</p>
+										</Show>
+										<div class="grid grid-cols-3 gap-2">
+											<For each={ALL_ASSETS.filter(a => a.name.toLowerCase().includes(librarySearch().toLowerCase().trim())).slice(0, 10)}>
+												{(asset) => (
+													<div
+														class={`relative rounded-xl border transition text-xs cursor-pointer ${
+															selectedAsset()?.id === asset.id
+																? 'bg-indigo-600/50 border-indigo-400/50 text-white'
+																: 'bg-black/30 border-white/10 text-slate-300 hover:bg-white/5 hover:border-white/20'
+														}`}
+														onClick={() => {
+															cleanupPreviewMesh();
+															setSelectedAsset(asset);
+															setEditingAsset(null);
+															setEditMode(false);
+															setDeleteMode(false);
+															setZoneSelectionMode(false);
+															setShowLibrary(false);
+														}}
+													>
+														<div class="px-3 pt-2.5 pb-6">
+															<div class="font-medium truncate mb-0.5">{asset.name}</div>
+															<div class="text-[10px] opacity-50 uppercase tracking-wide">{asset.type}</div>
+														</div>
+														<button
+															type="button"
+															title={isFavorite(asset.path) ? "Retirer des favoris" : "Ajouter aux favoris"}
+															onClick={(e) => { e.stopPropagation(); toggleFavorite(asset.path); }}
+															class={`absolute bottom-1.5 right-1.5 text-sm leading-none transition hover:scale-110 ${
+																isFavorite(asset.path) ? 'text-amber-400' : 'text-slate-600 hover:text-amber-300'
+															}`}
+														>
+															{isFavorite(asset.path) ? '★' : '☆'}
+														</button>
+													</div>
+												)}
+											</For>
+										</div>
+									</Show>
+
+									{/* Category browse */}
+									<Show when={librarySearch().trim().length === 0}>
+										<For each={ASSET_CATEGORIES.filter(c => !libraryCategory() || c.id === libraryCategory())}>
+											{(cat) => (
+												<div class="mb-6">
+													<h3 class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2 flex items-center gap-2">
+														<span class="flex-1">{cat.name}</span>
+														<span class="text-slate-600 normal-case font-normal">{cat.assets.length} assets</span>
+													</h3>
+													<div class="grid grid-cols-3 gap-2">
+														<For each={cat.assets}>
+															{(asset) => (
+																<div
+																	class={`relative rounded-xl border transition text-xs cursor-pointer ${
+																		selectedAsset()?.id === asset.id
+																			? 'bg-indigo-600/50 border-indigo-400/50 text-white'
+																			: 'bg-black/30 border-white/10 text-slate-300 hover:bg-white/5 hover:border-white/20'
+																	}}`}
+																	onClick={() => {
+																		cleanupPreviewMesh();
+																		setSelectedAsset(asset);
+																		setEditingAsset(null);
+																		setEditMode(false);
+																		setDeleteMode(false);
+																		setZoneSelectionMode(false);
+																		setShowLibrary(false);
+																	}}
+																>
+																	<div class="px-3 pt-2.5 pb-6">
+																		<div class="font-medium truncate mb-0.5">{asset.name}</div>
+																		<div class="text-[10px] opacity-50 uppercase tracking-wide">{asset.type}</div>
+																	</div>
+																	<button
+																		type="button"
+																		title={isFavorite(asset.path) ? "Retirer des favoris" : "Ajouter aux favoris"}
+																		onClick={(e) => { e.stopPropagation(); toggleFavorite(asset.path); }}
+																		class={`absolute bottom-1.5 right-1.5 text-sm leading-none transition hover:scale-110 ${
+																			isFavorite(asset.path) ? 'text-amber-400' : 'text-slate-600 hover:text-amber-300'
+																		}}`}
+																	>
+																		{isFavorite(asset.path) ? '★' : '☆'}
+																	</button>
+																</div>
+															)}
+														</For>
+													</div>
+												</div>
+											)}
+										</For>
+									</Show>
+
+								</div>
+							</div>
+						</div>
+					</div>
+				</Portal>
+			</Show>
 
 			{/* Context Menu for Spawn Zones */}
 			<Show when={contextMenuCell()}>

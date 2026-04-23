@@ -23,6 +23,7 @@ import {
   User,
   Drama,
   Loader2,
+  Map as MapIcon,
 } from "lucide-solid";
 import { createSignal, onCleanup, onMount, Show, For, type JSX } from "solid-js";
 import {
@@ -206,7 +207,11 @@ export default function CampaignView() {
         return;
       }
       setSessionInvite(null);
-      navigate("/board");
+      if (invite.campaignId) {
+        navigate(`/campaigns/${invite.campaignId}/lobby`);
+      } else {
+        navigate("/board");
+      }
     } catch (e: any) {
       setInviteError(e?.message ?? "Impossible de rejoindre la session.");
     } finally {
@@ -236,6 +241,33 @@ export default function CampaignView() {
   const handleUpdate = () => {
     // TODO: Implement edit campaign modal or navigate to edit page
     navigate(`/campaigns/${params.id}/edit`);
+  };
+
+  const handleCampaignManager = () => {
+    navigate(`/campaigns/${params.id}/manager`);
+  };
+
+  const handleLaunchCampaignSession = async () => {
+    const c = campaign();
+    if (!c || !isOwner()) return;
+    setLaunchError(null);
+    setLaunchingSession(true);
+    try {
+      if (!signalRService.isConnected) {
+        await signalRService.connect();
+        ensureMultiplayerHandlersRegistered();
+      }
+      await createSession(c.id);
+      navigate(`/campaigns/${params.id}/lobby`);
+    } catch (e: any) {
+      setLaunchError(e?.message ?? 'Impossible de créer la session.');
+    } finally {
+      setLaunchingSession(false);
+    }
+  };
+
+  const handleViewSessions = () => {
+    navigate(`/campaigns/${params.id}/sessions`);
   };
 
   const handleDelete = async () => {
@@ -743,6 +775,32 @@ export default function CampaignView() {
                   >
                     <Edit3 class="w-5 h-5" />
                     Modifier
+                  </button>
+                  <button
+                    onClick={handleCampaignManager}
+                    class="py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-white font-semibold hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                  >
+                    <MapIcon class="w-5 h-5" />
+                    Campaign Manager
+                  </button>
+                  <button
+                    onClick={handleLaunchCampaignSession}
+                    disabled={launchingSession()}
+                    class="py-3 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold transition-all shadow-lg shadow-purple-500/20 flex items-center justify-center gap-2"
+                  >
+                    <Show when={launchingSession()} fallback={<Play class="w-5 h-5" />}>
+                      <Loader2 class="w-5 h-5 animate-spin" />
+                    </Show>
+                    <Show when={launchingSession()} fallback="Lancer la session">
+                      Création…
+                    </Show>
+                  </button>
+                  <button
+                    onClick={handleViewSessions}
+                    class="py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-white font-semibold hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                  >
+                    <BookOpen class="w-5 h-5" />
+                    Voir les sessions
                   </button>
                   <button
                     onClick={handleDelete}
