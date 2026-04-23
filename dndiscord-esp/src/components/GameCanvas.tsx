@@ -234,6 +234,17 @@ export const GameCanvas: Component = () => {
     pendingRerun = false;
     (async () => {
       try {
+        // Dispose engine meshes whose store entry has been removed (e.g.
+        // Play Again wiped the units store but the skeleton mesh would
+        // otherwise linger as a ghost on the map).
+        const liveIds = new Set(unitIds);
+        for (const id of engineInstance.getTrackedUnitIds()) {
+          if (!liveIds.has(id)) {
+            engineInstance.removeUnit(id);
+            prevPositions.delete(id);
+          }
+        }
+
         for (const { id, unit, currentPos } of unitSnapshots) {
           const exists = engineInstance.hasUnit(id);
           const prevPos = prevPositions.get(id);
@@ -519,8 +530,11 @@ export const GameCanvas: Component = () => {
     // moves / attacks / end-turn through the hub, which broadcasts to the
     // whole group. Players would double-submit if they also ran the tick.
     // Solo play has no session, so `!isInSession()` lets the single client
-    // drive AI. Closes BUG-H (enemies never acted in multiplayer).
-    const autoAiEnabled = !isInSession() || getIsHost();
+    // drive AI. The DmPanel "IA auto" toggle (dmToolsState.aiAutoPlay) gates
+    // this further: when disabled, the DM pilots enemies manually via the
+    // EnemyHotbar; without that gate the toggle had no effect in MP.
+    const autoAiEnabled =
+      (!isInSession() || getIsHost()) && dmToolsState.aiAutoPlay;
     if (autoAiEnabled && isEnemyTurn && lastExecutedEnemyIndex !== currentIndex) {
       lastExecutedEnemyIndex = currentIndex;
       enemyTurnTimeout = setTimeout(async () => {
