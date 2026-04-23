@@ -19,12 +19,18 @@ import CharactersComponent from "./pages/CharactersComponent";
 import { AuthCallback, ProtectedRoute } from "./components/auth";
 import { authStore } from "./stores/auth.store";
 import { initDiscordSDK } from "./services/discord";
+import { initDevLogBridge } from "./services/devLogBridge";
 // CampaignManagerPage intentionally unimported: the story-tree authoring UI is
 // disconnected from gameplay today. File kept for a future revival.
 // import CampaignManagerPage from "./pages/CampaignManagerPage";
 import SessionInviteListener from "./components/SessionInviteListener";
 import EditCampaign from "./pages/EditCampaign";
 import TutorialOverlay from "./components/TutorialOverlay";
+
+// Dev-only: mirror console output to back log file.
+if (import.meta.env.DEV) {
+  initDevLogBridge();
+}
 
 // Initialize auth state on app load
 authStore.init();
