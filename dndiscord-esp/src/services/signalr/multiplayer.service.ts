@@ -407,18 +407,23 @@ export function registerMultiplayerHandlers(): void {
   });
 
   // GameStarted (host started the game, or DmRestartGame after defeat/victory).
-  // Safety net: force phase out of GAME_OVER the instant the event arrives so
-  // the GameOverScreen modal (gated on phase === GAME_OVER) unmounts
-  // independent of whether the BoardGame createEffect fires or the re-init
-  // pipeline succeeds downstream. This is the first-line defence; the
-  // full reset (stores clear + startGame) runs afterwards through the
-  // BoardGame effect's onMultiplayerGameStart.
+  // The first-time path runs via LobbyScreen (mounted, watches
+  // `sessionState.gameStartedPayload`). For subsequent GameStarted events
+  // (DM Recommencer / Play Again), LobbyScreen is unmounted and BoardGame's
+  // `createEffect(on(..., { defer: true }))` was observed to not fire
+  // reliably, leaving the turn-order strip + ghost units on screen. We
+  // dispatch a window CustomEvent as a deterministic bus so BoardGame can
+  // addEventListener and re-init without depending on Solid store reactivity.
   signalRService.on("GameStarted", (data: GameStartedPayload) => {
-    if (gameState.phase === GamePhase.GAME_OVER) {
+    const isRestart = gameState.phase === GamePhase.GAME_OVER;
+    if (isRestart) {
       console.log("[multiplayer] GameStarted received during GAME_OVER — forcing phase to FREE_ROAM");
       setGameState("phase", GamePhase.FREE_ROAM);
     }
     setGameStarted(data);
+    if (isRestart) {
+      window.dispatchEvent(new CustomEvent("dnd-game-restart", { detail: data }));
+    }
   });
 
   // Discord voice channel chat (filtered server-side to players in session)

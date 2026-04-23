@@ -1,4 +1,4 @@
-import { Component, Show, onMount, onCleanup, createSignal, createEffect, on } from "solid-js";
+import { Component, Show, onMount, onCleanup, createSignal, createEffect } from "solid-js";
 import { useNavigate, useLocation } from "@solidjs/router";
 import { ArrowLeft, RotateCcw, Check, Hand, MousePointer, Move as MoveIcon, Flag, HelpCircle, X, Settings as SettingsIcon } from "lucide-solid";
 import { InGameSettingsModal } from "../components/InGameSettingsModal";
@@ -254,22 +254,23 @@ const BoardGame: Component = () => {
   // React to subsequent GameStarted payloads while already in-game — the DM's
   // Recommencer button routes through `DmRestartGame` on the hub, which
   // broadcasts a fresh GameStarted to every client. LobbyScreen handles the
-  // initial transition but is unmounted by the time Recommencer fires; without
-  // this effect the DM's click updated session state silently and nothing
-  // ever re-initialised the board (BUG-Q). `defer: true` skips the first
-  // setting on mount (that one was already consumed by LobbyScreen or
-  // RoomJoinScreen's recovery path).
-  createEffect(
-    on(
-      () => sessionState.gameStartedPayload,
-      (payload) => {
-        if (!payload) return;
-        if (appPhase() !== AppPhase.IN_GAME) return;
-        onMultiplayerGameStart(payload);
-      },
-      { defer: true },
-    ),
-  );
+  // initial transition but is unmounted by the time Recommencer fires. The
+  // SolidJS `on(..., { defer: true })` path was observed to NOT fire for the
+  // second GameStarted payload in live multiplayer (no `[BoardGame] =====`
+  // banner in the log after Recommencer), leaving stale turn order + ghost
+  // units on screen. `multiplayer.service.ts` now dispatches a window
+  // CustomEvent on restart; subscribing here bypasses Solid reactivity and
+  // guarantees the re-init runs.
+  onMount(() => {
+    const handler = (ev: Event) => {
+      const payload = (ev as CustomEvent<GameStartedPayload>).detail;
+      if (!payload) return;
+      if (appPhase() !== AppPhase.IN_GAME) return;
+      onMultiplayerGameStart(payload);
+    };
+    window.addEventListener("dnd-game-restart", handler);
+    onCleanup(() => window.removeEventListener("dnd-game-restart", handler));
+  });
 
   const backToModeSelection = () => {
     setAppPhase(AppPhase.MODE_SELECTION);
