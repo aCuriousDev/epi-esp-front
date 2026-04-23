@@ -704,8 +704,10 @@ export const GameCanvas: Component = () => {
       return;
     }
 
-    // DM inspect: clicking a player unit opens stats/inventory panel
-    if (isDm() && unit.team === Team.PLAYER && !dmActiveMode()) {
+    // DM inspect: clicking any unit (player OR enemy) opens the inspect
+    // panel. Stats + HP-adjust tools work for every team; the inventory /
+    // give tabs gate themselves to player units internally.
+    if (isDm() && !dmActiveMode()) {
       setDmInspectedUnit(unitId);
       selectUnit(unitId);
       return;

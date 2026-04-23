@@ -33,7 +33,7 @@ import {
   setDmInspectedUnit,
 } from "../../stores/dmTools.store";
 import { isDm, getOtherPlayers, sessionState } from "../../stores/session.store";
-import { dmGrantItem } from "../../services/signalr/multiplayer.service";
+import { dmGrantItem, dmAdjustHp } from "../../services/signalr/multiplayer.service";
 import { InventoryService } from "../../services/inventory.service";
 import { getCategoryStyle } from "../../services/itemVisuals";
 import ItemIcon from "../common/ItemIcon";
@@ -259,7 +259,9 @@ export default function DmPlayerInspectPanel() {
               </button>
             </div>
 
-            {/* View toggle */}
+            {/* View toggle — inventory + give are player-only (characters
+                carry inventory; enemies / allies don't). Stats + HP tools
+                work on any unit. */}
             <div class="flex gap-0.5 mb-2">
               <button
                 class={`flex-1 py-1 rounded-md text-[10px] font-medium transition-all ${
@@ -267,32 +269,34 @@ export default function DmPlayerInspectPanel() {
                 }`}
                 onClick={() => setView("stats")}
               >Stats</button>
-              <button
-                class={`flex-1 py-1 rounded-md text-[10px] font-medium transition-all ${
-                  view() === "inventory" ? "bg-purple-500/20 text-purple-200 border border-purple-500/30" : "text-purple-400/50 hover:text-purple-300 border border-transparent"
-                }`}
-                onClick={() => setView("inventory")}
-              >
-                Inventaire
-                <Show when={totalItems() > 0}>
-                  <span class="ml-1 text-[8px] text-purple-300/50">({totalItems()})</span>
-                </Show>
-              </button>
-              <button
-                class={`flex-1 py-1 rounded-md text-[10px] font-medium transition-all ${
-                  view() === "give" ? "bg-amber-500/20 text-amber-200 border border-amber-500/30" : "text-purple-400/50 hover:text-purple-300 border border-transparent"
-                }`}
-                onClick={() => setView("give")}
-              >
-                <Sparkles class="w-3 h-3 inline mr-0.5" />
-                Donner
-              </button>
+              <Show when={u().team === Team.PLAYER}>
+                <button
+                  class={`flex-1 py-1 rounded-md text-[10px] font-medium transition-all ${
+                    view() === "inventory" ? "bg-purple-500/20 text-purple-200 border border-purple-500/30" : "text-purple-400/50 hover:text-purple-300 border border-transparent"
+                  }`}
+                  onClick={() => setView("inventory")}
+                >
+                  Inventaire
+                  <Show when={totalItems() > 0}>
+                    <span class="ml-1 text-[8px] text-purple-300/50">({totalItems()})</span>
+                  </Show>
+                </button>
+                <button
+                  class={`flex-1 py-1 rounded-md text-[10px] font-medium transition-all ${
+                    view() === "give" ? "bg-amber-500/20 text-amber-200 border border-amber-500/30" : "text-purple-400/50 hover:text-purple-300 border border-transparent"
+                  }`}
+                  onClick={() => setView("give")}
+                >
+                  <Sparkles class="w-3 h-3 inline mr-0.5" />
+                  Donner
+                </button>
+              </Show>
             </div>
 
             {/* ── STATS VIEW ── */}
             <Show when={view() === "stats"}>
               <div class="space-y-1.5">
-                {/* HP bar */}
+                {/* HP bar + DM heal/damage tool */}
                 <div class="space-y-0.5">
                   <div class="flex items-center justify-between text-[10px]">
                     <span class="flex items-center gap-1 text-red-300"><Heart class="w-3 h-3" /> PV</span>
@@ -301,6 +305,18 @@ export default function DmPlayerInspectPanel() {
                   <div class="h-1.5 rounded-full bg-white/10 overflow-hidden">
                     <div class="h-full rounded-full bg-gradient-to-r from-red-500 to-red-400 transition-all" style={{ width: `${hpPct()}%` }} />
                   </div>
+                  <Show when={isDm()}>
+                    <div class="flex items-center justify-between gap-1 mt-1 text-[10px]">
+                      <span class="text-purple-300/60">MJ :</span>
+                      <div class="flex items-center gap-0.5">
+                        <HpAdjustBtn unitId={u().id} delta={-10} label="-10" tone="red" />
+                        <HpAdjustBtn unitId={u().id} delta={-1} label="-1" tone="red" />
+                        <HpAdjustBtn unitId={u().id} delta={+1} label="+1" tone="green" />
+                        <HpAdjustBtn unitId={u().id} delta={+10} label="+10" tone="green" />
+                        <HpAdjustBtn unitId={u().id} delta={s().maxHealth} label="Max" tone="green" />
+                      </div>
+                    </div>
+                  </Show>
                 </div>
 
                 {/* AP bar */}
@@ -492,5 +508,28 @@ function StatRow(props: { icon: any; label: string; value: number }) {
       <span class="text-[9px] text-white/50 flex-1">{props.label}</span>
       <span class="text-[10px] text-white/80 font-mono font-semibold">{props.value}</span>
     </div>
+  );
+}
+
+function HpAdjustBtn(props: { unitId: string; delta: number; label: string; tone: "red" | "green" }) {
+  const toneClass = () =>
+    props.tone === "red"
+      ? "text-red-200 bg-red-500/15 hover:bg-red-500/25 border-red-500/30"
+      : "text-emerald-200 bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/30";
+  const apply = async () => {
+    try {
+      await dmAdjustHp(props.unitId, props.delta);
+    } catch (err) {
+      console.warn("[DM] dmAdjustHp failed", err);
+    }
+  };
+  return (
+    <button
+      onClick={apply}
+      class={`px-1.5 py-0.5 rounded border text-[9px] font-mono cursor-pointer transition-colors ${toneClass()}`}
+      title={props.delta > 0 ? `Soigner ${props.delta}` : `Infliger ${Math.abs(props.delta)} dégâts`}
+    >
+      {props.label}
+    </button>
   );
 }

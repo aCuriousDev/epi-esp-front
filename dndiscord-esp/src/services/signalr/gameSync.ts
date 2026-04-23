@@ -5,11 +5,12 @@
  */
 
 import { signalRService } from "./SignalRService";
-import type { GameMessage, MoveResult, TurnEndedPayload, DmMoveTokenPayload, DmSpawnUnitPayload, CombatStartedPayload, CombatEndedPayload, AbilityUsedPayload } from "../../types/multiplayer";
+import type { GameMessage, MoveResult, TurnEndedPayload, DmMoveTokenPayload, DmSpawnUnitPayload, CombatStartedPayload, CombatEndedPayload, AbilityUsedPayload, UnitHpAdjustedPayload } from "../../types/multiplayer";
 import type { GridPosition, Unit, UnitType } from "../../types";
 import { GameMode, GamePhase, Team } from "../../types";
 import { mapServerPhase } from "./serverPhase";
-import { units, addUnit } from "../../game/stores/UnitsStore";
+import { units, setUnits, addUnit } from "../../game/stores/UnitsStore";
+import { produce } from "solid-js/store";
 import { tiles, setTiles, updatePathfinder } from "../../game/stores/TilesStore";
 import { gameState, setGameState } from "../../game/stores/GameStateStore";
 import { posToKey } from "../../game/utils/GridUtils";
@@ -251,6 +252,42 @@ export function registerGameSyncHandlers(): void {
   // Silent ack for the server's peer-reconnect notice. No UI yet — suppresses
   // the "No client method with the name 'playerreconnected' found" warning.
   signalRService.on("PlayerReconnected", (_message: unknown) => { /* noop */ });
+
+  // DM used the heal/damage tool on a unit. Server broadcasts the clamped
+  // result + isAlive transition; every client applies verbatim, plays death
+  // VFX on alive->dead, logs to combat feed.
+  signalRService.on("UnitHpAdjusted", (message: GameMessage<UnitHpAdjustedPayload> | UnitHpAdjustedPayload | unknown) => {
+    const payload = (message && typeof message === "object" && "payload" in (message as any))
+      ? (message as GameMessage<UnitHpAdjustedPayload>).payload
+      : (message as UnitHpAdjustedPayload);
+    if (!payload?.unitId) return;
+    const unit = units[payload.unitId];
+    if (!unit) return;
+
+    setUnits(payload.unitId, produce((u) => {
+      u.stats.currentHealth = payload.hp;
+      u.stats.maxHealth = payload.maxHp;
+      u.isAlive = payload.isAlive;
+      if (!payload.isAlive) {
+        const key = posToKey(u.position);
+        if (tiles[key]?.occupiedBy === u.id) setTiles(key, "occupiedBy", null);
+      }
+    }));
+    updatePathfinder();
+
+    const name = unit.name;
+    if (payload.delta < 0) {
+      addCombatLog(`[MJ] ${name} subit ${Math.abs(payload.delta)} dégâts.`, "damage");
+    } else if (payload.delta > 0) {
+      addCombatLog(`[MJ] ${name} soigné·e de ${payload.delta} PV.`, "system");
+    }
+    if (payload.wasAlive && !payload.isAlive) {
+      addCombatLog(`${name} est vaincu·e !`, "system");
+      playDeathEffect(payload.unitId, unit.team as string);
+      playDeathSound();
+      playCameraShake(0.15, 300);
+    }
+  });
 
   // DM forcibly ended combat — clear the turn state, return to free roam.
   signalRService.on("CombatEnded", (_message: GameMessage<CombatEndedPayload> | CombatEndedPayload | unknown) => {

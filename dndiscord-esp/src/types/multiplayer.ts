@@ -182,6 +182,19 @@ export interface AbilityEffectPayload {
   value: number;
 }
 
+/** DM-initiated HP adjust (heal or damage, any team). Server clamps delta to
+ *  0..MaxHp; peers apply Hp + IsAlive verbatim and trigger death VFX when
+ *  WasAlive && !IsAlive. */
+export interface UnitHpAdjustedPayload {
+  unitId: string;
+  hp: number;
+  maxHp: number;
+  isAlive: boolean;
+  /** Actual applied delta after clamping (may be less than requested). */
+  delta: number;
+  wasAlive: boolean;
+}
+
 // --- Message séquencé (backend) ---
 export interface GameMessage<T> {
   type: string;

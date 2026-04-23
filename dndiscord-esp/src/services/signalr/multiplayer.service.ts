@@ -80,6 +80,7 @@ const HUB = {
   dmEndCombat: "DmEndCombat",
   dmRestartGame: "DmRestartGame",
   dmSwitchMap: "DmSwitchMap",
+  dmAdjustHp: "DmAdjustHp",
   selectDefaultTemplate: "SelectDefaultTemplate",
 } as const;
 
@@ -350,6 +351,13 @@ export async function dmStartCombat(): Promise<void> {
 /** DM-only: forcibly end combat and return the session to free roam. */
 export async function dmEndCombat(): Promise<void> {
   await signalRService.invoke(HUB.dmEndCombat);
+}
+
+/** DM-only: heal (+) or damage (-) any unit in the combat roster. Server
+ *  clamps to 0..MaxHp; peers apply the resulting HP + isAlive via the
+ *  UnitHpAdjusted broadcast. */
+export async function dmAdjustHp(unitId: string, delta: number): Promise<void> {
+  await signalRService.invoke(HUB.dmAdjustHp, unitId, delta);
 }
 
 // --- Enregistrement des handlers d'événements ---
