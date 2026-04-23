@@ -181,6 +181,12 @@ export const GameCanvas: Component = () => {
   
   // Track previous unit positions for movement animation
   const prevPositions = new Map<string, GridPosition>();
+  // Track previous aliveness to detect dead->alive transitions on the same
+  // unit id — the death VFX leaves the rig rotated on its back, so reusing
+  // the mesh for a respawn (Play Again / restart) keeps it laid down until
+  // we force a revive. A Play Again path triggers this because clearUnits +
+  // re-seed keeps the same player id.
+  const prevAlive = new Map<string, boolean>();
   
   // Lock to prevent concurrent effect execution
   let isProcessingUnits = false;
@@ -248,6 +254,7 @@ export const GameCanvas: Component = () => {
           if (!liveIds.has(id)) {
             engine.removeUnit(id);
             prevPositions.delete(id);
+            prevAlive.delete(id);
           }
         }
 
@@ -255,6 +262,8 @@ export const GameCanvas: Component = () => {
           if (engineInstance !== engine) return;
           const exists = engine.hasUnit(id);
           const prevPos = prevPositions.get(id);
+          const wasAlive = prevAlive.get(id);
+          prevAlive.set(id, unit.isAlive);
 
           if (!exists) {
             await engine.createUnit(unit);
@@ -276,6 +285,15 @@ export const GameCanvas: Component = () => {
             }
             // Skip updateUnit when position hasn't changed to avoid
             // animation stacking that causes units to float upward
+
+            // Dead->alive transition on the same mesh id means the store
+            // re-seeded a respawn (Play Again, heal past zero, etc). The
+            // death VFX left the rig laid out on the tile; upright it now
+            // so the respawned unit doesn't look like a corpse that can
+            // still move around.
+            if (wasAlive === false && unit.isAlive) {
+              engine.playReviveVFX(id);
+            }
           }
         }
 

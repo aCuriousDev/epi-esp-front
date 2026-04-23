@@ -41,7 +41,18 @@ export function getEnemyUnits(): Unit[] {
 // ============================================
 
 export function clearUnits(): void {
-  setUnits({});
+  // SolidJS createStore's top-level setter merges objects — passing `{}`
+  // is a no-op because there are no keys to write. Need produce + explicit
+  // deletes to actually empty the record. Previously every "clear" left the
+  // prior session's units alive in the store and surfaced as ghost
+  // enemies carrying over on rejoin / new session.
+  setUnits(
+    produce((draft) => {
+      for (const id of Object.keys(draft)) {
+        delete (draft as any)[id];
+      }
+    }),
+  );
 }
 
 /**
