@@ -20,8 +20,10 @@ import {
 } from '../abilities/AbilityDefinitions';
 import { mapAssignmentToUnit } from '../utils/CharacterToUnit';
 import { sessionState, isDm } from '../../stores/session.store';
+import { GRID_SIZE } from '../constants';
+import { getSpawnPositions } from '../spawn/Placement';
 
-const SPAWN_POSITIONS: GridPosition[] = [
+const LEGACY_FALLBACK_SPAWNS: GridPosition[] = [
   { x: 1, z: 1 },
   { x: 1, z: 3 },
   { x: 3, z: 1 },
@@ -29,6 +31,22 @@ const SPAWN_POSITIONS: GridPosition[] = [
   { x: 5, z: 1 },
   { x: 5, z: 3 },
 ];
+
+function resolveAllySpawns(count: number): GridPosition[] {
+  const picked = getSpawnPositions({
+    tiles,
+    team: 'ally',
+    count,
+    gridWidth: GRID_SIZE,
+    gridHeight: GRID_SIZE,
+    seed: Date.now(),
+  });
+  if (picked.length >= count) return picked;
+  // Final safety net when the grid is empty or entirely blocked — keep the
+  // legacy anchors so the init doesn't hand back fewer positions than units.
+  const filler = LEGACY_FALLBACK_SPAWNS.slice(0, count - picked.length);
+  return [...picked, ...filler];
+}
 
 export function initializeFreeRoam(mapId: string | null = null, unitAssignments?: UnitAssignment[]): void {
   console.log('[initializeFreeRoam] Starting Free Roam initialization...');
@@ -54,8 +72,9 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
     const filtered = unitAssignments.filter(
       (a) => !(isDm() && hubId && a.userId === hubId),
     );
+    const allySpawns = resolveAllySpawns(filtered.length);
     filtered.forEach((assignment, i) => {
-      const spawnPos = SPAWN_POSITIONS[i % SPAWN_POSITIONS.length];
+      const spawnPos = allySpawns[i] ?? LEGACY_FALLBACK_SPAWNS[i % LEGACY_FALLBACK_SPAWNS.length];
       const unit = mapAssignmentToUnit(assignment, spawnPos);
       newUnits[unit.id] = unit;
 
@@ -69,7 +88,6 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
         id: 'player_warrior',
         name: 'Sir Roland',
         type: UnitType.WARRIOR,
-        position: { x: 1, z: 1 },
         abilities: cloneAbilities(WARRIOR_ABILITIES),
         stats: {
           maxHealth: 120,
@@ -87,7 +105,6 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
         id: 'player_mage',
         name: 'Elara',
         type: UnitType.MAGE,
-        position: { x: 0, z: 2 },
         abilities: cloneAbilities(MAGE_ABILITIES),
         stats: {
           maxHealth: 80,
@@ -105,7 +122,6 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
         id: 'player_archer',
         name: 'Theron',
         type: UnitType.ARCHER,
-        position: { x: 2, z: 0 },
         abilities: cloneAbilities(ARCHER_ABILITIES),
         stats: {
           maxHealth: 90,
@@ -120,6 +136,11 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
         },
       },
     ];
+
+    const soloSpawns = resolveAllySpawns(playerUnits.length);
+    playerUnits.forEach((unitData, i) => {
+      unitData.position = soloSpawns[i] ?? LEGACY_FALLBACK_SPAWNS[i % LEGACY_FALLBACK_SPAWNS.length];
+    });
 
     playerUnits.forEach((unitData) => {
       const unit: Unit = {

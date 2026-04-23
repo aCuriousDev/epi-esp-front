@@ -19,6 +19,30 @@ import {
 import { loadMap } from '../../services/mapStorage';
 import { mapAssignmentToUnit } from '../utils/CharacterToUnit';
 import { sessionState, isDm } from '../../stores/session.store';
+import { tiles } from '../stores/TilesStore';
+import { GRID_SIZE } from '../constants';
+import { getSpawnPositions, type SpawnTeam } from '../spawn/Placement';
+
+/**
+ * When a map has no curated spawn zones for a team, fall back to rule-based
+ * placement over the board's floor tiles. Keeps the zone-aware path untouched.
+ */
+function fillFromPlacementRule(
+  bucket: GridPosition[],
+  team: SpawnTeam,
+  count: number,
+): void {
+  if (bucket.length > 0 || count <= 0) return;
+  const picked = getSpawnPositions({
+    tiles,
+    team,
+    count,
+    gridWidth: GRID_SIZE,
+    gridHeight: GRID_SIZE,
+    seed: Date.now(),
+  });
+  bucket.push(...picked);
+}
 
 /**
  * Obtient une position aléatoire depuis une liste de positions disponibles
@@ -149,6 +173,8 @@ export function initializeUnitsMultiplayer(
   const playerAssignments = unitAssignments.filter(
     (a) => !(isDm() && hubId && a.userId === hubId),
   );
+  fillFromPlacementRule(availableAllyPositions, 'ally', playerAssignments.length);
+  fillFromPlacementRule(availableEnemyPositions, 'enemy', DEFAULT_ENEMIES.length);
   playerAssignments.forEach((assignment, i) => {
     const spawn =
       getRandomPosition(availableAllyPositions) ??
@@ -258,7 +284,8 @@ export function initializeUnits(mapId: string | null = null): void {
   const spawnZones = getSpawnZones(mapId);
   const availableAllyPositions = [...spawnZones.ally];
   const availableEnemyPositions = [...spawnZones.enemy];
-  
+  fillFromPlacementRule(availableAllyPositions, 'ally', playerUnits.length);
+
   console.log('[initializeUnits] Ally spawn zones loaded:', availableAllyPositions.length);
   console.log('[initializeUnits] Enemy spawn zones loaded:', availableEnemyPositions.length);
   
@@ -364,10 +391,10 @@ export function initializeUnits(mapId: string | null = null): void {
     },
   ];
   
-  // Créer les unités ennemies avec placement aléatoire sur les zones "enemy"
-  
+  fillFromPlacementRule(availableEnemyPositions, 'enemy', enemyUnits.length);
+
   console.log('[initializeUnits] Enemy spawn zones loaded:', availableEnemyPositions.length);
-  
+
   // Créer les unités ennemies avec placement aléatoire sur les zones "enemy"
   enemyUnits.forEach((unitData) => {
     let position: { x: number; z: number };
@@ -483,7 +510,8 @@ export function initializeEnemies(mapId: string | null = null): void {
   // Obtenir les zones de spawn ennemies depuis la map
   const spawnZones = getSpawnZones(mapId);
   const availableEnemyPositions = [...spawnZones.enemy];
-  
+  fillFromPlacementRule(availableEnemyPositions, 'enemy', enemyUnits.length);
+
   console.log('[initializeEnemies] Enemy spawn zones loaded:', availableEnemyPositions.length);
   
   // Créer les unités ennemies avec placement aléatoire sur les zones "enemy"
