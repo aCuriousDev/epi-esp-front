@@ -173,18 +173,21 @@ export function initializeUnitsMultiplayer(
   const playerAssignments = unitAssignments.filter(
     (a) => !(isDm() && hubId && a.userId === hubId),
   );
-  fillFromPlacementRule(availableAllyPositions, 'ally', playerAssignments.length);
   fillFromPlacementRule(availableEnemyPositions, 'enemy', DEFAULT_ENEMIES.length);
   playerAssignments.forEach((assignment, i) => {
-    const spawn =
-      getRandomPosition(availableAllyPositions) ??
-      assignment.userId
-        ? { x: 1 + (i % 3) * 2, z: 1 + Math.floor(i / 3) * 2 }
-        : { x: 1, z: 1 };
-
-    // Remove chosen spawn to avoid duplicates
-    const idx = availableAllyPositions.findIndex((p) => p.x === spawn.x && p.z === spawn.z);
-    if (idx >= 0) availableAllyPositions.splice(idx, 1);
+    let spawn: GridPosition;
+    if (assignment.startX != null && assignment.startY != null) {
+      // Position authoritative du serveur — utiliser verbatim.
+      spawn = { x: assignment.startX, z: assignment.startY };
+    } else {
+      // Pas de position serveur (payload pre-rework) : zones curées puis fallback grille.
+      spawn =
+        getRandomPosition(availableAllyPositions) ??
+        { x: 1 + (i % 3) * 2, z: 1 + Math.floor(i / 3) * 2 };
+      // Retirer la position choisie pour éviter les doublons.
+      const idx = availableAllyPositions.findIndex((p) => p.x === spawn.x && p.z === spawn.z);
+      if (idx >= 0) availableAllyPositions.splice(idx, 1);
+    }
 
     const unit = mapAssignmentToUnit(assignment, spawn);
     newUnits[unit.id] = unit;

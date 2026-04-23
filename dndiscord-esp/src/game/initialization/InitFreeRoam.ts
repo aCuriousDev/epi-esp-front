@@ -72,9 +72,12 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
     const filtered = unitAssignments.filter(
       (a) => !(isDm() && hubId && a.userId === hubId),
     );
-    const allySpawns = resolveAllySpawns(filtered.length);
     filtered.forEach((assignment, i) => {
-      const spawnPos = allySpawns[i] ?? LEGACY_FALLBACK_SPAWNS[i % LEGACY_FALLBACK_SPAWNS.length];
+      // Utiliser la position fournie par le serveur si disponible, sinon fallback local.
+      const spawnPos =
+        assignment.startX != null && assignment.startY != null
+          ? { x: assignment.startX, z: assignment.startY }
+          : LEGACY_FALLBACK_SPAWNS[i % LEGACY_FALLBACK_SPAWNS.length];
       const unit = mapAssignmentToUnit(assignment, spawnPos);
       newUnits[unit.id] = unit;
 

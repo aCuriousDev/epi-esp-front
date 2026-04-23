@@ -57,6 +57,11 @@ export interface UnitAssignment {
   defense: number;
   movementRange: number;
   attackRange: number;
+  /** Server-authoritative spawn position. Present when the back computed it
+   *  at StartOrRestartGameAsync. Absent on pre-rework payloads — fall back to
+   *  local placement in that case. */
+  startX?: number;
+  startY?: number;
 }
 
 export interface GameStartedPayload {
