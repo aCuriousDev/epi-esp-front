@@ -186,7 +186,12 @@ const BoardGame: Component = () => {
     setAppPhase(AppPhase.LOBBY);
   };
 
+  let lastInitPayload: GameStartedPayload | null = null;
+
   const onMultiplayerGameStart = (payload: GameStartedPayload) => {
+    if (lastInitPayload === payload) return;
+    lastInitPayload = payload;
+
     console.log(
       "[BoardGame] ========== MULTIPLAYER GAME STARTED ==========",
       payload,
@@ -251,25 +256,22 @@ const BoardGame: Component = () => {
     checkEngine();
   };
 
-  // React to subsequent GameStarted payloads while already in-game — the DM's
-  // Recommencer button routes through `DmRestartGame` on the hub, which
-  // broadcasts a fresh GameStarted to every client. LobbyScreen handles the
-  // initial transition but is unmounted by the time Recommencer fires. The
-  // SolidJS `on(..., { defer: true })` path was observed to NOT fire for the
-  // second GameStarted payload in live multiplayer (no `[BoardGame] =====`
-  // banner in the log after Recommencer), leaving stale turn order + ghost
-  // units on screen. `multiplayer.service.ts` now dispatches a window
-  // CustomEvent on restart; subscribing here bypasses Solid reactivity and
-  // guarantees the re-init runs.
-  onMount(() => {
-    const handler = (ev: Event) => {
-      const payload = (ev as CustomEvent<GameStartedPayload>).detail;
-      if (!payload) return;
-      if (appPhase() !== AppPhase.IN_GAME) return;
-      onMultiplayerGameStart(payload);
-    };
-    window.addEventListener("dnd-game-restart", handler);
-    onCleanup(() => window.removeEventListener("dnd-game-restart", handler));
+  // Run the re-init for every GameStarted payload that lands while the app
+  // is already in IN_GAME phase. Covers three cases: (1) DM Recommencer
+  // after defeat/victory, (2) refresh/reconnect where OnConnectedAsync
+  // replays GameStarted via the rejoin snapshot, and (3) any future path
+  // that sets gameStartedPayload while BoardGame is mounted in-game. A
+  // plain createEffect (no `on(..., { defer: true })`) guarantees the
+  // effect fires even if the payload was already in the store at the time
+  // BoardGame mounted — the old deferred variant skipped that case and
+  // left rejoiners stuck on "Setting up…". The dedupe in
+  // onMultiplayerGameStart prevents double-init when LobbyScreen also
+  // called it directly for the initial transition.
+  createEffect(() => {
+    const payload = sessionState.gameStartedPayload;
+    if (!payload) return;
+    if (appPhase() !== AppPhase.IN_GAME) return;
+    onMultiplayerGameStart(payload);
   });
 
   const backToModeSelection = () => {

@@ -406,24 +406,17 @@ export function registerMultiplayerHandlers(): void {
     updateSession(normalizeSession(data));
   });
 
-  // GameStarted (host started the game, or DmRestartGame after defeat/victory).
-  // The first-time path runs via LobbyScreen (mounted, watches
-  // `sessionState.gameStartedPayload`). For subsequent GameStarted events
-  // (DM Recommencer / Play Again), LobbyScreen is unmounted and BoardGame's
-  // `createEffect(on(..., { defer: true }))` was observed to not fire
-  // reliably, leaving the turn-order strip + ghost units on screen. We
-  // dispatch a window CustomEvent as a deterministic bus so BoardGame can
-  // addEventListener and re-init without depending on Solid store reactivity.
+  // GameStarted (host started the game, or DmRestartGame after defeat/victory,
+  // or OnConnectedAsync replay after reconnect/refresh). The store write
+  // triggers BoardGame's createEffect — which dedupes by payload reference
+  // so LobbyScreen's direct onGameStart call (for initial lobby→game) isn't
+  // double-processed.
   signalRService.on("GameStarted", (data: GameStartedPayload) => {
-    const isRestart = gameState.phase === GamePhase.GAME_OVER;
-    if (isRestart) {
+    if (gameState.phase === GamePhase.GAME_OVER) {
       console.log("[multiplayer] GameStarted received during GAME_OVER — forcing phase to FREE_ROAM");
       setGameState("phase", GamePhase.FREE_ROAM);
     }
     setGameStarted(data);
-    if (isRestart) {
-      window.dispatchEvent(new CustomEvent("dnd-game-restart", { detail: data }));
-    }
   });
 
   // Discord voice channel chat (filtered server-side to players in session)
