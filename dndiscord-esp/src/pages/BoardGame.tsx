@@ -206,6 +206,18 @@ const BoardGame: Component = () => {
       }
     }
 
+    // Restart case: we're already in-game (the user hit Recommencer / Play
+    // Again, or the DM rebuilt the roster). Wipe stale stores before the
+    // re-seed so enemies from the previous "life" don't survive, and reset
+    // phase so the GameOverScreen (gated on phase=GAME_OVER) unmounts
+    // immediately rather than waiting for initializeFreeRoam to reach
+    // setGameState. Without this the defeat modal stuck around for users.
+    if (appPhase() === AppPhase.IN_GAME) {
+      clearUnits();
+      clearTiles();
+      resetGameState();
+    }
+
     setSelectedMapId(payload.mapId === "default" ? null : payload.mapId);
     setAppPhase(AppPhase.IN_GAME);
 
