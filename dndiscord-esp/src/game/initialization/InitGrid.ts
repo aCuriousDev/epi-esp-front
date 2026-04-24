@@ -11,6 +11,7 @@ import { posToKey } from '../utils/GridUtils';
 import { setTiles, initializePathfinder } from '../stores/TilesStore';
 import { loadMap, type SavedMapData, type SavedCellData, type SavedAssetData } from '../../services/mapStorage';
 import { getCollisionProperties } from '../utils/CollisionUtils';
+import { getSessionMapConfig } from '../../stores/session-map.store';
 
 export function initializeGrid(mapId: string | null = null): void {
   const newTiles: Record<string, any> = {};
@@ -30,14 +31,57 @@ export function initializeGrid(mapId: string | null = null): void {
     createDefaultGrid(newTiles);
   }
   
+  // Apply session map config (exitCells / trapCells defined in the MapNode)
+  applySessionMapOverrides(newTiles);
+
   setTiles(newTiles);
-  
+
   // Initialize pathfinder
   const tileMap = new Map<string, any>();
   Object.entries(newTiles).forEach(([key, tile]) => {
     tileMap.set(key, tile);
   });
   initializePathfinder(tileMap, GRID_SIZE, GRID_SIZE);
+}
+
+/**
+ * Overlays EXIT / TRAP tile types defined in the active session's MapNode.
+ * Called after the main map (or default grid) has been loaded so that
+ * scenario-level annotations always win over asset collision data.
+ */
+function applySessionMapOverrides(newTiles: Record<string, any>): void {
+  const cfg = getSessionMapConfig();
+  if (!cfg) return;
+
+  // ── Exit cells ───────────────────────────────────────────────────────────
+  for (const cell of cfg.exitCells ?? []) {
+    const key = posToKey(cell);
+    if (newTiles[key]) {
+      newTiles[key].type        = TileType.EXIT;
+      newTiles[key].walkable    = true;   // players must be able to step on them
+      newTiles[key].movementCost = 1;
+    }
+  }
+
+  // ── Trap cells ───────────────────────────────────────────────────────────
+  for (const cell of cfg.trapCells ?? []) {
+    const key = posToKey(cell);
+    if (newTiles[key]) {
+      newTiles[key].type     = TileType.TRAP;
+      newTiles[key].walkable = true;      // traps are hidden — walkable until triggered
+      // Add a damage effect so the engine can fire it on entry
+      newTiles[key].effects = [
+        ...(newTiles[key].effects ?? []),
+        { id: `trap_${cell.x}_${cell.z}`, type: 'damage', value: 10 },
+      ];
+    }
+  }
+
+  console.log(
+    '[InitGrid] Session map overrides applied —',
+    (cfg.exitCells?.length ?? 0), 'exit cells,',
+    (cfg.trapCells?.length ?? 0), 'trap cells',
+  );
 }
 
 /**

@@ -49,6 +49,13 @@ import { sessionState, clearSession } from "../stores/session.store";
 import { isDm } from "../stores/session.store";
 import { leaveSession, dmRestartGame as dmRestartGameHub } from "../services/signalr/multiplayer.service";
 import { isInSession } from "../stores/session.store";
+import {
+  getSessionMapConfig,
+  clearSessionMapConfig,
+  isSessionMapActive,
+  setSessionExitCallback,
+  clearSessionExitCallback,
+} from "../stores/session-map.store";
 import type { GameStartedPayload } from "../types/multiplayer";
 import { saveMap, type SavedMapData } from "../services/mapStorage";
 import { LogOut } from "lucide-solid";
@@ -60,6 +67,13 @@ import { randomizePreparationPlacement } from "../game/actions/PreparationAction
 const BoardGame: Component = () => {
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Tracks whether the component is still mounted.  Every checkEngine loop
+  // reads this flag before scheduling the next tick so orphaned timeouts
+  // that fire after an unmount are no-ops.
+  let mounted = true;
+  onCleanup(() => { mounted = false; });
+
   const [appPhase, setAppPhase] = createSignal<AppPhase>(
     AppPhase.MODE_SELECTION,
   );
@@ -69,9 +83,13 @@ const BoardGame: Component = () => {
     null,
   );
   const [isMultiplayer, setIsMultiplayer] = createSignal(false);
+  const [fromSession, setFromSession]     = createSignal(false);
 
   onMount(() => {
-    if (new URLSearchParams(location.search).get("demo") === "1") {
+    const qs = new URLSearchParams(location.search);
+
+    // ── Demo mode ───────────────────────────────────────────────────────────
+    if (qs.get("demo") === "1") {
       setSelectedMode(GameMode.COMBAT);
       setSelectedMapId(null);
       setAppPhase(AppPhase.IN_GAME);
@@ -82,11 +100,51 @@ const BoardGame: Component = () => {
         if (isEngineReady()) {
           setTimeout(() => startGame(GameMode.COMBAT, null), 150);
         } else {
-          setTimeout(checkEngine, 100);
+          if (mounted) setTimeout(checkEngine, 100);
         }
       };
       checkEngine();
       return;
+    }
+
+    // ── Session map mode (launched from CampaignSessionPage) ────────────────
+    if (qs.get("fromSession") === "1") {
+      const cfg = getSessionMapConfig();
+      if (cfg) {
+        console.log("[BoardGame] Session map mode — mapId:", cfg.mapId);
+        // Guard 1 — leave any active SignalR session before entering the
+        // story-tree FREE_ROAM flow. The two session concepts (campaign
+        // story-tree vs combat hub) coexist at the lobby layer; inside the
+        // board they must not overlap or the hub keeps broadcasting into a
+        // scene it no longer owns.
+        (async () => {
+          if (sessionState.session) {
+            try { await leaveSession(); } catch (_) {}
+          }
+          setFromSession(true);
+          setSelectedMode(GameMode.FREE_ROAM);
+          setSelectedMapId(cfg.mapId);
+          setAppPhase(AppPhase.IN_GAME);
+
+          setSessionExitCallback(() => backToSession());
+
+          let attempts = 0;
+          const checkEngine = () => {
+            if (++attempts > 50) {
+              console.error("[BoardGame] Engine failed to initialize (session map)");
+              backToSession();
+              return;
+            }
+            if (isEngineReady()) {
+              setTimeout(() => startGame(GameMode.FREE_ROAM, cfg.mapId), 150);
+            } else {
+              if (mounted) setTimeout(checkEngine, 100);
+            }
+          };
+          checkEngine();
+        })();
+        return;
+      }
     }
 
     const s = sessionState.session;
@@ -144,7 +202,7 @@ const BoardGame: Component = () => {
           startGame(selectedMode()!, mapId);
         }, 150);
       } else {
-        setTimeout(checkEngine, 100);
+        if (mounted) setTimeout(checkEngine, 100);
       }
     };
     checkEngine();
@@ -171,7 +229,7 @@ const BoardGame: Component = () => {
           startGame(GameMode.DUNGEON, null, dungeonId);
         }, 150);
       } else {
-        setTimeout(checkEngine, 100);
+        if (mounted) setTimeout(checkEngine, 100);
       }
     };
     checkEngine();
@@ -250,7 +308,7 @@ const BoardGame: Component = () => {
           );
         }, 150);
       } else {
-        setTimeout(checkEngine, 100);
+        if (mounted) setTimeout(checkEngine, 100);
       }
     };
     checkEngine();
@@ -271,16 +329,38 @@ const BoardGame: Component = () => {
     const payload = sessionState.gameStartedPayload;
     if (!payload) return;
     if (appPhase() !== AppPhase.IN_GAME) return;
+    // Guard 2 — story-tree flow owns the board; suppress hub re-init so a
+    // stale gameStartedPayload can't overwrite the session-map FREE_ROAM.
+    if (isSessionMapActive()) return;
     onMultiplayerGameStart(payload);
   });
 
-  const backToModeSelection = () => {
+  const backToModeSelection = async () => {
+    // Guard 3 — notify server before tearing down local state so the hub
+    // doesn't keep the DM's group membership alive for this client.
+    if (sessionState.session) {
+      try { await leaveSession(); } catch (_) {}
+    }
     setAppPhase(AppPhase.MODE_SELECTION);
     setSelectedMode(null);
     setSelectedMapId(null);
     setSelectedDungeonId(null);
     setIsMultiplayer(false);
+    setFromSession(false);
     clearSession();
+  };
+
+  /** Return to the campaign session page after playing a session map. */
+  const backToSession = () => {
+    const cfg = getSessionMapConfig();
+    clearSessionExitCallback();
+    clearSessionMapConfig();
+    clearEngineState();
+    if (cfg) {
+      navigate(`/campaigns/${cfg.campaignId}/session`);
+    } else {
+      backToModeSelection();
+    }
   };
 
   const returnToMenu = async () => {
@@ -711,9 +791,9 @@ const BoardGame: Component = () => {
         <header class="h-14 shrink-0 bg-gradient-to-r from-brandStart/90 to-brandEnd/90 backdrop-blur-sm border-b border-white/10 flex items-center justify-between px-3 sm:px-4 pt-safe-top">
           <div class="flex items-center gap-2 sm:gap-3">
             <button
-              onClick={() => returnToMenu()}
+              onClick={() => fromSession() ? backToSession() : returnToMenu()}
               class="flex items-center justify-center w-9 h-9 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 transition-colors"
-              aria-label="Retour au menu"
+              aria-label={fromSession() ? "Retour à la session" : "Retour au menu"}
             >
               <ArrowLeft class="w-4 h-4 text-white" />
             </button>
@@ -730,11 +810,17 @@ const BoardGame: Component = () => {
             </h1>
           </div>
           <div class="flex items-center gap-2">
-            {/* Quitter la session — visible to every connected participant so
-                players have an exit path even though the Infos drawer is
-                DM-only (Round 5). Uses the same clearSession + returnToMenu
-                sequence as the drawer's button so state tears down cleanly
-                (BUG-I). */}
+            {/* Session back button (Sam's story-tree flow) — most prominent */}
+            <Show when={fromSession()}>
+              <button
+                onClick={() => backToSession()}
+                class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-purple-500/40 bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 text-sm transition-colors"
+              >
+                <ArrowLeft class="w-3.5 h-3.5" />
+                <span class="hidden sm:inline">Retour à la session</span>
+              </button>
+            </Show>
+            {/* Quitter — any MP participant (BUG-I). Drawer Quitter is DM-only. */}
             <Show when={isInSession()}>
               <button
                 class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 text-white text-sm transition-colors"
@@ -750,8 +836,7 @@ const BoardGame: Component = () => {
                 <span class="hidden sm:inline">Quitter</span>
               </button>
             </Show>
-            {/* Restart is solo-only or DM-only — non-host players in a session
-                shouldn't be able to blow up the game for everyone else. */}
+            {/* Restart: solo-only or DM-only (non-host can't blow up MP for everyone). */}
             <Show when={!isInSession() || isSessionHost()}>
               <button
                 class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 text-white text-sm transition-colors"

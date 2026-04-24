@@ -66,13 +66,13 @@ const CampaignManager: Component = () => {
   // ─── Export / Import ─────────────────────────────────────────────────────
   const handleExport = async () => {
     const data = await canvasRef()?.exportData();
-    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
+    if (data == null) return;
+    // Use a data: URI — blob: URLs are blocked by the Discord Activity CSP.
+    const json = typeof data === 'string' ? data : JSON.stringify(data);
     const a = document.createElement('a');
-    a.href = url;
+    a.href = `data:application/json;charset=utf-8,${encodeURIComponent(json)}`;
     a.download = `${campaign()?.title ?? 'campaign'}.json`;
     a.click();
-    URL.revokeObjectURL(url);
   };
 
   const handleImport = (json: string | undefined) => {
@@ -162,6 +162,48 @@ const CampaignManager: Component = () => {
   // est un hook optionnel pour des actions supplémentaires si besoin.
   const handleUpdateNode = (_node?: CampaignNode) => {};
 
+  // ─── Build session tree format ────────────────────────────────────────────
+  // Converts the live draw2d canvas state into the {nodes, connections} format
+  // consumed by the session player and replay view.
+  const buildSessionTreeFormat = () => {
+    const cvs = canvasRef()?.getCanvas();
+    if (!cvs) return null;
+
+    const figIdToData: Record<string, any> = {};
+    (cvs as any).getFigures().each((_i: number, fig: any) => {
+      const ud = fig.getUserData?.();
+      if (ud?.id) figIdToData[fig.getId()] = ud;
+    });
+
+    const nodes: any[] = [];
+    for (const [figId, userData] of Object.entries(figIdToData)) {
+      const fig = (cvs as any).getFigure(figId);
+      nodes.push({
+        type: userData.type,
+        x: fig?.getAbsoluteX?.() ?? 0,
+        y: fig?.getAbsoluteY?.() ?? 0,
+        data: userData,
+      });
+    }
+
+    const connections: any[] = [];
+    (cvs as any).getLines().each((_i: number, conn: any) => {
+      const srcPort = conn.getSource?.();
+      const tgtPort = conn.getTarget?.();
+      if (!srcPort || !tgtPort) return;
+      const srcData = figIdToData[srcPort.getParent?.()?.getId?.()];
+      const tgtData = figIdToData[tgtPort.getParent?.()?.getId?.()];
+      if (srcData?.id && tgtData?.id) {
+        connections.push({
+          source: { node: srcData.id, port: srcPort.getName?.() ?? 'output' },
+          target: { node: tgtData.id, port: tgtPort.getName?.() ?? 'input' },
+        });
+      }
+    });
+
+    return { nodes, connections };
+  };
+
   // ─── Save campaign ────────────────────────────────────────────────────────
   const handleSaveCampaign = async () => {
     const canvas = canvasRef();
@@ -174,6 +216,13 @@ const CampaignManager: Component = () => {
       });
       const mappedCampaign = mapCampaignResponse(response);
       setCampaign(mappedCampaign);
+
+      // Also persist the session-player format locally for session + replay views
+      const treeData = buildSessionTreeFormat();
+      if (treeData) {
+        localStorage.setItem(`dnd-campaign-tree-${params.id}`, JSON.stringify(treeData));
+      }
+
       showToast('Campagne sauvegardée avec succès', 'success');
     } catch (err: any) {
       console.error('Failed to save campaign:', err);

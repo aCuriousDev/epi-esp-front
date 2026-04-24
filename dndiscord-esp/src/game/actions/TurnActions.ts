@@ -90,6 +90,10 @@ function initializeCombat(
   mapId: string | null = null,
   unitAssignments?: UnitAssignment[],
 ): void {
+  // Pre-set mapId so the GameCanvas createEffect reads the correct map when
+  // setTiles fires inside initializeGrid (it reacts to tiles + gameState.mapId).
+  setGameState("mapId", mapId);
+
   console.log("[initializeCombat] Initializing grid...");
   initializeGrid(mapId);
   console.log(

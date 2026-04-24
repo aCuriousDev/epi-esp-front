@@ -96,6 +96,48 @@ export interface CampaignMemberListResponse {
   totalCount: number;
 }
 
+// ─── Session types ─────────────────────────────────────────────────────────
+
+export enum GameSessionStatus {
+  Active = 'Active',
+  Completed = 'Completed',
+  Abandoned = 'Abandoned',
+}
+
+export interface AdvanceSessionRequest {
+  nodeId: string;
+  nodeType: string;
+  nodeTitle?: string;
+  portUsed?: string;
+  choiceText?: string;
+}
+
+export interface SessionHistoryEntryResponse {
+  id: string;
+  nodeId: string;
+  nodeType: string;
+  nodeTitle: string;
+  portUsed?: string;
+  choiceText?: string;
+  visitedAt: string;
+}
+
+export interface GameSessionResponse {
+  id: string;
+  campaignId: string;
+  status: GameSessionStatus;
+  currentNodeId?: string;
+  startedBy: string;
+  startedAt: string;
+  endedAt?: string;
+  entries: SessionHistoryEntryResponse[];
+}
+
+export interface GameSessionListResponse {
+  items: GameSessionResponse[];
+  totalCount: number;
+}
+
 /**
  * Helper to get auth header
  */
@@ -270,5 +312,54 @@ export const CampaignService = {
       {},
       { headers: getAuthHeaders() }
     );
+  },
+
+  // ─── Session methods ──────────────────────────────────────────────────────
+
+  async createSession(campaignId: string): Promise<GameSessionResponse> {
+    const response = await axios.post<GameSessionResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/sessions`,
+      {},
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  },
+
+  async listSessions(campaignId: string): Promise<GameSessionListResponse> {
+    const response = await axios.get<GameSessionListResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/sessions`,
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  },
+
+  async getSession(campaignId: string, sessionId: string): Promise<GameSessionResponse> {
+    const response = await axios.get<GameSessionResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/sessions/${sessionId}`,
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  },
+
+  async advanceSession(
+    campaignId: string,
+    sessionId: string,
+    request: AdvanceSessionRequest
+  ): Promise<GameSessionResponse> {
+    const response = await axios.post<GameSessionResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/sessions/${sessionId}/advance`,
+      request,
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  },
+
+  async completeSession(campaignId: string, sessionId: string): Promise<GameSessionResponse> {
+    const response = await axios.post<GameSessionResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/sessions/${sessionId}/complete`,
+      {},
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
   },
 };

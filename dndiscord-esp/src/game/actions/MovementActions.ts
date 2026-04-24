@@ -6,7 +6,7 @@
 
 import { batch } from 'solid-js';
 import { produce } from 'solid-js/store';
-import { GridPosition, GamePhase, TurnPhase, Team, GameMode } from '../../types';
+import { GridPosition, GamePhase, TurnPhase, Team, GameMode, TileType } from '../../types';
 import { gameState, setGameState, addCombatLog, getIsFreeRoamMode, getIsDungeonMode } from '../stores/GameStateStore';
 import { units, setUnits } from '../stores/UnitsStore';
 import { tiles, setTiles, pathfinder, updatePathfinder } from '../stores/TilesStore';
@@ -19,6 +19,7 @@ import { getTeleportPositions } from '../../services/mapStorage';
 import { transitionToNextRoom } from './TurnActions';
 import { playMovementDustEffect } from '../vfx/VFXIntegration';
 import { playFootstepSound, playSelectSound } from '../audio/SoundIntegration';
+import { isSessionMapActive, triggerSessionExit } from '../../stores/session-map.store';
 
 // ============================================
 // UNIT SELECTION
@@ -282,6 +283,36 @@ export function moveUnit(targetPos: GridPosition): boolean {
   // Update pathfinder with new tile state
   updatePathfinder();
 
+  // ── Tile effects on landing ─────────────────────────────────────────────
+  const destTile = tiles[posToKey(targetPos)];
+  if (destTile) {
+    // TRAP: apply all damage effects then disarm (one-shot)
+    if (destTile.type === TileType.TRAP) {
+      for (const effect of destTile.effects ?? []) {
+        if (effect.type === 'damage') {
+          setUnits(unit.id, produce((u) => {
+            u.stats.currentHealth = Math.max(0, u.stats.currentHealth - effect.value);
+            if (u.stats.currentHealth <= 0) {
+              u.isAlive = false;
+              setTiles(posToKey(targetPos), 'occupiedBy', null);
+            }
+          }));
+          addCombatLog(`${unit.name} déclenche un piège ! −${effect.value} PV`, 'damage');
+        }
+      }
+      // Disarm trap after first trigger
+      setTiles(posToKey(targetPos), 'type', TileType.FLOOR);
+      setTiles(posToKey(targetPos), 'effects', []);
+    }
+
+    // EXIT: trigger session return when a player steps on this cell
+    if (destTile.type === TileType.EXIT && unit.team === Team.PLAYER) {
+      if (isSessionMapActive()) {
+        addCombatLog('Sortie atteinte ! Retour au scénario…', 'system');
+        setTimeout(() => triggerSessionExit(), 800);
+      }
+    }
+  }
 
   // En session multijoueur : diffuser le mouvement aux autres joueurs
   const session = getCurrentSession();

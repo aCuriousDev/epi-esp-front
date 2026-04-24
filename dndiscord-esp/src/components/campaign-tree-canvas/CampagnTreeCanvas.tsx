@@ -1,4 +1,4 @@
-import { onMount, onCleanup, createSignal } from "solid-js";
+import { onMount, onCleanup, createSignal, Show } from "solid-js";
 import draw2d from "draw2d";
 import { CampaignNode } from "./nodes/CampaignNode";
 import { CombatNode } from "./nodes/CombatNode";
@@ -13,6 +13,8 @@ interface CampaignTreeCanvasProps {
   onNodeSelect?: (node: CampaignNode | null) => void;
   onConnectionCreate?: (connection: draw2d.Connection) => void;
   ref?: (methods: CampaignTreeCanvasRef) => void;
+  readOnly?: boolean;
+  canvasId?: string;
 }
 
 export interface CampaignTreeCanvasRef {
@@ -31,6 +33,10 @@ export interface CampaignTreeCanvasRef {
   undo: () => void;
   redo: () => void;
   refreshCanvas: () => void;
+  highlightVisited: (
+    visitedNodeIds: string[],
+    traversedEdges: Array<{ sourceId: string; port: string }>,
+  ) => void;
 }
 
 interface AddNodeData {
@@ -115,6 +121,9 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           type: 'map',
           title: nodeData.data?.title ?? '',
           selectedMap: nodeData.data?.selectedMap ?? '',
+          spawnPoint: nodeData.data?.spawnPoint,
+          exitCells:  nodeData.data?.exitCells,
+          trapCells:  nodeData.data?.trapCells,
         });
         break;
       }
@@ -387,6 +396,54 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
   };
 
   /**
+   * Highlight visited nodes and traversed connections in green (for replay view)
+   */
+  const highlightVisited = (
+    visitedNodeIds: string[],
+    traversedEdges: Array<{ sourceId: string; port: string }>,
+  ) => {
+    if (!canvas) return;
+
+    // Highlight visited nodes
+    canvas.getFigures().each((_i: number, fig: any) => {
+      const userData = fig.getUserData?.();
+      if (userData?.id && visitedNodeIds.includes(userData.id)) {
+        // Try to colour the background rectangle child
+        const children = fig.getChildren?.();
+        if (children) {
+          children.each((_j: number, child: any) => {
+            if (typeof child.setBackgroundColor === 'function') {
+              child.setBackgroundColor('#166534');
+              child.setColor('#22c55e');
+              child.repaint?.();
+            }
+          });
+        }
+        fig.repaint?.();
+      }
+    });
+
+    // Highlight traversed connections
+    canvas.getLines().each((_i: number, conn: any) => {
+      const sourcePort = conn.getSource?.();
+      const sourceNode = sourcePort?.getParent?.();
+      const sourceNodeData = sourceNode?.getUserData?.();
+      const portName = sourcePort?.getName?.();
+
+      if (sourceNodeData?.id && portName) {
+        const isTraversed = traversedEdges.some(
+          (e) => e.sourceId === sourceNodeData.id && e.port === portName,
+        );
+        if (isTraversed) {
+          conn.setColor('#22c55e');
+          conn.setStroke(3);
+          conn.repaint?.();
+        }
+      }
+    });
+  };
+
+  /**
    * Fit to page
    */
   const fitToPage = () => {
@@ -433,6 +490,15 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     canvas.installEditPolicy(new draw2d.policy.canvas.WheelZoomPolicy());
     canvas.installEditPolicy(new draw2d.policy.canvas.PanningSelectionPolicy());
     canvas.installEditPolicy(new draw2d.policy.canvas.KeyboardPolicy());
+
+    // Read-only mode: replace selection policy so nothing can be moved/edited
+    if (props.readOnly) {
+      try {
+        canvas.installEditPolicy(new (draw2d.policy.canvas as any).ReadOnlySelectionPolicy());
+      } catch (e) {
+        console.warn('[Canvas] ReadOnlySelectionPolicy not available:', e);
+      }
+    }
 
     //Listener
     canvasRef.addEventListener('wheel', handleWheelZoom, { passive: false });
@@ -500,7 +566,8 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
         getTreeBoundingBox,
         undo,
         redo,
-        refreshCanvas
+        refreshCanvas,
+        highlightVisited,
       });
     }
   });
@@ -528,7 +595,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
       <div
         class="campaign-view-page"
         ref={canvasRef}
-        id="campaign-tree-canvas"
+        id={props.canvasId ?? "campaign-tree-canvas"}
         style={{
           width: "5000px",
           height: "5000px",
@@ -555,6 +622,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           border: `1px solid ${tokens.ink[600]}`,
         }}
       >
+        {/* Zoom controls always visible */}
         {/* Zoom controls */}
         <div
           style={{
@@ -640,27 +708,30 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           📐 Adapter
         </button>
 
-        {/* Clear all */}
-        <button
-          onClick={clearCanvas}
-          style={{
-            padding: "0.5rem 0.75rem",
-            background: "rgba(239,68,68,0.22)",
-            border: `1px solid ${tokens.status.danger}`,
-            "border-radius": "4px",
-            color: tokens.status.danger,
-            cursor: "pointer",
-            "font-size": "0.85rem",
-            "font-weight": "500",
-            "white-space": "nowrap",
-          }}
-          title="Effacer tous les nœuds"
-        >
-          Effacer
-        </button>
+        {/* Clear all — hidden in read-only mode */}
+        <Show when={!props.readOnly}>
+          <button
+            onClick={clearCanvas}
+            style={{
+              padding: "0.5rem 0.75rem",
+              background: "rgba(239,68,68,0.22)",
+              border: `1px solid ${tokens.status.danger}`,
+              "border-radius": "4px",
+              color: tokens.status.danger,
+              cursor: "pointer",
+              "font-size": "0.85rem",
+              "font-weight": "500",
+              "white-space": "nowrap",
+            }}
+            title="Effacer tous les nœuds"
+          >
+            Effacer
+          </button>
+        </Show>
       </div>
 
-      {/* Légende des types de nodes (en haut à gauche) */}
+      {/* Légende des types de nodes (en haut à gauche) — masquée en lecture seule */}
+      <Show when={!props.readOnly}>
       <div
         style={{
           position: "absolute",
@@ -719,6 +790,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           </div>
         </div>
       </div>
+      </Show>
     </div>
   );
 }
