@@ -13,11 +13,24 @@ import ButtonMenu from "../components/common/ButtonMenu";
 import { LoginButton, UserMenu } from "../components/auth";
 import { authStore } from "../stores/auth.store";
 import { playAmbientMusic, stopAmbientMusic, playMenuHoverSound, playMenuClickSound } from "../game/audio/SoundIntegration";
+import { CharacterService } from "../services/character.service";
+import { CampaignService } from "../services/campaign.service";
 
 export default function MenuComponent() {
 	const [hovered, setHovered] = createSignal<string | null>(null);
+	const [nbCharacters, setNbCharacters] = createSignal<string>("…");
+	const [nbCampaigns, setNbCampaigns] = createSignal<string>("…");
 
-	onMount(() => playAmbientMusic('menu'));
+	onMount(() => {
+		playAmbientMusic('menu');
+		// Fetch real counts — fire-and-forget, errors are non-fatal
+		CharacterService.getMyCharacters()
+			.then((chars) => setNbCharacters(String(chars.length)))
+			.catch((e) => { console.warn("[MenuComponent] Failed to load characters count", e); setNbCharacters("0"); });
+		CampaignService.listCampaigns({ pageSize: 1 })
+			.then((res) => setNbCampaigns(String(res.totalCount)))
+			.catch((e) => { console.warn("[MenuComponent] Failed to load campaigns count", e); setNbCampaigns("0"); });
+	});
 	onCleanup(() => stopAmbientMusic());
 
 	const [menuItems, setMenuItems] = createSignal<
@@ -171,22 +184,25 @@ export default function MenuComponent() {
 				<Show when={authStore.isAuthenticated()}>
 					<section class="w-full max-w-2xl mt-4 stats-section">
 						<div class="grid grid-cols-3 gap-3 sm:gap-4">
-							<QuickStatCard 
+							<QuickStatCard
 								icon={<Users class="w-5 h-5" />}
 								label="Personnages"
-								value="0"
+								value={nbCharacters()}
 								onClick={() => navigate("/characters")}
 							/>
-							<QuickStatCard 
+							<QuickStatCard
 								icon={<ScrollText class="w-5 h-5" />}
 								label="Campagnes"
-								value="0"
+								value={nbCampaigns()}
 								onClick={() => navigate("/campaigns")}
 							/>
-							<QuickStatCard 
+							{/* TODO(parties): needs a dedicated backend endpoint (e.g. GET /api/sessions/count)
+							    to return the number of sessions the current user participated in. */}
+							<QuickStatCard
 								icon={<Swords class="w-5 h-5" />}
 								label="Parties"
-								value="0"
+								value="—"
+								title="À venir"
 								onClick={() => navigate("/board")}
 							/>
 						</div>
@@ -337,15 +353,17 @@ export default function MenuComponent() {
 /**
  * Quick stat card component
  */
-function QuickStatCard(props: { 
-	icon: JSX.Element; 
-	label: string; 
+function QuickStatCard(props: {
+	icon: JSX.Element;
+	label: string;
 	value: string;
+	title?: string;
 	onClick?: () => void;
 }) {
 	return (
 		<button
 			onClick={props.onClick}
+			title={props.title}
 			class="group p-4 bg-game-dark/50 backdrop-blur-sm border border-white/10 rounded-xl hover:bg-white/10 hover:border-purple-500/30 transition-all text-center"
 		>
 			<div class="flex justify-center mb-2 text-purple-400 group-hover:text-purple-300 transition-colors">
