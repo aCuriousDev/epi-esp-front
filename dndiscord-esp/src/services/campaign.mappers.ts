@@ -145,6 +145,15 @@ export const displayDungeonMasterName = (
   return "Maître du Jeu";
 };
 
+/**
+ * True when the campaign carries an authored story-tree scenario (non-empty
+ * JSON string on `campaignTreeDefinition`). Drives the routing decision in
+ * `CampaignView.handleJoinInvite` and similar UI gates: scenario → Sam's
+ * /lobby → /session flow, no scenario → POC /board quick-launch.
+ */
+export const hasScenario = (campaignTreeDefinition?: string | null): boolean =>
+  !!campaignTreeDefinition?.trim();
+
 export const mapCampaignResponse = (apiCampaign: CampaignDetailResponse): Campaign => {
   return {
     id: apiCampaign.id,

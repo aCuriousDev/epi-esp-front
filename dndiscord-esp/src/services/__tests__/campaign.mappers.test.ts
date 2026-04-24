@@ -8,6 +8,7 @@ import {
   mapToAPICampaignStatus,
   mapCampaignResponse,
   displayDungeonMasterName,
+  hasScenario,
   type CampaignDetailResponse,
 } from "../campaign.mappers";
 
@@ -276,5 +277,31 @@ describe("displayDungeonMasterName", () => {
         "quentest123",
       ),
     ).toBe("Thorgar");
+  });
+});
+
+describe("hasScenario", () => {
+  it("returns false for null", () => {
+    expect(hasScenario(null)).toBe(false);
+  });
+
+  it("returns false for undefined", () => {
+    expect(hasScenario(undefined)).toBe(false);
+  });
+
+  it("returns false for empty string", () => {
+    expect(hasScenario("")).toBe(false);
+  });
+
+  it("returns false for whitespace-only string", () => {
+    expect(hasScenario("   \n\t  ")).toBe(false);
+  });
+
+  it("returns true for a real JSON payload", () => {
+    expect(hasScenario('{"nodes":[]}')).toBe(true);
+  });
+
+  it("returns true even for a non-JSON non-empty string (drives UI gate, not content validation)", () => {
+    expect(hasScenario("tree")).toBe(true);
   });
 });

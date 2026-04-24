@@ -294,9 +294,20 @@ export async function dmRestartGame(mapId: string): Promise<void> {
   await signalRService.invoke(HUB.dmRestartGame, mapId, mapData);
 }
 
+const GUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** DM-only: swap the session's scene to another of the campaign's persisted maps.
- * Server broadcasts MapSwitched to the session group. */
+ * Server broadcasts MapSwitched to the session group. The hub method signature
+ * is `DmSwitchMap(Guid mapId)`, so passing a non-UUID string (e.g. the
+ * localStorage draft key the Map Editor uses) would throw on the server and
+ * the error would be swallowed by the caller — silent failure. Guard here so
+ * the caller sees an actionable error instead. */
 export async function dmSwitchMap(mapId: string): Promise<void> {
+  if (!mapId || !GUID_SHAPE.test(mapId)) {
+    throw new Error(
+      `dmSwitchMap: mapId must be a campaign-persisted UUID (got "${mapId}")`,
+    );
+  }
   await signalRService.invoke(HUB.dmSwitchMap, mapId);
 }
 

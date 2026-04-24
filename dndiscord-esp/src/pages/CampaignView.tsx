@@ -44,6 +44,7 @@ import {
   APICampaignStatus,
   mapCampaignResponse,
   displayDungeonMasterName,
+  hasScenario,
   mapToAPICampaignStatus,
 } from "../services/campaign.service";
 import {
@@ -213,8 +214,7 @@ export default function CampaignView() {
       //   - Without scenario (POC "Lancement rapide" flow) → straight to /board.
       // Mirrors SessionInviteListener which always routes to /board for
       // campaigns reached via the global notification outside this page.
-      const hasScenario = !!campaign()?.campaignTreeDefinition?.trim();
-      if (invite.campaignId && hasScenario) {
+      if (invite.campaignId && hasScenario(campaign()?.campaignTreeDefinition)) {
         navigate(`/campaigns/${invite.campaignId}/lobby`);
       } else {
         navigate("/board");
