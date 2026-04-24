@@ -9,6 +9,7 @@ import {
   ShadowGenerator,
   Animation,
 } from '@babylonjs/core';
+import { setRotationYRadians } from '../../components/map-editor/rotation';
 import { Tile, TileType } from '../../types';
 import { gridToWorld, TILE_SIZE, GRID_SIZE } from '../../game';
 import { posToKey } from '../../game/utils/GridUtils';
@@ -182,7 +183,7 @@ export class GridRenderer {
         );
         groundMesh.position.set(0, cellData.ground.positionY, 0);
         groundMesh.scaling.setAll(cellData.ground.scale);
-        groundMesh.rotation.y = cellData.ground.rotationY;
+        setRotationYRadians(groundMesh, cellData.ground.rotationY);
         groundMesh.parent = container;
         groundMesh.computeWorldMatrix(true);
         groundMesh.getChildMeshes(false).forEach(child => child.computeWorldMatrix(true));
@@ -201,7 +202,7 @@ export class GridRenderer {
         );
         assetMesh.position.set(0, assetData.positionY, 0);
         assetMesh.scaling.setAll(assetData.scale);
-        assetMesh.rotation.y = assetData.rotationY;
+        setRotationYRadians(assetMesh, assetData.rotationY);
         assetMesh.parent = container;
         assetMesh.computeWorldMatrix(true);
         assetMesh.getChildMeshes(false).forEach(child => child.computeWorldMatrix(true));

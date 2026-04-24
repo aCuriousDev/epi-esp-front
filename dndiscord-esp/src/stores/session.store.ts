@@ -12,6 +12,7 @@ import type {
   GameStartedPayload,
 } from "../types/multiplayer";
 import { PlayerRole } from "../types/multiplayer";
+import { clearDmToolsState } from "./dmTools.store";
 
 export interface SessionStoreState {
   /** Session courante (null si pas en session). */
@@ -97,6 +98,7 @@ export function getPersistedGameStarted(): GameStartedPayload | null {
 export function clearSession(): void {
   clearPersistedSession();
   clearPersistedGameStarted();
+  clearDmToolsState();
   setSessionState({
     session: null,
     isLoading: false,
@@ -203,7 +205,38 @@ export function isHost(): boolean {
   return me?.role === PlayerRole.DungeonMaster;
 }
 
+/** Alias explicite : vérifie si l'utilisateur courant est le Dungeon Master. */
+export const isDm = isHost;
+
+/** Retourne la liste des autres joueurs (pas le DM courant). */
+export function getOtherPlayers() {
+  const hubId = sessionState.hubUserId;
+  if (!hubId || !sessionState.session) return [];
+  return sessionState.session.players.filter(
+    (p) => p.userId !== hubId && p.role === PlayerRole.Player
+  );
+}
+
 /** Retourne le userId (Guid) du hub pour comparaison avec les players. */
 export function getHubUserId(): string | null {
   return sessionState.hubUserId;
+}
+
+/**
+ * True if the given characterId is selected by any player in the current session.
+ * Used as a defence-in-depth filter on SignalR events that carry a characterId —
+ * rejects stray broadcasts from another session if the back ever leaks them.
+ */
+export function isCharacterInCurrentSession(characterId: string | undefined | null): boolean {
+  if (!characterId) return false;
+  const session = sessionState.session;
+  if (!session) return false;
+  return session.players.some((p) => p.selectedCharacterId === characterId);
+}
+
+/** True when the current session has a player in the DungeonMaster role. */
+export function sessionHasDm(): boolean {
+  const session = sessionState.session;
+  if (!session) return false;
+  return session.players.some((p) => p.role === PlayerRole.DungeonMaster);
 }

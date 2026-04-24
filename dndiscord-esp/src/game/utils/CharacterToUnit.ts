@@ -26,12 +26,14 @@ function classToUnitType(characterClass: string): UnitType {
     case 'Moine':
       return UnitType.WARRIOR;
     case 'Magicien':
+    case 'Mage': // lobby quickstart preset label (back BuildDefaultAssignment)
     case 'Ensorceleur':
     case 'Sorcier':
       return UnitType.MAGE;
+    case 'Archer': // lobby quickstart preset label
     case 'Voleur':
     case 'Rodeur':
-      return UnitType.ARCHER; // closest match
+      return UnitType.ARCHER;
     case 'Barde':
     case 'Clerc':
     case 'Druide':

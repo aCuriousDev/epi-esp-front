@@ -12,6 +12,7 @@ import {
   getAllySpawnPositions,
   getEnemySpawnPositions,
 } from "../initialization/InitUnits";
+import { isInSession } from "../../stores/session.store";
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -27,6 +28,15 @@ function shuffle<T>(arr: T[]): T[] {
  * Respects occupancy and clears previous occupancy.
  */
 export function randomizePreparationPlacement(mapId: string | null): void {
+  // Preparation placement is not supported in multiplayer: the authoritative
+  // spawn positions come from the server's GameStarted payload, and random
+  // shuffles on individual clients would desync the board. The UI button that
+  // triggers this should also be hidden when in a session.
+  if (isInSession()) {
+    console.log("[randomizePreparationPlacement] No-op in multiplayer — server owns spawn positions");
+    return;
+  }
+
   const ally = shuffle(getAllySpawnPositions(mapId));
   const enemy = shuffle(getEnemySpawnPositions(mapId));
 

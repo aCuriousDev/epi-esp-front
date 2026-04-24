@@ -14,6 +14,8 @@ import {
   Team,
 } from "../../types";
 import type { UnitAssignment } from "../../types/multiplayer";
+import { isInSession } from "../../stores/session.store";
+import { signalRService } from "../../services/signalr/SignalRService";
 import {
   gameState,
   setGameState,
@@ -88,6 +90,10 @@ function initializeCombat(
   mapId: string | null = null,
   unitAssignments?: UnitAssignment[],
 ): void {
+  // Pre-set mapId so the GameCanvas createEffect reads the correct map when
+  // setTiles fires inside initializeGrid (it reacts to tiles + gameState.mapId).
+  setGameState("mapId", mapId);
+
   console.log("[initializeCombat] Initializing grid...");
   initializeGrid(mapId);
   console.log(
@@ -140,6 +146,15 @@ function initializeCombat(
  * Démarre le combat après la phase de préparation (bouton "Prêt" cliqué)
  */
 export function startCombatFromPreparation(): void {
+  // In a multiplayer session the hub's CombatManager owns this transition —
+  // DmStartCombat rolls initiative server-side and broadcasts CombatStarted
+  // with the authoritative turn order. Running the local computation here would
+  // recreate the original BUG-C desync (every client computing its own order).
+  if (isInSession()) {
+    console.log("[startCombatFromPreparation] No-op in multiplayer — server owns the transition");
+    return;
+  }
+
   const turnOrder = TurnManager.calculateTurnOrder(units);
 
   console.log(
@@ -147,9 +162,16 @@ export function startCombatFromPreparation(): void {
     TurnManager.debugTurnOrder(turnOrder, units),
   );
 
+  // Derive the opening phase from whichever unit goes first by initiative.
+  // The old code hardcoded PLAYER_TURN here, which skipped the ENEMY_TURN
+  // entirely when an enemy's initiative beat the players' — the AI tick
+  // never fired, manual control had nothing to grab, combat looked stuck.
+  const firstUnit = turnOrder.length > 0 ? units[turnOrder[0]] : null;
+  const openingPhase = TurnManager.determinePhase(firstUnit);
+
   batch(() => {
     setGameState({
-      phase: GamePhase.PLAYER_TURN,
+      phase: openingPhase,
       turnPhase: TurnPhase.SELECT_UNIT,
       currentTurn: 1,
       turnOrder,
@@ -328,6 +350,7 @@ function updateGamePhase(): void {
 
 export function endUnitTurn(): void {
   const unit = gameState.selectedUnit ? units[gameState.selectedUnit] : null;
+  const currentUnitId = gameState.turnOrder[gameState.currentUnitIndex] ?? unit?.id ?? null;
 
   console.log(
     "[endUnitTurn] Called for unit:",
@@ -339,7 +362,7 @@ export function endUnitTurn(): void {
   // If no unit is selected, still proceed to next turn (handles edge cases)
   if (!unit) {
     console.log("[endUnitTurn] No unit selected, advancing turn anyway");
-    nextTurn();
+    maybeAdvanceTurn(currentUnitId);
     return;
   }
 
@@ -363,6 +386,27 @@ export function endUnitTurn(): void {
     addCombatLog(`${unit.name} ends their turn.`, "system");
   });
 
+  maybeAdvanceTurn(currentUnitId ?? unit.id);
+}
+
+/**
+ * In a multiplayer session, the hub's CombatManager owns the turn cursor — we
+ * invoke `EndTurn` and wait for the `TurnEnded` broadcast (applied by gameSync)
+ * to advance locally. Running `nextTurn` optimistically here would race the
+ * broadcast and desync the two clients (classic BUG-C).
+ *
+ * In solo, there's no hub — run the local advance as before.
+ */
+function maybeAdvanceTurn(unitId: string | null): void {
+  if (isInSession() && unitId) {
+    signalRService
+      .invoke("EndTurn", { unitId })
+      .catch((err) => {
+        console.warn("[endUnitTurn] Hub EndTurn failed, falling back to local advance:", err);
+        nextTurn();
+      });
+    return;
+  }
   nextTurn();
 }
 
@@ -431,6 +475,15 @@ function initializeDungeon(dungeonId: string): void {
  * All player units are moved to the next room's ally spawn positions.
  */
 export function transitionToNextRoom(): void {
+  // Dungeon mode is currently solo-only. In a session every client would hit
+  // the teleport tile at different moments and re-initialise their own room,
+  // forking the board. If dungeon is ever exposed to multiplayer, this
+  // transition needs a hub broadcast (a new DmSwitchRoom or similar).
+  if (isInSession()) {
+    console.warn("[transitionToNextRoom] No-op in multiplayer — dungeon room changes must be hub-driven");
+    return;
+  }
+
   const dungeon = gameState.dungeon;
   if (!dungeon) return;
 

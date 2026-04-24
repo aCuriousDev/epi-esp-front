@@ -19,7 +19,7 @@ import {
   QuadraticEase,
 } from '@babylonjs/core';
 import { Unit, UnitType, GridPosition, Team } from '../../types';
-import { gridToWorld } from '../../game';
+import { gridToWorld, gameState } from '../../game';
 import { ModelLoader } from '../ModelLoader';
 
 /**
@@ -107,6 +107,13 @@ export class UnitRenderer {
    * Falls back to capsule mesh if model loading fails.
    */
   public async createUnit(unit: Unit): Promise<void> {
+    // Guard: if a mesh already exists for this unit, dispose it first to prevent duplicates
+    const existing = this.unitMeshes.get(unit.id);
+    if (existing) {
+      console.warn(`[UnitRenderer] createUnit called for ${unit.id} but mesh already exists — skipping`);
+      return;
+    }
+
     console.log(`Creating unit: ${unit.id}, team: ${unit.team}, type: ${unit.type}, name: ${unit.name}`);
     const worldPosObj = gridToWorld(unit.position);
     const worldPos = new Vector3(worldPosObj.x, worldPosObj.y, worldPosObj.z);
@@ -233,7 +240,11 @@ export class UnitRenderer {
     
     const worldPosObj = gridToWorld(unit.position);
     const worldPos = new Vector3(worldPosObj.x, worldPosObj.y, worldPosObj.z);
-    const currentY = mesh.position.y;
+    // Use the known Y offset instead of mesh.position.y to avoid capturing
+    // a mid-animation elevated Y that causes units to float higher over time
+    const currentY = unit.team === 'player'
+      ? this.MODEL_CONFIG.playerYOffset
+      : this.MODEL_CONFIG.enemyYOffset;
     
     // Use previous position if available, otherwise use current mesh position
     const fromPosObj = previousPosition 
@@ -267,8 +278,11 @@ export class UnitRenderer {
       this.animateRotation(mesh, targetRotation);
     }
     
-    // Then animate movement
-    this.animateMovement(mesh, worldPos, currentY);
+    // Only animate movement if position actually changed
+    if (willAnimate) {
+      this.scene.stopAnimation(mesh);
+      this.animateMovement(mesh, worldPos, currentY);
+    }
     
     // Update visibility
     this.updateVisibility(mesh, unit.isAlive);
@@ -621,13 +635,7 @@ export class UnitRenderer {
    * Check if a unit is currently selected
    */
   private isUnitSelected(unitId: string): boolean {
-    // Import game state dynamically to avoid circular dependencies
-    try {
-      const { gameState } = require('../../game');
-      return gameState.selectedUnit === unitId;
-    } catch {
-      return false;
-    }
+    return gameState.selectedUnit === unitId;
   }
 
   /**
@@ -664,27 +672,27 @@ export class UnitRenderer {
 
   /**
    * Définit la visibilité des unités ennemies
+   * Attends que tous les meshes soient créés avant d'appliquer (retry loop).
    * @param visible - true pour rendre visibles, false pour invisibles
    * @param enemyUnitIds - Liste des IDs des unités ennemies
    */
-  public setEnemyVisibility(visible: boolean, enemyUnitIds: string[]): void {
-    console.log(`[UnitRenderer] setEnemyVisibility(${visible}) for ${enemyUnitIds.length} enemies:`, enemyUnitIds);
-    let visibleCount = 0;
-    let notFoundCount = 0;
-    
+  public async setEnemyVisibility(visible: boolean, enemyUnitIds: string[]): Promise<void> {
+    const maxRetries = 20; // 20 × 100ms = 2s max
+    let retries = 0;
+
+    while (retries < maxRetries) {
+      const missing = enemyUnitIds.filter(id => !this.unitMeshes.get(id));
+      if (missing.length === 0) break;
+      retries++;
+      await new Promise(r => setTimeout(r, 100));
+    }
+
     enemyUnitIds.forEach(unitId => {
       const mesh = this.unitMeshes.get(unitId);
       if (mesh) {
         this.setMeshVisibility(mesh, visible);
-        visibleCount++;
-        console.log(`[UnitRenderer] ${visible ? 'Showed' : 'Hid'} enemy unit: ${unitId}`);
-      } else {
-        notFoundCount++;
-        console.warn(`[UnitRenderer] Enemy unit mesh not found: ${unitId} (may not be created yet)`);
       }
     });
-    
-    console.log(`[UnitRenderer] Visibility update complete: ${visibleCount} updated, ${notFoundCount} not found`);
   }
 
   /**
@@ -754,6 +762,12 @@ export class UnitRenderer {
    */
   public getUnitMesh(unitId: string): AbstractMesh | undefined {
     return this.unitMeshes.get(unitId);
+  }
+
+  /** Snapshot of every tracked unit id. Callers diff against the UnitsStore
+   *  to dispose meshes whose store entry has been removed. */
+  public getTrackedUnitIds(): string[] {
+    return Array.from(this.unitMeshes.keys());
   }
 
   /**

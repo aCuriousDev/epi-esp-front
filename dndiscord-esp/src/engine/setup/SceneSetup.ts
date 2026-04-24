@@ -13,9 +13,12 @@ import { GRID_SIZE } from '../../game';
  * SceneSetup - Handles camera and lighting configuration
  */
 export class SceneSetup {
+  private scene: Scene;
   private camera: ArcRotateCamera;
   private shadowGenerator: ShadowGenerator | null = null;
-  
+  private sunLight: DirectionalLight | null = null;
+  private currentShadowResolution = 1024;
+
   // Default camera settings
   private readonly DEFAULT_ALPHA = -Math.PI / 4;
   private readonly DEFAULT_BETA = Math.PI / 3.5;
@@ -23,6 +26,7 @@ export class SceneSetup {
   private readonly DEFAULT_TARGET = Vector3.Zero();
 
   constructor(scene: Scene, canvas: HTMLCanvasElement) {
+    this.scene = scene;
     this.camera = this.setupCamera(scene, canvas);
     this.setupLights(scene);
   }
@@ -84,12 +88,35 @@ export class SceneSetup {
     );
     sunLight.intensity = 0.8;
     sunLight.position = new Vector3(10, 20, 10);
-    
-    // Shadow generator
-    this.shadowGenerator = new ShadowGenerator(1024, sunLight);
+    this.sunLight = sunLight;
+
+    this.rebuildShadowGenerator(this.currentShadowResolution);
+  }
+
+  private rebuildShadowGenerator(resolution: number): void {
+    if (!this.sunLight) return;
+    if (this.shadowGenerator) {
+      this.shadowGenerator.dispose();
+      this.shadowGenerator = null;
+    }
+    this.shadowGenerator = new ShadowGenerator(resolution, this.sunLight);
     this.shadowGenerator.useBlurExponentialShadowMap = true;
     this.shadowGenerator.blurKernel = 32;
     this.shadowGenerator.setDarkness(0.3);
+    this.currentShadowResolution = resolution;
+  }
+
+  /**
+   * Swap the shadow map resolution at runtime. Rebuilds the generator;
+   * callers that kept a reference must re-register shadow casters.
+   */
+  public setShadowResolution(resolution: number): void {
+    if (resolution === this.currentShadowResolution) return;
+    this.rebuildShadowGenerator(resolution);
+  }
+
+  public setShadowsEnabled(enabled: boolean): void {
+    this.scene.shadowsEnabled = enabled;
   }
 
   public getCamera(): ArcRotateCamera {
