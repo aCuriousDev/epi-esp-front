@@ -208,7 +208,13 @@ export default function CampaignView() {
         return;
       }
       setSessionInvite(null);
-      if (invite.campaignId) {
+      // Route based on whether the campaign has an authored story-tree:
+      //   - With scenario → Sam's lobby → session → board?fromSession=1 chain.
+      //   - Without scenario (POC "Lancement rapide" flow) → straight to /board.
+      // Mirrors SessionInviteListener which always routes to /board for
+      // campaigns reached via the global notification outside this page.
+      const hasScenario = !!campaign()?.campaignTreeDefinition?.trim();
+      if (invite.campaignId && hasScenario) {
         navigate(`/campaigns/${invite.campaignId}/lobby`);
       } else {
         navigate("/board");
@@ -634,7 +640,7 @@ export default function CampaignView() {
                     </Show>
                     {launchingSession()
                       ? "Création de la session..."
-                      : "Lancer une session"}
+                      : "Lancement rapide"}
                   </button>
                 </Show>
                 <Show when={!isOwner()}>
@@ -644,7 +650,7 @@ export default function CampaignView() {
                     title="Seul le MJ peut créer une session"
                   >
                     <Play class="w-5 h-5" />
-                    Lancer une session (MJ uniquement)
+                    Lancement rapide (MJ uniquement)
                   </button>
                 </Show>
                 <Show when={isOwner()}>
