@@ -143,8 +143,12 @@ export function registerGameSyncHandlers(): void {
 
     applyUnitMove(unitId, dest.x, dest.z, payload.apCost ?? 1);
 
-    setGameState("pathPreview", []);
-    setGameState("highlightedTiles", []);
+    // Only clear local preview/highlights if this is the unit I have selected.
+    // Other clients may have a different unit selected — don't disrupt their UI.
+    if (gameState.selectedUnit === unitId) {
+      setGameState("pathPreview", []);
+      setGameState("highlightedTiles", []);
+    }
   });
 
   signalRService.on(
@@ -218,8 +222,10 @@ export function registerGameSyncHandlers(): void {
 
       applyUnitMove(unitId, dest.x, dest.z); // no AP deduction for DM force-move
 
-      setGameState("pathPreview", []);
-      setGameState("highlightedTiles", []);
+      if (gameState.selectedUnit === unitId) {
+        setGameState("pathPreview", []);
+        setGameState("highlightedTiles", []);
+      }
 
       addCombatLog(
         `[MJ] ${unitData.name} déplacé en (${dest.x}, ${dest.z})`,
