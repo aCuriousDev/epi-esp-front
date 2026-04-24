@@ -188,8 +188,10 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
   };
 
   const playerCount = () => session()?.players.length ?? 0;
+  const MIN_PLAYERS_TO_START = 2;
   // Allow host (DM) to force-start alone for testing
-  const canStart = () => (amHost() || playerCount() >= 2) && !starting();
+  const canStart = () =>
+    (amHost() || playerCount() >= MIN_PLAYERS_TO_START) && !starting();
 
   return (
     <div class="relative min-h-screen w-full overflow-hidden bg-brand-gradient">
@@ -366,10 +368,10 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                   ? "Lancement..."
                   : `Lancer la partie (${playerCount()} joueurs)`}
               </button>
-              <Show when={playerCount() < 2 && !amHost()}>
+              <Show when={playerCount() < MIN_PLAYERS_TO_START && !amHost()}>
                 <p class="text-center text-sm text-slate-400 mt-2">
-                  Au moins {minPlayersToStart()} joueur
-                  {minPlayersToStart() > 1 ? "s" : ""} requis pour commencer.
+                  Au moins {MIN_PLAYERS_TO_START} joueur
+                  {MIN_PLAYERS_TO_START > 1 ? "s" : ""} requis pour commencer.
                 </p>
               </Show>
               <Show when={startError()}>
