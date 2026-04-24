@@ -1,6 +1,7 @@
 import { createMemo, createSignal, Show } from "solid-js";
 import { A, useNavigate } from "@solidjs/router";
 import { CharacterService, CharacterClass, CharacterRace } from "../services/character.service";
+import { isPlayableClass } from "../types/character";
 
 type DnDClass = {
 	key: string;
@@ -166,6 +167,12 @@ const classKeyToEnum: Record<string, CharacterClass> = {
 	"wizard": CharacterClass.Magicien,
 };
 
+// Only classes with a matching 3D asset are offered at character creation.
+// The backend also rejects non-playable classes (CharacterClassExtensions.IsPlayable).
+const PLAYABLE_CLASS_LIST = CLASSES.filter((c) =>
+  isPlayableClass(classKeyToEnum[c.key]),
+);
+
 // Map frontend race names to backend CharacterRace enum
 const raceNameToEnum: Record<string, CharacterRace> = {
 	"Humain": CharacterRace.Humain,
@@ -188,7 +195,7 @@ export default function CreateCharacter() {
 	const [prevClass, setPrevClass] = createSignal<string | null>(null);
 
 	const klass = createMemo(
-		() => CLASSES.find((c) => c.key === selectedClass())!
+		() => PLAYABLE_CLASS_LIST.find((c) => c.key === selectedClass())!
 	);
 
 	const handleCreate = async () => {
@@ -260,7 +267,7 @@ export default function CreateCharacter() {
 						<div class="rounded-xl bg-black/25 ring-1 ring-white/10 p-5 shadow-soft">
 							<label class="block text-sm text-slate-300 mb-3">Classe</label>
 							<div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-								{CLASSES.map((c) => (
+								{PLAYABLE_CLASS_LIST.map((c) => (
 									<button
 										class={`text-sm rounded-lg px-3 py-2 border transition ${
 											selectedClass() === c.key

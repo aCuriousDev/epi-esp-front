@@ -2,42 +2,38 @@
  * Maps a UnitAssignment (from backend) to a frontend Unit.
  */
 
-import { Unit, UnitType, Team, GridPosition } from '../../types';
+import { Unit, UnitType, Team, GridPosition, Ability } from '../../types';
 import type { UnitAssignment } from '../../types/multiplayer';
 import {
   WARRIOR_ABILITIES,
+  BARBARIAN_ABILITIES,
   MAGE_ABILITIES,
   ARCHER_ABILITIES,
+  ROGUE_ABILITIES,
   cloneAbilities,
 } from '../abilities/AbilityDefinitions';
-import type { Ability } from '../../types';
-
-// Healer abilities reuse mage for now (no dedicated HEALER_ABILITIES defined yet)
-const HEALER_ABILITIES = MAGE_ABILITIES;
 
 /**
  * Map a character class string (French) to UnitType enum.
+ *
+ * Only the 5 playable classes (Barbare, Guerrier, Magicien, Rodeur, Voleur)
+ * have dedicated 3D assets. Legacy lobby quickstart labels ("Mage", "Archer")
+ * are still honoured so pre-existing sessions keep working.
  */
 function classToUnitType(characterClass: string): UnitType {
   switch (characterClass) {
-    case 'Guerrier':
     case 'Barbare':
-    case 'Paladin':
-    case 'Moine':
+      return UnitType.BARBARIAN;
+    case 'Guerrier':
       return UnitType.WARRIOR;
     case 'Magicien':
     case 'Mage': // lobby quickstart preset label (back BuildDefaultAssignment)
-    case 'Ensorceleur':
-    case 'Sorcier':
       return UnitType.MAGE;
-    case 'Archer': // lobby quickstart preset label
-    case 'Voleur':
     case 'Rodeur':
+    case 'Archer': // lobby quickstart preset label
       return UnitType.ARCHER;
-    case 'Barde':
-    case 'Clerc':
-    case 'Druide':
-      return UnitType.HEALER;
+    case 'Voleur':
+      return UnitType.ROGUE;
     default:
       return UnitType.WARRIOR;
   }
@@ -47,12 +43,14 @@ function abilitiesForType(unitType: UnitType): Ability[] {
   switch (unitType) {
     case UnitType.WARRIOR:
       return cloneAbilities(WARRIOR_ABILITIES);
+    case UnitType.BARBARIAN:
+      return cloneAbilities(BARBARIAN_ABILITIES);
     case UnitType.MAGE:
       return cloneAbilities(MAGE_ABILITIES);
     case UnitType.ARCHER:
       return cloneAbilities(ARCHER_ABILITIES);
-    case UnitType.HEALER:
-      return cloneAbilities(HEALER_ABILITIES);
+    case UnitType.ROGUE:
+      return cloneAbilities(ROGUE_ABILITIES);
     default:
       return cloneAbilities(WARRIOR_ABILITIES);
   }
@@ -64,8 +62,8 @@ function attackRangeForType(unitType: UnitType): number {
       return 5;
     case UnitType.ARCHER:
       return 6;
-    case UnitType.HEALER:
-      return 4;
+    case UnitType.ROGUE:
+      return 2;
     default:
       return 1;
   }

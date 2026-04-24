@@ -1,27 +1,30 @@
 import {
   cloneAbilities,
   WARRIOR_ABILITIES,
+  BARBARIAN_ABILITIES,
   MAGE_ABILITIES,
   ARCHER_ABILITIES,
-  ENEMY_ABILITIES,
+  ROGUE_ABILITIES,
+  SKELETON_WARRIOR_ABILITIES,
+  SKELETON_MAGE_ABILITIES,
+  SKELETON_ROGUE_ABILITIES,
+  SKELETON_MINION_ABILITIES,
 } from '../abilities/AbilityDefinitions';
 
 describe('AbilityDefinitions', () => {
   describe('ability arrays are non-empty', () => {
-    it('WARRIOR_ABILITIES is non-empty', () => {
-      expect(WARRIOR_ABILITIES.length).toBeGreaterThan(0);
-    });
-
-    it('MAGE_ABILITIES is non-empty', () => {
-      expect(MAGE_ABILITIES.length).toBeGreaterThan(0);
-    });
-
-    it('ARCHER_ABILITIES is non-empty', () => {
-      expect(ARCHER_ABILITIES.length).toBeGreaterThan(0);
-    });
-
-    it('ENEMY_ABILITIES is non-empty', () => {
-      expect(ENEMY_ABILITIES.length).toBeGreaterThan(0);
+    it.each([
+      ['WARRIOR_ABILITIES', WARRIOR_ABILITIES],
+      ['BARBARIAN_ABILITIES', BARBARIAN_ABILITIES],
+      ['MAGE_ABILITIES', MAGE_ABILITIES],
+      ['ARCHER_ABILITIES', ARCHER_ABILITIES],
+      ['ROGUE_ABILITIES', ROGUE_ABILITIES],
+      ['SKELETON_WARRIOR_ABILITIES', SKELETON_WARRIOR_ABILITIES],
+      ['SKELETON_MAGE_ABILITIES', SKELETON_MAGE_ABILITIES],
+      ['SKELETON_ROGUE_ABILITIES', SKELETON_ROGUE_ABILITIES],
+      ['SKELETON_MINION_ABILITIES', SKELETON_MINION_ABILITIES],
+    ])('%s is non-empty', (_name, abilities) => {
+      expect(abilities.length).toBeGreaterThan(0);
     });
   });
 
