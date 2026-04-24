@@ -298,7 +298,7 @@ export default function TutorialOverlay() {
               <button
                 type="button"
                 class="flex-shrink-0 p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all hover:scale-105 active:scale-95"
-                onClick={() => stopTutorial(true)}
+                onClick={() => stopTutorial(false)}
                 aria-label="Fermer le tutoriel"
               >
                 <X class="w-4 h-4" />
@@ -339,7 +339,7 @@ export default function TutorialOverlay() {
                 <button
                   type="button"
                   class="px-3 py-2 rounded-xl text-sm text-slate-400 hover:text-white border border-transparent hover:border-white/10 transition"
-                  onClick={() => stopTutorial(true)}
+                  onClick={() => stopTutorial(false)}
                 >
                   Plus tard
                 </button>

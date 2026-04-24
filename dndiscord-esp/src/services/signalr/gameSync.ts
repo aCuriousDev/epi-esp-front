@@ -71,7 +71,10 @@ function toFrontendPos(p: { x: number; y: number }): GridPosition {
 }
 
 function applySnapshot(payload: GameStateSnapshotPayload): void {
-  if (!payload?.units?.length) return;
+  if (!payload?.units?.length) {
+    console.warn("[gameSync] FullStateSync received empty units payload", payload);
+    return;
+  }
 
   for (const key of Object.keys(tiles)) {
     if (tiles[key]?.occupiedBy != null) {
@@ -81,7 +84,21 @@ function applySnapshot(payload: GameStateSnapshotPayload): void {
 
   for (const u of payload.units) {
     const pos = toFrontendPos(u.position as { x: number; y: number });
-    if (!units[u.unitId]) continue;
+    const tileKey = posToKey(pos);
+
+    // Always re-apply occupancy from server snapshot; if we don't know the unit
+    // yet (join/reconnect race), still block pathing/collision on that tile.
+    if (tiles[tileKey]) {
+      setTiles(tileKey, "occupiedBy", u.unitId);
+    }
+
+    if (!units[u.unitId]) {
+      console.warn(
+        "[gameSync] applySnapshot: unit missing locally; occupancy applied only",
+        { unitId: u.unitId, pos },
+      );
+      continue;
+    }
 
     setUnits(
       u.unitId,
@@ -91,11 +108,6 @@ function applySnapshot(payload: GameStateSnapshotPayload): void {
         unit.stats.maxHealth = u.maxHp;
       }),
     );
-
-    const tileKey = posToKey(pos);
-    if (tiles[tileKey]) {
-      setTiles(tileKey, "occupiedBy", u.unitId);
-    }
   }
 
   updatePathfinder();
@@ -237,7 +249,12 @@ export function registerGameSyncHandlers(): void {
       let stats;
       try {
         stats = JSON.parse(payload.statsJson);
-      } catch {
+      } catch (err) {
+        console.error("[gameSync] DmUnitSpawned statsJson parse failed", {
+          unitId: payload.unitId,
+          name: payload.name,
+          err,
+        });
         return;
       }
 
@@ -510,6 +527,7 @@ async function handleMapSwitched(message: unknown): Promise<void> {
   }
 
   const { clearEngineState } = await import("../../components/GameCanvas");
+  const prevMapId = gameState.mapId;
   await clearEngineState();
 
   // Full re-init through startGame. The previous implementation only set
@@ -527,7 +545,22 @@ async function handleMapSwitched(message: unknown): Promise<void> {
   // but is deferred — POC scope prefers a simple, correct reset.
   const assignments = sessionState.gameStartedPayload?.unitAssignments;
   const { startGame } = await import("../../game");
-  startGame(GameMode.FREE_ROAM, parsed.mapId, null, assignments);
+  try {
+    startGame(GameMode.FREE_ROAM, parsed.mapId, null, assignments);
+  } catch (err) {
+    console.error("[gameSync] startGame failed after MapSwitched", err);
+    if (prevMapId) {
+      console.warn("[gameSync] attempting recovery: restart previous map", {
+        prevMapId,
+      });
+      try {
+        startGame(GameMode.FREE_ROAM, prevMapId, null, assignments);
+      } catch (err2) {
+        console.error("[gameSync] recovery startGame failed", err2);
+      }
+    }
+    throw err;
+  }
 
   addCombatLog(`[MJ] Nouvelle carte : ${parsed.name}`, "system");
 }

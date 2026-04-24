@@ -292,6 +292,31 @@ export function moveUnit(targetPos: GridPosition): boolean {
   const prevPos = { ...unit.position };
   const prevDestOccupiedBy = tiles[posToKey(targetPos)]?.occupiedBy ?? null;
 
+  const rollbackOptimisticMove = (err: unknown) => {
+    console.warn("[MovementActions] move broadcast failed, rollback", err);
+    batch(() => {
+      // Restore tile occupancy
+      setTiles(posToKey(targetPos), "occupiedBy", prevDestOccupiedBy);
+      setTiles(posToKey(prevPos), "occupiedBy", unit.id);
+
+      // Restore unit position + AP
+      setUnits(
+        unit.id,
+        produce((u) => {
+          u.position = prevPos;
+          if (!isFreeRoam) {
+            u.stats.currentActionPoints += movementCost;
+          }
+        }),
+      );
+
+      // Clear local preview/highlights; next user action will recompute
+      setGameState("pathPreview", []);
+    });
+
+    updatePathfinder();
+  };
+
   batch(() => {
     // Play movement dust trail VFX + footstep sound
     playMovementDustEffect(unit.position, targetPos);
@@ -410,7 +435,7 @@ export function moveUnit(targetPos: GridPosition): boolean {
         unitId: unit.id,
         target: { x: targetPos.x, y: targetPos.z },
       }).catch((err) => {
-        console.warn("[MovementActions] dmMoveToken failed:", err);
+        rollbackOptimisticMove(err);
       });
     } else {
       // Normal movement → legacy broadcast
@@ -422,7 +447,7 @@ export function moveUnit(targetPos: GridPosition): boolean {
         apCost: movementCost,
         remainingAp,
       }).catch((err) => {
-        console.warn("[MovementActions] sendUnitMove failed:", err);
+        rollbackOptimisticMove(err);
       });
     }
   }
