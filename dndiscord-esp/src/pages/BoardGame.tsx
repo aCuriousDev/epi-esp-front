@@ -23,6 +23,7 @@ import { DmPanel } from "../components/dm/DmPanel";
 import DmPlayerInspectPanel from "../components/dm/DmPlayerInspectPanel";
 import { ItemReceivedToast } from "../components/dm/ItemReceivedToast";
 import { EnemySpawnToast } from "../components/dm/EnemySpawnToast";
+import { ProgressionToast } from "../components/dm/ProgressionToast";
 import InventoryPanel from "../components/InventoryPanel";
 import WalletPanel from "../components/WalletPanel";
 import { PlayerHotbar } from "../components/hotbar/PlayerHotbar";
@@ -877,6 +878,9 @@ const BoardGame: Component = () => {
 
             {/* Enemy spawn notification toasts */}
             <EnemySpawnToast />
+
+            {/* XP/level-up/gold recipient toasts */}
+            <ProgressionToast />
 
             {/* Compact unit info card (top-center) + persistent player hotbar
                 (bottom-center) — non-DM UX replacing the old auto-opening

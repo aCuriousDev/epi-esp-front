@@ -18,6 +18,11 @@ import {
   type DmGrantItemPayload,
   type ItemGrantedPayload,
   type DmSpawnUnitPayload,
+  type DmAwardExperiencePayload,
+  type DmForceLevelUpPayload,
+  type DmGrantGoldPayload,
+  type CharacterProgressedPayload,
+  type GoldGrantedPayload,
 } from "../../types/multiplayer";
 import {
   setSession,
@@ -55,6 +60,7 @@ import {
   removeUnitsByOwnerUserId,
 } from "../../game/stores/UnitsStore";
 import { addHiddenRoll, addGrantedItem } from "../../stores/dmTools.store";
+import { addCharacterProgressed, addGoldGranted } from "../../stores/dmTools.store";
 
 const HUB = {
   createSession: "CreateSession",
@@ -81,6 +87,9 @@ const HUB = {
   dmRestartGame: "DmRestartGame",
   dmSwitchMap: "DmSwitchMap",
   dmAdjustHp: "DmAdjustHp",
+  dmAwardExperience: "DmAwardExperience",
+  dmForceLevelUp: "DmForceLevelUp",
+  dmGrantGold: "DmGrantGold",
   selectDefaultTemplate: "SelectDefaultTemplate",
 } as const;
 
@@ -387,6 +396,21 @@ export async function dmAdjustHp(unitId: string, delta: number): Promise<void> {
   await signalRService.invoke(HUB.dmAdjustHp, unitId, delta);
 }
 
+/** DM-only: award raw XP to a player's selected character. */
+export async function dmAwardExperience(payload: DmAwardExperiencePayload): Promise<void> {
+  await signalRService.invoke(HUB.dmAwardExperience, payload);
+}
+
+/** DM-only: force one or more level-ups on a player's selected character. */
+export async function dmForceLevelUp(payload: DmForceLevelUpPayload): Promise<void> {
+  await signalRService.invoke(HUB.dmForceLevelUp, payload);
+}
+
+/** DM-only: grant/remove a typed currency amount from a player's selected character wallet. */
+export async function dmGrantGold(payload: DmGrantGoldPayload): Promise<void> {
+  await signalRService.invoke(HUB.dmGrantGold, payload);
+}
+
 // --- Enregistrement des handlers d'événements ---
 
 import { normalizePlayer, normalizeSession } from "./multiplayer.normalizers";
@@ -528,6 +552,16 @@ export function registerMultiplayerHandlers(): void {
   signalRService.on("ItemGranted", (msg: any) => {
     const payload: ItemGrantedPayload = msg?.payload ?? msg;
     addGrantedItem(payload);
+  });
+
+  signalRService.on("CharacterProgressed", (msg: any) => {
+    const payload: CharacterProgressedPayload = msg?.payload ?? msg;
+    addCharacterProgressed(payload);
+  });
+
+  signalRService.on("GoldGranted", (msg: any) => {
+    const payload: GoldGrantedPayload = msg?.payload ?? msg;
+    addGoldGranted(payload);
   });
 
   // SessionEnded — DM left / host closed the session / back dropped it.

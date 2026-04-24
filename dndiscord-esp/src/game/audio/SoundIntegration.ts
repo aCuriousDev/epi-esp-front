@@ -220,3 +220,8 @@ export function playNotificationSound(): void {
   if (!soundSettings.sfxEnabled()) return;
   getOrCreate().playNotification();
 }
+
+export function playLevelUpSound(): void {
+  if (!soundSettings.sfxEnabled()) return;
+  getOrCreate().playVictory();
+}

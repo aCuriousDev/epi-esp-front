@@ -26,6 +26,8 @@ import {
   Minus,
   Package,
   Sparkles,
+  Coins,
+  TrendingUp,
 } from "lucide-solid";
 import { units } from "../../game/stores/UnitsStore";
 import {
@@ -33,9 +35,16 @@ import {
   setDmInspectedUnit,
 } from "../../stores/dmTools.store";
 import { isDm, getOtherPlayers, sessionState } from "../../stores/session.store";
-import { dmGrantItem, dmAdjustHp } from "../../services/signalr/multiplayer.service";
+import {
+  dmGrantItem,
+  dmAdjustHp,
+  dmAwardExperience,
+  dmForceLevelUp,
+  dmGrantGold,
+} from "../../services/signalr/multiplayer.service";
 import { InventoryService } from "../../services/inventory.service";
 import { getCategoryStyle } from "../../services/itemVisuals";
+import { CharacterService, type CharacterDto } from "../../services/character.service";
 import ItemIcon from "../common/ItemIcon";
 import { Team } from "../../types";
 import type { Item, ItemCategory, InventoryEntry, InventoryChangedEvent } from "../../types/inventory";
@@ -50,6 +59,16 @@ const CATEGORY_FILTERS: Array<{ value: "all" | ItemCategory; label: string }> = 
   { value: "Treasure", label: "Trésors" },
 ];
 
+const COIN_TYPES = [
+  { value: "cp", label: "Pièces de cuivre" },
+  { value: "sp", label: "Pièces d'argent" },
+  { value: "ep", label: "Pièces d'électrum" },
+  { value: "gp", label: "Pièces d'or" },
+  { value: "pp", label: "Pièces de platine" },
+] as const;
+
+type CoinType = (typeof COIN_TYPES)[number]["value"];
+
 export default function DmPlayerInspectPanel() {
   // ── Catalog (loaded once) ──
   const [catalog, setCatalog] = createSignal<Item[]>([]);
@@ -59,11 +78,16 @@ export default function DmPlayerInspectPanel() {
   // ── Inventory of inspected character ──
   const [inventory, setInventory] = createSignal<InventoryEntry[]>([]);
   const [loadingInv, setLoadingInv] = createSignal(false);
+  const [character, setCharacter] = createSignal<CharacterDto | null>(null);
 
   // ── Give state ──
   const [grantQuantity, setGrantQuantity] = createSignal(1);
   const [grantingItemId, setGrantingItemId] = createSignal<string | null>(null);
   const [givenItemId, setGivenItemId] = createSignal<string | null>(null);
+  const [xpAmount, setXpAmount] = createSignal(250);
+  const [goldAmount, setGoldAmount] = createSignal(10);
+  const [goldType, setGoldType] = createSignal<CoinType>("gp");
+  const [updatingProgression, setUpdatingProgression] = createSignal(false);
 
   // ── View toggle: "stats" | "inventory" | "give" ──
   const [view, setView] = createSignal<"stats" | "inventory" | "give">("stats");
@@ -126,6 +150,16 @@ export default function DmPlayerInspectPanel() {
     }
   };
 
+  const loadCharacter = async (charId: string) => {
+    try {
+      const data = await CharacterService.getCharacter(charId);
+      setCharacter(data);
+    } catch (err) {
+      console.error("[DM Inspect] Failed to load character:", err);
+      setCharacter(null);
+    }
+  };
+
   const currentCharId = createMemo(() => characterId());
   const currentUnitId = createMemo(() => dmInspectedUnit());
 
@@ -138,9 +172,11 @@ export default function DmPlayerInspectPanel() {
       }
       if (charId) {
         loadInventory(charId);
+        loadCharacter(charId);
         unsubscribe = InventoryService.onInventoryChanged(handleInventoryChanged);
       } else {
         setInventory([]);
+        setCharacter(null);
       }
     }),
   );
@@ -154,6 +190,7 @@ export default function DmPlayerInspectPanel() {
       setView("stats");
       setGrantingItemId(null);
       setGivenItemId(null);
+      setUpdatingProgression(false);
     }),
   );
 
@@ -230,6 +267,57 @@ export default function DmPlayerInspectPanel() {
   });
 
   const close = () => setDmInspectedUnit(null);
+
+  const handleAwardXp = async () => {
+    const player = playerInfo();
+    const charId = currentCharId();
+    const amount = Math.max(1, Math.floor(xpAmount()));
+    if (!player || !charId || updatingProgression()) return;
+    setUpdatingProgression(true);
+    try {
+      await dmAwardExperience({ targetUserId: player.userId, experienceAmount: amount });
+      await loadCharacter(charId);
+    } catch (e) {
+      console.error("[DM Inspect] Award XP failed:", e);
+    } finally {
+      setUpdatingProgression(false);
+    }
+  };
+
+  const handleForceLevelUp = async () => {
+    const player = playerInfo();
+    const charId = currentCharId();
+    if (!player || !charId || updatingProgression()) return;
+    setUpdatingProgression(true);
+    try {
+      await dmForceLevelUp({ targetUserId: player.userId, levels: 1 });
+      await loadCharacter(charId);
+    } catch (e) {
+      console.error("[DM Inspect] Force level up failed:", e);
+    } finally {
+      setUpdatingProgression(false);
+    }
+  };
+
+  const handleGrantGold = async () => {
+    const player = playerInfo();
+    const amount = Math.floor(goldAmount());
+    if (!player || amount === 0 || updatingProgression()) return;
+    setUpdatingProgression(true);
+    try {
+      await dmGrantGold({
+        targetUserId: player.userId,
+        amount,
+        currencyType: goldType(),
+        // Legacy field for older backend compatibility.
+        goldPieces: amount,
+      });
+    } catch (e) {
+      console.error("[DM Inspect] Grant gold failed:", e);
+    } finally {
+      setUpdatingProgression(false);
+    }
+  };
 
   // ═══════════════════════════════════════════════════════════════════
   // RENDER
@@ -337,6 +425,77 @@ export default function DmPlayerInspectPanel() {
                   <StatRow icon={<Footprints class="w-3 h-3 text-emerald-300" />} label="Déplacement" value={s().movementRange} />
                   <StatRow icon={<Swords class="w-3 h-3 text-purple-300" />} label="Portée" value={s().attackRange} />
                 </div>
+
+                <Show when={u().team === Team.PLAYER && currentCharId()}>
+                  <div class="mt-2 space-y-1.5 rounded-lg border border-purple-500/20 bg-purple-500/5 p-2">
+                    <div class="flex items-center justify-between text-[10px]">
+                      <span class="text-purple-200/80 flex items-center gap-1"><TrendingUp class="w-3 h-3" /> Progression</span>
+                      <span class="text-white/80">Niv. {character()?.level ?? "?"}</span>
+                    </div>
+                    <Show when={character()}>
+                      <div class="grid grid-cols-3 gap-1 text-[9px]">
+                        <StatMini label="FOR" value={character()!.abilities.strength} />
+                        <StatMini label="DEX" value={character()!.abilities.dexterity} />
+                        <StatMini label="CON" value={character()!.abilities.constitution} />
+                        <StatMini label="INT" value={character()!.abilities.intelligence} />
+                        <StatMini label="SAG" value={character()!.abilities.wisdom} />
+                        <StatMini label="CHA" value={character()!.abilities.charisma} />
+                      </div>
+                      <div class="text-[9px] text-purple-200/70 text-center">
+                        XP stockée: <span class="font-mono text-white/85">{character()!.experiencePoints}</span> / 1000
+                      </div>
+                    </Show>
+                    <div class="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={1}
+                        class="dm-input h-7 text-[10px]"
+                        value={xpAmount()}
+                        onInput={(e) => setXpAmount(Math.max(1, Number(e.currentTarget.value) || 1))}
+                      />
+                      <button
+                        class="px-2 py-1 rounded-md text-[10px] bg-violet-500/25 border border-violet-400/30 text-violet-100 hover:bg-violet-500/35 transition-colors disabled:opacity-50"
+                        disabled={updatingProgression()}
+                        onClick={handleAwardXp}
+                      >
+                        +XP
+                      </button>
+                      <button
+                        class="px-2 py-1 rounded-md text-[10px] bg-yellow-500/25 border border-yellow-400/30 text-yellow-100 hover:bg-yellow-500/35 transition-colors disabled:opacity-50"
+                        disabled={updatingProgression()}
+                        onClick={handleForceLevelUp}
+                      >
+                        Level Up
+                      </button>
+                    </div>
+
+                    <div class="flex items-center gap-1">
+                      <input
+                        type="number"
+                        class="dm-input h-7 text-[10px]"
+                        value={goldAmount()}
+                        onInput={(e) => setGoldAmount(Math.trunc(Number(e.currentTarget.value) || 0))}
+                      />
+                      <select
+                        class="dm-input h-7 text-[10px] px-1"
+                        value={goldType()}
+                        onChange={(e) => setGoldType(e.currentTarget.value as CoinType)}
+                      >
+                        <For each={COIN_TYPES}>
+                          {(coin) => <option value={coin.value}>{coin.label}</option>}
+                        </For>
+                      </select>
+                      <button
+                        class="px-2 py-1 rounded-md text-[10px] bg-amber-500/25 border border-amber-400/30 text-amber-100 hover:bg-amber-500/35 transition-colors disabled:opacity-50 flex items-center gap-1"
+                        disabled={updatingProgression() || goldAmount() === 0}
+                        onClick={handleGrantGold}
+                      >
+                        <Coins class="w-3 h-3" />
+                        Donner
+                      </button>
+                    </div>
+                  </div>
+                </Show>
 
                 {/* Position */}
                 <div class="text-[9px] text-purple-300/40 text-center mt-1">
@@ -496,6 +655,15 @@ export default function DmPlayerInspectPanel() {
         );
       }}
     </Show>
+  );
+}
+
+function StatMini(props: { label: string; value: number }) {
+  return (
+    <div class="rounded-md border border-white/10 bg-black/20 px-1.5 py-1 text-center">
+      <div class="text-[8px] text-purple-300/55">{props.label}</div>
+      <div class="text-[10px] text-white/90 font-semibold">{props.value}</div>
+    </div>
   );
 }
 

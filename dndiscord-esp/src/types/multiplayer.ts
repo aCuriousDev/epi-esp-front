@@ -251,3 +251,60 @@ export interface DmSpawnUnitPayload {
   target: GridPosition;
   statsJson: string;
 }
+
+export interface DmAwardExperiencePayload {
+  targetUserId: string;
+  experienceAmount: number;
+}
+
+export interface DmForceLevelUpPayload {
+  targetUserId: string;
+  levels: number;
+}
+
+export interface DmGrantGoldPayload {
+  targetUserId: string;
+  amount: number;
+  currencyType: "cp" | "sp" | "ep" | "gp" | "pp";
+  // Legacy compatibility with older backends.
+  goldPieces: number;
+}
+
+export interface CharacterProgressedPayload {
+  targetUserId: string;
+  targetUserName: string;
+  characterId: string;
+  awardedExperience: number;
+  experienceRemainder: number;
+  previousLevel: number;
+  newLevel: number;
+  levelUps: number;
+  currentHitPoints: number;
+  maxHitPoints: number;
+  armorClass: number;
+  initiative: number;
+  speed: number;
+  strength: number;
+  dexterity: number;
+  constitution: number;
+  intelligence: number;
+  wisdom: number;
+  charisma: number;
+  timestamp: string;
+}
+
+export interface GoldGrantedPayload {
+  targetUserId: string;
+  targetUserName: string;
+  characterId: string;
+  amount: number;
+  currencyType: "cp" | "sp" | "ep" | "gp" | "pp";
+  goldDelta: number;
+  copperPieces: number;
+  silverPieces: number;
+  electrumPieces: number;
+  goldPieces: number;
+  platinumPieces: number;
+  totalInCopper: number;
+  timestamp: string;
+}
