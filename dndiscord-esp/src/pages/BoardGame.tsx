@@ -23,6 +23,9 @@ import { DmPanel } from "../components/dm/DmPanel";
 import DmPlayerInspectPanel from "../components/dm/DmPlayerInspectPanel";
 import { ItemReceivedToast } from "../components/dm/ItemReceivedToast";
 import { EnemySpawnToast } from "../components/dm/EnemySpawnToast";
+import DiceRequestListener from "../components/dice/DiceRequestListener";
+import DiceRollPrompt from "../components/dice/DiceRollPrompt";
+import DiceResultToast from "../components/dice/DiceResultToast";
 import InventoryPanel from "../components/InventoryPanel";
 import WalletPanel from "../components/WalletPanel";
 import { PlayerHotbar } from "../components/hotbar/PlayerHotbar";
@@ -877,6 +880,11 @@ const BoardGame: Component = () => {
 
             {/* Enemy spawn notification toasts */}
             <EnemySpawnToast />
+
+            {/* DM-triggered D20 roll request feature */}
+            <DiceRequestListener />
+            <DiceRollPrompt />
+            <DiceResultToast />
 
             {/* Compact unit info card (top-center) + persistent player hotbar
                 (bottom-center) — non-DM UX replacing the old auto-opening
