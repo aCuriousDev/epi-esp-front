@@ -5,6 +5,7 @@ import {
   diceRequestsState,
   setDiceRequestsState,
 } from "../../stores/diceRequests.store";
+import type { GameMessage } from "../../types/multiplayer";
 
 interface RollRequestedPayload {
   requestId: string;
@@ -49,7 +50,8 @@ export default function DiceRequestListener() {
   onMount(() => {
     const me = () => sessionState.hubUserId ?? "";
 
-    const onRollRequested = (p: RollRequestedPayload) => {
+    const onRollRequested = (message: GameMessage<RollRequestedPayload>) => {
+      const p = message.payload;
       // This event reaches the targeted player only.
       setDiceRequestsState(p.requestId, {
         requestId: p.requestId,
@@ -66,7 +68,8 @@ export default function DiceRequestListener() {
       });
     };
 
-    const onDmEcho = (p: RollRequestedDmEchoPayload) => {
+    const onDmEcho = (message: GameMessage<RollRequestedDmEchoPayload>) => {
+      const p = message.payload;
       if (diceRequestsState[p.requestId]) {
         // Already populated (e.g. from Public event dedupe chain). Update metadata.
         setDiceRequestsState(p.requestId, {
@@ -91,7 +94,8 @@ export default function DiceRequestListener() {
       });
     };
 
-    const onPublic = (p: RollRequestedPublicPayload) => {
+    const onPublic = (message: GameMessage<RollRequestedPublicPayload>) => {
+      const p = message.payload;
       // Dedupe: if a dedicated event already populated this requestId, drop.
       if (diceRequestsState[p.requestId]) return;
       setDiceRequestsState(p.requestId, {
@@ -109,7 +113,8 @@ export default function DiceRequestListener() {
       });
     };
 
-    const onResult = (p: RollResultBroadcastPayload) => {
+    const onResult = (message: GameMessage<RollResultBroadcastPayload>) => {
+      const p = message.payload;
       const existing = diceRequestsState[p.requestId];
       if (!existing) return; // result arrived before requested — defensive drop
       setDiceRequestsState(p.requestId, "results", p.userId, {
@@ -122,7 +127,8 @@ export default function DiceRequestListener() {
       }
     };
 
-    const onCanceled = (p: RollCanceledPayload) => {
+    const onCanceled = (message: GameMessage<RollCanceledPayload>) => {
+      const p = message.payload;
       if (!diceRequestsState[p.requestId]) return;
       setDiceRequestsState(p.requestId, "status", "canceled");
     };
