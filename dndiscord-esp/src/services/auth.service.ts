@@ -84,6 +84,39 @@ export const AuthService = {
   },
 
   /**
+   * Supprime le compte et toutes les données associées (RGPD art. 17).
+   * Côté serveur : cascade sur Characters, Campaigns possédées, memberships,
+   * révocation du token Discord. Le token local est effacé dans tous les cas.
+   */
+  async deleteAccount(): Promise<void> {
+    const token = localStorage.getItem("token");
+    if (!token) throw new Error("No token found");
+
+    try {
+      await axios.delete(`${API_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } finally {
+      localStorage.removeItem("token");
+    }
+  },
+
+  /**
+   * Exporte les données personnelles au format JSON (RGPD art. 20).
+   * Renvoie l'objet Blob prêt à être téléchargé.
+   */
+  async exportData(): Promise<Blob> {
+    const token = localStorage.getItem("token");
+    if (!token) throw new Error("No token found");
+
+    const response = await axios.get(`${API_URL}/api/auth/me/export`, {
+      headers: { Authorization: `Bearer ${token}` },
+      responseType: "blob",
+    });
+    return response.data as Blob;
+  },
+
+  /**
    * Check if user has a stored token
    */
   hasToken(): boolean {

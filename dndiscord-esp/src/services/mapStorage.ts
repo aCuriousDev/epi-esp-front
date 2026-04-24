@@ -4,6 +4,20 @@
 
 export type SpawnZoneType = "ally" | "enemy" | "teleport";
 
+/**
+ * A light placed by the user in the map editor. `presetId` references an
+ * entry in `src/config/lightPresets.ts`. Overrides are optional and only
+ * set when the user tweaks intensity or colour away from the preset.
+ */
+export interface SavedLightData {
+	presetId: "torch" | "lantern" | "magical_orb";
+	x: number;
+	z: number;
+	y?: number;
+	intensityOverride?: number;
+	colorOverride?: [number, number, number];
+}
+
 export interface SavedMapData {
 	id: string;
 	name: string;
@@ -18,6 +32,24 @@ export interface SavedMapData {
 	dungeonId?: string;
 	/** Index de la salle dans le donjon (0-based) */
 	roomIndex?: number;
+	/** Lumières placées (torches, lanternes, orbes magiques). */
+	lights?: SavedLightData[];
+	/** Schema version. Missing or <2 indicates a pre-lights map. */
+	version?: number;
+}
+
+/**
+ * Promote older map payloads to the current shape. Called by `loadMap` so
+ * consumers always receive a well-formed object.
+ */
+function migrateMap(raw: SavedMapData): SavedMapData {
+	const version = raw.version ?? 1;
+	if (version >= 2) return raw;
+	return {
+		...raw,
+		lights: raw.lights ?? [],
+		version: 2,
+	};
 }
 
 export interface DungeonData {
@@ -101,7 +133,7 @@ export function loadMap(mapId: string): SavedMapData | null {
 	try {
 		const data = localStorage.getItem(`${STORAGE_KEY}_${mapId}`);
 		if (!data) return null;
-		return JSON.parse(data);
+		return migrateMap(JSON.parse(data) as SavedMapData);
 	} catch (error) {
 		console.error(`Error loading map ${mapId}:`, error);
 		return null;
@@ -245,6 +277,60 @@ export function deleteDungeon(dungeonId: string): void {
 	} catch (error) {
 		console.error(`Error deleting dungeon ${dungeonId}:`, error);
 	}
+}
+
+// ============================================
+// EXPORT / IMPORT
+// ============================================
+
+/**
+ * Déclenche le téléchargement d'une map au format JSON (.dndmap.json).
+ */
+export function exportMapToFile(mapData: SavedMapData): void {
+	const json = JSON.stringify(mapData, null, 2);
+	// Use a data: URI instead of URL.createObjectURL — blob: URLs are blocked
+	// by the Discord Activity CSP (connect-src / script-src restrictions).
+	const a    = document.createElement('a');
+	a.href     = `data:application/json;charset=utf-8,${encodeURIComponent(json)}`;
+	a.download = `${mapData.name.replace(/[^a-z0-9_\-]/gi, '_')}.dndmap.json`;
+	document.body.appendChild(a);
+	a.click();
+	document.body.removeChild(a);
+}
+
+/**
+ * Importe une map depuis une chaîne JSON.
+ * Assigne un nouvel ID unique (évite toute collision), sauvegarde en localStorage
+ * et retourne la map créée.
+ * @throws {Error} si le JSON est invalide ou que le champ `cells` est absent.
+ */
+export function importMapFromJson(jsonString: string): SavedMapData {
+	let parsed: SavedMapData;
+	try {
+		parsed = JSON.parse(jsonString);
+	} catch {
+		throw new Error('Fichier invalide : JSON malformé.');
+	}
+
+	if (!parsed || !Array.isArray(parsed.cells)) {
+		throw new Error('Format invalide : champ "cells" manquant ou incorrect.');
+	}
+
+	const imported: SavedMapData = {
+		...parsed,
+		// Nouvel ID pour éviter tout écrasement de carte existante
+		id:        generateMapId(),
+		name:      parsed.name ?? 'Carte importée',
+		createdAt: Date.now(),
+		updatedAt: Date.now(),
+		// La carte importée devient standalone (pas liée à un donjon)
+		mapType:   parsed.mapType === 'dungeon-room' ? 'classique' : (parsed.mapType ?? 'classique'),
+		dungeonId: undefined,
+		roomIndex: undefined,
+	};
+
+	saveMap(imported);
+	return imported;
 }
 
 /**

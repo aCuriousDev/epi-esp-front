@@ -1,52 +1,27 @@
-import { Campaign, CampaignStatus } from "@/types/campaign";
+import { CampaignStatus } from "@/types/campaign";
 import axios from "axios";
 import { getApiUrl } from "./config";
+export {
+  APICampaignStatus,
+  CampaignMemberRole,
+  MembershipStatus,
+  mapMemberRole,
+  mapToAPICampaignStatus,
+  mapCampaignStatus,
+  mapCampaignResponse,
+  displayDungeonMasterName,
+  hasScenario,
+} from "./campaign.mappers";
+export type {
+  CampaignResponse,
+  CampaignMemberResponse,
+  CampaignDetailResponse,
+} from "./campaign.mappers";
+import { APICampaignStatus, CampaignMemberRole } from "./campaign.mappers";
+import type { CampaignResponse, CampaignDetailResponse, CampaignMemberResponse } from "./campaign.mappers";
 
 const API_URL = getApiUrl();
 
-/**
- * Campaign Status enum matching backend (integers)
-//  */
-export enum APICampaignStatus {
-  Draft = 0,
-  Active = 1,
-  Paused = 2,
-  Completed = 3,
-  Archived = 4,
-}
-
-/**
- * Campaign Member Role enum
- */
-export enum CampaignMemberRole {
-  Player = "Player",
-  CoDungeonMaster = "CoDungeonMaster",
-  Spectator = "Spectator",
-}
-
-/**
- * Membership Status enum
- */
-export enum MembershipStatus {
-  Pending = "Pending",
-  Active = "Active",
-  Declined = "Declined",
-  Removed = "Removed",
-  Left = "Left",
-}
-/**
- * Map API member role to frontend role
- */
-export const mapMemberRole = (apiRole: string): "dm" | "player" => {
-  switch (apiRole) {
-    case "CoDungeonMaster":
-      return "dm";
-    case "Player":
-    case "Spectator":
-    default:
-      return "player";
-  }
-};
 /**
  * Backend API Types
  */
@@ -98,43 +73,6 @@ export interface UpdateMemberRequest {
   notes?: string;
 }
 
-/**
- * Response types
- */
-export interface CampaignResponse {
-  id: string;
-  name: string;
-  description?: string;
-  dungeonMasterId: string;
-  status: number;
-  imageUrl?: string;
-  maxPlayers: number;
-  isPublic: boolean;
-  memberCount: number;
-  createdAt: string;
-  updatedAt: string;
-  lastPlayedAt?: string;
-  campaignTreeDefinition: string;
-}
-
-export interface CampaignMemberResponse {
-  id: string;
-  userId: string;
-  role: CampaignMemberRole;
-  status: MembershipStatus;
-  nickname?: string;
-  joinedAt: string;
-  acceptedAt?: string;
-}
-
-export interface CampaignDetailResponse extends CampaignResponse {
-  /** True when the current user is the Dungeon Master of this campaign (from API). */
-  isDungeonMaster?: boolean;
-  hasInviteCode: boolean;
-  inviteCodeExpiresAt?: string;
-  members: CampaignMemberResponse[];
-  snapshotCount: number;
-}
 export interface UpdateCampaignManagerRequest {
   campaignTreeDefinition: string;
 }
@@ -159,6 +97,48 @@ export interface CampaignMemberListResponse {
   totalCount: number;
 }
 
+// ─── Session types ─────────────────────────────────────────────────────────
+
+export enum GameSessionStatus {
+  Active = 'Active',
+  Completed = 'Completed',
+  Abandoned = 'Abandoned',
+}
+
+export interface AdvanceSessionRequest {
+  nodeId: string;
+  nodeType: string;
+  nodeTitle?: string;
+  portUsed?: string;
+  choiceText?: string;
+}
+
+export interface SessionHistoryEntryResponse {
+  id: string;
+  nodeId: string;
+  nodeType: string;
+  nodeTitle: string;
+  portUsed?: string;
+  choiceText?: string;
+  visitedAt: string;
+}
+
+export interface GameSessionResponse {
+  id: string;
+  campaignId: string;
+  status: GameSessionStatus;
+  currentNodeId?: string;
+  startedBy: string;
+  startedAt: string;
+  endedAt?: string;
+  entries: SessionHistoryEntryResponse[];
+}
+
+export interface GameSessionListResponse {
+  items: GameSessionResponse[];
+  totalCount: number;
+}
+
 /**
  * Helper to get auth header
  */
@@ -171,83 +151,6 @@ function getAuthHeaders() {
   };
 }
 
-/**
- * Map frontend status to API status (integer)
- */
-export const mapToAPICampaignStatus = (
-  status: CampaignStatus,
-): APICampaignStatus => {
-  switch (status) {
-    case CampaignStatus.Planning:
-      return APICampaignStatus.Draft;
-    case CampaignStatus.Active:
-      return APICampaignStatus.Active;
-    case CampaignStatus.Paused:
-      return APICampaignStatus.Paused;
-    case CampaignStatus.Completed:
-      return APICampaignStatus.Completed;
-    case CampaignStatus.Archived:
-      return APICampaignStatus.Archived;
-    default:
-      return APICampaignStatus.Draft;
-  }
-};
-
-/**
- * Map API campaign status (integer) to frontend status (string)
- */
-export const mapCampaignStatus = (apiStatus: number): CampaignStatus => {
-  switch (apiStatus) {
-    case 0:
-      return CampaignStatus.Planning; // Draft
-    case 1:
-      return CampaignStatus.Active;
-    case 2:
-      return CampaignStatus.Paused;
-    case 3:
-      return CampaignStatus.Completed;
-    case 4:
-      return CampaignStatus.Archived;
-    default:
-      return CampaignStatus.Planning;
-  }
-};
-
-export const mapCampaignResponse = (
-  apiCampaign: CampaignDetailResponse,
-): Campaign => {
-  return {
-    id: apiCampaign.id,
-    title: apiCampaign.name,
-    description: apiCampaign.description,
-    coverImageUrl: apiCampaign.imageUrl,
-    status: mapCampaignStatus(apiCampaign.status),
-    visibility: apiCampaign.isPublic ? ("Public" as any) : ("Private" as any),
-    dungeonMasterId: apiCampaign.dungeonMasterId,
-    isDungeonMaster: apiCampaign.isDungeonMaster,
-    dungeonMasterName: "Maître du Jeu", // API doesn't provide this
-    dungeonMasterAvatar: "",
-    maxPlayers: apiCampaign.maxPlayers,
-    currentPlayers: apiCampaign.memberCount,
-    players:
-      apiCampaign.members?.map((m) => ({
-        id: m.id,
-        username: m.userId, // API doesn't provide username, using userId
-        role: mapMemberRole(m.role),
-        characterName: m.nickname,
-        joinedAt: m.joinedAt,
-      })) || [],
-    sessions: [], // API doesn't provide sessions yet
-    totalSessions: apiCampaign.snapshotCount || 0,
-    setting: undefined,
-    startingLevel: 1,
-    currentLevel: 1,
-    tags: [],
-    createdAt: apiCampaign.createdAt,
-    updatedAt: apiCampaign.updatedAt,
-    campaignTreeDefinition: apiCampaign.campaignTreeDefinition,
-  };
-};
 /**
  * Campaign Service - handles all campaign API calls
  */
@@ -424,5 +327,54 @@ export const CampaignService = {
       {},
       { headers: getAuthHeaders() },
     );
+  },
+
+  // ─── Session methods ──────────────────────────────────────────────────────
+
+  async createSession(campaignId: string): Promise<GameSessionResponse> {
+    const response = await axios.post<GameSessionResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/sessions`,
+      {},
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  },
+
+  async listSessions(campaignId: string): Promise<GameSessionListResponse> {
+    const response = await axios.get<GameSessionListResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/sessions`,
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  },
+
+  async getSession(campaignId: string, sessionId: string): Promise<GameSessionResponse> {
+    const response = await axios.get<GameSessionResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/sessions/${sessionId}`,
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  },
+
+  async advanceSession(
+    campaignId: string,
+    sessionId: string,
+    request: AdvanceSessionRequest
+  ): Promise<GameSessionResponse> {
+    const response = await axios.post<GameSessionResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/sessions/${sessionId}/advance`,
+      request,
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  },
+
+  async completeSession(campaignId: string, sessionId: string): Promise<GameSessionResponse> {
+    const response = await axios.post<GameSessionResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/sessions/${sessionId}/complete`,
+      {},
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
   },
 };

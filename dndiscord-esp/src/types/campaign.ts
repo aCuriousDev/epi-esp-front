@@ -46,21 +46,29 @@ export interface Campaign {
   dungeonMasterId: string;
   /** When true, the current user is the DM (from API); use this for "Lancer la session". */
   isDungeonMaster?: boolean;
-  dungeonMasterName: string;
+  /** @deprecated The API doesn't provide DM display names yet. Fall back to "Maître du Jeu" at call sites. */
+  dungeonMasterName?: string;
   dungeonMasterAvatar?: string;
   maxPlayers: number;
   currentPlayers: number;
   players?: CampaignPlayer[];
+  /** @deprecated Not persisted yet. Kept optional so legacy UI references still compile. */
   sessions?: CampaignSession[];
+  /** @deprecated Not persisted yet. */
   nextSessionDate?: string;
-  totalSessions: number;
-  setting?: string; // e.g., "Forgotten Realms", "Homebrew"
-  startingLevel: number;
+  /** @deprecated Not persisted yet. */
+  totalSessions?: number;
+  /** @deprecated Not persisted yet. */
+  setting?: string;
+  /** @deprecated Not persisted yet. */
+  startingLevel?: number;
+  /** @deprecated Not persisted yet. */
   currentLevel?: number;
+  /** @deprecated Not persisted yet. */
   tags?: string[];
   createdAt: string;
   updatedAt?: string;
-  campaignTreeDefinition:string | undefined
+  campaignTreeDefinition?: string;
 }
 
 export interface CreateCampaignDto {
@@ -69,9 +77,6 @@ export interface CreateCampaignDto {
   coverImageUrl?: string;
   visibility: CampaignVisibility;
   maxPlayers: number;
-  setting?: string;
-  startingLevel: number;
-  tags?: string[];
 }
 
 /**

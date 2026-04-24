@@ -4,7 +4,7 @@
  * Manages the game grid tiles and pathfinder
  */
 
-import { createStore } from 'solid-js/store';
+import { createStore, produce } from 'solid-js/store';
 import { Tile } from '../../types';
 import { Pathfinder } from '../../utils/pathfinding';
 
@@ -47,7 +47,16 @@ export function updatePathfinder(): void {
 // ============================================
 
 export function clearTiles(): void {
-  setTiles({});
+  // Same SolidJS quirk as clearUnits — setTiles({}) merges and so was a
+  // silent no-op, leaving the prior map's tiles in the store across session
+  // transitions.
+  setTiles(
+    produce((draft) => {
+      for (const key of Object.keys(draft)) {
+        delete (draft as any)[key];
+      }
+    }),
+  );
   pathfinder = null;
 }
 

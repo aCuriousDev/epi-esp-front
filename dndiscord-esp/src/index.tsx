@@ -1,5 +1,5 @@
 import { render } from "solid-js/web";
-import { Router, Route } from "@solidjs/router";
+import { Router, Route, type RouteSectionProps } from "@solidjs/router";
 import "./index.css";
 import App from "./App";
 import CreateCharacter from "./pages/CreateCharacter";
@@ -14,15 +14,32 @@ import CampaignsPage from "./pages/CampaignsPage";
 import CreateCampaign from "./pages/CreateCampaign";
 import CampaignView from "./pages/CampaignView";
 import SettingsPage from "./pages/SettingsPage";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
+import MentionsLegales from "./pages/MentionsLegales";
+import CookiesPolicy from "./pages/CookiesPolicy";
 import type {} from "solid-styled-jsx";
 import CharactersComponent from "./pages/CharactersComponent";
 import { AuthCallback, ProtectedRoute } from "./components/auth";
 import { authStore } from "./stores/auth.store";
 import { initDiscordSDK } from "./services/discord";
+import { initDevLogBridge } from "./services/devLogBridge";
+import CampaignLobbyPage from "./pages/CampaignLobbyPage";
+import CampaignSessionPage from "./pages/CampaignSessionPage";
+import CampaignSessionsListPage from "./pages/CampaignSessionsListPage";
+import CampaignSessionReplayPage from "./pages/CampaignSessionReplayPage";
+// Story-tree authoring UI — WIP, exposed as /campaigns/:id/manager so DMs can
+// preview and continue Sam's work. Not wired to gameplay yet.
 import CampaignManagerPage from "./pages/CampaignManagerPage";
 import SessionInviteListener from "./components/SessionInviteListener";
 import EditCampaign from "./pages/EditCampaign";
 import TutorialOverlay from "./components/TutorialOverlay";
+import CookieConsent from "./components/CookieConsent";
+
+// Dev-only: mirror console output to back log file.
+if (import.meta.env.DEV) {
+  initDevLogBridge();
+}
 
 // Initialize auth state on app load
 authStore.init();
@@ -60,14 +77,30 @@ async function initDiscord() {
   }
 }
 
+// Wrapper du Router : CookieConsent doit être à l'intérieur du contexte
+// Router pour utiliser <A> et useLocation (cacher la bannière sur les
+// pages légales). `root` est le point d'extension propre de Solid Router.
+function RouterRoot(props: RouteSectionProps) {
+  return (
+    <>
+      <CookieConsent />
+      {props.children}
+    </>
+  );
+}
+
 // Rend l'application immédiatement, puis initialise Discord en arrière-plan
 render(
   () => (
-    <Router>
+    <Router root={RouterRoot}>
       {/* Public routes */}
       <Route path="/login" component={LoginPage} />
       <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/rules" component={Rules} />
+      <Route path="/privacy" component={PrivacyPolicy} />
+      <Route path="/terms" component={TermsOfService} />
+      <Route path="/legal" component={MentionsLegales} />
+      <Route path="/cookies" component={CookiesPolicy} />
 
       {/* Protected routes - require authentication */}
       <Route
@@ -131,6 +164,38 @@ render(
         component={() => (
           <Protected>
             <CampaignManagerPage />
+          </Protected>
+        )}
+      />
+      <Route
+        path="/campaigns/:id/lobby"
+        component={() => (
+          <Protected>
+            <CampaignLobbyPage />
+          </Protected>
+        )}
+      />
+      <Route
+        path="/campaigns/:id/session"
+        component={() => (
+          <Protected>
+            <CampaignSessionPage />
+          </Protected>
+        )}
+      />
+      <Route
+        path="/campaigns/:id/sessions"
+        component={() => (
+          <Protected>
+            <CampaignSessionsListPage />
+          </Protected>
+        )}
+      />
+      <Route
+        path="/campaigns/:id/sessions/:sessionId"
+        component={() => (
+          <Protected>
+            <CampaignSessionReplayPage />
           </Protected>
         )}
       />

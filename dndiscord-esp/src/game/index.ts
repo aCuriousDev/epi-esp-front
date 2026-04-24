@@ -49,6 +49,7 @@ export {
   getPlayerUnits,
   getEnemyUnits,
   clearUnits,
+  addUnit,
 } from './stores/UnitsStore';
 
 export {
@@ -65,6 +66,7 @@ export {
 
 export {
   selectUnit,
+  deselectUnit,
   previewPath,
   moveUnit,
 } from './actions/MovementActions';

@@ -83,11 +83,22 @@ export function playHealEffect(position: GridPosition): void {
  */
 export async function playDeathEffect(unitId: string, team: string): Promise<void> {
   if (!engineRef) return;
-  
+
   try {
     await engineRef.playDeathVFX(unitId, team);
   } catch (e) {
     console.warn('VFX playDeathEffect failed:', e);
+  }
+}
+
+/** Upright a laid-down corpse and restore idle animation — triggered when
+ *  the DM heals a dead unit back above 0 HP via DmAdjustHp. */
+export function playReviveEffect(unitId: string): void {
+  if (!engineRef) return;
+  try {
+    engineRef.playReviveVFX(unitId);
+  } catch (e) {
+    console.warn('VFX playReviveEffect failed:', e);
   }
 }
 

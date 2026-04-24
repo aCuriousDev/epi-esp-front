@@ -10,7 +10,7 @@ import { units, getCurrentUnit } from '../stores/UnitsStore';
 import { pathfinder } from '../stores/TilesStore';
 import { selectUnit, moveUnit, previewPath } from '../actions/MovementActions';
 import { selectAbility, useAbility } from '../actions/CombatActions';
-import { nextTurn, endUnitTurn } from '../actions/TurnActions';
+import { endUnitTurn } from '../actions/TurnActions';
 
 // ============================================
 // ENEMY TURN EXECUTION
@@ -18,21 +18,24 @@ import { nextTurn, endUnitTurn } from '../actions/TurnActions';
 
 export async function executeEnemyTurn(): Promise<void> {
   const currentUnit = getCurrentUnit();
-  
+
+  // Every exit goes through endUnitTurn — in multiplayer it routes through
+  // the hub's EndTurn command so peers see the advance. `nextTurn()` was the
+  // legacy local-only path and would desync if the AI hit an early exit on
+  // the DM's client in session.
   if (!currentUnit || currentUnit.team !== Team.ENEMY) {
-    nextTurn();
+    endUnitTurn();
     return;
   }
-  
+
   addCombatLog(`${currentUnit.name}'s turn!`, 'system');
-  
-  // Simple AI: Move towards nearest player unit and attack if possible
+
   const playerUnits = Object.values(units).filter(
     (u) => u.team === Team.PLAYER && u.isAlive
   );
-  
+
   if (playerUnits.length === 0) {
-    nextTurn();
+    endUnitTurn();
     return;
   }
   
@@ -50,11 +53,11 @@ export async function executeEnemyTurn(): Promise<void> {
   }
   
   if (!nearestPlayer || !pathfinder) {
-    nextTurn();
+    endUnitTurn();
     return;
   }
-  
-  // Select this unit
+
+  // Select this unit (local UI only — selectedUnit is per-client)
   selectUnit(currentUnit.id);
   await delay(500);
   

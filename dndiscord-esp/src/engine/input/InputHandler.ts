@@ -46,13 +46,20 @@ export class InputHandler {
         }
       }
       
-      // Check if it's a unit (root mesh or child mesh)
-      // Mesh names can be "unit_player_warrior" or "unit_player_warrior.Rig_Medium.Knight_Body"
+      // Check if it's a unit (root mesh or child mesh).
+      // Child mesh names come in two flavours depending on how the
+      // model was instantiated:
+      //   - legacy SceneLoader.ImportMesh:        unit_X.Rig_Medium.Body
+      //   - new AssetContainer.instantiateModels: unit_X__Rig_Medium
+      // So the unit-id is the chunk between `unit_` and the first `.`
+      // or `__` separator.
       if (meshName.startsWith('unit_')) {
-        // Extract unit ID (everything between "unit_" and the first "." or end of string)
-        const unitId = meshName.includes('.') 
-          ? meshName.substring(5, meshName.indexOf('.'))  // "unit_" is 5 chars
-          : meshName.substring(5);  // Remove "unit_" prefix
+        const afterPrefix = meshName.substring(5); // "unit_".length === 5
+        const dotIdx = afterPrefix.indexOf('.');
+        const dblIdx = afterPrefix.indexOf('__');
+        const candidates = [dotIdx, dblIdx].filter((i) => i >= 0);
+        const cut = candidates.length > 0 ? Math.min(...candidates) : -1;
+        const unitId = cut >= 0 ? afterPrefix.substring(0, cut) : afterPrefix;
         if (this.onUnitClick && unitId) {
           this.onUnitClick(unitId);
         }

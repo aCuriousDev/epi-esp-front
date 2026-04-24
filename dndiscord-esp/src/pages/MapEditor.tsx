@@ -1,12 +1,14 @@
-import { Component, onMount, onCleanup, createSignal, For, Show, createEffect } from "solid-js";
+import { Component, onMount, onCleanup, createSignal, For, Show, createEffect, createMemo } from "solid-js";
+import { Portal } from "solid-js/web";
 import { A, useParams, useSearchParams, useNavigate } from "@solidjs/router";
 import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-solid";
-import { saveMap, loadMap, generateMapId, loadDungeon, saveDungeon, type SavedMapData, type SavedCellData, type SavedAssetData, type DungeonData } from "../services/mapStorage";
+import { saveMap, loadMap, generateMapId, loadDungeon, saveDungeon, exportMapToFile, importMapFromJson, type SavedMapData, type SavedCellData, type SavedAssetData, type SavedLightData, type DungeonData } from "../services/mapStorage";
 import {
 	Engine,
 	Scene,
 	ArcRotateCamera,
 	HemisphericLight,
+	DirectionalLight,
 	Vector3,
 	Mesh,
 	AbstractMesh,
@@ -18,37 +20,37 @@ import {
 	MeshBuilder,
 	TransformNode,
 	BoundingInfo,
+	PointLight,
+	ShadowGenerator,
+	GlowLayer,
 } from "@babylonjs/core";
 import { ModelLoader } from "../engine/ModelLoader";
 import { gridToWorld, GRID_SIZE, TILE_SIZE } from "../game";
-import { ASSET_PACKS } from "../config/assetPacks";
 import { getCollisionProperties, doesAssetBlockMovement } from "../game/utils/CollisionUtils";
+import type { MapAsset, AssetCategory, StackedAsset } from "../components/map-editor/types";
+import {
+	CHARACTER_ASSETS,
+	ENEMY_ASSETS,
+	ASSET_CATEGORIES,
+} from "../components/map-editor/PaletteData";
+import { ASSET_FAVORITE_PATHS } from "../config/assetFavorites";
+import {
+	filterCategories,
+	pickFavoritesCategory,
+} from "../components/map-editor/AssetPaletteFilter";
+import {
+	LIGHT_PRESETS,
+	LIGHT_PRESET_IDS,
+	type LightPresetId,
+} from "../config/lightPresets";
 import "@babylonjs/loaders";
 
-interface MapAsset {
-	id: string;
-	name: string;
-	path: string;
-	type: "floor" | "wall" | "block" | "water" | "character" | "enemy" | "nature" | "furniture" | "decoration" | "resource";
-	icon?: string;
-}
-
-interface AssetCategory {
-	id: string;
-	name: string;
-	assets: MapAsset[];
-}
-
 /**
- * Représente un asset placé dans une cellule
+ * Verbose per-mesh positioning/placement logs. Firing them on every
+ * preview hover created thousands of lines per second. Flip this to
+ * true when actually debugging stacking or commit-height issues.
  */
-interface StackedAsset {
-	mesh: AbstractMesh;
-	asset: MapAsset;
-	height: number; // Hauteur réelle calculée depuis bounding box
-	bottomY: number; // Position Y du bas du mesh (dans l'espace local de la cellule)
-	topY: number; // Position Y du haut du mesh (dans l'espace local de la cellule)
-}
+const MAPEDITOR_DEBUG = false;
 
 /**
  * Classe représentant une cellule de la grille avec ses données
@@ -291,12 +293,17 @@ class GridCell {
 	public exportData(getAffectedCells?: (meshName: string) => { x: number; z: number }[]): { x: number; z: number; ground?: any; stackedAssets: any[] } {
 		const stackedAssets = this.stackedAssets.map(sa => {
 			const metadata = sa.mesh.metadata as any;
+			// When rotationQuaternion is set Babylon ignores rotation; convert to euler
+			// so we always read the true Y rotation regardless of which path was used.
+			const rotationY = sa.mesh.rotationQuaternion
+				? sa.mesh.rotationQuaternion.toEulerAngles().y
+				: sa.mesh.rotation.y;
 			const data: any = {
 				assetId: metadata?.assetId || sa.asset.id,
 				assetPath: metadata?.assetPath || sa.asset.path,
 				assetType: metadata?.assetType || sa.asset.type,
 				scale: sa.mesh.scaling.x, // Assume uniform scaling
-				rotationY: sa.mesh.rotation.y,
+				rotationY,
 				positionY: sa.mesh.position.y,
 			};
 			// Inclure les cellules affectées pour les assets multi-cases
@@ -312,12 +319,15 @@ class GridCell {
 		let ground: any = undefined;
 		if (this.groundMesh) {
 			const metadata = this.groundMesh.metadata as any;
+			const groundRotationY = this.groundMesh.rotationQuaternion
+				? this.groundMesh.rotationQuaternion.toEulerAngles().y
+				: this.groundMesh.rotation.y;
 			ground = {
 				assetId: metadata?.assetId || "unknown",
 				assetPath: metadata?.assetPath || "unknown",
 				assetType: metadata?.assetType || "floor",
 				scale: this.groundMesh.scaling.x,
-				rotationY: this.groundMesh.rotation.y,
+				rotationY: groundRotationY,
 				positionY: this.groundMesh.position.y,
 			};
 			// Inclure les cellules affectées pour les sols multi-cases
@@ -665,7 +675,7 @@ class AssetStackManager {
 	public createStackedAsset(mesh: AbstractMesh, asset: MapAsset, cellWorldY: number = 0): StackedAsset {
 		const { bottomY, topY, height } = this.calculateCellRelativeYPositions(mesh, cellWorldY);
 		
-		console.log(`Created StackedAsset: ${asset.name} - bottomY: ${bottomY.toFixed(3)}, topY: ${topY.toFixed(3)}, height: ${height.toFixed(3)}`);
+		if (MAPEDITOR_DEBUG) console.log(`Created StackedAsset: ${asset.name} - bottomY: ${bottomY.toFixed(3)}, topY: ${topY.toFixed(3)}, height: ${height.toFixed(3)}`);
 		
 		return {
 			mesh,
@@ -699,7 +709,7 @@ class AssetStackManager {
 		// Calculer l'offset nécessaire
 		const offsetY = targetWorldBottomY - currentWorldBottomY;
 		
-		console.log(`Positioning ${mesh.name}: currentBottom=${currentWorldBottomY.toFixed(3)}, targetBottom=${targetWorldBottomY.toFixed(3)}, offset=${offsetY.toFixed(3)}`);
+		if (MAPEDITOR_DEBUG) console.log(`Positioning ${mesh.name}: currentBottom=${currentWorldBottomY.toFixed(3)}, targetBottom=${targetWorldBottomY.toFixed(3)}, offset=${offsetY.toFixed(3)}`);
 		
 		// Appliquer l'offset à la position du mesh
 		mesh.position.y += offsetY;
@@ -716,103 +726,39 @@ class AssetStackManager {
 	 */
 	public positionMeshOnStack(mesh: AbstractMesh, cell: GridCell): void {
 		const stackHeight = cell.getStackHeight();
-		console.log(`Placing on stack at height: ${stackHeight.toFixed(3)}`);
+		if (MAPEDITOR_DEBUG) console.log(`Placing on stack at height: ${stackHeight.toFixed(3)}`);
 		this.positionMeshAtHeight(mesh, stackHeight, 0);
 	}
 }
 
-// Helper function to create asset from file path
-const createAssetFromPath = (
-	basePath: string,
-	fileName: string,
-	type: MapAsset["type"],
-	displayName?: string
-): MapAsset => {
-	const id = fileName.replace(/\.(gltf|glb)$/i, "").toLowerCase().replace(/[^a-z0-9]/g, "_");
-	const name = displayName || fileName
-		.replace(/\.(gltf|glb)$/i, "")
-		.replace(/_/g, " ")
-		.replace(/\b\w/g, (l) => l.toUpperCase());
-	return {
-		id,
-		name,
-		path: `${basePath}/${fileName}`,
-		type,
-	};
-};
+// Palette data (CHARACTER_ASSETS / ENEMY_ASSETS / ASSET_CATEGORIES) lives in
+// src/components/map-editor/PaletteData.ts and is imported at the top.
 
-// Helper function to create assets from file list
-const createAssetsFromFiles = (
-	basePath: string,
-	files: string[],
-	type: MapAsset["type"]
-): MapAsset[] => {
-	return files.map((file) => createAssetFromPath(basePath, file, type));
-};
+// Flat list of every available asset — used by the library search
+const ALL_ASSETS: MapAsset[] = ASSET_CATEGORIES.flatMap(c => c.assets);
 
-// Helper function to extract folder name from base path
-const extractFolderNameFromPath = (basePath: string): string => {
-	const match = basePath.match(/\/packages\/([^\/]+)/);
-	return match ? match[1] : basePath;
-};
+// ── User-managed favorites (localStorage) ─────────────────────────────────
+const USER_FAVORITES_KEY = 'dndiscord_editor_favorites';
 
-// Helper function to create category with automatic name from base path
-const createCategory = (
-	basePath: string,
-	files: string[],
-	type: MapAsset["type"]
-): AssetCategory => {
-	const folderName = extractFolderNameFromPath(basePath);
-	const assets = createAssetsFromFiles(basePath, files, type);
-	return {
-		id: folderName.toLowerCase().replace(/[^a-z0-9]/g, "_"),
-		name: folderName,
-		assets,
-	};
-};
-
-// Characters
-const CHARACTER_ASSETS: MapAsset[] = [
-	{ id: "knight", name: "Chevalier", path: "/models/characters/knight/knight.glb", type: "character" },
-	{ id: "rogue", name: "Voleur", path: "/models/characters/rogue/rogue.glb", type: "character" },
-	{ id: "wizard", name: "Magicien", path: "/models/characters/wizard/wizard.glb", type: "character" },
-];
-
-// Enemies
-const ENEMY_ASSETS: MapAsset[] = [
-	{ id: "skeleton_warrior", name: "Squelette Guerrier", path: "/models/enemies/skeleton_warrior/skeleton_warrior.glb", type: "enemy" },
-	{ id: "skeleton_mage", name: "Squelette Mage", path: "/models/enemies/skeleton_mage/skeleton_mage.glb", type: "enemy" },
-	{ id: "skeleton_rogue", name: "Squelette Voleur", path: "/models/enemies/skeleton_rogue/skeleton_rogue.glb", type: "enemy" },
-];
-
-// Asset Categories - Grouped by catName from config file
-const ASSET_CATEGORIES: AssetCategory[] = (() => {
-	const groupedByCatName = new Map<string, MapAsset[]>();
-	
-	Object.values(ASSET_PACKS).forEach((pack) => {
-		const packAssets = createAssetsFromFiles(pack.basePath, pack.files, pack.type);
-		const catName = pack.catName;
-		
-		if (!groupedByCatName.has(catName)) {
-			groupedByCatName.set(catName, []);
+function loadUserFavoritePaths(): string[] {
+	try {
+		const raw = localStorage.getItem(USER_FAVORITES_KEY);
+		if (raw) {
+			const parsed = JSON.parse(raw) as string[];
+			if (Array.isArray(parsed) && parsed.length > 0) return parsed;
 		}
-		groupedByCatName.get(catName)!.push(...packAssets);
-	});
-	
-	const categories: AssetCategory[] = [];
-	groupedByCatName.forEach((assets, catName) => {
-		categories.push({
-			id: catName.toLowerCase().replace(/[^a-z0-9]/g, "_"),
-			name: catName,
-			assets,
-		});
-	});
-	
-	categories.push({ id: "enemies", name: "Enemies", assets: ENEMY_ASSETS });
-	categories.push({ id: "characters", name: "Characters", assets: CHARACTER_ASSETS });
-	
-	return categories;
-})();
+	} catch { /* ignore */ }
+	// First launch: seed with the curated default list
+	return [...ASSET_FAVORITE_PATHS];
+}
+
+function saveUserFavoritePaths(paths: string[]): void {
+	try {
+		localStorage.setItem(USER_FAVORITES_KEY, JSON.stringify(paths));
+	} catch (e) {
+		console.warn('[MapEditor] Failed to persist favorites:', e);
+	}
+}
 
 export default function MapEditor() {
 	const params = useParams<{ mapId?: string }>();
@@ -833,12 +779,23 @@ export default function MapEditor() {
 	let modelLoader: ModelLoader | null = null;
 	let gridManager: GridManager | null = null;
 	let assetStackManager: AssetStackManager | null = null;
+	let editorShadowGenerator: ShadowGenerator | null = null;
+	let editorGlowLayer: GlowLayer | null = null;
 	
 	const [mapId, setMapId] = createSignal<string | null>(null);
 	const [mapName, setMapName] = createSignal<string>("Nouvelle Map");
 	const [dungeonData, setDungeonData] = createSignal<DungeonData | null>(null);
 	const [selectedAsset, setSelectedAsset] = createSignal<MapAsset | null>(null);
 	const [expandedCategories, setExpandedCategories] = createSignal<Set<string>>(new Set());
+	const [activePaletteTab, setActivePaletteTab] = createSignal<"favoris" | "tous">("favoris");
+	const [searchQuery, setSearchQuery] = createSignal("");
+
+	const visibleCategories = () => {
+		const base = activePaletteTab() === "favoris"
+			? [pickFavoritesCategory(ASSET_CATEGORIES, userFavoritePaths())]
+			: ASSET_CATEGORIES;
+		return filterCategories(base, searchQuery());
+	};
 	const [rotationAngle, setRotationAngle] = createSignal(0);
 	const [deleteMode, setDeleteMode] = createSignal(false);
 	const [editMode, setEditMode] = createSignal(false);
@@ -848,17 +805,195 @@ export default function MapEditor() {
 	const [collisionPreviewMode, setCollisionPreviewMode] = createSignal(false);
 	const [selectedCollisionAsset, setSelectedCollisionAsset] = createSignal<{ asset: MapAsset; cell: GridCell; mesh: AbstractMesh } | null>(null);
 	const [zoneSelectionMode, setZoneSelectionMode] = createSignal(false);
+	const [lightMode, setLightMode] = createSignal(false);
+	const [selectedLightPreset, setSelectedLightPreset] = createSignal<LightPresetId>("torch");
+	const [placedLights, setPlacedLights] = createSignal<SavedLightData[]>([]);
+
+	// Babylon objects mirroring placedLights, keyed by "x,z". Kept outside the
+	// signal so disposal doesn't force a reactive pass on every mutation.
+	const lightVisuals = new Map<string, { mesh: AbstractMesh; light: PointLight }>();
+	const lightKey = (x: number, z: number) => `${x},${z}`;
+
+	const spawnLightFixture = async (data: SavedLightData): Promise<void> => {
+		if (!scene || !modelLoader) return;
+		const preset = LIGHT_PRESETS[data.presetId];
+		if (!preset) return;
+		despawnLightFixture(data.x, data.z);
+
+		const world = gridToWorld({ x: data.x, z: data.z });
+		const key = lightKey(data.x, data.z);
+		const uniqueName = `editor_light_${data.presetId}_${key}_${Date.now()}`;
+		try {
+			const mesh = await modelLoader.loadModel(preset.meshPath, uniqueName);
+			mesh.position.set(world.x, data.y ?? 0, world.z);
+			mesh.scaling.setAll(0.5);
+
+			const light = new PointLight(
+				`editor_pl_${uniqueName}`,
+				new Vector3(world.x, (data.y ?? 0) + preset.lightYOffset, world.z),
+				scene,
+			);
+			const color = data.colorOverride
+				? new Color3(data.colorOverride[0], data.colorOverride[1], data.colorOverride[2])
+				: preset.lightColor;
+			light.diffuse = color;
+			light.specular = color;
+			light.intensity = data.intensityOverride ?? preset.intensity;
+			light.radius = preset.radius;
+			light.range = preset.range;
+
+			// Paint the fixture mesh emissive so it reads as "lit" even if
+			// the PointLight is occluded. GlowLayer picks this up for a
+			// subtle halo — kept modest so the fixture silhouette stays
+			// readable rather than blowing out into a white blob.
+			const tintMesh = (m: AbstractMesh) => {
+				const mat = m.material;
+				if (mat instanceof StandardMaterial) {
+					mat.emissiveColor = preset.fixtureEmissive.clone();
+				} else if (mat instanceof PBRMaterial) {
+					mat.emissiveColor = preset.fixtureEmissive.clone();
+					mat.emissiveIntensity = 0.6;
+				}
+				m.getChildMeshes().forEach(tintMesh);
+			};
+			tintMesh(mesh);
+
+			lightVisuals.set(key, { mesh, light });
+		} catch (error) {
+			console.warn(`[MapEditor] Failed to spawn light ${preset.id}:`, error);
+		}
+	};
+
+	const despawnLightFixture = (x: number, z: number): void => {
+		const entry = lightVisuals.get(lightKey(x, z));
+		if (!entry) return;
+		if (!entry.mesh.isDisposed()) entry.mesh.dispose(false, true);
+		entry.light.dispose();
+		lightVisuals.delete(lightKey(x, z));
+	};
+
+	const clearAllLightFixtures = (): void => {
+		lightVisuals.forEach((e) => {
+			if (!e.mesh.isDisposed()) e.mesh.dispose(false, true);
+			e.light.dispose();
+		});
+		lightVisuals.clear();
+	};
 	const [selectionStart, setSelectionStart] = createSignal<{ x: number; z: number } | null>(null);
 	const [selectionEnd, setSelectionEnd] = createSignal<{ x: number; z: number } | null>(null);
 	const [isSelecting, setIsSelecting] = createSignal(false);
 	const [isCameraLocked, setIsCameraLocked] = createSignal(false);
-	
+	const [cameraMode, setCameraMode] = createSignal<'free' | 'top'>('free');
+	const [rubberBandRect, setRubberBandRect] = createSignal<{ left: number; top: number; width: number; height: number } | null>(null);
+	const [placedAssets, setPlacedAssets] = createSignal<MapAsset[]>([]);
+	const [showLibrary, setShowLibrary] = createSignal(false);
+	const [librarySearch, setLibrarySearch] = createSignal('');
+	const [libraryCategory, setLibraryCategory] = createSignal<string>('');
+	// User-managed favorites — paths stored in localStorage
+	const [userFavoritePaths, setUserFavoritePaths] = createSignal<string[]>(loadUserFavoritePaths());
+	const isFavorite = (path: string) => userFavoritePaths().includes(path);
+	const toggleFavorite = (path: string) => {
+		const current = userFavoritePaths();
+		const next = current.includes(path)
+			? current.filter(p => p !== path)
+			: [...current, path];
+		setUserFavoritePaths(next);
+		saveUserFavoritePaths(next);
+	};
+	// 'auto' = always stack on top of existing pile; number = force Y placement height
+	const [workingHeight, setWorkingHeight] = createSignal<'auto' | number>('auto');
+	// Feedback d'import (null = idle, 'ok' | 'error')
+	const [importStatus, setImportStatus] = createSignal<{ type: 'ok' | 'error'; message: string } | null>(null);
+
+	let importFileInputRef: HTMLInputElement | undefined;
+
 	// Zones de placement pour combats et téléportation
 	const [spawnZones, setSpawnZones] = createSignal<Map<string, "ally" | "enemy" | "teleport">>(new Map());
 	const [contextMenuCell, setContextMenuCell] = createSignal<{ x: number; z: number; screenX: number; screenY: number } | null>(null);
 	
 	let previewMesh: AbstractMesh | null = null;
+	let previewAssetId: string | null = null;
+	let previewLoadToken = 0; // guards against races when the selected asset changes mid-load
+	// Base Y rotation baked into the GLTF model (captured once on load).
+	// Both the ghost preview and the placement mesh use the same model, so we
+	// store it here and add it back on every rotation update so the ghost
+	// always matches the placed asset exactly.
+	let previewBaseRotationY = 0;
+
+	// Edit mode keeps the original mesh visible with a blue emissive tint
+	// while a ghost preview follows the cursor. The original is only
+	// disposed when the placement is actually committed (or if the user
+	// clicks the same asset again to deselect).
+	let editingOriginalMesh: AbstractMesh | null = null;
+	let editingOriginalEmissives: Array<{ mat: StandardMaterial | PBRMaterial; orig: Color3 }> = [];
+	const EDIT_TINT = new Color3(0.2, 0.55, 1);
+
+	const tintEditingMesh = (root: AbstractMesh) => {
+		editingOriginalEmissives = [];
+		const visit = (m: AbstractMesh) => {
+			const mat = m.material;
+			if (mat instanceof StandardMaterial || mat instanceof PBRMaterial) {
+				editingOriginalEmissives.push({ mat, orig: mat.emissiveColor.clone() });
+				mat.emissiveColor = EDIT_TINT.clone();
+				if (mat instanceof PBRMaterial) {
+					mat.emissiveIntensity = 1.0;
+				}
+			}
+			m.getChildMeshes().forEach(visit);
+		};
+		visit(root);
+	};
+
+	const untintEditingMesh = () => {
+		editingOriginalEmissives.forEach(({ mat, orig }) => {
+			try {
+				mat.emissiveColor = orig;
+				if (mat instanceof PBRMaterial) mat.emissiveIntensity = 1.0;
+			} catch {
+				// material was disposed — nothing to restore.
+			}
+		});
+		editingOriginalEmissives = [];
+	};
+
+	const consumeEditingOriginal = () => {
+		if (!editingOriginalMesh) return;
+		// Material tint is lost with the mesh disposal; no need to untint first.
+		if (!editingOriginalMesh.isDisposed()) {
+			gridManager?.unregisterAsset(editingOriginalMesh.name);
+			editingOriginalMesh.dispose();
+		}
+		editingOriginalMesh = null;
+		editingOriginalEmissives = [];
+	};
+
+	const cancelEditingSelection = () => {
+		untintEditingMesh();
+		editingOriginalMesh = null;
+	};
+
+	// Tracks which asset types are currently placed on the map (for the sidebar list)
+	let usedAssetsTracker = new Map<string, MapAsset>();
+
+	const addToPlacedAssets = (asset: MapAsset) => {
+		usedAssetsTracker.set(asset.id, asset);
+		setPlacedAssets(Array.from(usedAssetsTracker.values()));
+	};
+
+	const refreshPlacedAssets = () => {
+		usedAssetsTracker.clear();
+		if (gridManager) {
+			gridManager.getAllCells().forEach(cell => {
+				cell.getStackedAssets().forEach(sa => {
+					usedAssetsTracker.set(sa.asset.id, sa.asset);
+				});
+			});
+		}
+		setPlacedAssets(Array.from(usedAssetsTracker.values()));
+	};
 	let selectionOverlays: Map<string, Mesh> = new Map(); // Map des overlays de sélection par cellule
+	let selectionMaterial: StandardMaterial | null = null; // Shared material for selection overlays (reused, not recreated every frame)
+	let rubberBandStart: { x: number; y: number } | null = null; // DOM coords for CSS rubber-band start
 	let previewUpdateTimeout: number | null = null;
 	let isUpdatingPreview: boolean = false; // Flag pour éviter les mises à jour multiples simultanées
 	let collisionOverlays: Map<string, Mesh> = new Map(); // Map des overlays de collision par cellule
@@ -962,12 +1097,16 @@ export default function MapEditor() {
 					overlay.parent = cellNode;
 					overlay.isPickable = false;
 
-					const material = new StandardMaterial(`selectionMat_${x}_${z}`, scene);
-					material.diffuseColor = new Color3(0.2, 0.6, 1); // Bleu clair
-					material.emissiveColor = new Color3(0.1, 0.3, 0.5);
-					material.alpha = 0.5;
-					material.disableLighting = true;
-					overlay.material = material;
+					// Lazy-create a single shared material (reused for all cells, avoids O(n) GPU allocs per frame)
+					if (!selectionMaterial && scene) {
+						selectionMaterial = new StandardMaterial('selectionSharedMat', scene);
+						selectionMaterial.diffuseColor = new Color3(0.2, 0.6, 1);
+						selectionMaterial.emissiveColor = new Color3(0.1, 0.3, 0.5);
+						selectionMaterial.alpha = 0.5;
+						selectionMaterial.disableLighting = true;
+						selectionMaterial.backFaceCulling = false;
+					}
+					if (selectionMaterial) overlay.material = selectionMaterial;
 
 					selectionOverlays.set(`${x},${z}`, overlay);
 				}
@@ -977,17 +1116,32 @@ export default function MapEditor() {
 
 	// Initialize map ID and name from params (in onMount to ensure params are available)
 
-	// Update preview rotation when rotation angle changes
+	// If edit mode is turned off or editingAsset clears (without a commit
+	// path), make sure the tinted original mesh returns to its normal
+	// look. The commit path calls consumeEditingOriginal() which disposes
+	// the mesh outright; this effect is purely a safety net for mode
+	// switches, palette clicks, etc.
 	createEffect(() => {
-		if (previewMesh && (selectedAsset() || editingAsset()) && scene) {
-			const rotationRad = (rotationAngle() * Math.PI) / 180;
-			if (previewMesh.rotationQuaternion) {
-				const euler = previewMesh.rotationQuaternion.toEulerAngles();
-				previewMesh.rotationQuaternion = null;
-				previewMesh.rotation.y = euler.y + rotationRad;
-			} else {
-				previewMesh.rotation.y = rotationRad;
-			}
+		const active = editMode() && !!editingAsset();
+		if (!active && editingOriginalMesh && !editingOriginalMesh.isDisposed()) {
+			untintEditingMesh();
+			editingOriginalMesh = null;
+		}
+	});
+
+	// Update preview rotation when the slider / keyboard shortcut changes.
+	// Forces a world-matrix recompute so the new angle shows on the very
+	// next render instead of waiting for the user to move the cursor.
+	createEffect(() => {
+		// Read rotationAngle unconditionally so Solid tracks it even when
+		// previewMesh isn't ready yet — once the preview loads later,
+		// repositionPreviewOnCell picks up the current angle.
+		const rotationRad = (rotationAngle() * Math.PI) / 180;
+		if (previewMesh && !previewMesh.isDisposed() && scene && (selectedAsset() || editingAsset() || lightMode())) {
+			// Always include the GLTF base offset so the ghost matches the placed mesh.
+			previewMesh.rotation.y = previewBaseRotationY + rotationRad;
+			previewMesh.computeWorldMatrix(true);
+			previewMesh.getChildMeshes(false).forEach((child) => child.computeWorldMatrix(true));
 		}
 	});
 
@@ -1032,6 +1186,10 @@ export default function MapEditor() {
 						const mesh = await assetStackManager.loadModel(groundAsset, uniqueName);
 						
 						mesh.scaling.setAll(cellData.ground.scale);
+						// BabylonJS GLTF loader sets rotationQuaternion on every mesh.
+						// When rotationQuaternion is non-null it overrides rotation entirely,
+						// so we must null it out before assigning rotation.y.
+						if (mesh.rotationQuaternion) mesh.rotationQuaternion = null;
 						mesh.rotation.y = cellData.ground.rotationY;
 						
 						const cellNode = cell.getCellNode();
@@ -1066,6 +1224,8 @@ export default function MapEditor() {
 						const mesh = await assetStackManager.loadModel(asset, uniqueName);
 						
 						mesh.scaling.setAll(assetData.scale);
+						// Same fix: null out rotationQuaternion before setting rotation.y
+						if (mesh.rotationQuaternion) mesh.rotationQuaternion = null;
 						mesh.rotation.y = assetData.rotationY;
 						
 						const cellNode = cell.getCellNode();
@@ -1093,6 +1253,14 @@ export default function MapEditor() {
 					}
 				}
 			}
+			// Restore placed lights (if any). loadMap already ran migrateMap, so
+			// `.lights` is either an array or undefined — never the old shape.
+			const savedLights = savedData.lights ?? [];
+			setPlacedLights(savedLights);
+			clearAllLightFixtures();
+			for (const l of savedLights) {
+				await spawnLightFixture(l);
+			}
 		} catch (error) {
 			console.error("Error loading map:", error);
 		} finally {
@@ -1101,6 +1269,8 @@ export default function MapEditor() {
 			if (showCollisions() || collisionPreviewMode()) {
 				updateCollisionOverlays();
 			}
+			// Rebuild placed-assets sidebar from loaded data
+			refreshPlacedAssets();
 		}
 	};
 
@@ -1120,6 +1290,7 @@ export default function MapEditor() {
 			});
 
 			const existingMap = loadMap(mapId()!);
+			const lightsList = placedLights();
 			const mapData: SavedMapData = {
 				id: mapId()!,
 				name,
@@ -1130,6 +1301,8 @@ export default function MapEditor() {
 				mapType: existingMap?.mapType,
 				dungeonId: existingMap?.dungeonId,
 				roomIndex: existingMap?.roomIndex,
+				lights: lightsList.length > 0 ? lightsList : undefined,
+				version: 2,
 			};
 
 			saveMap(mapData);
@@ -1160,6 +1333,47 @@ export default function MapEditor() {
 			alert("Map sauvegardée avec succès !");
 		} else {
 			alert("Erreur lors de la sauvegarde de la map");
+		}
+	};
+
+	/** Exporte l'état courant de la carte en fichier JSON téléchargeable. */
+	const exportCurrentMap = () => {
+		if (!gridManager) return;
+		const name = mapName().trim() || 'carte';
+
+		const cellsData = gridManager.exportData();
+		const spawnZonesRecord: Record<string, "ally" | "enemy" | "teleport"> = {};
+		spawnZones().forEach((type, key) => { spawnZonesRecord[key] = type; });
+
+		const existingMap = mapId() ? loadMap(mapId()!) : null;
+		const mapData: SavedMapData = {
+			id:          mapId() ?? 'exported',
+			name,
+			createdAt:   existingMap?.createdAt ?? Date.now(),
+			updatedAt:   Date.now(),
+			cells:       cellsData,
+			spawnZones:  Object.keys(spawnZonesRecord).length > 0 ? spawnZonesRecord : undefined,
+			mapType:     existingMap?.mapType,
+			dungeonId:   existingMap?.dungeonId,
+			roomIndex:   existingMap?.roomIndex,
+		};
+		exportMapToFile(mapData);
+	};
+
+	/** Lit le fichier sélectionné, importe la carte et navigue vers le nouvel ID. */
+	const handleImportFile = async (file: File) => {
+		setImportStatus(null);
+		try {
+			const text = await file.text();
+			const imported = importMapFromJson(text);
+			setImportStatus({ type: 'ok', message: `"${imported.name}" importée !` });
+			// Naviguer vers la carte importée après un court délai pour que le feedback soit visible
+			setTimeout(() => {
+				navigate(`/map-editor/${imported.id}`);
+			}, 1200);
+		} catch (err: any) {
+			setImportStatus({ type: 'error', message: err?.message ?? 'Erreur inconnue.' });
+			setTimeout(() => setImportStatus(null), 4000);
 		}
 	};
 
@@ -1205,13 +1419,51 @@ export default function MapEditor() {
 		camera.wheelDeltaPercentage = 0.01;
 		scene.activeCamera = camera;
 
-		// Setup lighting
-		const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
-		light.intensity = 0.8;
+		// Store the free-view defaults so we can restore them when switching back
+		const FREE_VIEW = { alpha: Math.PI / 3, beta: Math.PI / 3, radius: 30 };
+
+		// Ambient baseline — dim so placed PointLights have visible contrast.
+		// 0.8 was blasting the whole scene flat; 0.35 leaves headroom for
+		// per-light colour + the sun to do their job.
+		const hemi = new HemisphericLight("editor_hemi", new Vector3(0, 1, 0), scene);
+		hemi.intensity = 0.35;
+		hemi.groundColor = new Color3(0.1, 0.1, 0.15);
+
+		// Soft key light so geometry still reads (walls, props) without
+		// flattening colours. Direction matches the game scene so map author
+		// sees approximately what they'll get in play.
+		const sun = new DirectionalLight(
+			"editor_sun",
+			new Vector3(-0.5, -1, -0.5).normalize(),
+			scene,
+		);
+		sun.intensity = 0.7;
+		sun.position = new Vector3(10, 20, 10);
+
+		// GlowLayer lets emissive materials + flame particles bloom, which is
+		// the main reason torches look "lit" rather than pinprick dots.
+		editorGlowLayer = new GlowLayer("editor_glow", scene);
+		editorGlowLayer.intensity = 0.35;
+
+		// Sun shadow map — walls/props cast soft shadows on the floor. The
+		// torch PointLights intentionally don't cast shadows (omnidirectional
+		// cubemap shadows are expensive for an editor preview).
+		editorShadowGenerator = new ShadowGenerator(1024, sun);
+		editorShadowGenerator.useBlurExponentialShadowMap = true;
+		editorShadowGenerator.blurKernel = 24;
+		editorShadowGenerator.setDarkness(0.35);
 
 		// Initialize model loader
 		modelLoader = new ModelLoader(scene);
-		
+
+		// Warm AssetContainer cache for the curated favorites so the first
+		// drag-drop is instant (was stuttery — each placement used to kick
+		// off its own glTF fetch + parse on the main thread).
+		// Fire-and-forget: failures here just mean the first drop is slow.
+		modelLoader
+			.preloadModels(ASSET_FAVORITE_PATHS)
+			.catch((err) => console.warn("[MapEditor] Palette preload partial failure:", err));
+
 		// Initialize grid manager and asset stack manager
 		gridManager = new GridManager(scene);
 		assetStackManager = new AssetStackManager(scene, modelLoader);
@@ -1303,6 +1555,13 @@ export default function MapEditor() {
 	onCleanup(() => {
 		cleanupPreviewMesh();
 		clearCollisionPreview();
+		clearAllLightFixtures();
+		// Restore any mesh still blue-tinted from an edit-mode session
+		// (it was going to be disposed with the scene anyway, but
+		// untinting first keeps the material look consistent if the
+		// user navigates back).
+		untintEditingMesh();
+		editingOriginalMesh = null;
 		// Clear selection overlays
 		selectionOverlays.forEach((overlay) => {
 			if (!overlay.isDisposed()) {
@@ -1402,14 +1661,20 @@ export default function MapEditor() {
 	};
 
 	// Cleanup preview mesh
+	/**
+	 * Tear down the current preview mesh entirely. Called on mode switches,
+	 * unmount and any explicit cleanup site. The load-once pointer-move flow
+	 * does NOT call this between cells — it only hides the existing mesh.
+	 */
 	const cleanupPreviewMesh = async () => {
-		// Annuler le timeout en cours
 		if (previewUpdateTimeout !== null) {
 			clearTimeout(previewUpdateTimeout);
 			previewUpdateTimeout = null;
 		}
+		// Invalidate any in-flight load so its result is discarded.
+		previewLoadToken += 1;
+		previewAssetId = null;
 
-		// Attendre que la mise à jour en cours soit terminée
 		while (isUpdatingPreview) {
 			await new Promise(resolve => setTimeout(resolve, 10));
 		}
@@ -1417,22 +1682,16 @@ export default function MapEditor() {
 		if (previewMesh) {
 			const meshToClean = previewMesh;
 			previewMesh = null;
-			
-			const allDescendants = meshToClean.getDescendants(false);
 			const meshScene = meshToClean.getScene();
-			
 			if (meshScene) {
-				// Nettoyer tous les descendants
-				allDescendants.forEach((node) => {
+				meshToClean.getDescendants(false).forEach((node) => {
 					if (node instanceof AbstractMesh || node instanceof Mesh) {
 						try {
 							if (!(node as AbstractMesh).isDisposed()) {
 								meshScene.removeMesh(node as AbstractMesh);
 								(node as AbstractMesh).dispose();
 							}
-						} catch (e) {
-							// Ignorer les erreurs de disposal
-						}
+						} catch (e) { /* ignore */ }
 					}
 				});
 				try {
@@ -1440,11 +1699,136 @@ export default function MapEditor() {
 						meshScene.removeMesh(meshToClean);
 						meshToClean.dispose();
 					}
-				} catch (e) {
-					// Ignorer les erreurs de disposal
-				}
+				} catch (e) { /* ignore */ }
 			}
 		}
+	};
+
+	/**
+	 * Hide the preview without disposing it. Used when the pointer leaves a
+	 * valid drop target — on the next valid cell we just re-enable it, which
+	 * is one frame of work vs. a full glTF reload.
+	 */
+	const hidePreview = () => {
+		if (previewMesh && !previewMesh.isDisposed()) {
+			previewMesh.setEnabled(false);
+		}
+	};
+
+	const applyPreviewAlpha = (mesh: AbstractMesh) => {
+		const setAlpha = (m: AbstractMesh) => {
+			const mat = m.material;
+			if (mat instanceof StandardMaterial) {
+				mat.alpha = 0.35;
+			} else if (mat instanceof PBRMaterial) {
+				mat.transparencyMode = 2;
+				mat.alpha = 0.35;
+			}
+			m.getChildMeshes().forEach((child) => setAlpha(child));
+		};
+		setAlpha(mesh);
+	};
+
+	/**
+	 * Ensure a preview mesh exists for `asset`. Sync-fast when the current
+	 * preview already represents this asset (the common case during hover);
+	 * async load only when the asset changes or there's no preview yet. A
+	 * monotonic token discards any stale load that finishes after a later
+	 * selection change.
+	 */
+	const ensurePreviewForAsset = async (asset: MapAsset): Promise<AbstractMesh | null> => {
+		if (
+			previewAssetId === asset.id &&
+			previewMesh &&
+			!previewMesh.isDisposed()
+		) {
+			return previewMesh;
+		}
+
+		// Different asset (or no preview yet) — dispose the old, load the new.
+		if (previewMesh) {
+			await cleanupPreviewMesh();
+		}
+
+		if (!assetStackManager) return null;
+		const token = ++previewLoadToken;
+		try {
+			isUpdatingPreview = true;
+			const uniqueName = `preview_${asset.id}_${Date.now()}`;
+			const mesh = await assetStackManager.loadModel(asset, uniqueName);
+
+			// If another selection happened while we were loading, drop this.
+			if (token !== previewLoadToken) {
+				if (!mesh.isDisposed()) mesh.dispose(false, true);
+				return null;
+			}
+
+			// Scale per asset type, matching commit-time sizing.
+			let scale = 1;
+			if (asset.type === "character" || asset.type === "enemy") scale = 0.3;
+			else if (asset.type === "furniture" || asset.type === "decoration") scale = 0.4;
+			else scale = 0.5;
+			mesh.scaling.setAll(scale);
+
+			applyPreviewAlpha(mesh);
+
+			mesh.isPickable = false;
+			mesh.getChildMeshes().forEach((c) => { c.isPickable = false; });
+			mesh.renderingGroupId = 1;
+			mesh.getChildMeshes().forEach((c) => {
+				if ('renderingGroupId' in c) (c as any).renderingGroupId = 1;
+			});
+			mesh.metadata = { isPreview: true };
+			mesh.getChildMeshes().forEach((c) => { c.metadata = { isPreview: true }; });
+
+			mesh.setEnabled(false); // start hidden; shown once we position it
+
+			// Capture and discard the GLTF base rotation immediately so that
+			// repositionPreviewOnCell and the rotation-change createEffect can
+			// always apply (previewBaseRotationY + userRotation) consistently,
+			// matching what placeAssetOnCell does for the committed mesh.
+			previewBaseRotationY = mesh.rotationQuaternion
+				? mesh.rotationQuaternion.toEulerAngles().y
+				: 0;
+			if (mesh.rotationQuaternion) mesh.rotationQuaternion = null;
+			mesh.rotation.y = previewBaseRotationY;
+
+			previewMesh = mesh;
+			previewAssetId = asset.id;
+			return mesh;
+		} catch (error) {
+			console.warn(`[MapEditor] Preview load failed for ${asset.id}:`, error);
+			return null;
+		} finally {
+			isUpdatingPreview = false;
+		}
+	};
+
+	/**
+	 * Reparent the persistent preview to the target cell and snap its Y to
+	 * the correct commit height (floor for ground, stack-top otherwise).
+	 * Cheap: no glTF round-trip, only TransformNode updates.
+	 */
+	const repositionPreviewOnCell = (cell: GridCell, asset: MapAsset) => {
+		if (!previewMesh || previewMesh.isDisposed() || !assetStackManager) return;
+
+		// Latest rotation from the UI — always include the GLTF base offset.
+		const rotationRad = (rotationAngle() * Math.PI) / 180;
+		previewMesh.rotation.y = previewBaseRotationY + rotationRad;
+
+		const cellNode = cell.getCellNode();
+		if (!cellNode) return;
+		previewMesh.parent = cellNode;
+		previewMesh.position.set(0, 0, 0);
+		previewMesh.computeWorldMatrix(true);
+		previewMesh.getChildMeshes(false).forEach((child) => child.computeWorldMatrix(true));
+
+		if (asset.type === "floor") {
+			assetStackManager.positionMeshAtHeight(previewMesh, 0, 0);
+		} else {
+			assetStackManager.positionMeshOnStack(previewMesh, cell);
+		}
+		previewMesh.setEnabled(true);
 	};
 
 	/**
@@ -1763,182 +2147,121 @@ export default function MapEditor() {
 		setContextMenuCell(null);
 	};
 
-	// Setup preview mesh
+	// ── Camera view helpers ───────────────────────────────────────────────────
+
+	/** Smooth-animate the ArcRotateCamera to a target alpha/beta/radius over `duration` ms. */
+	const animateCamera = (targetAlpha: number, targetBeta: number, targetRadius: number, duration = 400) => {
+		if (!camera) return;
+		const startAlpha  = camera.alpha;
+		const startBeta   = camera.beta;
+		const startRadius = camera.radius;
+		const startTime   = performance.now();
+
+		const easeInOut = (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+		const lerp      = (a: number, b: number, t: number) => a + (b - a) * t;
+
+		const step = (now: number) => {
+			if (!camera) return;
+			const t    = Math.min((now - startTime) / duration, 1);
+			const ease = easeInOut(t);
+			camera.alpha  = lerp(startAlpha,  targetAlpha,  ease);
+			camera.beta   = lerp(startBeta,   targetBeta,   ease);
+			camera.radius = lerp(startRadius, targetRadius, ease);
+			if (t < 1) requestAnimationFrame(step);
+		};
+		requestAnimationFrame(step);
+	};
+
+	const switchToTopView = () => {
+		if (!camera) return;
+		setCameraMode('top');
+		animateCamera(camera.alpha, 0.01, 50);
+	};
+
+	const switchToFreeView = () => {
+		setCameraMode('free');
+		animateCamera(Math.PI / 3, Math.PI / 3, 30);
+	};
+
+	/**
+	 * Pointer-move observer — load-once, reposition-always.
+	 *
+	 * The previous implementation reloaded the glTF + disposed the previous
+	 * preview on every POINTERMOVE, debounced at 50 ms. That produced the
+	 * visible stutter the user reported. This version keeps a single long-
+	 * lived preview mesh for the currently selected asset and only moves it
+	 * across cells. Cost per move is O(matrix updates) rather than
+	 * O(glTF load + dispose).
+	 */
 	const setupPreviewMesh = () => {
-		if (!scene || !camera || !gridManager || !assetStackManager) return;
+		if (!scene) return;
 
-		scene.onPointerObservable.add((pointerInfo) => {
-			if (pointerInfo.type === PointerEventTypes.POINTERMOVE && (selectedAsset() || editingAsset()) && !deleteMode() && !collisionPreviewMode() && !zoneSelectionMode() && scene) {
-				if (previewUpdateTimeout !== null) {
-					clearTimeout(previewUpdateTimeout);
-					previewUpdateTimeout = null;
-				}
-				
-				previewUpdateTimeout = window.setTimeout(async () => {
-					if (!scene || !gridManager || !assetStackManager || isUpdatingPreview) {
-						previewUpdateTimeout = null;
-						return;
-					}
-					
-					const currentAsset = selectedAsset() || editingAsset()?.asset;
-					if (!currentAsset) {
-						await cleanupPreviewMesh();
-						previewUpdateTimeout = null;
-						return;
-					}
-					
-					const pickInfo = scene.pick(scene.pointerX, scene.pointerY, (mesh) => {
-						// Permettre seulement les cellPlanes pour le preview
-						return mesh.name.startsWith("cellPlane_") && 
-						       !mesh.name.startsWith("preview_") &&
-						       !mesh.metadata?.isPreview;
-					});
+		scene.onPointerObservable.add(async (pointerInfo) => {
+			if (pointerInfo.type !== PointerEventTypes.POINTERMOVE) return;
+			if (!scene || !gridManager) return;
 
-					if (pickInfo?.hit && pickInfo.pickedPoint) {
-						const worldX = pickInfo.pickedPoint.x;
-						const worldZ = pickInfo.pickedPoint.z;
-						const gridX = Math.floor((worldX / TILE_SIZE) + (GRID_SIZE / 2) - 0.5);
-						const gridZ = Math.floor((worldZ / TILE_SIZE) + (GRID_SIZE / 2) - 0.5);
-
-						if (gridX >= 0 && gridX < GRID_SIZE && gridZ >= 0 && gridZ < GRID_SIZE) {
-							const cell = gridManager.getCell(gridX, gridZ);
-							if (cell) {
-								await updatePreviewMesh(currentAsset, cell);
-							}
-						}
-					}
-					previewUpdateTimeout = null;
-				}, 50); // Augmenté à 50ms pour réduire les appels multiples
-			} else if ((!selectedAsset() && !editingAsset()) || deleteMode() || collisionPreviewMode() || zoneSelectionMode()) {
-				if (previewUpdateTimeout !== null) {
-					clearTimeout(previewUpdateTimeout);
-					previewUpdateTimeout = null;
-				}
-				cleanupPreviewMesh();
+			// Modes that MUST NOT show a placement ghost.
+			if (deleteMode() || collisionPreviewMode() || zoneSelectionMode()) {
+				hidePreview();
+				return;
 			}
+
+			// In light mode, resolve the "current asset" to a synthetic
+			// MapAsset pointing at the selected preset's fixture mesh —
+			// lets the user see a ghost of the torch/lantern/orb where it
+			// will drop on release, same as any normal asset.
+			const lightPresetAsset: MapAsset | null = lightMode()
+				? {
+					id: `light_preset_${selectedLightPreset()}`,
+					name: LIGHT_PRESETS[selectedLightPreset()].label,
+					path: LIGHT_PRESETS[selectedLightPreset()].meshPath,
+					// "block" keeps the preview at 0.5 scale to match
+					// spawnLightFixture's final mesh scaling.
+					type: "block",
+				}
+				: null;
+
+			const currentAsset: MapAsset | null =
+				lightPresetAsset ?? selectedAsset() ?? editingAsset()?.asset ?? null;
+			if (!currentAsset) {
+				hidePreview();
+				return;
+			}
+
+			// Ensure the preview is loaded for this asset (cache hit is sync-ish).
+			const ready = await ensurePreviewForAsset(currentAsset);
+			if (!ready) return;
+
+			const pick = scene.pick(scene.pointerX, scene.pointerY, (mesh) =>
+				mesh.name.startsWith("cellPlane_") &&
+				!mesh.name.startsWith("preview_") &&
+				!mesh.metadata?.isPreview,
+			);
+			if (!pick?.hit || !pick.pickedMesh) {
+				hidePreview();
+				return;
+			}
+			// Read grid coords from the cellPlane's metadata — the same
+			// source the placement path uses. The old worldX-math path
+			// was off by half a cell versus gridToWorld (the `-0.5` in the
+			// formula conflicted with the `+0.5` gridToWorld applies), so
+			// the preview showed on cell N-1 while placement landed on N.
+			const meta = pick.pickedMesh.metadata as
+				| { gridX?: number; gridZ?: number }
+				| undefined;
+			if (meta?.gridX === undefined || meta?.gridZ === undefined) {
+				hidePreview();
+				return;
+			}
+			const cell = gridManager.getCell(meta.gridX, meta.gridZ);
+			if (!cell) {
+				hidePreview();
+				return;
+			}
+			repositionPreviewOnCell(cell, currentAsset);
 		});
 	};
 
-	// Update preview mesh
-	const updatePreviewMesh = async (asset: MapAsset, cell: GridCell) => {
-		if (!scene || !assetStackManager || isUpdatingPreview) return;
-
-		isUpdatingPreview = true;
-
-		try {
-			// Nettoyer le preview précédent de manière synchrone
-			if (previewMesh) {
-				const meshToClean = previewMesh;
-				previewMesh = null;
-				
-				const allDescendants = meshToClean.getDescendants(false);
-				const meshScene = meshToClean.getScene();
-				
-				if (meshScene) {
-					allDescendants.forEach((node) => {
-						if (node instanceof AbstractMesh || node instanceof Mesh) {
-							try {
-								if (!(node as AbstractMesh).isDisposed()) {
-									meshScene.removeMesh(node as AbstractMesh);
-									(node as AbstractMesh).dispose();
-								}
-							} catch (e) {}
-						}
-					});
-					try {
-						if (!meshToClean.isDisposed()) {
-							meshScene.removeMesh(meshToClean);
-							meshToClean.dispose();
-						}
-					} catch (e) {}
-				}
-			}
-
-			// Attendre un peu pour s'assurer que le cleanup est terminé
-			await new Promise(resolve => setTimeout(resolve, 10));
-
-			const uniqueName = `preview_${asset.id}_${Date.now()}`;
-			const mesh = await assetStackManager.loadModel(asset, uniqueName);
-			
-			// 1. Définir le scale
-			let scale = 1;
-			if (asset.type === "character" || asset.type === "enemy") {
-				scale = 0.3;
-			} else if (asset.type === "furniture" || asset.type === "decoration") {
-				scale = 0.4;
-			} else if (asset.type === "floor") {
-				scale = 0.5;
-			} else {
-				scale = 0.5;
-			}
-			mesh.scaling.setAll(scale);
-			
-			// 2. Appliquer la rotation
-			const rotationRad = (rotationAngle() * Math.PI) / 180;
-			if (mesh.rotationQuaternion) {
-				const euler = mesh.rotationQuaternion.toEulerAngles();
-				mesh.rotationQuaternion = null;
-				mesh.rotation.y = euler.y + rotationRad;
-			} else {
-				mesh.rotation.y = rotationRad;
-			}
-
-			// 3. Parenter à la cellule
-			const cellNode = cell.getCellNode();
-			if (cellNode) {
-				mesh.parent = cellNode;
-				
-				// 4. Initialiser la position au centre de la cellule
-				mesh.position.set(0, 0, 0);
-				
-				// 5. Forcer le recalcul des matrices world après le parenting
-				mesh.computeWorldMatrix(true);
-				mesh.getChildMeshes(false).forEach(child => child.computeWorldMatrix(true));
-				
-				// 6. Positionner correctement en Y
-				if (asset.type === "floor") {
-					// Pour les sols, positionner à y=0
-					assetStackManager.positionMeshAtHeight(mesh, 0, 0);
-				} else {
-					// Positionner au-dessus de la pile existante
-					assetStackManager.positionMeshOnStack(mesh, cell);
-				}
-			}
-
-			// Make preview more transparent (accentuated transparency)
-			const setAlpha = (m: AbstractMesh) => {
-				if (m.material) {
-					if (m.material instanceof StandardMaterial) {
-						m.material.alpha = 0.3; // Plus transparent (était 0.6)
-					} else if (m.material instanceof PBRMaterial) {
-						m.material.transparencyMode = 2; // ALPHABLEND
-						m.material.alpha = 0.3; // Plus transparent (était 0.6)
-					}
-				}
-				m.getChildMeshes().forEach((child) => setAlpha(child));
-			};
-			setAlpha(mesh);
-
-			mesh.isPickable = false;
-			mesh.getChildMeshes().forEach((child) => { child.isPickable = false; });
-			mesh.renderingGroupId = 1;
-			mesh.getChildMeshes().forEach((child) => {
-				if ('renderingGroupId' in child) {
-					(child as any).renderingGroupId = 1;
-				}
-			});
-			mesh.metadata = { isPreview: true };
-			mesh.getChildMeshes().forEach((child) => {
-				child.metadata = { isPreview: true };
-			});
-
-			previewMesh = mesh;
-		} catch (error) {
-			console.warn(`Failed to load preview for ${asset.name}:`, error);
-		} finally {
-			isUpdatingPreview = false;
-		}
-	};
 
 	// Place asset on a single cell
 	const placeAsset = async (asset: MapAsset, gridX: number, gridZ: number) => {
@@ -2059,40 +2382,71 @@ export default function MapEditor() {
 				// Recalculer les positions de tous les assets empilés au-dessus du nouveau sol
 				cell.restackAssets(assetStackManager);
 			} else {
-				// Pour les autres assets, les empiler
-				// Calculer la hauteur effective en tenant compte des assets multi-cases
-				let effectiveStackHeight = cell.getStackHeight();
-				
-				// Vérifier les assets d'autres cellules qui débordent sur celle-ci
-				const externalAssets = gridManager.getAssetsAffectingCell(gridX, gridZ);
-				for (const extMesh of externalAssets) {
-					// Ignorer les assets déjà dans la pile de cette cellule
-					const isInStack = cell.getStackedAssets().some(sa => sa.mesh === extMesh);
-					const isGround = cell.getGround() === extMesh;
-					if (isInStack || isGround) continue;
-					
-					// Utiliser le topY world de l'asset externe
-					const extTopY = assetStackManager.calculateWorldTopY(extMesh);
-					effectiveStackHeight = Math.max(effectiveStackHeight, extTopY);
+				const wh = workingHeight();
+				if (wh === 'auto') {
+					// Auto: empiler au-dessus de la pile effective (comportement par défaut)
+					let effectiveStackHeight = cell.getStackHeight();
+
+					// Vérifier les assets d'autres cellules qui débordent sur celle-ci
+					const externalAssets = gridManager.getAssetsAffectingCell(gridX, gridZ);
+					for (const extMesh of externalAssets) {
+						const isInStack = cell.getStackedAssets().some(sa => sa.mesh === extMesh);
+						const isGround = cell.getGround() === extMesh;
+						if (isInStack || isGround) continue;
+						const extTopY = assetStackManager.calculateWorldTopY(extMesh);
+						effectiveStackHeight = Math.max(effectiveStackHeight, extTopY);
+					}
+
+					assetStackManager.positionMeshAtHeight(mesh, effectiveStackHeight, 0);
+				} else {
+					// Hauteur manuelle: placer exactement à la hauteur demandée
+					assetStackManager.positionMeshAtHeight(mesh, wh, 0);
 				}
-				
-				// Positionner au-dessus de la pile effective
-				assetStackManager.positionMeshAtHeight(mesh, effectiveStackHeight, 0);
-				
+
 				// Créer le StackedAsset et l'ajouter à la pile
 				const stackedAsset = assetStackManager.createStackedAsset(mesh, asset, 0);
 				cell.addAsset(stackedAsset);
 			}
 
+			// Register with the sun's shadow map so placed walls/props/furniture
+			// cast soft shadows on the floor. Floor tiles only receive.
+			if (editorShadowGenerator) {
+				if (asset.type !== "floor") {
+					editorShadowGenerator.addShadowCaster(mesh, true);
+				}
+				mesh.receiveShadows = true;
+				mesh.getChildMeshes(false).forEach((child) => {
+					child.receiveShadows = true;
+				});
+			}
+
 			// 6. Calculer toutes les cellules affectées par cet asset (basé sur le bounding box)
 			const bounds = assetStackManager.getCombinedWorldBoundsFull(mesh);
 			if (bounds) {
-				// Convertir le bounding box world en cellules de grille
+				// Convert the world-space bounds to grid-cell indices. Two
+				// subtle traps the old math fell into:
+				//   1. Using `Math.floor` on maxX/maxZ claimed the NEXT cell
+				//      whenever the bounds ended exactly on a cell boundary
+				//      (which is the common case for 1x1 assets, since the
+				//      bounding box is tight to the mesh). That caused the
+				//      adjacent cell to think a block hovered above it and
+				//      the next placement went "in the air".
+				//   2. Floating-point noise at the boundary (e.g. 0.0001 past
+				//      the edge) had the same effect.
+				// Using ceil-minus-one + a small epsilon so an asset only
+				// claims cells whose INTERIOR it actually overlaps.
 				const halfSize = (GRID_SIZE * TILE_SIZE) / 2;
-				const minGridX = Math.max(0, Math.floor((bounds.minX + halfSize) / TILE_SIZE));
-				const maxGridX = Math.min(GRID_SIZE - 1, Math.floor((bounds.maxX + halfSize) / TILE_SIZE));
-				const minGridZ = Math.max(0, Math.floor((bounds.minZ + halfSize) / TILE_SIZE));
-				const maxGridZ = Math.min(GRID_SIZE - 1, Math.floor((bounds.maxZ + halfSize) / TILE_SIZE));
+				const epsilon = 0.05;
+				const minGridX = Math.max(0, Math.floor((bounds.minX + epsilon + halfSize) / TILE_SIZE));
+				const maxGridX = Math.min(
+					GRID_SIZE - 1,
+					Math.ceil((bounds.maxX - epsilon + halfSize) / TILE_SIZE) - 1,
+				);
+				const minGridZ = Math.max(0, Math.floor((bounds.minZ + epsilon + halfSize) / TILE_SIZE));
+				const maxGridZ = Math.min(
+					GRID_SIZE - 1,
+					Math.ceil((bounds.maxZ - epsilon + halfSize) / TILE_SIZE) - 1,
+				);
 
 				// Enregistrer toutes les cellules affectées
 				const affectedCellKeys: string[] = [];
@@ -2120,6 +2474,9 @@ export default function MapEditor() {
 			if (showCollisions() || collisionPreviewMode()) {
 				updateCollisionOverlays();
 			}
+
+			// Track this asset in the sidebar list
+			addToPlacedAssets(asset);
 
 		} catch (error) {
 			console.error(`Failed to place asset ${asset.name}:`, error);
@@ -2302,6 +2659,19 @@ export default function MapEditor() {
 					setSelectionEnd(coords);
 					updateSelectionOverlay();
 				}
+				// Update CSS rubber-band overlay
+				if (rubberBandStart && canvasRef) {
+					const r = canvasRef.getBoundingClientRect();
+					const ev = pointerInfo.event as PointerEvent;
+					const domX = ev.clientX - r.left;
+					const domY = ev.clientY - r.top;
+					setRubberBandRect({
+						left: Math.min(rubberBandStart.x, domX),
+						top: Math.min(rubberBandStart.y, domY),
+						width: Math.abs(domX - rubberBandStart.x),
+						height: Math.abs(domY - rubberBandStart.y),
+					});
+				}
 			}
 		});
 
@@ -2313,7 +2683,7 @@ export default function MapEditor() {
 					const assetToPlace = selectedAsset() || editingAsset()?.asset;
 					if (assetToPlace) {
 						placeAssetOnZone(assetToPlace, start.x, start.z, end.x, end.z);
-						
+
 						if (editingAsset()) {
 							setEditingAsset(null);
 							setEditMode(false);
@@ -2323,32 +2693,106 @@ export default function MapEditor() {
 				setIsSelecting(false);
 				setSelectionStart(null);
 				setSelectionEnd(null);
+				// Clear rubber-band overlay and release pointer capture
+				rubberBandStart = null;
+				setRubberBandRect(null);
+				try { canvasRef?.releasePointerCapture((pointerInfo.event as PointerEvent).pointerId); } catch (_) {}
 				updateSelectionOverlay();
 				return;
 			}
 		});
 
+		// Placement fires on POINTERTAP (pointer-up without appreciable move)
+		// rather than POINTERDOWN. Benefits:
+		//  - Camera orbit drags no longer drop an asset mid-rotation.
+		//  - Touchpad / mobile users can slide to aim before releasing.
+		//  - Rectangle zone-selection is the only mode that needs immediate
+		//    press feedback, so it keeps a dedicated POINTERDOWN branch
+		//    below.
 		scene.onPointerObservable.add((pointerInfo) => {
-			if (pointerInfo.type === PointerEventTypes.POINTERDOWN && scene) {
-				// Zone selection mode
-				if (zoneSelectionMode() && (selectedAsset() || editingAsset()?.asset)) {
-					const coords = getGridCoordsFromPointer();
-					if (coords) {
-						setSelectionStart(coords);
-						setSelectionEnd(coords);
-						setIsSelecting(true);
-						updateSelectionOverlay();
+			// Zone selection: start on POINTERDOWN so the rectangle grows
+			// while the user drags. Ending handled by the POINTERUP observer
+			// registered elsewhere in setupClickHandler.
+			if (
+				pointerInfo.type === PointerEventTypes.POINTERDOWN &&
+				scene &&
+				zoneSelectionMode() &&
+				(selectedAsset() || editingAsset()?.asset)
+			) {
+				const coords = getGridCoordsFromPointer();
+				if (coords) {
+					setSelectionStart(coords);
+					setSelectionEnd(coords);
+					setIsSelecting(true);
+					updateSelectionOverlay();
+				}
+				return;
+			}
+
+			if (pointerInfo.type === PointerEventTypes.POINTERTAP && scene) {
+				// Light placement mode — click a cell to drop a light.
+				if (lightMode()) {
+					const pick = scene.pick(scene.pointerX, scene.pointerY, (m) =>
+						m.name.startsWith("cellPlane_"),
+					);
+					if (!pick?.hit || !pick.pickedMesh) return;
+					const meta = pick.pickedMesh.metadata as
+						| { gridX?: number; gridZ?: number }
+						| undefined;
+					if (meta?.gridX === undefined || meta?.gridZ === undefined) return;
+					const gridX = meta.gridX;
+					const gridZ = meta.gridZ;
+
+					// Stack the light on top of whatever is already on the
+					// cell (table, wall, crate, etc.) — same logic as normal
+					// asset placement. Also account for external multi-cell
+					// assets that overflow into this cell.
+					let stackY = 0;
+					if (gridManager && assetStackManager) {
+						const cell = gridManager.getCell(gridX, gridZ);
+						if (cell) {
+							stackY = cell.getStackHeight();
+							const external = gridManager.getAssetsAffectingCell(gridX, gridZ);
+							for (const extMesh of external) {
+								const inStack = cell.getStackedAssets().some((sa) => sa.mesh === extMesh);
+								const isGround = cell.getGround() === extMesh;
+								if (inStack || isGround) continue;
+								const extTopY = assetStackManager.calculateWorldTopY(extMesh);
+								stackY = Math.max(stackY, extTopY);
+							}
+						}
 					}
+
+					const newLight: SavedLightData = {
+						presetId: selectedLightPreset(),
+						x: gridX,
+						z: gridZ,
+						y: stackY,
+					};
+					setPlacedLights((prev) => {
+						const without = prev.filter((l) => !(l.x === gridX && l.z === gridZ));
+						return [...without, newLight];
+					});
+					void spawnLightFixture(newLight);
 					return;
 				}
 
-				const isDeleteOrEdit = deleteMode() || editMode();
-				
+				// Zone selection start is handled on POINTERDOWN above; swallow
+				// the tap so a release doesn't also try to place an asset.
+				if (zoneSelectionMode()) {
+					return;
+				}
+
+				// In edit mode we need the cellPlane filter once we're already
+				// holding an asset (placement tap). Only use the delete/edit
+				// filter for the pick-up tap in edit mode and for delete.
+				const isDeleteOrEdit = deleteMode() || (editMode() && !editingAsset());
+
 				// Choisir le filtre selon le mode
 				const pickInfo = isDeleteOrEdit
 					? scene.pick(scene.pointerX, scene.pointerY, deleteEditPickFilter)
 					: scene.pick(scene.pointerX, scene.pointerY, (mesh) => {
-						if (mesh.name.startsWith("preview_") || 
+						if (mesh.name.startsWith("preview_") ||
 						    mesh.name.startsWith("collision_") ||
 						    mesh.metadata?.isPreview) return false;
 						if (mesh.name.startsWith("cellPlane_")) return true;
@@ -2357,6 +2801,49 @@ export default function MapEditor() {
 					});
 
 				if (deleteMode()) {
+					// Try to detect a placed-light click two ways, most specific
+					// first: direct hit on the fixture mesh (or one of its
+					// descendants), then cellPlane fallback for "click the tile
+					// near the light" UX. Either match short-circuits the normal
+					// asset-delete path so lights are never left orphaned.
+					const rawPick = scene.pick(scene.pointerX, scene.pointerY);
+					if (rawPick?.hit && rawPick.pickedMesh) {
+						const hit = rawPick.pickedMesh;
+						for (const [key, entry] of lightVisuals.entries()) {
+							const fixtureDescendants = entry.mesh.getDescendants(false);
+							const isFixture =
+								hit === entry.mesh ||
+								fixtureDescendants.indexOf(hit as unknown as typeof fixtureDescendants[number]) !== -1 ||
+								hit.name.startsWith(entry.mesh.name);
+							if (isFixture) {
+								const [xs, zs] = key.split(",").map(Number);
+								setPlacedLights((prev) =>
+									prev.filter((l) => !(l.x === xs && l.z === zs)),
+								);
+								despawnLightFixture(xs, zs);
+								return;
+							}
+						}
+					}
+					const cellPick = scene.pick(scene.pointerX, scene.pointerY, (m) =>
+						m.name.startsWith("cellPlane_"),
+					);
+					if (cellPick?.hit && cellPick.pickedMesh) {
+						const cMeta = cellPick.pickedMesh.metadata as
+							| { gridX?: number; gridZ?: number }
+							| undefined;
+						if (cMeta?.gridX !== undefined && cMeta?.gridZ !== undefined) {
+							const gx = cMeta.gridX;
+							const gz = cMeta.gridZ;
+							const hadLight = placedLights().some((l) => l.x === gx && l.z === gz);
+							if (hadLight) {
+								setPlacedLights((prev) => prev.filter((l) => !(l.x === gx && l.z === gz)));
+								despawnLightFixture(gx, gz);
+								return;
+							}
+						}
+					}
+
 					// Delete mode: utiliser le mesh survolé (déjà identifié par le hover handler)
 					// ou fallback sur le picking direct
 					let targetMesh: AbstractMesh | null = null;
@@ -2364,12 +2851,12 @@ export default function MapEditor() {
 					// D'abord essayer avec le mesh survolé
 					if (hoveredMesh) {
 						targetMesh = hoveredMesh;
-						console.log('[DELETE] Using hoveredMesh:', targetMesh.name);
+						if (MAPEDITOR_DEBUG) console.log('[DELETE] Using hoveredMesh:', targetMesh.name);
 					} 
 					// Sinon, essayer avec le picking direct
 					else if (pickInfo?.hit && pickInfo.pickedMesh) {
 						targetMesh = findRootAssetMesh(pickInfo.pickedMesh);
-						console.log('[DELETE] Found via pickInfo:', targetMesh?.name);
+						if (MAPEDITOR_DEBUG) console.log('[DELETE] Found via pickInfo:', targetMesh?.name);
 					}
 					
 					if (!targetMesh) {
@@ -2377,12 +2864,12 @@ export default function MapEditor() {
 						const debugPick = scene.pick(scene.pointerX, scene.pointerY);
 						if (debugPick?.hit && debugPick.pickedMesh) {
 							targetMesh = findRootAssetMesh(debugPick.pickedMesh);
-							console.log('[DELETE] Found via debugPick:', targetMesh?.name);
+							if (MAPEDITOR_DEBUG) console.log('[DELETE] Found via debugPick:', targetMesh?.name);
 						}
 					}
 					
 					if (targetMesh && gridManager) {
-						console.log('[DELETE] Target mesh found:', targetMesh.name);
+						if (MAPEDITOR_DEBUG) console.log('[DELETE] Target mesh found:', targetMesh.name);
 						
 						// Sauvegarder la référence ET le nom avant de nettoyer la surbrillance
 						const targetMeshRef = targetMesh;
@@ -2431,7 +2918,7 @@ export default function MapEditor() {
 								// Vérifier le mesh principal et tous ses enfants
 								if (isSameMesh(cellMesh)) {
 									deletedMesh = cellMesh;
-									console.log('[DELETE] Found in stackedAssets:', deletedMesh.name);
+									if (MAPEDITOR_DEBUG) console.log('[DELETE] Found in stackedAssets:', deletedMesh.name);
 									cell.removeAsset(cellMesh);
 									cellMesh.dispose();
 									cellsToRestack.push(cell);
@@ -2443,7 +2930,7 @@ export default function MapEditor() {
 								for (const child of childMeshes) {
 									if (child instanceof AbstractMesh && isSameMesh(child)) {
 										deletedMesh = cellMesh; // Supprimer le mesh parent
-										console.log('[DELETE] Found via child mesh in stackedAssets:', cellMesh.name);
+										if (MAPEDITOR_DEBUG) console.log('[DELETE] Found via child mesh in stackedAssets:', cellMesh.name);
 										cell.removeAsset(cellMesh);
 										cellMesh.dispose();
 										cellsToRestack.push(cell);
@@ -2456,7 +2943,7 @@ export default function MapEditor() {
 							const ground = cell.getGround();
 							if (ground && isSameMesh(ground)) {
 								deletedMesh = ground;
-								console.log('[DELETE] Found in ground:', deletedMesh.name);
+								if (MAPEDITOR_DEBUG) console.log('[DELETE] Found in ground:', deletedMesh.name);
 								ground.dispose();
 								cell.setGround(null);
 								cellsToRestack.push(cell);
@@ -2464,8 +2951,8 @@ export default function MapEditor() {
 						});
 						
 						if (!deletedMesh) {
-							console.warn('[DELETE] Mesh not found in grid cells:', targetMeshName);
-							console.log('[DELETE] Available meshes:', gridManager.getAllCells().flatMap(cell => {
+							if (MAPEDITOR_DEBUG) console.warn('[DELETE] Mesh not found in grid cells:', targetMeshName);
+							if (MAPEDITOR_DEBUG) console.log('[DELETE] Available meshes:', gridManager.getAllCells().flatMap(cell => {
 								const meshes: string[] = [];
 								cell.getStackedAssets().forEach(sa => meshes.push(sa.mesh.name));
 								if (cell.getGround()) meshes.push('ground: ' + cell.getGround()!.name);
@@ -2487,16 +2974,17 @@ export default function MapEditor() {
 									cell.restackAssets(assetStackManager);
 								}
 							}
-							
+							refreshPlacedAssets();
+
 							// Update collision overlays if enabled
 							if (showCollisions() || collisionPreviewMode()) {
 								updateCollisionOverlays();
 							}
-							
-							console.log('[DELETE] Successfully deleted mesh');
+
+							if (MAPEDITOR_DEBUG) console.log('[DELETE] Successfully deleted mesh');
 						}
 					} else {
-						console.warn('[DELETE] No target mesh found or gridManager missing');
+						if (MAPEDITOR_DEBUG) console.warn('[DELETE] No target mesh found or gridManager missing');
 					}
 					return;
 				}
@@ -2508,36 +2996,66 @@ export default function MapEditor() {
 				}
 
 				if (editMode()) {
-					// Edit mode: utiliser le mesh survolé (déjà identifié par le hover handler)
-					// ou fallback sur le picking direct
-					const rootMesh = hoveredMesh 
-						|| (pickInfo?.hit && pickInfo.pickedMesh ? findRootAssetMesh(pickInfo.pickedMesh) : null);
-					if (rootMesh && gridManager) {
-						
-						// Nettoyer la surbrillance
-						clearHighlight();
-						
-						gridManager.getAllCells().forEach((cell) => {
-							const stackedAssets = cell.getStackedAssets();
-							stackedAssets.forEach((stackedAsset) => {
-								if (stackedAsset.mesh === rootMesh) {
-									setEditingAsset({ asset: stackedAsset.asset, cell, mesh: stackedAsset.mesh });
-									setSelectedAsset(stackedAsset.asset);
-									setRotationAngle(0);
-									// Nettoyer l'enregistrement multi-cases
-									gridManager!.unregisterAsset(stackedAsset.mesh.name);
-									cell.removeAsset(stackedAsset.mesh);
-									stackedAsset.mesh.dispose();
-								}
+					// Edit mode flow:
+					//   1. First tap on an asset → select it: blue tint on
+					//      the original mesh (stays in place), editingAsset
+					//      set, ghost preview follows the cursor.
+					//   2. Second tap on the same asset → deselect: un-tint
+					//      and clear editing state. Original stays exactly
+					//      where it was.
+					//   3. Second tap on a cellPlane → commit move: dispose
+					//      the original, place a fresh mesh at the target.
+					if (!editingAsset()) {
+						const rootMesh = hoveredMesh
+							|| (pickInfo?.hit && pickInfo.pickedMesh ? findRootAssetMesh(pickInfo.pickedMesh) : null);
+						if (rootMesh && gridManager) {
+							clearHighlight();
+							let foundStacked: { asset: MapAsset; cell: GridCell; mesh: AbstractMesh } | null = null;
+							gridManager.getAllCells().forEach((cell) => {
+								cell.getStackedAssets().forEach((sa) => {
+									if (sa.mesh === rootMesh) {
+										foundStacked = { asset: sa.asset, cell, mesh: sa.mesh };
+									}
+								});
 							});
-						});
-						
-						// Update collision overlays if enabled
-						if (showCollisions()) {
-							updateCollisionOverlays();
+							if (foundStacked) {
+								// Keep the original alive + blue-tinted. It will
+								// be disposed on commit (cellPlane tap) or
+								// un-tinted on deselect (same-asset tap).
+								const picked = foundStacked as { asset: MapAsset; cell: GridCell; mesh: AbstractMesh };
+								editingOriginalMesh = picked.mesh;
+								tintEditingMesh(picked.mesh);
+								setEditingAsset(picked);
+								setSelectedAsset(picked.asset);
+								setRotationAngle(0);
+								if (showCollisions()) {
+									updateCollisionOverlays();
+								}
+							}
+						}
+						return;
+					}
+
+					// editingAsset() is already set. If the click is on the
+					// same original mesh (any descendant), the user wants to
+					// deselect — not place.
+					if (editingOriginalMesh) {
+						const rawPick = scene.pick(scene.pointerX, scene.pointerY);
+						if (rawPick?.hit && rawPick.pickedMesh) {
+							const descendants = editingOriginalMesh.getDescendants(false);
+							const isSameAsset =
+								rawPick.pickedMesh === editingOriginalMesh ||
+								descendants.some((d) => d === rawPick.pickedMesh);
+							if (isSameAsset) {
+								cancelEditingSelection();
+								setEditingAsset(null);
+								setSelectedAsset(null);
+								cleanupPreviewMesh();
+								return;
+							}
 						}
 					}
-					return;
+					// Fall through to the placement branch below.
 				}
 
 				// Normal placement mode (single cell)
@@ -2598,6 +3116,11 @@ export default function MapEditor() {
 								placeAsset(assetToPlace, gridX, gridZ);
 								
 								if (editingAsset()) {
+									// Edit-mode commit: the original mesh is
+									// still in its old spot with the blue
+									// tint — remove it now that the new copy
+									// is placed on the target cell.
+									consumeEditingOriginal();
 									setEditingAsset(null);
 									setEditMode(false);
 								}
@@ -2648,8 +3171,12 @@ export default function MapEditor() {
 
 	// Clear map
 	const clearMap = () => {
+		usedAssetsTracker.clear();
+		setPlacedAssets([]);
 		cleanupPreviewMesh();
 		clearCollisionPreview();
+		clearAllLightFixtures();
+		setPlacedLights([]);
 		// Clear selection overlays
 		selectionOverlays.forEach((overlay) => {
 			if (!overlay.isDisposed()) {
@@ -2686,9 +3213,30 @@ export default function MapEditor() {
 		}
 	};
 
+	// Human-readable current mode for the top banner. Order matters:
+	// delete/edit/zone/collision/light "take over" the scene and should win
+	// over "Placement" even when an asset is still selected.
+	const currentModeLabel = () => {
+		if (deleteMode()) return { text: "Mode Suppression", color: "bg-red-600/80 text-white" };
+		if (editMode()) return { text: "Mode Édition", color: "bg-blue-600/80 text-white" };
+		if (zoneSelectionMode()) return { text: "Mode Zone", color: "bg-purple-600/80 text-white" };
+		if (collisionPreviewMode()) return { text: "Mode Collision", color: "bg-yellow-500/80 text-game-darker" };
+		if (lightMode()) return { text: "Mode Lumière", color: "bg-orange-500/90 text-game-darker" };
+		if (selectedAsset() || editingAsset()) return { text: "Placement", color: "bg-emerald-600/80 text-white" };
+		return { text: "Consultation", color: "bg-slate-700/80 text-white" };
+	};
+
 	return (
 		<div class="relative min-h-full w-full overflow-hidden bg-brand-gradient">
 			<div class="vignette absolute inset-0 pointer-events-none"></div>
+
+			{/* Current-mode banner — top-center. Shows the editor's current
+			    tool at a glance so the user knows what a click will do. */}
+			<div class="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-30">
+				<div class={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold shadow-lg border border-white/10 backdrop-blur-sm ${currentModeLabel().color}`}>
+					{currentModeLabel().text}
+				</div>
+			</div>
 
 			{/* Back button */}
 			<A href="/map-editor" class="settings-btn" aria-label="Retour">
@@ -2764,12 +3312,77 @@ export default function MapEditor() {
 					/>
 				</div>
 
+				{/* ── Asset palette ─────────────────────────────────── */}
 				<div class="mb-4">
-					<label class="block text-sm text-slate-300 mb-2">Sélectionner un asset</label>
+					<div class="flex items-center justify-between mb-2">
+						<label class="text-sm text-slate-300">Sélectionner un asset</label>
+						<button
+							type="button"
+							onClick={() => { setShowLibrary(true); setLibrarySearch(""); setLibraryCategory(""); }}
+							class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600/40 hover:bg-indigo-500/60 border border-indigo-500/30 text-indigo-200 text-xs transition"
+						>
+							📚 Bibliothèque
+						</button>
+					</div>
+
+					{/* Tab switcher */}
+					<div class="flex gap-1 bg-black/40 rounded-lg p-1 mb-2">
+						<button
+							type="button"
+							onClick={() => setActivePaletteTab("favoris")}
+							class={`flex-1 px-2 py-1 rounded-md text-xs transition-colors ${
+								activePaletteTab() === "favoris"
+									? "bg-gradient-to-r from-brandStart to-brandEnd text-white"
+									: "text-slate-300 hover:bg-white/10"
+							}`}
+						>
+							Favoris
+						</button>
+						<button
+							type="button"
+							onClick={() => setActivePaletteTab("tous")}
+							class={`flex-1 px-2 py-1 rounded-md text-xs transition-colors ${
+								activePaletteTab() === "tous"
+									? "bg-gradient-to-r from-brandStart to-brandEnd text-white"
+									: "text-slate-300 hover:bg-white/10"
+							}`}
+						>
+							Tous
+						</button>
+					</div>
+
+					{/* Search input */}
+					<input
+						type="text"
+						placeholder="Chercher un asset..."
+						value={searchQuery()}
+						onInput={(e) => setSearchQuery(e.currentTarget.value)}
+						class="w-full px-3 py-2 mb-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:border-brandStart transition"
+					/>
+
+					{/* Empty-favorites hint */}
+					<Show when={activePaletteTab() === "favoris" && userFavoritePaths().length === 0}>
+						<div class="flex flex-col items-center gap-2 py-5 px-3 text-center">
+							<span class="text-2xl">⭐</span>
+							<p class="text-slate-400 text-xs leading-relaxed">
+								Ouvrez la <button
+									type="button"
+									class="text-indigo-300 underline underline-offset-2 hover:text-indigo-200"
+									onClick={() => { setShowLibrary(true); setLibrarySearch(""); setLibraryCategory(""); }}
+								>Bibliothèque</button> et cliquez ⭐ sur un asset pour l'ajouter ici.
+							</p>
+						</div>
+					</Show>
+
 					<div class="space-y-2">
-						<For each={ASSET_CATEGORIES}>
+						<For each={visibleCategories()}>
 							{(category) => {
-								const isExpanded = () => expandedCategories().has(category.id);
+								// Auto-expand when in Favoris tab or when searching so the
+								// user doesn't have to click every accordion header.
+								const isExpanded = () =>
+									activePaletteTab() === "favoris" ||
+									searchQuery().length > 0 ||
+									expandedCategories().has(category.id);
 								const toggleCategory = () => {
 									const newSet = new Set(expandedCategories());
 									if (newSet.has(category.id)) {
@@ -2786,7 +3399,10 @@ export default function MapEditor() {
 											class="w-full flex items-center justify-between px-3 py-2 bg-black/30 hover:bg-black/40 text-slate-200 transition text-sm font-medium"
 											onClick={toggleCategory}
 										>
-											<span>{category.name}</span>
+											<span>
+												{category.name}{" "}
+												<span class="text-slate-500">({category.assets.length})</span>
+											</span>
 											<Show when={isExpanded()} fallback={<ChevronRight class="h-4 w-4" />}>
 												<ChevronDown class="h-4 w-4" />
 											</Show>
@@ -2802,12 +3418,17 @@ export default function MapEditor() {
 																	: "bg-black/30 border-white/10 text-slate-200 hover:bg-black/40"
 															}`}
 															onClick={() => {
+																// Click-again-to-deselect: clicking the same palette
+																// asset a second time clears the selection and the
+																// preview ghost.
+																const already = selectedAsset()?.id === asset.id;
 																cleanupPreviewMesh();
-																setSelectedAsset(asset);
 																setEditingAsset(null);
 																setEditMode(false);
 																setDeleteMode(false);
 																setZoneSelectionMode(false);
+																setLightMode(false);
+																setSelectedAsset(already ? null : asset);
 															}}
 														>
 															{asset.name}
@@ -2823,31 +3444,102 @@ export default function MapEditor() {
 					</div>
 				</div>
 
-				{/* Rotation Control */}
-				{(selectedAsset() || editingAsset()) && (
+				{/* Rotation Control: keyboard (Q/D) + step buttons + slider */}
+				{(selectedAsset() || editingAsset() || lightMode()) && (
 					<div class="mb-4">
 						<label class="block text-sm text-slate-300 mb-2">
-							Rotation: {rotationAngle()}°
+							Rotation:{" "}
+							<span class="text-game-gold font-mono">
+								{rotationAngle()}°
+							</span>
 						</label>
-						<div class="flex gap-2">
+						<div class="flex gap-2 mb-2">
 							<button
 								class="flex-1 px-3 py-2 rounded-lg bg-black/40 hover:bg-black/60 border border-white/10 text-slate-200 text-sm transition"
 								onClick={() => setRotationAngle((prev) => (prev - 15 + 360) % 360)}
-								title="Appuyez sur Q pour tourner à gauche"
+								title="Raccourci Q"
 							>
-								↺ Q (Gauche)
+								↺ −15°
+							</button>
+							<button
+								class="flex-1 px-3 py-2 rounded-lg bg-black/40 hover:bg-black/60 border border-white/10 text-slate-200 text-sm transition"
+								onClick={() => setRotationAngle(0)}
+								title="Remettre à 0°"
+							>
+								0°
 							</button>
 							<button
 								class="flex-1 px-3 py-2 rounded-lg bg-black/40 hover:bg-black/60 border border-white/10 text-slate-200 text-sm transition"
 								onClick={() => setRotationAngle((prev) => (prev + 15) % 360)}
-								title="Appuyez sur D pour tourner à droite"
+								title="Raccourci D"
 							>
-								↻ D (Droite)
+								↻ +15°
 							</button>
 						</div>
+						<input
+							type="range"
+							min="0"
+							max="360"
+							step="5"
+							value={rotationAngle()}
+							onInput={(e) =>
+								setRotationAngle(parseInt(e.currentTarget.value, 10) % 360)
+							}
+							class="w-full accent-pink-500"
+						/>
 						<p class="mt-2 text-xs text-slate-400">
-							Utilisez Q (gauche) et D (droite) pour faire tourner
+							Raccourcis Q / D. La rotation est appliquée au preview
+							et enregistrée avec l'objet posé.
 						</p>
+					</div>
+				)}
+
+				{/* ── Working Height ─────────────────────────────────── */}
+				{(selectedAsset() || editingAsset()) && selectedAsset()?.type !== 'floor' && (
+					<div class="mb-4">
+						<div class="flex items-center justify-between mb-2">
+							<label class="text-sm text-slate-300">Hauteur de travail</label>
+							<button
+								onClick={() => setWorkingHeight('auto')}
+								class={`text-xs px-2 py-0.5 rounded border transition ${
+									workingHeight() === 'auto'
+										? 'bg-emerald-600/40 border-emerald-500/50 text-emerald-300'
+										: 'bg-black/30 border-white/10 text-slate-400 hover:text-slate-200'
+								}`}
+							>Auto</button>
+						</div>
+
+						<div class="flex items-center gap-2">
+							<button
+								class="w-8 h-8 rounded-lg bg-black/40 hover:bg-black/60 border border-white/10 text-slate-200 text-lg leading-none transition flex items-center justify-center"
+								onClick={() => setWorkingHeight(prev => {
+									const cur = prev === 'auto' ? 0 : prev;
+									return Math.max(0, parseFloat((cur - 0.25).toFixed(2)));
+								})}
+							>−</button>
+
+							<div class={`flex-1 text-center font-mono text-sm py-1 rounded-lg border ${
+								workingHeight() === 'auto'
+									? 'bg-emerald-900/20 border-emerald-700/30 text-emerald-400'
+									: 'bg-black/30 border-white/10 text-white'
+							}`}>
+								{workingHeight() === 'auto' ? 'Auto ↑ pile' : `Y = ${(workingHeight() as number).toFixed(2)}`}
+							</div>
+
+							<button
+								class="w-8 h-8 rounded-lg bg-black/40 hover:bg-black/60 border border-white/10 text-slate-200 text-lg leading-none transition flex items-center justify-center"
+								onClick={() => setWorkingHeight(prev => {
+									const cur = prev === 'auto' ? 0 : prev;
+									return parseFloat((cur + 0.25).toFixed(2));
+								})}
+							>+</button>
+						</div>
+
+						<Show when={workingHeight() !== 'auto'}>
+							<p class="mt-1.5 text-[10px] text-slate-500">
+								L'asset sera placé avec son bas à Y = {(workingHeight() as number).toFixed(2)} — indépendamment des assets déjà présents.
+							</p>
+						</Show>
 					</div>
 				)}
 
@@ -2888,6 +3580,7 @@ export default function MapEditor() {
 								setDeleteMode(false);
 								setZoneSelectionMode(false);
 								setCollisionPreviewMode(false);
+								setLightMode(false);
 								setSelectedAsset(null);
 								setEditingAsset(null);
 							} else {
@@ -2925,6 +3618,7 @@ export default function MapEditor() {
 								setEditMode(false);
 								setZoneSelectionMode(false);
 								setCollisionPreviewMode(false);
+								setLightMode(false);
 								setSelectedAsset(null);
 								setEditingAsset(null);
 							}
@@ -2955,6 +3649,7 @@ export default function MapEditor() {
 								setDeleteMode(false);
 								setEditMode(false);
 								setCollisionPreviewMode(false);
+								setLightMode(false);
 							} else {
 								setIsSelecting(false);
 								setSelectionStart(null);
@@ -2989,6 +3684,7 @@ export default function MapEditor() {
 								setDeleteMode(false);
 								setEditMode(false);
 								setZoneSelectionMode(false);
+								setLightMode(false);
 								setSelectedAsset(null);
 								setEditingAsset(null);
 								setShowCollisions(false);
@@ -3016,6 +3712,103 @@ export default function MapEditor() {
 					)}
 				</div>
 
+				{/* Light Placement Mode */}
+				<div class="mb-4">
+					<button
+						class={`w-full px-4 py-2 rounded-lg text-sm transition ${
+							lightMode()
+								? "bg-orange-500/90 hover:bg-orange-500 text-white"
+								: "bg-black/40 hover:bg-black/60 border border-white/10 text-slate-200"
+						}`}
+						onClick={() => {
+							const newMode = !lightMode();
+							setLightMode(newMode);
+							cleanupPreviewMesh();
+							if (newMode) {
+								setDeleteMode(false);
+								setEditMode(false);
+								setZoneSelectionMode(false);
+								setCollisionPreviewMode(false);
+								setSelectedAsset(null);
+								setEditingAsset(null);
+							}
+						}}
+					>
+						{lightMode() ? "💡 Mode Lumière Actif" : "💡 Placer une lumière"}
+					</button>
+					<Show when={lightMode()}>
+						<div class="mt-2 grid grid-cols-3 gap-1 bg-black/40 rounded-lg p-1">
+							<For each={LIGHT_PRESET_IDS}>
+								{(id) => (
+									<button
+										type="button"
+										onClick={() => setSelectedLightPreset(id)}
+										class={`px-2 py-1.5 rounded-md text-xs transition-colors ${
+											selectedLightPreset() === id
+												? "bg-gradient-to-r from-amber-500 to-orange-500 text-white"
+												: "text-slate-200 hover:bg-white/10"
+										}`}
+									>
+										{LIGHT_PRESETS[id].label}
+									</button>
+								)}
+							</For>
+						</div>
+						<p class="mt-2 text-xs text-slate-400">
+							Cliquez sur une cellule pour y déposer la lumière. Utilisez le mode suppression pour retirer une lumière existante.
+						</p>
+					</Show>
+				</div>
+
+				{/* ── Export / Import ─────────────────────────────── */}
+				<div class="flex gap-2 mb-2">
+					<button
+						class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-sky-700/60 hover:bg-sky-600/80 border border-sky-500/30 text-sky-200 text-xs font-medium transition"
+						onClick={exportCurrentMap}
+						title="Télécharger la carte en JSON"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+						</svg>
+						Exporter
+					</button>
+					<button
+						class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-violet-700/60 hover:bg-violet-600/80 border border-violet-500/30 text-violet-200 text-xs font-medium transition"
+						onClick={() => importFileInputRef?.click()}
+						title="Importer une carte depuis un fichier JSON"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+						</svg>
+						Importer
+					</button>
+					{/* Hidden file picker */}
+					<input
+						ref={importFileInputRef}
+						type="file"
+						accept=".json,.dndmap.json"
+						class="hidden"
+						onChange={(e) => {
+							const file = e.currentTarget.files?.[0];
+							if (file) handleImportFile(file);
+							e.currentTarget.value = '';
+						}}
+					/>
+				</div>
+
+				{/* Import feedback toast */}
+				<Show when={importStatus()}>
+					{(s) => (
+						<div class={`mb-2 px-3 py-2 rounded-lg text-xs font-medium ${
+							s().type === 'ok'
+								? 'bg-emerald-900/60 border border-emerald-500/40 text-emerald-300'
+								: 'bg-red-900/60 border border-red-500/40 text-red-300'
+						}`}>
+							{s().type === 'ok' ? '✓ ' : '✕ '}{s().message}
+						</div>
+					)}
+				</Show>
+
 				<div class="flex gap-2">
 					<button
 						class="flex-1 px-4 py-2 rounded-lg bg-red-600/80 hover:bg-red-600 text-white text-sm transition"
@@ -3039,6 +3832,230 @@ export default function MapEditor() {
 				class="w-full h-full"
 				style={{ width: "100%", height: "100vh" }}
 			/>
+
+			{/* ── Camera view controls — bottom-left ───────────────────────────── */}
+			<div class="absolute bottom-4 left-4 z-20 flex gap-2">
+				<button
+					onClick={switchToTopView}
+					title="Vue du dessus"
+					class={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border backdrop-blur-sm shadow-lg transition ${
+						cameraMode() === 'top'
+							? 'bg-indigo-600/70 border-indigo-400/50 text-white'
+							: 'bg-black/60 border-white/10 text-slate-300 hover:bg-black/80 hover:text-white'
+					}`}
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+					</svg>
+					Dessus
+				</button>
+				<button
+					onClick={switchToFreeView}
+					title="Vue libre (perspective)"
+					class={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border backdrop-blur-sm shadow-lg transition ${
+						cameraMode() === 'free'
+							? 'bg-indigo-600/70 border-indigo-400/50 text-white'
+							: 'bg-black/60 border-white/10 text-slate-300 hover:bg-black/80 hover:text-white'
+					}`}
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M1 6l11 6 11-6"/><path d="M1 12l11 6 11-6"/>
+					</svg>
+					Libre
+				</button>
+			</div>
+
+			{/* CSS rubber-band selection rectangle — shown while dragging in zone selection mode */}
+			<Show when={rubberBandRect()}>
+				{(r) => (
+					<div
+						class="absolute pointer-events-none border-2 border-blue-400 bg-blue-400/10 rounded-sm"
+						style={{
+							left: `${r().left}px`,
+							top: `${r().top}px`,
+							width: `${r().width}px`,
+							height: `${r().height}px`,
+							"z-index": "40",
+						}}
+					/>
+				)}
+			</Show>
+
+			{/* ═══════════════════════════════════════════════════════════
+			    Library modal — full-screen asset browser
+			    ═══════════════════════════════════════════════════════════ */}
+			<Show when={showLibrary()}>
+				<Portal mount={document.body}>
+					<div
+						class="fixed inset-0 bg-black/85 backdrop-blur-md z-[200] flex items-center justify-center p-4"
+						onClick={(e) => { if (e.target === e.currentTarget) setShowLibrary(false); }}
+					>
+						<div class="bg-[#0c1422] border border-white/10 rounded-2xl shadow-2xl w-[820px] max-w-[95vw] flex flex-col overflow-hidden"
+							style={{ "max-height": "88vh" }}>
+
+							{/* Header */}
+							<div class="flex items-center gap-3 px-5 py-4 border-b border-white/10 shrink-0">
+								<span class="text-xl">📚</span>
+								<div class="flex-1">
+									<h2 class="text-white font-display text-lg leading-tight">Bibliothèque d'assets</h2>
+									<p class="text-slate-500 text-xs mt-0.5">Sélectionnez un asset pour le placer sur la carte</p>
+								</div>
+								<button
+									onClick={() => setShowLibrary(false)}
+									class="px-3 py-1.5 rounded-lg bg-black/40 hover:bg-white/10 border border-white/10 text-slate-400 text-sm transition"
+								>✕</button>
+							</div>
+
+							{/* Search */}
+							<div class="px-5 py-3 border-b border-white/10 shrink-0">
+								<input
+									type="text"
+									placeholder="🔍  Rechercher un asset… (affiche les 10 premiers résultats)"
+									value={librarySearch()}
+									onInput={(e) => setLibrarySearch(e.currentTarget.value)}
+									class="w-full px-4 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/60 transition"
+								/>
+							</div>
+
+							{/* Body */}
+							<div class="flex flex-1 overflow-hidden">
+
+								{/* Category sidebar */}
+								<div class="w-44 shrink-0 border-r border-white/10 overflow-y-auto p-2 space-y-0.5">
+									<button
+										onClick={() => { setLibraryCategory(''); setLibrarySearch(''); }}
+										class={`w-full text-left px-3 py-2 rounded-lg text-sm transition ${
+											libraryCategory() === '' && !librarySearch()
+												? 'bg-indigo-600/40 text-indigo-200 border border-indigo-500/30'
+												: 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+										}`}
+									>
+										Toutes les catégories
+									</button>
+									<For each={ASSET_CATEGORIES}>
+										{(cat) => (
+											<button
+												onClick={() => { setLibraryCategory(cat.id); setLibrarySearch(''); }}
+												class={`w-full text-left px-3 py-2 rounded-lg text-sm transition truncate ${
+													libraryCategory() === cat.id && !librarySearch()
+														? 'bg-indigo-600/40 text-indigo-200 border border-indigo-500/30'
+														: 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+												}`}
+												title={cat.name}
+											>
+												{cat.name}
+											</button>
+										)}
+									</For>
+								</div>
+
+								{/* Asset grid */}
+								<div class="flex-1 overflow-y-auto p-4">
+
+									{/* Search results */}
+									<Show when={librarySearch().trim().length > 0}>
+										<p class="text-xs text-slate-500 mb-3">
+											{ALL_ASSETS.filter(a => a.name.toLowerCase().includes(librarySearch().toLowerCase().trim())).slice(0, 10).length} résultat{ALL_ASSETS.filter(a => a.name.toLowerCase().includes(librarySearch().toLowerCase().trim())).slice(0, 10).length !== 1 ? 's' : ''} pour « {librarySearch().trim()} »
+										</p>
+										<Show when={ALL_ASSETS.filter(a => a.name.toLowerCase().includes(librarySearch().toLowerCase().trim())).length === 0}>
+											<p class="text-slate-600 text-sm text-center py-8">Aucun asset trouvé.</p>
+										</Show>
+										<div class="grid grid-cols-3 gap-2">
+											<For each={ALL_ASSETS.filter(a => a.name.toLowerCase().includes(librarySearch().toLowerCase().trim())).slice(0, 10)}>
+												{(asset) => (
+													<div
+														class={`relative rounded-xl border transition text-xs cursor-pointer ${
+															selectedAsset()?.id === asset.id
+																? 'bg-indigo-600/50 border-indigo-400/50 text-white'
+																: 'bg-black/30 border-white/10 text-slate-300 hover:bg-white/5 hover:border-white/20'
+														}`}
+														onClick={() => {
+															cleanupPreviewMesh();
+															setSelectedAsset(asset);
+															setEditingAsset(null);
+															setEditMode(false);
+															setDeleteMode(false);
+															setZoneSelectionMode(false);
+															setShowLibrary(false);
+														}}
+													>
+														<div class="px-3 pt-2.5 pb-6">
+															<div class="font-medium truncate mb-0.5">{asset.name}</div>
+															<div class="text-[10px] opacity-50 uppercase tracking-wide">{asset.type}</div>
+														</div>
+														<button
+															type="button"
+															title={isFavorite(asset.path) ? "Retirer des favoris" : "Ajouter aux favoris"}
+															onClick={(e) => { e.stopPropagation(); toggleFavorite(asset.path); }}
+															class={`absolute bottom-1.5 right-1.5 text-sm leading-none transition hover:scale-110 ${
+																isFavorite(asset.path) ? 'text-amber-400' : 'text-slate-600 hover:text-amber-300'
+															}`}
+														>
+															{isFavorite(asset.path) ? '★' : '☆'}
+														</button>
+													</div>
+												)}
+											</For>
+										</div>
+									</Show>
+
+									{/* Category browse */}
+									<Show when={librarySearch().trim().length === 0}>
+										<For each={ASSET_CATEGORIES.filter(c => !libraryCategory() || c.id === libraryCategory())}>
+											{(cat) => (
+												<div class="mb-6">
+													<h3 class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2 flex items-center gap-2">
+														<span class="flex-1">{cat.name}</span>
+														<span class="text-slate-600 normal-case font-normal">{cat.assets.length} assets</span>
+													</h3>
+													<div class="grid grid-cols-3 gap-2">
+														<For each={cat.assets}>
+															{(asset) => (
+																<div
+																	class={`relative rounded-xl border transition text-xs cursor-pointer ${
+																		selectedAsset()?.id === asset.id
+																			? 'bg-indigo-600/50 border-indigo-400/50 text-white'
+																			: 'bg-black/30 border-white/10 text-slate-300 hover:bg-white/5 hover:border-white/20'
+																	}}`}
+																	onClick={() => {
+																		cleanupPreviewMesh();
+																		setSelectedAsset(asset);
+																		setEditingAsset(null);
+																		setEditMode(false);
+																		setDeleteMode(false);
+																		setZoneSelectionMode(false);
+																		setShowLibrary(false);
+																	}}
+																>
+																	<div class="px-3 pt-2.5 pb-6">
+																		<div class="font-medium truncate mb-0.5">{asset.name}</div>
+																		<div class="text-[10px] opacity-50 uppercase tracking-wide">{asset.type}</div>
+																	</div>
+																	<button
+																		type="button"
+																		title={isFavorite(asset.path) ? "Retirer des favoris" : "Ajouter aux favoris"}
+																		onClick={(e) => { e.stopPropagation(); toggleFavorite(asset.path); }}
+																		class={`absolute bottom-1.5 right-1.5 text-sm leading-none transition hover:scale-110 ${
+																			isFavorite(asset.path) ? 'text-amber-400' : 'text-slate-600 hover:text-amber-300'
+																		}}`}
+																	>
+																		{isFavorite(asset.path) ? '★' : '☆'}
+																	</button>
+																</div>
+															)}
+														</For>
+													</div>
+												</div>
+											)}
+										</For>
+									</Show>
+
+								</div>
+							</div>
+						</div>
+					</div>
+				</Portal>
+			</Show>
 
 			{/* Context Menu for Spawn Zones */}
 			<Show when={contextMenuCell()}>

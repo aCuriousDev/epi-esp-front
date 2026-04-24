@@ -1,4 +1,4 @@
-import { useNavigate } from "@solidjs/router";
+import { A, useNavigate } from "@solidjs/router";
 import { createSignal, For, JSX, onCleanup, onMount, Show } from "solid-js";
 import { Settings, ScrollText, Swords, Users } from "lucide-solid";
 
@@ -13,11 +13,24 @@ import ButtonMenu from "../components/common/ButtonMenu";
 import { LoginButton, UserMenu } from "../components/auth";
 import { authStore } from "../stores/auth.store";
 import { playAmbientMusic, stopAmbientMusic, playMenuHoverSound, playMenuClickSound } from "../game/audio/SoundIntegration";
+import { CharacterService } from "../services/character.service";
+import { CampaignService } from "../services/campaign.service";
 
 export default function MenuComponent() {
 	const [hovered, setHovered] = createSignal<string | null>(null);
+	const [nbCharacters, setNbCharacters] = createSignal<string>("…");
+	const [nbCampaigns, setNbCampaigns] = createSignal<string>("…");
 
-	onMount(() => playAmbientMusic('menu'));
+	onMount(() => {
+		playAmbientMusic('menu');
+		// Fetch real counts — fire-and-forget, errors are non-fatal
+		CharacterService.getMyCharacters()
+			.then((chars) => setNbCharacters(String(chars.length)))
+			.catch((e) => { console.warn("[MenuComponent] Failed to load characters count", e); setNbCharacters("0"); });
+		CampaignService.listCampaigns({ pageSize: 1 })
+			.then((res) => setNbCampaigns(String(res.totalCount)))
+			.catch((e) => { console.warn("[MenuComponent] Failed to load campaigns count", e); setNbCampaigns("0"); });
+	});
 	onCleanup(() => stopAmbientMusic());
 
 	const [menuItems, setMenuItems] = createSignal<
@@ -112,12 +125,17 @@ export default function MenuComponent() {
 				</div>
 			</nav>
 
-			<main class="relative z-10 mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center gap-8 p-6 sm:p-10">
+			<main class="relative z-10 mx-auto flex min-h-screen max-w-5xl flex-col items-center p-6 sm:p-10">
+				{/* Bloc centré : héro + menu + stats. flex-1 le laisse manger
+				    l'espace vertical disponible ; justify-center recentre son
+				    contenu à l'intérieur. Le footer (mt-auto en frère) se cale
+				    ainsi en bas sans chevauchement possible. */}
+				<div class="flex flex-1 w-full flex-col items-center justify-center gap-8">
 				{/* Logo and Title Section */}
 				<header class="text-center hero-section">
-					{/* Animated D20 dice - click to re-roll */}
-					<div class="flex justify-center mb-6">
-						<AnimatedD20 size={96} />
+					{/* Animated D20 dice - click, hold-and-shake, or flick to roll */}
+					<div class="flex justify-center mb-10">
+						<AnimatedD20 size={220} />
 					</div>
 
 					<h1 class="main-title font-display text-5xl sm:text-6xl md:text-7xl tracking-wide">
@@ -166,33 +184,55 @@ export default function MenuComponent() {
 				<Show when={authStore.isAuthenticated()}>
 					<section class="w-full max-w-2xl mt-4 stats-section">
 						<div class="grid grid-cols-3 gap-3 sm:gap-4">
-							<QuickStatCard 
+							<QuickStatCard
 								icon={<Users class="w-5 h-5" />}
 								label="Personnages"
-								value="0"
+								value={nbCharacters()}
 								onClick={() => navigate("/characters")}
 							/>
-							<QuickStatCard 
+							<QuickStatCard
 								icon={<ScrollText class="w-5 h-5" />}
 								label="Campagnes"
-								value="0"
+								value={nbCampaigns()}
 								onClick={() => navigate("/campaigns")}
 							/>
-							<QuickStatCard 
+							{/* TODO(parties): needs a dedicated backend endpoint (e.g. GET /api/sessions/count)
+							    to return the number of sessions the current user participated in. */}
+							<QuickStatCard
 								icon={<Swords class="w-5 h-5" />}
 								label="Parties"
-								value="0"
+								value="—"
+								title="À venir"
 								onClick={() => navigate("/board")}
 							/>
 						</div>
 					</section>
 				</Show>
+				</div>
+				{/* Footer en fin de <main> — l'espace est déjà mangé par le
+				    bloc flex-1 ci-dessus, donc le footer vit en bas, dans
+				    le flux, sans absolute ni chevauchement. */}
+				<footer class="w-full pt-10 text-center text-xs text-slate-400/60 space-y-2">
+					<p>Appuyez sur un bouton pour commencer votre aventure</p>
+					<p class="flex items-center justify-center gap-2 text-[11px] text-slate-500/70 flex-wrap">
+						<A href="/privacy" class="hover:text-slate-300 transition-colors">
+							Confidentialité
+						</A>
+						<span>·</span>
+						<A href="/terms" class="hover:text-slate-300 transition-colors">
+							CGU
+						</A>
+						<span>·</span>
+						<A href="/legal" class="hover:text-slate-300 transition-colors">
+							Mentions légales
+						</A>
+						<span>·</span>
+						<A href="/cookies" class="hover:text-slate-300 transition-colors">
+							Cookies
+						</A>
+					</p>
+				</footer>
 			</main>
-
-			{/* Footer hint */}
-			<footer class="absolute bottom-4 left-0 right-0 text-center text-xs text-slate-400/60">
-				Appuyez sur un bouton pour commencer votre aventure
-			</footer>
 
 			<style jsx>{`
 				.menu-page {
@@ -313,15 +353,17 @@ export default function MenuComponent() {
 /**
  * Quick stat card component
  */
-function QuickStatCard(props: { 
-	icon: JSX.Element; 
-	label: string; 
+function QuickStatCard(props: {
+	icon: JSX.Element;
+	label: string;
 	value: string;
+	title?: string;
 	onClick?: () => void;
 }) {
 	return (
 		<button
 			onClick={props.onClick}
+			title={props.title}
 			class="group p-4 bg-game-dark/50 backdrop-blur-sm border border-white/10 rounded-xl hover:bg-white/10 hover:border-purple-500/30 transition-all text-center"
 		>
 			<div class="flex justify-center mb-2 text-purple-400 group-hover:text-purple-300 transition-colors">

@@ -545,3 +545,118 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ========================================
+   DM TOOLS ANIMATIONS
+   ======================================== */
+@keyframes dm-slide-in {
+	from {
+		opacity: 0;
+		transform: translateX(100px) scale(0.9);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(0) scale(1);
+	}
+}
+
+/* ========================================
+   DM PANEL — Purple/Violet Theme
+   ======================================== */
+
+.dm-panel {
+	@apply rounded-xl p-3 border backdrop-blur-xl;
+	border-color: rgba(139, 92, 246, 0.25);
+	background: linear-gradient(135deg, rgba(75, 30, 78, 0.6) 0%, rgba(22, 44, 68, 0.6) 100%);
+	animation: dm-slide-in 0.3s ease-out;
+}
+
+.dm-inspect-panel {
+	@apply rounded-xl p-3 border backdrop-blur-xl;
+	border-color: rgba(139, 92, 246, 0.2);
+	background: linear-gradient(135deg, rgba(55, 25, 78, 0.7) 0%, rgba(18, 36, 58, 0.7) 100%);
+	animation: dm-slide-in 0.25s ease-out;
+}
+
+.dm-input {
+	@apply rounded-lg px-2.5 py-1.5 text-xs text-white w-full appearance-none;
+	background: rgba(139, 92, 246, 0.08);
+	border: 1px solid rgba(139, 92, 246, 0.2);
+	@apply transition-colors focus:outline-none placeholder:text-slate-500;
+}
+.dm-input:focus {
+	border-color: rgba(139, 92, 246, 0.5);
+	box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.15);
+}
+
+select.dm-input {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b5cf6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 0.5rem center;
+	padding-right: 1.75rem;
+	cursor: pointer;
+}
+select.dm-input option {
+	background: #1a1028;
+	color: #e2e8f0;
+}
+
+.dm-btn {
+	@apply flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-semibold;
+	@apply text-white/90 transition-all cursor-pointer;
+	background: linear-gradient(135deg, rgba(124, 58, 237, 0.5), rgba(79, 70, 229, 0.5));
+	border: 1px solid rgba(139, 92, 246, 0.3);
+	@apply hover:brightness-125 disabled:opacity-30;
+}
+
+.dm-spawn-card {
+	@apply flex items-center gap-2 px-2 py-1.5 rounded-lg text-left cursor-pointer;
+	border: 1px solid rgba(139, 92, 246, 0.15);
+	@apply transition-all hover:bg-purple-500/10;
+}
+.dm-spawn-card--active {
+	background: rgba(239, 68, 68, 0.12);
+	border-color: rgba(239, 68, 68, 0.35);
+}
+
+.dm-item-card {
+	@apply flex flex-col items-center gap-0.5 p-1 rounded-lg;
+	border: 1px solid rgba(139, 92, 246, 0.1);
+	@apply cursor-pointer transition-all hover:bg-purple-500/10;
+}
+.dm-item-card--active {
+	background: rgba(245, 158, 11, 0.12);
+	border-color: rgba(245, 158, 11, 0.35);
+}
+
+/* ── DM Inventory catalog ── */
+
+.dm-catalog-grid::-webkit-scrollbar {
+	width: 3px;
+}
+.dm-catalog-grid::-webkit-scrollbar-track {
+	background: transparent;
+}
+.dm-catalog-grid::-webkit-scrollbar-thumb {
+	background: rgba(139, 92, 246, 0.25);
+	border-radius: 9999px;
+}
+
+.dm-catalog-item {
+	@apply cursor-pointer transition-all duration-200;
+}
+.dm-catalog-item:disabled {
+	@apply opacity-40 cursor-not-allowed;
+}
+.dm-catalog-item:not(:disabled):hover {
+	transform: translateY(-1px);
+	box-shadow: 0 2px 8px rgba(139, 92, 246, 0.15);
+}
+
+.dm-qty-btn {
+	@apply flex items-center justify-center w-5 h-5 rounded;
+	background: rgba(139, 92, 246, 0.12);
+	border: 1px solid rgba(139, 92, 246, 0.2);
+	@apply text-purple-300/70 transition-all cursor-pointer;
+	@apply hover:bg-purple-500/25 hover:text-purple-200;
+}
