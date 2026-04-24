@@ -1,0 +1,146 @@
+import { onCleanup, onMount } from "solid-js";
+import { signalRService } from "../../services/signalr/SignalRService";
+import { sessionState } from "../../stores/session.store";
+import {
+  diceRequestsState,
+  setDiceRequestsState,
+} from "../../stores/diceRequests.store";
+
+interface RollRequestedPayload {
+  requestId: string;
+  diceType: "d20";
+  label: string | null;
+  forcedValue: number;
+}
+
+interface RollRequestedDmEchoPayload {
+  requestId: string;
+  diceType: "d20";
+  label: string | null;
+  targetUserIds: string[];
+  expectedCount: number;
+}
+
+interface RollRequestedPublicPayload {
+  requestId: string;
+  diceType: "d20";
+  label: string | null;
+  targetUserIds: string[];
+  expectedCount: number;
+}
+
+interface RollResultBroadcastPayload {
+  requestId: string;
+  userId: string;
+  userName: string | null;
+  diceType: "d20";
+  value: number;
+  label: string | null;
+  requestComplete: boolean;
+}
+
+interface RollCanceledPayload {
+  requestId: string;
+  label: string | null;
+  stillPendingUserIds: string[];
+}
+
+export default function DiceRequestListener() {
+  onMount(() => {
+    const me = () => sessionState.hubUserId ?? "";
+
+    const onRollRequested = (p: RollRequestedPayload) => {
+      // This event reaches the targeted player only.
+      setDiceRequestsState(p.requestId, {
+        requestId: p.requestId,
+        diceType: p.diceType,
+        label: p.label,
+        targetUserIds: [me()],
+        dmUserId: "",
+        status: "pending",
+        expectedCount: 1,
+        forcedValue: p.forcedValue,
+        myParticipation: "waiting",
+        results: {},
+        createdAt: Date.now(),
+      });
+    };
+
+    const onDmEcho = (p: RollRequestedDmEchoPayload) => {
+      if (diceRequestsState[p.requestId]) {
+        // Already populated (e.g. from Public event dedupe chain). Update metadata.
+        setDiceRequestsState(p.requestId, {
+          targetUserIds: p.targetUserIds,
+          expectedCount: p.expectedCount,
+          dmUserId: me(),
+        });
+        return;
+      }
+      setDiceRequestsState(p.requestId, {
+        requestId: p.requestId,
+        diceType: p.diceType,
+        label: p.label,
+        targetUserIds: p.targetUserIds,
+        dmUserId: me(),
+        status: "pending",
+        expectedCount: p.expectedCount,
+        forcedValue: null,
+        myParticipation: "not-target",
+        results: {},
+        createdAt: Date.now(),
+      });
+    };
+
+    const onPublic = (p: RollRequestedPublicPayload) => {
+      // Dedupe: if a dedicated event already populated this requestId, drop.
+      if (diceRequestsState[p.requestId]) return;
+      setDiceRequestsState(p.requestId, {
+        requestId: p.requestId,
+        diceType: p.diceType,
+        label: p.label,
+        targetUserIds: p.targetUserIds,
+        dmUserId: "",
+        status: "pending",
+        expectedCount: p.expectedCount,
+        forcedValue: null,
+        myParticipation: "not-target",
+        results: {},
+        createdAt: Date.now(),
+      });
+    };
+
+    const onResult = (p: RollResultBroadcastPayload) => {
+      const existing = diceRequestsState[p.requestId];
+      if (!existing) return; // result arrived before requested — defensive drop
+      setDiceRequestsState(p.requestId, "results", p.userId, {
+        value: p.value,
+        userName: p.userName ?? p.userId,
+        rolledAt: Date.now(),
+      });
+      if (p.requestComplete) {
+        setDiceRequestsState(p.requestId, "status", "completed");
+      }
+    };
+
+    const onCanceled = (p: RollCanceledPayload) => {
+      if (!diceRequestsState[p.requestId]) return;
+      setDiceRequestsState(p.requestId, "status", "canceled");
+    };
+
+    signalRService.on("RollRequested", onRollRequested);
+    signalRService.on("RollRequestedDmEcho", onDmEcho);
+    signalRService.on("RollRequestedPublic", onPublic);
+    signalRService.on("RollResultBroadcast", onResult);
+    signalRService.on("RollCanceled", onCanceled);
+
+    onCleanup(() => {
+      signalRService.off("RollRequested", onRollRequested);
+      signalRService.off("RollRequestedDmEcho", onDmEcho);
+      signalRService.off("RollRequestedPublic", onPublic);
+      signalRService.off("RollResultBroadcast", onResult);
+      signalRService.off("RollCanceled", onCanceled);
+    });
+  });
+
+  return null;
+}
