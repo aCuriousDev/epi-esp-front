@@ -53,19 +53,22 @@ export default function DiceRollPrompt() {
     if (!req) return;
     setLastValue(value);
     setPhase("result");
-    setDiceRequestsState(req.requestId, "myParticipation", "rolling");
 
     // Fire-and-forget. If the server has already canceled the request, the hub
-    // silently ignores our submit.
+    // silently ignores our submit. We do NOT flip myParticipation yet — the
+    // `myPendingRequests` filter reads "waiting" only, and flipping off early
+    // would unmount the modal mid-animation and swallow the result reveal.
     try {
       await signalRService.invoke("SubmitRollResult", { requestId: req.requestId });
     } catch {
       // Non-fatal — either the server dropped or the request was canceled.
     }
-    setDiceRequestsState(req.requestId, "myParticipation", "submitted");
 
     const hold = reducedMotion() ? 900 : 1800;
-    window.setTimeout(() => setPhase("exit"), hold);
+    window.setTimeout(() => {
+      setPhase("exit");
+      setDiceRequestsState(req.requestId, "myParticipation", "submitted");
+    }, hold);
   }
 
   const tone = createMemo(() => {
