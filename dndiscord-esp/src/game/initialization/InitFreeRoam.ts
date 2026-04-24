@@ -22,83 +22,7 @@ import {
 } from '../abilities/AbilityDefinitions';
 import { mapAssignmentToUnit } from '../utils/CharacterToUnit';
 import { sessionState, isDm } from '../../stores/session.store';
-import { getSpawnPositions } from '../spawn/Placement';
-import { buildSessionCluster } from '../spawn/SessionSpawnCluster';
-
-const LEGACY_FALLBACK_SPAWNS: GridPosition[] = [
-  { x: 1, z: 1 },
-  { x: 1, z: 3 },
-  { x: 3, z: 1 },
-  { x: 3, z: 3 },
-  { x: 5, z: 1 },
-  { x: 5, z: 3 },
-];
-
-/**
- * Priority chain for ally spawn in solo / story-tree free-roam:
- *   1. session-map.spawnPoint → cluster around the DM-authored anchor
- *   2. rule-based Placement band (our algorithm)
- *   3. LEGACY_FALLBACK_SPAWNS (last resort when grid empty / fully blocked)
- *
- * Each step appends to `picked` until count is met, so a partial cluster
- * (e.g. spawnPoint near a wall) still hands off to Placement cleanly.
- */
-function resolveAllySpawns(count: number): GridPosition[] {
-  if (count <= 0) return [];
-  const picked: GridPosition[] = [];
-
-  const cfg = getSessionMapConfig();
-  if (cfg?.spawnPoint) {
-    const cluster = buildSessionCluster({
-      point: cfg.spawnPoint,
-      count,
-      gridWidth: GRID_SIZE,
-      gridHeight: GRID_SIZE,
-      tiles,
-    });
-    picked.push(...cluster);
-    if (cluster.length < count && cluster.length === 0) {
-      console.warn(
-        '[resolveAllySpawns] session-map spawnPoint yielded no walkable cells; falling through to rule-based placement',
-        cfg.spawnPoint,
-      );
-    }
-  }
-
-  if (picked.length < count) {
-    const claimed = new Set(picked.map(p => `${p.x},${p.z}`));
-    const ruleBased = getSpawnPositions({
-      tiles,
-      team: 'ally',
-      count: count - picked.length,
-      gridWidth: GRID_SIZE,
-      gridHeight: GRID_SIZE,
-      seed: Date.now(),
-    });
-    for (const p of ruleBased) {
-      if (picked.length >= count) break;
-      const k = `${p.x},${p.z}`;
-      if (!claimed.has(k)) {
-        picked.push(p);
-        claimed.add(k);
-      }
-    }
-  }
-
-  if (picked.length < count) {
-    const claimed = new Set(picked.map(p => `${p.x},${p.z}`));
-    for (const p of LEGACY_FALLBACK_SPAWNS) {
-      if (picked.length >= count) break;
-      const k = `${p.x},${p.z}`;
-      if (!claimed.has(k)) {
-        picked.push(p);
-        claimed.add(k);
-      }
-    }
-  }
-
-  return picked;
-}
+import { resolveAllySpawns, LEGACY_FALLBACK_SPAWNS } from '../spawn/ResolveAllySpawns';
 
 export function initializeFreeRoam(mapId: string | null = null, unitAssignments?: UnitAssignment[]): void {
   console.log('[initializeFreeRoam] Starting Free Roam initialization...');
@@ -187,7 +111,15 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
       },
     ];
 
-    const soloSpawns = resolveAllySpawns(playerUnits.length);
+    const soloSpawns = resolveAllySpawns({
+      count: playerUnits.length,
+      tiles,
+      gridWidth: GRID_SIZE,
+      gridHeight: GRID_SIZE,
+      spawnPoint: getSessionMapConfig()?.spawnPoint ?? null,
+      seed: Date.now(),
+      legacyFallback: LEGACY_FALLBACK_SPAWNS,
+    });
     playerUnits.forEach((unitData, i) => {
       unitData.position = soloSpawns[i] ?? LEGACY_FALLBACK_SPAWNS[i % LEGACY_FALLBACK_SPAWNS.length];
     });

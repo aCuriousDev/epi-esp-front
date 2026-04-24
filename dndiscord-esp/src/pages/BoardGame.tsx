@@ -119,7 +119,12 @@ const BoardGame: Component = () => {
         // scene it no longer owns.
         (async () => {
           if (sessionState.session) {
-            try { await leaveSession(); } catch (_) {}
+            try {
+              await leaveSession();
+            } catch (err) {
+              console.warn("[BoardGame] leaveSession on fromSession entry failed", err);
+              clearSession();
+            }
           }
           setFromSession(true);
           setSelectedMode(GameMode.FREE_ROAM);
@@ -338,8 +343,14 @@ const BoardGame: Component = () => {
   const backToModeSelection = async () => {
     // Guard 3 — notify server before tearing down local state so the hub
     // doesn't keep the DM's group membership alive for this client.
+    // clearSession() below runs regardless so a failed hub call can't leave
+    // a stale session reference behind.
     if (sessionState.session) {
-      try { await leaveSession(); } catch (_) {}
+      try {
+        await leaveSession();
+      } catch (err) {
+        console.warn("[BoardGame] leaveSession in backToModeSelection failed", err);
+      }
     }
     setAppPhase(AppPhase.MODE_SELECTION);
     setSelectedMode(null);

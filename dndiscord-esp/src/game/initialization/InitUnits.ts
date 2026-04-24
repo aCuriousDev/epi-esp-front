@@ -93,15 +93,14 @@ function getSpawnZones(mapId: string | null): { ally: { x: number; z: number }[]
     return { ally: allyZones, enemy: enemyZones };
   }
 
+  const clusterKeys = new Set(allyZones.map((p) => `${p.x},${p.z}`));
   Object.entries(savedMap.spawnZones).forEach(([key, type]) => {
     const [x, z] = key.split(',').map(Number);
     if (type === 'ally') {
-      // Only add if we didn't already place the session spawnPoint here
-      if (!sessionCfg?.spawnPoint) allyZones.push({ x, z });
+      if (!clusterKeys.has(`${x},${z}`)) allyZones.push({ x, z });
     } else if (type === 'enemy') {
       enemyZones.push({ x, z });
     }
-    // "teleport" zones are not spawn positions
   });
 
   return { ally: allyZones, enemy: enemyZones };
