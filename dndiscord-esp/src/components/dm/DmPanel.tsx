@@ -74,7 +74,7 @@ export const DmPanel: Component = () => {
   // enabling tile-click-to-move. Decouples selection from the move tool —
   // earlier "move" default meant every click risked a teleport. The DM now
   // switches to "Déplacer" explicitly when they want drag-to-move.
-  const [activeTab, setActiveTab] = createSignal<"select" | "move" | "roll" | "request" | "spawn" | "maps">("select");
+  const [activeTab, setActiveTab] = createSignal<"select" | "move" | "roll" | "dice-request" | "spawn" | "maps">("select");
 
   // Dice
   const [diceType, setDiceType] = createSignal(20);
@@ -178,7 +178,7 @@ export const DmPanel: Component = () => {
     else { setDmSpawnTemplate(tplId); setDmDragUnit(null); }
   };
 
-  const switchTab = (tab: "select" | "move" | "roll" | "request" | "spawn" | "maps") => {
+  const switchTab = (tab: "select" | "move" | "roll" | "dice-request" | "spawn" | "maps") => {
     setActiveTab(tab);
     setDmDragUnit(null);
     setDmSpawnTemplate(null);
@@ -341,7 +341,7 @@ export const DmPanel: Component = () => {
             <DmTab active={activeTab() === "move"} onClick={() => switchTab("move")} label="Déplacer" />
             <DmTab active={activeTab() === "spawn"} onClick={() => switchTab("spawn")} label="Invoquer" />
             <DmTab active={activeTab() === "roll"} onClick={() => switchTab("roll")} label="Dés" />
-            <DmTab active={activeTab() === "request"} onClick={() => switchTab("request")} label="Jet D20" />
+            <DmTab active={activeTab() === "dice-request"} onClick={() => switchTab("dice-request")} label="Jet D20" />
             <Show when={getCurrentSession()?.campaignId}>
               <DmTab active={activeTab() === "maps"} onClick={() => { switchTab("maps"); void loadMapsIfNeeded(); }} label="Cartes" />
             </Show>
@@ -445,7 +445,7 @@ export const DmPanel: Component = () => {
           </Show>
 
           {/* ── REQUEST TAB ── DM asks players to roll a public D20 */}
-          <Show when={activeTab() === "request"}>
+          <Show when={activeTab() === "dice-request"}>
             <DiceRequestPanel />
           </Show>
 
