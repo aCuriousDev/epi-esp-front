@@ -5,22 +5,15 @@ import {
   Users,
   Calendar,
   BookOpen,
-  Settings,
   Play,
   Pause,
   UserPlus,
   Trash2,
   Edit3,
   Clock,
-  MapPin,
-  MessageSquare,
-  ChevronRight,
   Plus,
-  Check,
   X,
-  ScrollText,
   Swords,
-  User,
   Drama,
   Loader2,
   Map as MapIcon,
@@ -29,19 +22,13 @@ import { createSignal, onCleanup, onMount, Show, For, type JSX } from "solid-js"
 import {
   Campaign,
   CampaignStatus,
-  CampaignPlayer,
-  CampaignSession,
   getStatusColor,
   getStatusLabel,
 } from "../types/campaign";
 import { authStore } from "../stores/auth.store";
-import { AuthService } from "../services/auth.service";
 import { safeConfirm } from "../services/ui/confirm";
 import {
   CampaignService,
-  CampaignDetailResponse,
-  CampaignMemberResponse,
-  APICampaignStatus,
   mapCampaignResponse,
   displayDungeonMasterName,
   hasScenario,
@@ -63,9 +50,7 @@ export default function CampaignView() {
   const [campaign, setCampaign] = createSignal<Campaign | null>(null);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
-  const [activeTab, setActiveTab] = createSignal<
-    "overview" | "players" | "sessions"
-  >("overview");
+  const [activeTab, setActiveTab] = createSignal<"overview" | "players">("overview");
   const [showInviteModal, setShowInviteModal] = createSignal(false);
   const [inviteCode, setInviteCode] = createSignal<string | null>(null);
   const [launchingSession, setLaunchingSession] = createSignal(false);
@@ -81,7 +66,7 @@ export default function CampaignView() {
   const [inviteError, setInviteError] = createSignal<string | null>(null);
 
   const user = () => authStore.user();
-  /** Le créateur/MJ peut lancer une session ; on s’appuie sur l’API (isDungeonMaster) pour éviter les écarts d’identifiants. */
+  /** Le créateur/MJ peut lancer une session ; on s'appuie sur l'API (isDungeonMaster) pour éviter les écarts d'identifiants. */
   const isOwner = () => {
     const c = campaign();
     if (!c) return false;
@@ -173,6 +158,18 @@ export default function CampaignView() {
     });
   };
 
+  /** Relative time helper — no external dep, pure JS Intl. */
+  const formatRelativeTime = (dateStr: string): string => {
+    const diffMs = Date.now() - new Date(dateStr).getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return "aujourd'hui";
+    if (diffDays === 1) return "il y a 1 jour";
+    if (diffDays < 30) return `il y a ${diffDays} jours`;
+    const diffMonths = Math.floor(diffDays / 30);
+    if (diffMonths === 1) return "il y a 1 mois";
+    return `il y a ${diffMonths} mois`;
+  };
+
   /** Créer une session GameHub pour cette campagne et aller au board (DM uniquement). */
   const handleLaunchSession = async () => {
     const c = campaign();
@@ -246,7 +243,6 @@ export default function CampaignView() {
   };
 
   const handleUpdate = () => {
-    // TODO: Implement edit campaign modal or navigate to edit page
     navigate(`/campaigns/${params.id}/edit`);
   };
 
@@ -338,31 +334,39 @@ export default function CampaignView() {
     }
   };
 
+  /** Tab keyboard navigation — arrow keys cycle between Overview and Players. */
+  const handleTabKeyDown = (e: KeyboardEvent, tab: "overview" | "players") => {
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      e.preventDefault();
+      setActiveTab(tab === "overview" ? "players" : "overview");
+    }
+  };
+
   return (
     <div class="campaign-view-page min-h-screen w-full bg-brand-gradient">
       {/* Background effects */}
-      <div class="absolute inset-0 overflow-hidden pointer-events-none">
+      <div class="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
         <div class="absolute top-0 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
         <div class="absolute bottom-1/4 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl" />
       </div>
 
       {/* Vignette */}
-      <div class="vignette absolute inset-0" />
+      <div class="vignette absolute inset-0" aria-hidden="true" />
 
       {/* Back button */}
       <A
         href="/campaigns"
-        class="settings-btn !left-4 !right-auto"
-        aria-label="Retour"
+        class="settings-btn !left-4 !right-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+        aria-label="Retour aux campagnes"
       >
-        <ArrowLeft class="settings-icon h-5 w-5" />
+        <ArrowLeft class="settings-icon h-5 w-5" aria-hidden="true" />
       </A>
 
       <Show
         when={!loading()}
         fallback={
-          <div class="flex items-center justify-center min-h-screen">
-            <div class="w-12 h-12 border-4 border-white/20 border-t-purple-500 rounded-full animate-spin" />
+          <div class="flex items-center justify-center min-h-screen" role="status" aria-label="Chargement de la campagne">
+            <div class="w-12 h-12 border-4 border-white/20 border-t-purple-500 rounded-full animate-spin" aria-hidden="true" />
           </div>
         }
       >
@@ -373,12 +377,13 @@ export default function CampaignView() {
               <div class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl mb-6">
                 {/* Banner */}
                 <div class="h-32 bg-gradient-to-r from-purple-600/40 via-indigo-600/30 to-violet-600/40 relative">
-                  <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.05%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-30" />
+                  <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.05%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-30" aria-hidden="true" />
 
                   {/* Status badge */}
                   <div class="absolute top-4 right-4">
                     <span
                       class={`px-3 py-1.5 text-sm rounded-xl border ${getStatusColor(camp().status)}`}
+                      aria-label={`Statut : ${getStatusLabel(camp().status)}`}
                     >
                       {getStatusLabel(camp().status)}
                     </span>
@@ -389,25 +394,15 @@ export default function CampaignView() {
                     <div class="absolute top-4 left-4 flex gap-2">
                       <button
                         onClick={toggleStatus}
-                        class="p-2 rounded-lg bg-black/30 backdrop-blur-sm border border-white/10 hover:bg-black/50 transition-colors"
-                        title={
-                          camp().status === CampaignStatus.Active
-                            ? "Mettre en pause"
-                            : "Reprendre"
-                        }
+                        aria-label={camp().status === CampaignStatus.Active ? "Mettre en pause" : "Reprendre"}
+                        class="p-2 rounded-lg bg-black/30 backdrop-blur-sm border border-white/10 hover:bg-black/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                       >
                         <Show
                           when={camp().status === CampaignStatus.Active}
-                          fallback={<Play class="w-4 h-4 text-green-400" />}
+                          fallback={<Play class="w-4 h-4 text-green-400" aria-hidden="true" />}
                         >
-                          <Pause class="w-4 h-4 text-yellow-400" />
+                          <Pause class="w-4 h-4 text-yellow-400" aria-hidden="true" />
                         </Show>
-                      </button>
-                      <button
-                        class="p-2 rounded-lg bg-black/30 backdrop-blur-sm border border-white/10 hover:bg-black/50 transition-colors"
-                        title="Paramètres"
-                      >
-                        <Settings class="w-4 h-4 text-slate-300" />
                       </button>
                     </div>
                   </Show>
@@ -421,27 +416,30 @@ export default function CampaignView() {
                         {camp().title}
                       </h1>
                       <div class="flex flex-wrap items-center gap-3 text-slate-400 mb-4">
-                        <span class="flex items-center gap-1.5">
-                          <Users class="w-4 h-4" />
+                        <span class="flex items-center gap-1.5" aria-label={`${camp().currentPlayers} joueurs sur ${camp().maxPlayers}`}>
+                          <Users class="w-4 h-4" aria-hidden="true" />
                           {camp().currentPlayers}/{camp().maxPlayers} joueurs
                         </span>
                       </div>
 
                       <Show when={camp().description}>
-                        <p class="text-slate-300/80 leading-relaxed">
-                          {camp().description}
-                        </p>
+                        <div class="border-l-2 border-purple-500/30 pl-3">
+                          <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">Description</p>
+                          <p class="text-slate-300/90 leading-relaxed italic">
+                            {camp().description}
+                          </p>
+                        </div>
                       </Show>
                     </div>
 
                     {/* DM Card */}
                     <div class="sm:w-64 p-4 bg-white/5 rounded-xl border border-white/10">
                       <div class="flex items-center gap-3 mb-3">
-                        <div class="w-12 h-12 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
-                          <Crown class="w-6 h-6 text-white" />
+                        <div class="w-12 h-12 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center" aria-hidden="true">
+                          <Crown class="w-6 h-6 text-white" aria-hidden="true" />
                         </div>
                         <div>
-                          <p class="text-xs text-amber-400 uppercase tracking-wider">
+                          <p class="text-xs text-amber-400 uppercase tracking-wider font-semibold">
                             Maître du Jeu
                           </p>
                           <p class="text-white font-semibold">
@@ -449,8 +447,9 @@ export default function CampaignView() {
                           </p>
                         </div>
                       </div>
-                      <div class="text-sm text-slate-400">
-                        <p>Démarré le {formatDate(camp().createdAt)}</p>
+                      <div class="text-sm text-slate-400 space-y-0.5">
+                        <p>Créé le {formatDate(camp().createdAt)}</p>
+                        <p class="text-slate-500 text-xs">{formatRelativeTime(camp().createdAt)}</p>
                       </div>
                     </div>
                   </div>
@@ -459,8 +458,8 @@ export default function CampaignView() {
                   <Show when={camp().nextSessionDate}>
                     <div class="mt-6 p-4 bg-green-500/10 border border-green-500/20 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                       <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
-                          <Calendar class="w-5 h-5 text-green-400" />
+                        <div class="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center" aria-hidden="true">
+                          <Calendar class="w-5 h-5 text-green-400" aria-hidden="true" />
                         </div>
                         <div>
                           <p class="text-sm text-green-400 font-medium">
@@ -472,19 +471,17 @@ export default function CampaignView() {
                         </div>
                       </div>
                       <button
-                        class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
+                        class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                         onClick={handleLaunchSession}
                         disabled={launchingSession()}
                       >
                         <Show
                           when={launchingSession()}
-                          fallback={<Play class="w-4 h-4" />}
+                          fallback={<Play class="w-4 h-4" aria-hidden="true" />}
                         >
-                          <Loader2 class="w-4 h-4 animate-spin" />
+                          <Loader2 class="w-4 h-4 animate-spin" aria-hidden="true" />
                         </Show>
-                        {launchingSession()
-                          ? "Création..."
-                          : "Lancer la session"}
+                        {launchingSession() ? "Création..." : "Lancer la session"}
                       </button>
                     </div>
                   </Show>
@@ -492,17 +489,27 @@ export default function CampaignView() {
               </div>
 
               {/* Tabs */}
-              <div class="flex gap-2 mb-6 overflow-x-auto pb-2">
+              <div
+                role="tablist"
+                aria-label="Sections de la campagne"
+                class="flex gap-2 mb-6 overflow-x-auto pb-2"
+              >
                 <TabButton
+                  id="tab-overview"
+                  panelId="panel-overview"
                   active={activeTab() === "overview"}
                   onClick={() => setActiveTab("overview")}
-                  icon={<BookOpen class="w-4 h-4" />}
+                  onKeyDown={(e) => handleTabKeyDown(e, "overview")}
+                  icon={<BookOpen class="w-4 h-4" aria-hidden="true" />}
                   label="Aperçu"
                 />
                 <TabButton
+                  id="tab-players"
+                  panelId="panel-players"
                   active={activeTab() === "players"}
                   onClick={() => setActiveTab("players")}
-                  icon={<Users class="w-4 h-4" />}
+                  onKeyDown={(e) => handleTabKeyDown(e, "players")}
+                  icon={<Users class="w-4 h-4" aria-hidden="true" />}
                   label="Joueurs"
                   count={camp().currentPlayers}
                 />
@@ -515,15 +522,20 @@ export default function CampaignView() {
               <div class="space-y-6">
                 {/* Overview Tab */}
                 <Show when={activeTab() === "overview"}>
-                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div
+                    id="panel-overview"
+                    role="tabpanel"
+                    aria-labelledby="tab-overview"
+                    class="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                  >
                     <StatCard
-                      icon={<Users class="w-5 h-5" />}
+                      icon={<Users class="w-5 h-5" aria-hidden="true" />}
                       label="Joueurs"
                       value={`${camp().currentPlayers}/${camp().maxPlayers}`}
                       color="purple"
                     />
                     <StatCard
-                      icon={<Clock class="w-5 h-5" />}
+                      icon={<Clock class="w-5 h-5" aria-hidden="true" />}
                       label="Durée"
                       value={`${Math.ceil((Date.now() - new Date(camp().createdAt).getTime()) / (1000 * 60 * 60 * 24 * 30))} mois`}
                       color="green"
@@ -533,21 +545,23 @@ export default function CampaignView() {
 
                 {/* Players Tab */}
                 <Show when={activeTab() === "players"}>
-                  <div class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
+                  <div
+                    id="panel-players"
+                    role="tabpanel"
+                    aria-labelledby="tab-players"
+                    class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden"
+                  >
                     <div class="p-4 border-b border-white/10 flex items-center justify-between">
-                      <h3 class="font-display text-lg text-white">
+                      <h2 class="font-display text-lg text-white">
                         Joueurs ({camp().currentPlayers})
-                      </h3>
-                      <Show
-                        when={
-                          isOwner() && camp().currentPlayers < camp().maxPlayers
-                        }
-                      >
+                      </h2>
+                      <Show when={isOwner() && camp().currentPlayers < camp().maxPlayers}>
                         <button
                           onClick={handleGenerateInvite}
-                          class="flex items-center gap-2 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded-lg transition-colors"
+                          aria-label="Inviter un joueur"
+                          class="flex items-center gap-2 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                         >
-                          <UserPlus class="w-4 h-4" />
+                          <UserPlus class="w-4 h-4" aria-hidden="true" />
                           Inviter
                         </button>
                       </Show>
@@ -556,8 +570,8 @@ export default function CampaignView() {
                     <div class="divide-y divide-white/5">
                       {/* DM */}
                       <div class="p-4 flex items-center gap-4 bg-amber-500/5">
-                        <div class="w-12 h-12 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
-                          <Crown class="w-6 h-6 text-white" />
+                        <div class="w-12 h-12 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center" aria-hidden="true">
+                          <Crown class="w-6 h-6 text-white" aria-hidden="true" />
                         </div>
                         <div class="flex-1">
                           <p class="text-white font-semibold">
@@ -571,8 +585,8 @@ export default function CampaignView() {
                       <For each={camp().players}>
                         {(player) => (
                           <div class="p-4 flex items-center gap-4 hover:bg-white/5 transition-colors">
-                            <div class="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center">
-                              <Drama class="w-6 h-6 text-purple-300" />
+                            <div class="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center" aria-hidden="true">
+                              <Drama class="w-6 h-6 text-purple-300" aria-hidden="true" />
                             </div>
                             <div class="flex-1 min-w-0">
                               <p class="text-white font-semibold">
@@ -585,33 +599,42 @@ export default function CampaignView() {
                             <Show when={isOwner()}>
                               <button
                                 onClick={() => handleRemoveMember(player.id)}
-                                class="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
-                                title="Retirer le joueur"
+                                aria-label={`Retirer ${player.username} de la campagne`}
+                                class="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                               >
-                                <X class="w-4 h-4" />
+                                <X class="w-4 h-4" aria-hidden="true" />
                               </button>
                             </Show>
                           </div>
                         )}
                       </For>
 
-                      {/* Empty slots */}
-                      <For
-                        each={Array(
-                          camp().maxPlayers - camp().currentPlayers,
-                        ).fill(0)}
-                      >
-                        {() => (
-                          <div class="p-4 flex items-center gap-4 opacity-50">
-                            <div class="w-12 h-12 rounded-full border-2 border-dashed border-white/20 flex items-center justify-center">
-                              <Plus class="w-5 h-5 text-slate-500" />
-                            </div>
-                            <div class="flex-1">
-                              <p class="text-slate-500">Place disponible</p>
-                            </div>
+                      {/* Empty state when no players at all (excluding DM) */}
+                      <Show when={!camp().players || camp().players!.length === 0}>
+                        <div class="py-10 px-4 text-center">
+                          <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-white/5 flex items-center justify-center">
+                            <Users class="w-7 h-7 text-slate-500" aria-hidden="true" />
                           </div>
-                        )}
-                      </For>
+                          <p class="text-slate-300 font-medium mb-1">Aucun joueur pour l'instant</p>
+                          <p class="text-slate-500 text-sm">Invitez-en via un code d'invitation.</p>
+                        </div>
+                      </Show>
+
+                      {/* Empty slots */}
+                      <Show when={camp().players && camp().players!.length > 0}>
+                        <For each={Array(camp().maxPlayers - camp().currentPlayers).fill(0)}>
+                          {() => (
+                            <div class="p-4 flex items-center gap-4 opacity-50" aria-hidden="true">
+                              <div class="w-12 h-12 rounded-full border-2 border-dashed border-white/20 flex items-center justify-center">
+                                <Plus class="w-5 h-5 text-slate-500" />
+                              </div>
+                              <div class="flex-1">
+                                <p class="text-slate-500">Place disponible</p>
+                              </div>
+                            </div>
+                          )}
+                        </For>
+                      </Show>
                     </div>
                   </div>
                 </Show>
@@ -621,85 +644,103 @@ export default function CampaignView() {
 
               {/* Erreur création de session */}
               <Show when={launchError()}>
-                <p class="mt-4 text-red-400 text-sm">{launchError()}</p>
+                <p class="mt-4 text-red-400 text-sm" role="alert">{launchError()}</p>
               </Show>
 
-              {/* Actions Footer */}
-              <div class="mt-8 flex flex-col sm:flex-row gap-4">
-                <Show when={isOwner()}>
+              {/* ── Actions footer ──────────────────────────────────────────── */}
+              <Show when={isOwner()}>
+                {/* Row 1: Primary (Lancement rapide) + Secondary (Lancer la session) */}
+                <div class="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* PRIMARY — POC fast launch */}
                   <button
-                    class="flex-1 py-3 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold hover:from-purple-500 hover:to-indigo-500 transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                    class="py-3 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold transition-all shadow-lg shadow-purple-500/20 flex items-center justify-center gap-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 motion-safe:hover:-translate-y-0.5"
                     onClick={handleLaunchSession}
                     disabled={launchingSession()}
+                    aria-label="Lancement rapide — démarrer une session sans scénario"
                   >
                     <Show
                       when={launchingSession()}
-                      fallback={<Play class="w-5 h-5" />}
+                      fallback={<Swords class="w-5 h-5" aria-hidden="true" />}
                     >
-                      <Loader2 class="w-5 h-5 animate-spin" />
+                      <Loader2 class="w-5 h-5 animate-spin" aria-hidden="true" />
                     </Show>
-                    {launchingSession()
-                      ? "Création de la session..."
-                      : "Lancement rapide"}
+                    {launchingSession() ? "Création de la session..." : "Lancement rapide"}
                   </button>
-                </Show>
-                <Show when={!isOwner()}>
-                  <button
-                    class="flex-1 py-3 px-6 rounded-xl bg-game-dark/60 border border-white/10 text-slate-400 font-semibold flex items-center justify-center gap-2 cursor-default"
-                    disabled
-                    title="Seul le MJ peut créer une session"
-                  >
-                    <Play class="w-5 h-5" />
-                    Lancement rapide (MJ uniquement)
-                  </button>
-                </Show>
-                <Show when={isOwner()}>
-                  <button
-                    onClick={handleUpdate}
-                    class="py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-white font-semibold hover:bg-white/10 transition-all flex items-center justify-center gap-2"
-                  >
-                    <Edit3 class="w-5 h-5" />
-                    Modifier
-                  </button>
-                  <button
-                    onClick={handleCampaignManager}
-                    title="Éditeur de scénario (work-in-progress, non branché sur le gameplay)"
-                    class="py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-semibold hover:bg-white/10 transition-all flex items-center justify-center gap-2"
-                  >
-                    <MapIcon class="w-5 h-5" />
-                    Campaign Manager
-                    <span class="ml-1 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                      WIP
-                    </span>
-                  </button>
+
+                  {/* SECONDARY — story-tree lobby flow */}
                   <button
                     onClick={handleLaunchCampaignSession}
                     disabled={launchingSession()}
-                    class="py-3 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold transition-all shadow-lg shadow-purple-500/20 flex items-center justify-center gap-2"
+                    class="py-3 px-6 rounded-xl border border-purple-500/40 bg-purple-500/10 hover:bg-purple-500/20 text-purple-200 font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                    aria-label="Lancer la session — démarre le lobby scénario"
                   >
-                    <Show when={launchingSession()} fallback={<Play class="w-5 h-5" />}>
-                      <Loader2 class="w-5 h-5 animate-spin" />
+                    <Show when={launchingSession()} fallback={<Play class="w-5 h-5" aria-hidden="true" />}>
+                      <Loader2 class="w-5 h-5 animate-spin" aria-hidden="true" />
                     </Show>
                     <Show when={launchingSession()} fallback="Lancer la session">
                       Création…
                     </Show>
                   </button>
+                </div>
+
+                {/* Row 2: Tertiary utility actions */}
+                <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <button
+                    onClick={handleUpdate}
+                    aria-label="Modifier la campagne"
+                    class="py-2.5 px-4 rounded-xl bg-white/5 border border-white/10 text-slate-200 font-medium hover:bg-white/10 transition-all flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                  >
+                    <Edit3 class="w-4 h-4" aria-hidden="true" />
+                    Modifier
+                  </button>
+
+                  <button
+                    onClick={handleCampaignManager}
+                    title="Éditeur de scénario (work-in-progress, non branché sur le gameplay)"
+                    aria-label="Campaign Manager (work in progress)"
+                    class="relative py-2.5 px-4 rounded-xl bg-white/5 border border-white/10 text-slate-200 font-medium hover:bg-white/10 transition-all flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                  >
+                    <MapIcon class="w-4 h-4" aria-hidden="true" />
+                    Campaign Manager
+                    <span class="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 leading-none">
+                      WIP
+                    </span>
+                  </button>
+
                   <button
                     onClick={handleViewSessions}
-                    class="py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-white font-semibold hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                    aria-label="Voir l'historique des sessions"
+                    class="py-2.5 px-4 rounded-xl bg-white/5 border border-white/10 text-slate-200 font-medium hover:bg-white/10 transition-all flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
-                    <BookOpen class="w-5 h-5" />
+                    <BookOpen class="w-4 h-4" aria-hidden="true" />
                     Voir les sessions
                   </button>
+                </div>
+
+                {/* Row 3: Destructive — visually isolated danger zone */}
+                <div class="mt-6 p-4 rounded-xl border border-red-500/20 bg-red-500/5 flex items-center justify-between gap-4">
+                  <div>
+                    <p class="text-sm font-medium text-red-300">Zone dangereuse</p>
+                    <p class="text-xs text-red-400/70 mt-0.5">La suppression est irréversible.</p>
+                  </div>
                   <button
                     onClick={handleDelete}
-                    class="py-3 px-6 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-semibold hover:bg-red-500/20 transition-all flex items-center justify-center gap-2"
+                    aria-label="Supprimer définitivement cette campagne"
+                    class="py-2 px-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 font-semibold hover:bg-red-500/20 hover:border-red-500/50 transition-all flex items-center gap-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
-                    <Trash2 class="w-5 h-5" />
+                    <Trash2 class="w-4 h-4" aria-hidden="true" />
                     Supprimer
                   </button>
-                </Show>
-              </div>
+                </div>
+              </Show>
+
+              {/* Non-owner: read-only indicator */}
+              <Show when={!isOwner()}>
+                <div class="mt-8 py-3 px-6 rounded-xl bg-game-dark/60 border border-white/10 text-slate-400 font-semibold flex items-center justify-center gap-2">
+                  <Play class="w-5 h-5" aria-hidden="true" />
+                  Lancement rapide (MJ uniquement)
+                </div>
+              </Show>
             </main>
           )}
         </Show>
@@ -710,14 +751,17 @@ export default function CampaignView() {
         <div
           class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
           onClick={() => setShowInviteModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="invite-modal-title"
         >
           <div
             class="bg-game-dark border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 class="text-xl font-display text-white mb-4">
+            <h2 id="invite-modal-title" class="text-xl font-display text-white mb-4">
               Code d'invitation
-            </h3>
+            </h2>
             <p class="text-slate-400 mb-4">
               Partagez ce code avec vos joueurs pour les inviter à rejoindre la
               campagne.
@@ -732,7 +776,7 @@ export default function CampaignView() {
                 navigator.clipboard.writeText(inviteCode() || "");
                 alert("Code copié dans le presse-papiers !");
               }}
-              class="w-full py-2 px-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-colors"
+              class="w-full py-2 px-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
               Copier le code
             </button>
@@ -742,13 +786,18 @@ export default function CampaignView() {
 
       {/* Error Toast */}
       <Show when={error()}>
-        <div class="fixed bottom-4 right-4 z-50 bg-red-500/90 text-white px-6 py-3 rounded-xl shadow-lg">
-          {error()}
+        <div
+          class="fixed bottom-4 right-4 z-50 bg-red-500/90 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-3"
+          role="alert"
+          aria-live="assertive"
+        >
+          <span>{error()}</span>
           <button
             onClick={() => setError(null)}
-            class="ml-4 text-white/80 hover:text-white"
+            aria-label="Fermer l'erreur"
+            class="text-white/80 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 rounded"
           >
-            ✕
+            <X class="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
       </Show>
@@ -758,14 +807,17 @@ export default function CampaignView() {
         <div
           class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
           onClick={() => setSessionInvite(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="session-invite-title"
         >
           <div
             class="bg-game-dark border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 class="text-xl font-display text-white mb-3">
+            <h2 id="session-invite-title" class="text-xl font-display text-white mb-3">
               Session de jeu démarrée
-            </h3>
+            </h2>
             <p class="text-slate-300 mb-4">
               <span class="text-purple-300 font-semibold">
                 {sessionInvite()?.startedByUserName || "Un joueur"}
@@ -773,19 +825,19 @@ export default function CampaignView() {
               a démarré une session de jeu. Souhaitez-vous la rejoindre ?
             </p>
             <Show when={inviteError()}>
-              <p class="mb-3 text-red-400 text-sm">{inviteError()}</p>
+              <p class="mb-3 text-red-400 text-sm" role="alert">{inviteError()}</p>
             </Show>
             <div class="flex gap-3">
               <button
                 onClick={() => setSessionInvite(null)}
-                class="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white transition-all"
+                class="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 disabled={joiningInvite()}
               >
                 Plus tard
               </button>
               <button
                 onClick={handleJoinInvite}
-                class="flex-1 px-4 py-2.5 bg-purple-600 hover:bg-purple-500 rounded-xl text-white transition-all disabled:opacity-50"
+                class="flex-1 px-4 py-2.5 bg-purple-600 hover:bg-purple-500 rounded-xl text-white transition-all disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 disabled={joiningInvite()}
               >
                 <Show when={joiningInvite()} fallback={"Rejoindre"}>
@@ -815,16 +867,24 @@ export default function CampaignView() {
  * Tab button component
  */
 function TabButton(props: {
+  id: string;
+  panelId: string;
   active: boolean;
   onClick: () => void;
-  icon: any;
+  onKeyDown: (e: KeyboardEvent) => void;
+  icon: JSX.Element;
   label: string;
   count?: number;
 }) {
   return (
     <button
+      id={props.id}
+      role="tab"
+      aria-selected={props.active}
+      aria-controls={props.panelId}
       onClick={props.onClick}
-      class={`flex items-center gap-2 px-4 py-2.5 rounded-xl border whitespace-nowrap transition-all ${
+      onKeyDown={props.onKeyDown}
+      class={`flex items-center gap-2 px-4 py-2.5 rounded-xl border whitespace-nowrap transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
         props.active
           ? "bg-purple-600/30 border-purple-500/50 text-white"
           : "bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10"
@@ -834,6 +894,7 @@ function TabButton(props: {
       <span>{props.label}</span>
       <Show when={props.count !== undefined}>
         <span
+          aria-hidden="true"
           class={`text-xs px-1.5 py-0.5 rounded-full ${
             props.active ? "bg-purple-500/50" : "bg-white/10"
           }`}
@@ -849,7 +910,7 @@ function TabButton(props: {
  * Stat card component
  */
 function StatCard(props: {
-  icon: any;
+  icon: JSX.Element;
   label: string;
   value: string;
   color: "purple" | "blue" | "amber" | "green";
@@ -862,7 +923,7 @@ function StatCard(props: {
   };
 
   return (
-    <div class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-xl p-4">
+    <div class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-xl p-5">
       <div
         class={`w-10 h-10 rounded-lg ${colorClasses[props.color]} flex items-center justify-center mb-3`}
       >
@@ -870,21 +931,6 @@ function StatCard(props: {
       </div>
       <p class="text-2xl font-bold text-white">{props.value}</p>
       <p class="text-sm text-slate-400">{props.label}</p>
-    </div>
-  );
-}
-
-/**
- * Activity item component
- */
-function ActivityItem(props: { icon: JSX.Element; text: string; time: string }) {
-  return (
-    <div class="flex items-start gap-3 p-3 bg-white/5 rounded-xl">
-      <span>{props.icon}</span>
-      <div class="flex-1 min-w-0">
-        <p class="text-white text-sm">{props.text}</p>
-        <p class="text-slate-500 text-xs mt-0.5">{props.time}</p>
-      </div>
     </div>
   );
 }
