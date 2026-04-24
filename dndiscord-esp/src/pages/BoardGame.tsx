@@ -19,6 +19,15 @@ import { DungeonSelectionForGame } from "../components/DungeonSelectionForGame";
 import { RoomJoinScreen } from "../components/RoomJoinScreen";
 import { LobbyScreen } from "../components/LobbyScreen";
 import { DialogueOverlay } from "../components/dialogue/DialogueOverlay";
+import { DmPanel } from "../components/dm/DmPanel";
+import DmPlayerInspectPanel from "../components/dm/DmPlayerInspectPanel";
+import { ItemReceivedToast } from "../components/dm/ItemReceivedToast";
+import { EnemySpawnToast } from "../components/dm/EnemySpawnToast";
+import InventoryPanel from "../components/InventoryPanel";
+import WalletPanel from "../components/WalletPanel";
+import { PlayerHotbar } from "../components/hotbar/PlayerHotbar";
+import { EnemyHotbar } from "../components/hotbar/EnemyHotbar";
+import { UnitInfoCardTop } from "../components/hotbar/UnitInfoCardPosition";
 import { clearAllDialogues } from "../stores/dialogue.store";
 import {
   gameState,
@@ -37,10 +46,13 @@ import {
 import { getHubUserId } from "../stores/session.store";
 import { GamePhase, AppPhase, GameMode } from "../types";
 import { sessionState, clearSession } from "../stores/session.store";
-import { leaveSession } from "../services/signalr/multiplayer.service";
+import { isDm } from "../stores/session.store";
+import { leaveSession, dmRestartGame as dmRestartGameHub } from "../services/signalr/multiplayer.service";
+import { isInSession } from "../stores/session.store";
 import {
   getSessionMapConfig,
   clearSessionMapConfig,
+  isSessionMapActive,
   setSessionExitCallback,
   clearSessionExitCallback,
 } from "../stores/session-map.store";
@@ -100,28 +112,42 @@ const BoardGame: Component = () => {
       const cfg = getSessionMapConfig();
       if (cfg) {
         console.log("[BoardGame] Session map mode — mapId:", cfg.mapId);
-        setFromSession(true);
-        setSelectedMode(GameMode.FREE_ROAM);
-        setSelectedMapId(cfg.mapId);
-        setAppPhase(AppPhase.IN_GAME);
-
-        // Register the exit callback so MovementActions can navigate back
-        setSessionExitCallback(() => backToSession());
-
-        let attempts = 0;
-        const checkEngine = () => {
-          if (++attempts > 50) {
-            console.error("[BoardGame] Engine failed to initialize (session map)");
-            backToSession();
-            return;
+        // Guard 1 — leave any active SignalR session before entering the
+        // story-tree FREE_ROAM flow. The two session concepts (campaign
+        // story-tree vs combat hub) coexist at the lobby layer; inside the
+        // board they must not overlap or the hub keeps broadcasting into a
+        // scene it no longer owns.
+        (async () => {
+          if (sessionState.session) {
+            try {
+              await leaveSession();
+            } catch (err) {
+              console.warn("[BoardGame] leaveSession on fromSession entry failed", err);
+              clearSession();
+            }
           }
-          if (isEngineReady()) {
-            setTimeout(() => startGame(GameMode.FREE_ROAM, cfg.mapId), 150);
-          } else {
-            if (mounted) setTimeout(checkEngine, 100);
-          }
-        };
-        checkEngine();
+          setFromSession(true);
+          setSelectedMode(GameMode.FREE_ROAM);
+          setSelectedMapId(cfg.mapId);
+          setAppPhase(AppPhase.IN_GAME);
+
+          setSessionExitCallback(() => backToSession());
+
+          let attempts = 0;
+          const checkEngine = () => {
+            if (++attempts > 50) {
+              console.error("[BoardGame] Engine failed to initialize (session map)");
+              backToSession();
+              return;
+            }
+            if (isEngineReady()) {
+              setTimeout(() => startGame(GameMode.FREE_ROAM, cfg.mapId), 150);
+            } else {
+              if (mounted) setTimeout(checkEngine, 100);
+            }
+          };
+          checkEngine();
+        })();
         return;
       }
     }
@@ -223,7 +249,12 @@ const BoardGame: Component = () => {
     setAppPhase(AppPhase.LOBBY);
   };
 
+  let lastInitPayload: GameStartedPayload | null = null;
+
   const onMultiplayerGameStart = (payload: GameStartedPayload) => {
+    if (lastInitPayload === payload) return;
+    lastInitPayload = payload;
+
     console.log(
       "[BoardGame] ========== MULTIPLAYER GAME STARTED ==========",
       payload,
@@ -243,13 +274,27 @@ const BoardGame: Component = () => {
       }
     }
 
+    // Restart case: we're already in-game (the user hit Recommencer / Play
+    // Again, or the DM rebuilt the roster). Wipe stale stores before the
+    // re-seed so enemies from the previous "life" don't survive, and reset
+    // phase so the GameOverScreen (gated on phase=GAME_OVER) unmounts
+    // immediately rather than waiting for initializeFreeRoam to reach
+    // setGameState. Without this the defeat modal stuck around for users.
+    if (appPhase() === AppPhase.IN_GAME) {
+      clearUnits();
+      clearTiles();
+      resetGameState();
+    }
+
     setSelectedMapId(payload.mapId === "default" ? null : payload.mapId);
     setAppPhase(AppPhase.IN_GAME);
 
-    const modeForSession = () => {
-      const s = sessionState.session;
-      return s?.campaignId ? GameMode.COMBAT : GameMode.FREE_ROAM;
-    };
+    // Every multiplayer game starts in Free Roam. The DM decides when to flip the
+    // session into COMBAT via DmPanel's "Démarrer combat" button, which broadcasts
+    // CombatStarted to every client. The old `campaignId ? COMBAT : FREE_ROAM`
+    // heuristic forced campaign sessions straight into prep phase, stranding
+    // turn order in an empty state (the "AI doesn't play" symptom).
+    const modeForSession = () => GameMode.FREE_ROAM;
 
     let attempts = 0;
     const checkEngine = () => {
@@ -274,7 +319,39 @@ const BoardGame: Component = () => {
     checkEngine();
   };
 
-  const backToModeSelection = () => {
+  // Run the re-init for every GameStarted payload that lands while the app
+  // is already in IN_GAME phase. Covers three cases: (1) DM Recommencer
+  // after defeat/victory, (2) refresh/reconnect where OnConnectedAsync
+  // replays GameStarted via the rejoin snapshot, and (3) any future path
+  // that sets gameStartedPayload while BoardGame is mounted in-game. A
+  // plain createEffect (no `on(..., { defer: true })`) guarantees the
+  // effect fires even if the payload was already in the store at the time
+  // BoardGame mounted — the old deferred variant skipped that case and
+  // left rejoiners stuck on "Setting up…". The dedupe in
+  // onMultiplayerGameStart prevents double-init when LobbyScreen also
+  // called it directly for the initial transition.
+  createEffect(() => {
+    const payload = sessionState.gameStartedPayload;
+    if (!payload) return;
+    if (appPhase() !== AppPhase.IN_GAME) return;
+    // Guard 2 — story-tree flow owns the board; suppress hub re-init so a
+    // stale gameStartedPayload can't overwrite the session-map FREE_ROAM.
+    if (isSessionMapActive()) return;
+    onMultiplayerGameStart(payload);
+  });
+
+  const backToModeSelection = async () => {
+    // Guard 3 — notify server before tearing down local state so the hub
+    // doesn't keep the DM's group membership alive for this client.
+    // clearSession() below runs regardless so a failed hub call can't leave
+    // a stale session reference behind.
+    if (sessionState.session) {
+      try {
+        await leaveSession();
+      } catch (err) {
+        console.warn("[BoardGame] leaveSession in backToModeSelection failed", err);
+      }
+    }
     setAppPhase(AppPhase.MODE_SELECTION);
     setSelectedMode(null);
     setSelectedMapId(null);
@@ -313,16 +390,26 @@ const BoardGame: Component = () => {
   const restartGame = async () => {
     const currentMode = getCurrentMode();
     const currentMapId = selectedMapId();
-    console.log(
-      "[BoardGame] ========== RESTARTING GAME IN",
-      currentMode,
-      "MODE WITH MAP:",
-      currentMapId || "default",
-      "==========",
-    );
 
-    // Explicit, awaited teardown — deterministic ordering replaces the old
-    // setTimeout(100) race window.
+    // Multiplayer host restart: use the dedicated DmRestartGame hub method,
+    // which rebuilds assignments and broadcasts GameStarted to every client.
+    // Plain StartGame would throw "Game already started" because the session
+    // is in InProgress state. The old local fallback silently regenerated the
+    // single-player DEFAULT_ENEMIES trio on the host only and left players
+    // stranded on their old state — that was the "weird defaults" bug.
+    if (isInSession()) {
+      if (!isSessionHost()) return;
+      try {
+        await dmRestartGameHub(currentMapId || "default");
+      } catch (err) {
+        console.error("[BoardGame] DmRestartGame failed — game not restarted:", err);
+      }
+      // Never fall through to the local path in multiplayer. Forking the host
+      // to solo while peers stayed on the old state was BUG-K / BUG-N.
+      return;
+    }
+
+    // Solo path only: explicit, awaited teardown then local re-init.
     await clearEngineState();
 
     clearUnits();
@@ -330,7 +417,6 @@ const BoardGame: Component = () => {
     resetGameState();
 
     await startGame(currentMode, currentMapId);
-    console.log("[BoardGame] Game restart complete");
   };
 
   const closeDrawers = () => {
@@ -357,13 +443,15 @@ const BoardGame: Component = () => {
   const [leftDrawerOpen, setLeftDrawerOpen] = createSignal(false);
   const [rightDrawerOpen, setRightDrawerOpen] = createSignal(false);
 
-  // Auto-open the unit info drawer the first time a selection happens. We
-  // only force-open on a selection transition — any manual close by the
-  // user stays closed until they select a different unit.
+  // Auto-open the unit info drawer the first time a selection happens. Only
+  // applies to the DM — non-DM players get a compact UnitInfoCard floating
+  // at the top of the canvas plus the persistent bottom hotbar, so the
+  // drawer would be redundant noise. We still force-open on a selection
+  // transition for the DM; manual close stays closed until a new selection.
   let lastAutoOpenedFor: string | null = null;
   createEffect(() => {
     const sel = gameState.selectedUnit;
-    if (sel && sel !== lastAutoOpenedFor) {
+    if (sel && sel !== lastAutoOpenedFor && isDm()) {
       lastAutoOpenedFor = sel;
       setLeftDrawerOpen(true);
       setRightDrawerOpen(false);
@@ -411,6 +499,16 @@ const BoardGame: Component = () => {
     if (gameState.phase !== GamePhase.PLAYER_TURN) return false;
     const current = getCurrentUnit();
     return !!current && current.team === "player" && isCurrentUnitMine();
+  };
+
+  // DM override: skip the current enemy turn. Needed because the DM has no
+  // unit of their own; without this surface, enemies that can't find a valid
+  // action would stall the turn order indefinitely.
+  const canDmEndEnemyTurn = () => {
+    if (!isDm()) return false;
+    if (gameState.phase !== GamePhase.ENEMY_TURN) return false;
+    const current = getCurrentUnit();
+    return !!current && current.team === "enemy";
   };
 
   // AP-spent derivation for the end-turn confirm prompt. If the player
@@ -480,6 +578,18 @@ const BoardGame: Component = () => {
     }, 2500);
   };
 
+  /**
+   * Character id of the current (non-DM) player for board-side inventory/wallet.
+   * null when outside a session, when we're the DM, or when no character is yet selected.
+   */
+  const myBoardCharacterId = (): string | null => {
+    const session = sessionState.session;
+    const hubId = getHubUserId();
+    if (!session || !hubId || isDm()) return null;
+    const me = session.players.find((p) => p.userId === hubId);
+    return me?.selectedCharacterId ?? null;
+  };
+
   const renderLeftPanelContent = () => (
     <>
       <Show when={sessionState.session}>
@@ -503,6 +613,21 @@ const BoardGame: Component = () => {
             Quitter la session
           </button>
         </div>
+      </Show>
+      {/* DM Panel — only visible to the Dungeon Master */}
+      <Show when={sessionState.session && isDm()}>
+        <DmPanel />
+        <DmPlayerInspectPanel />
+      </Show>
+      {/* Board-side inventory + wallet for the current player (not DM), so they
+          can browse items granted by the DM without leaving the board. */}
+      <Show when={sessionState.session && !isDm() && myBoardCharacterId()}>
+        {(charId) => (
+          <>
+            <WalletPanel characterId={charId()} isMJ={false} />
+            <InventoryPanel characterId={charId()} isMJ={false} />
+          </>
+        )}
       </Show>
       {/* TurnOrderDisplay is now rendered as an always-visible top banner
           above the canvas, so it stays readable without opening a drawer. */}
@@ -696,7 +821,7 @@ const BoardGame: Component = () => {
             </h1>
           </div>
           <div class="flex items-center gap-2">
-            {/* Session back button (prominent) */}
+            {/* Session back button (Sam's story-tree flow) — most prominent */}
             <Show when={fromSession()}>
               <button
                 onClick={() => backToSession()}
@@ -706,13 +831,32 @@ const BoardGame: Component = () => {
                 <span class="hidden sm:inline">Retour à la session</span>
               </button>
             </Show>
-            <button
-              class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 text-white text-sm transition-colors"
-              onClick={() => restartGame()}
-            >
-              <RotateCcw class="w-3.5 h-3.5" />
-              <span class="hidden sm:inline">Recommencer</span>
-            </button>
+            {/* Quitter — any MP participant (BUG-I). Drawer Quitter is DM-only. */}
+            <Show when={isInSession()}>
+              <button
+                class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 text-white text-sm transition-colors"
+                onClick={async () => {
+                  try {
+                    await leaveSession();
+                  } catch (_) {}
+                  returnToMenu();
+                }}
+                title="Quitter la session"
+              >
+                <LogOut class="w-3.5 h-3.5" />
+                <span class="hidden sm:inline">Quitter</span>
+              </button>
+            </Show>
+            {/* Restart: solo-only or DM-only (non-host can't blow up MP for everyone). */}
+            <Show when={!isInSession() || isSessionHost()}>
+              <button
+                class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 text-white text-sm transition-colors"
+                onClick={() => restartGame()}
+              >
+                <RotateCcw class="w-3.5 h-3.5" />
+                <span class="hidden sm:inline">Recommencer</span>
+              </button>
+            </Show>
           </div>
         </header>
 
@@ -727,6 +871,22 @@ const BoardGame: Component = () => {
 
             {/* Dialogue bubbles overlay (positioned above canvas) */}
             <DialogueOverlay />
+
+            {/* Item received notification toasts */}
+            <ItemReceivedToast />
+
+            {/* Enemy spawn notification toasts */}
+            <EnemySpawnToast />
+
+            {/* Compact unit info card (top-center) + persistent player hotbar
+                (bottom-center) — non-DM UX replacing the old auto-opening
+                drawer. DM keeps the drawer via the effect above. The
+                EnemyHotbar self-gates on isDm + ENEMY_TURN so the DM can
+                actively play whichever enemy's turn is active when the
+                auto-AI toggle is off. */}
+            <UnitInfoCardTop />
+            <PlayerHotbar />
+            <EnemyHotbar />
 
             {/* Loading Overlay */}
             <Show when={!isEngineReady()}>
@@ -801,8 +961,13 @@ const BoardGame: Component = () => {
                   {getPhaseText(gameState.phase)}
                 </div>
               </Show>
-              {/* Bouton Prêt - Phase de préparation */}
-              <Show when={gameState.phase === GamePhase.COMBAT_PREPARATION}>
+              {/* Bouton Prêt - Phase de préparation. Hidden in multiplayer:
+                  the hub's DmStartCombat transitions straight to PlayerTurn
+                  (no preparation phase exists server-side). The button's
+                  startCombatFromPreparation action is now a no-op in session,
+                  but rendering it would still mislead players into thinking
+                  they need to click something. */}
+              <Show when={gameState.phase === GamePhase.COMBAT_PREPARATION && !isInSession()}>
                 <button
                   data-tutorial="prep-ready"
                   class="px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold bg-game-gold text-game-darker hover:bg-amber-400 transition shadow-lg whitespace-nowrap"
@@ -835,17 +1000,26 @@ const BoardGame: Component = () => {
               </div>
             </Show>
 
-            {/* Drawer toggles — visible on every breakpoint now that the
-                panels are drawers instead of permanent sidebars. */}
+            {/* Drawer toggles — the "Infos" drawer is DM-only now; non-DM
+                players get the persistent hotbar + Inventory/Wallet modals
+                from HotbarUtilities instead, so the drawer toggle would be
+                redundant UI crowding. Solo play (no session) keeps it. */}
             <div class="absolute top-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
-              <button
-                class="pointer-events-auto px-3 py-2 rounded-lg border border-white/20 bg-game-dark/85 backdrop-blur text-xs text-white font-medium shadow-lg focus-ring-gold"
-                onClick={toggleLeftDrawer}
-                aria-expanded={leftDrawerOpen()}
-                aria-controls="left-drawer"
-              >
-                {leftDrawerOpen() ? "Fermer infos" : "Infos"}
-              </button>
+              <Show when={!isInSession() || isDm()}>
+                <button
+                  class="pointer-events-auto px-3 py-2 rounded-lg border border-white/20 bg-game-dark/85 backdrop-blur text-xs text-white font-medium shadow-lg focus-ring-gold"
+                  onClick={toggleLeftDrawer}
+                  aria-expanded={leftDrawerOpen()}
+                  aria-controls="left-drawer"
+                >
+                  {leftDrawerOpen() ? "Fermer infos" : "Infos"}
+                </button>
+              </Show>
+              <Show when={isInSession() && !isDm()}>
+                {/* Placeholder keeps the flex-between spacing so the right
+                    drawer toggle stays anchored. */}
+                <span class="pointer-events-none" />
+              </Show>
               <button
                 class="pointer-events-auto px-3 py-2 rounded-lg border border-white/20 bg-game-dark/85 backdrop-blur text-xs text-white font-medium shadow-lg focus-ring-gold"
                 onClick={toggleRightDrawer}
@@ -945,7 +1119,11 @@ const BoardGame: Component = () => {
                 mis-clicked with camera or help controls. Reset View
                 lives in the help cluster bottom-left instead. */}
             <div class="absolute bottom-4 right-3 sm:right-4 z-20 pr-safe-right pb-safe-bottom flex flex-col gap-2 items-end">
-              <Show when={canEndPlayerTurn()}>
+              {/* DM-only: players have a Fin-du-tour button inside the hotbar;
+                  this floating variant stays for the DM perspective where
+                  they still need to see whose end-turn is pending (for the
+                  visible-turn-order debug flow). */}
+              <Show when={canEndPlayerTurn() && isDm()}>
                 <Show when={endTurnPending()}>
                   <div class="px-3 py-1.5 rounded-lg bg-amber-600/90 text-white text-xs font-medium shadow-lg border border-white/10 animate-pulse">
                     Aucun AP dépensé — reclique pour confirmer
@@ -962,6 +1140,20 @@ const BoardGame: Component = () => {
                 >
                   <Flag class="w-4 h-4" />
                   <span>{endTurnPending() ? "Confirmer" : "Fin du tour"}</span>
+                </button>
+              </Show>
+
+              {/* DM-only fallback: skip a stuck enemy turn (e.g. no path, no
+                  target). Without this the whole turn order stalls because
+                  the DM has no player unit of their own. */}
+              <Show when={canDmEndEnemyTurn()}>
+                <button
+                  class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-lg transition-colors focus-ring-gold bg-red-600/90 hover:bg-red-500 text-white border border-red-400/40"
+                  onClick={() => endUnitTurn()}
+                  title="MJ : passer le tour de cet ennemi"
+                >
+                  <Flag class="w-4 h-4" />
+                  <span>Passer tour ennemi</span>
                 </button>
               </Show>
             </div>

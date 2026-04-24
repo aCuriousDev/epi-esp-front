@@ -10,17 +10,14 @@ import {
   type SessionInfo,
   type JoinResult,
   type KickResult,
-  type MoveRequest,
-  type MoveResult,
-  type AttackRequest,
-  type AttackResult,
-  type UseAbilityRequest,
-  type UseAbilityResult,
   type TurnEndedPayload,
-  type GameMessage,
-  type GameStateSnapshotPayload,
   type PlayerInfo,
   type GameStartedPayload,
+  type DmMoveTokenPayload,
+  type DmHiddenRollPayload,
+  type DmGrantItemPayload,
+  type ItemGrantedPayload,
+  type DmSpawnUnitPayload,
 } from "../../types/multiplayer";
 import {
   setSession,
@@ -38,6 +35,10 @@ import {
   sessionState,
 } from "../../stores/session.store";
 import { registerGameSyncHandlers } from "./gameSync";
+import { clearUnits } from "../../game/stores/UnitsStore";
+import { clearTiles } from "../../game/stores/TilesStore";
+import { resetGameState, gameState, setGameState } from "../../game/stores/GameStateStore";
+import { GamePhase } from "../../types";
 import { authStore } from "../../stores/auth.store";
 import { AuthService } from "../auth.service";
 import { loadMap } from "../mapStorage";
@@ -53,6 +54,7 @@ import {
   getPlayerUnits,
   removeUnitsByOwnerUserId,
 } from "../../game/stores/UnitsStore";
+import { addHiddenRoll, addGrantedItem } from "../../stores/dmTools.store";
 
 const HUB = {
   createSession: "CreateSession",
@@ -66,15 +68,20 @@ const HUB = {
   unsubscribeActivity: "UnsubscribeActivity",
   selectCharacter: "SelectCharacter",
   startGame: "StartGame",
-  move: "Move",
-  attack: "Attack",
-  useAbility: "UseAbility",
   endTurn: "EndTurn",
-  requestFullState: "RequestFullState",
-  sendGameStateSnapshot: "SendGameStateSnapshot",
   sendUnitMove: "SendUnitMove",
   sendAbilityUsed: "SendAbilityUsed",
-  sendEndTurn: "SendEndTurn",
+  // DM Tools
+  dmMoveToken: "DmMoveToken",
+  dmHiddenRoll: "DmHiddenRoll",
+  dmGrantItem: "DmGrantItem",
+  dmSpawnUnit: "DmSpawnUnit",
+  dmStartCombat: "DmStartCombat",
+  dmEndCombat: "DmEndCombat",
+  dmRestartGame: "DmRestartGame",
+  dmSwitchMap: "DmSwitchMap",
+  dmAdjustHp: "DmAdjustHp",
+  selectDefaultTemplate: "SelectDefaultTemplate",
 } as const;
 
 async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
@@ -132,6 +139,16 @@ export async function createSession(campaignId: string): Promise<SessionInfo> {
   );
   syncHubUserId();
   const result = normalizeSession(raw as Record<string, unknown>);
+  // Purge any board state left over from a previous session in this tab —
+  // without this, the old session's DM-spawned enemies stayed in the units
+  // store and contaminated the new session (isVictory() returned false
+  // because ghost enemies kept isAlive=true, so every win was reported as
+  // defeat; ghost enemies were also selectable in free roam but invisible
+  // during combat since the server's new Combat.Units roster didn't include
+  // them).
+  clearUnits();
+  clearTiles();
+  resetGameState();
   setSession(result);
   clearPartyChat();
   await tryBindDiscordVoiceToSession(result.sessionId);
@@ -167,6 +184,12 @@ export async function unsubscribeActivity(
 /** Rejoindre une session par son ID. */
 export async function joinSession(sessionId: string): Promise<JoinResult> {
   syncHubUserId();
+  // Same cross-session cleanup as createSession — stale units from a prior
+  // session in this tab will otherwise survive into the new one and break
+  // the victory/defeat outcome + ghost-selectable-but-invisible units.
+  clearUnits();
+  clearTiles();
+  resetGameState();
   const raw = (await signalRService.invoke(
     HUB.joinSession,
     sessionId,
@@ -193,6 +216,14 @@ export async function leaveSession(): Promise<void> {
   clearSession();
   clearPartyChat();
   resetHandlersRegistered();
+  // Drop the board state bound to the session that was just left. Without
+  // this, joining a new session from the same tab inherits the previous
+  // roster — the `DmUnitSpawned` broadcast from the new session then lands
+  // on top of stale units and the cross-client roster ends up desynced
+  // (BUG-E). Engine disposal happens separately via GameCanvas unmount.
+  clearUnits();
+  clearTiles();
+  resetGameState();
 }
 
 /** Exclure un joueur (DM uniquement). */
@@ -229,6 +260,14 @@ export async function selectCharacter(
   await signalRService.invoke(HUB.selectCharacter, characterId);
 }
 
+/** Pick a quickstart preset (warrior / mage / archer). Mutually exclusive with
+ * selectCharacter — whichever was called most recently wins server-side. */
+export async function selectDefaultTemplate(
+  templateId: "warrior" | "mage" | "archer" | null,
+): Promise<void> {
+  await signalRService.invoke(HUB.selectDefaultTemplate, templateId);
+}
+
 /** Lancer la partie (host uniquement). Envoie les données de la map pour les joueurs distants. */
 export async function startGame(mapId: string): Promise<void> {
   let mapData: string | null = null;
@@ -241,45 +280,44 @@ export async function startGame(mapId: string): Promise<void> {
   await signalRService.invoke(HUB.startGame, mapId, mapData);
 }
 
-// --- Actions de jeu (E2.3, server-authoritative) ---
-
-export async function move(request: MoveRequest): Promise<MoveResult> {
-  return signalRService.invoke(HUB.move, request) as Promise<MoveResult>;
+/** DM-only: restart an in-progress session. Server rebuilds assignments and
+ * re-broadcasts GameStarted to every client. Unlike startGame, this doesn't
+ * require the session to be in Lobby state. */
+export async function dmRestartGame(mapId: string): Promise<void> {
+  let mapData: string | null = null;
+  if (mapId && mapId !== "default") {
+    const map = loadMap(mapId);
+    if (map) {
+      mapData = JSON.stringify(map);
+    }
+  }
+  await signalRService.invoke(HUB.dmRestartGame, mapId, mapData);
 }
 
-export async function attack(request: AttackRequest): Promise<AttackResult> {
-  return signalRService.invoke(HUB.attack, request) as Promise<AttackResult>;
+const GUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** DM-only: swap the session's scene to another of the campaign's persisted maps.
+ * Server broadcasts MapSwitched to the session group. The hub method signature
+ * is `DmSwitchMap(Guid mapId)`, so passing a non-UUID string (e.g. the
+ * localStorage draft key the Map Editor uses) would throw on the server and
+ * the error would be swallowed by the caller — silent failure. Guard here so
+ * the caller sees an actionable error instead. */
+export async function dmSwitchMap(mapId: string): Promise<void> {
+  if (!mapId || !GUID_SHAPE.test(mapId)) {
+    throw new Error(
+      `dmSwitchMap: mapId must be a campaign-persisted UUID (got "${mapId}")`,
+    );
+  }
+  await signalRService.invoke(HUB.dmSwitchMap, mapId);
 }
 
-export async function useAbility(
-  request: UseAbilityRequest,
-): Promise<UseAbilityResult> {
-  return signalRService.invoke(
-    HUB.useAbility,
-    request,
-  ) as Promise<UseAbilityResult>;
-}
+// --- Actions de jeu (server-authoritative via hub) ---
 
 export async function endTurn(payload: TurnEndedPayload): Promise<void> {
   await signalRService.invoke(HUB.endTurn, payload);
 }
 
-export async function requestFullState(): Promise<
-  GameMessage<GameStateSnapshotPayload>
-> {
-  return signalRService.invoke(HUB.requestFullState) as Promise<
-    GameMessage<GameStateSnapshotPayload>
-  >;
-}
-
-/** Envoyer un snapshot d'état (legacy / sync manuelle). */
-export async function sendGameStateSnapshot(
-  snapshot: GameStateSnapshotPayload,
-): Promise<void> {
-  await signalRService.invoke(HUB.sendGameStateSnapshot, snapshot);
-}
-
-/** Legacy: broadcast mouvement sans validation serveur. */
+/** Broadcast a player/DM movement — server validates ownership + phase. */
 export async function sendUnitMove(payload: {
   unitId: string;
   path: { x: number; y: number }[];
@@ -300,9 +338,53 @@ export async function sendAbilityUsed(payload: {
   await signalRService.invoke(HUB.sendAbilityUsed, payload);
 }
 
-/** Legacy: broadcast fin de tour. */
-export async function sendEndTurn(payload: TurnEndedPayload): Promise<void> {
-  await signalRService.invoke(HUB.sendEndTurn, payload);
+// --- DM Tools (E-MJ) ---
+
+/** DM force-moves any token on the board. */
+export async function dmMoveToken(payload: DmMoveTokenPayload): Promise<void> {
+  await signalRService.invoke(HUB.dmMoveToken, payload);
+}
+
+/** DM rolls a hidden dice (result only sent back to caller). */
+export async function dmHiddenRoll(
+  diceType: number = 20,
+  modifier: number = 0,
+  label?: string,
+): Promise<DmHiddenRollPayload> {
+  return signalRService.invoke(
+    HUB.dmHiddenRoll,
+    diceType,
+    modifier,
+    label ?? null,
+  ) as Promise<DmHiddenRollPayload>;
+}
+
+/** DM grants an item to a player. */
+export async function dmGrantItem(payload: DmGrantItemPayload): Promise<void> {
+  await signalRService.invoke(HUB.dmGrantItem, payload);
+}
+
+/** DM spawns a new enemy unit. */
+export async function dmSpawnUnit(payload: DmSpawnUnitPayload): Promise<void> {
+  await signalRService.invoke(HUB.dmSpawnUnit, payload);
+}
+
+/** DM flips the session from free-roam into combat preparation. Server broadcasts
+ * CombatStarted to every client in the session group. */
+export async function dmStartCombat(): Promise<void> {
+  await signalRService.invoke(HUB.dmStartCombat);
+}
+
+/** DM-only: forcibly end combat and return the session to free roam. */
+export async function dmEndCombat(): Promise<void> {
+  await signalRService.invoke(HUB.dmEndCombat);
+}
+
+/** DM-only: heal (+) or damage (-) any unit in the combat roster. Server
+ *  clamps to 0..MaxHp; peers apply the resulting HP + isAlive via the
+ *  UnitHpAdjusted broadcast. */
+export async function dmAdjustHp(unitId: string, delta: number): Promise<void> {
+  await signalRService.invoke(HUB.dmAdjustHp, unitId, delta);
 }
 
 // --- Enregistrement des handlers d'événements ---
@@ -347,11 +429,13 @@ export function registerMultiplayerHandlers(): void {
 
   signalRService.on("PlayerDisconnected", (data: Record<string, unknown>) => {
     const userId = data.userId ?? data.UserId;
-    if (userId != null) {
-      // Option: marquer le joueur comme Disconnected au lieu de le retirer
-      removePlayerFromSession(String(userId));
-      removeUnitsByOwnerUserId(String(userId));
-    }
+    if (userId == null) return;
+    // Intentional: on a transient disconnect (page refresh, tab reload), keep
+    // both the player entry and their unit mesh in place. The back marks the
+    // player as Disconnected and runs a grace period before tearing down;
+    // when they reconnect their token is still on the map so the DM never
+    // sees a "player vanished" state. Voluntary leave (PlayerLeft) and DM
+    // kick (PlayerKicked) still remove both — those handlers stay as-is.
   });
 
   // PlayerUpdated (character selection in lobby)
@@ -359,8 +443,16 @@ export function registerMultiplayerHandlers(): void {
     updateSession(normalizeSession(data));
   });
 
-  // GameStarted (host started the game)
+  // GameStarted (host started the game, or DmRestartGame after defeat/victory,
+  // or OnConnectedAsync replay after reconnect/refresh). The store write
+  // triggers BoardGame's createEffect — which dedupes by payload reference
+  // so LobbyScreen's direct onGameStart call (for initial lobby→game) isn't
+  // double-processed.
   signalRService.on("GameStarted", (data: GameStartedPayload) => {
+    if (gameState.phase === GamePhase.GAME_OVER) {
+      console.log("[multiplayer] GameStarted received during GAME_OVER — forcing phase to FREE_ROAM");
+      setGameState("phase", GamePhase.FREE_ROAM);
+    }
     setGameStarted(data);
   });
 
@@ -425,11 +517,40 @@ export function registerMultiplayerHandlers(): void {
     updateSession(normalizeSession(data));
   });
 
-  // Optionnel: SessionEnded
+  // --- DM Tools events ---
+
+  // Hidden roll result (only received by the DM who rolled)
+  signalRService.on("DmHiddenRollResult", (data: DmHiddenRollPayload) => {
+    addHiddenRoll(data);
+  });
+
+  // Item granted to a player (broadcast to all)
+  signalRService.on("ItemGranted", (msg: any) => {
+    const payload: ItemGrantedPayload = msg?.payload ?? msg;
+    addGrantedItem(payload);
+  });
+
+  // SessionEnded — DM left / host closed the session / back dropped it.
+  // Tear the whole board state down so the remaining players don't stay
+  // on an orphaned /board view (which was falling back to the solo roster
+  // — Sir Roland / Elara / Theron — the moment they hit Recommencer
+  // because isInSession() just flipped false). Navigate home on the next
+  // tick; the clearSession/clearUnits/clearTiles combo guarantees no
+  // session-scoped state leaks into whatever the player does next.
   signalRService.on("SessionEnded", (_reason: string) => {
     clearSession();
     resetHandlersRegistered();
+    clearUnits();
+    clearTiles();
+    resetGameState();
     setSessionError("La session a été terminée.");
+    try {
+      if (typeof window !== "undefined" && window.location && window.location.pathname !== "/") {
+        window.location.assign("/");
+      }
+    } catch (err) {
+      console.warn("[multiplayer] SessionEnded navigate failed", err);
+    }
   });
 }
 
@@ -458,13 +579,10 @@ export async function rejoinSession(sessionId: string): Promise<boolean> {
 
   if (!result.success) return false;
 
-  if (result.session?.state === SessionState.InProgress) {
-    try {
-      await signalRService.invoke(HUB.requestFullState);
-    } catch (e) {
-      console.warn("RequestFullState failed after rejoin:", e);
-    }
-  }
+  // Post-rework the server replays GameStarted + CombatStarted automatically
+  // via SendRejoinSnapshotAsync (triggered by OnConnectedAsync or RejoinSession).
+  // No explicit state-request call needed — dead code path removed with
+  // StateManager + RequestFullState hub method.
   return true;
 }
 
@@ -518,6 +636,18 @@ export function ensureMultiplayerHandlersRegistered(): void {
   });
 
   signalRService.onReconnected(async () => {
+    // Server owns the user→session mapping post-rework (SessionManager.FindSessionByUser).
+    // Invoking RejoinSession with no args triggers SendRejoinSnapshotAsync on the back,
+    // which re-adds the caller to the SignalR group + pushes GameStarted + CombatStarted
+    // (when in combat) as replay events. The existing front handlers consume those and
+    // rehydrate the board. Closes BUG-R.
+    try {
+      const rejoined = await signalRService.invoke("RejoinSession");
+      if (rejoined) return;
+    } catch (err) {
+      console.warn("RejoinSession (server-side lookup) failed, falling back:", err);
+    }
+    // Legacy fallback: rejoin by sessionId from local/persisted state.
     const sid =
       sessionState.session?.sessionId ?? getPersistedSession()?.sessionId;
     if (!sid) return;

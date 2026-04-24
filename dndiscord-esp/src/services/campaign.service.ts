@@ -9,6 +9,8 @@ export {
   mapToAPICampaignStatus,
   mapCampaignStatus,
   mapCampaignResponse,
+  displayDungeonMasterName,
+  hasScenario,
 } from "./campaign.mappers";
 export type {
   CampaignResponse,

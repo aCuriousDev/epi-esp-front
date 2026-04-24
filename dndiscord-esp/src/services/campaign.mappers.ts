@@ -97,6 +97,20 @@ export const mapToAPICampaignStatus = (status: CampaignStatus): APICampaignStatu
   }
 };
 
+const GUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Display name fallback for legacy members that joined before the backend
+ * started seeding Nickname from the JWT. When nickname is missing and userId
+ * is a raw GUID, render a short compact label instead of the 36-char hex.
+ */
+function prettyMemberName(nickname: string | null | undefined, userId: string): string {
+  const trimmed = nickname?.trim();
+  if (trimmed) return trimmed;
+  if (GUID_SHAPE.test(userId)) return `Joueur #${userId.replace(/-/g, "").slice(0, 6)}`;
+  return userId;
+}
+
 /**
  * Map API campaign status (integer) to frontend status (string)
  */
@@ -111,6 +125,35 @@ export const mapCampaignStatus = (apiStatus: number): CampaignStatus => {
   }
 };
 
+/**
+ * Resolves the user-facing DM name for a campaign card / detail view.
+ *
+ * The back doesn't currently expose a `dungeonMasterName` (see comment on
+ * Campaign.dungeonMasterName). But when the current user IS the DM of the
+ * campaign, we already know their Discord handle from the auth store — no
+ * round-trip needed. For other viewers we fall back to the literal label
+ * until a future iteration denormalises the DM's username onto the Campaign
+ * row (or a user-lookup service is introduced). Pure so it's trivially
+ * testable.
+ */
+export const displayDungeonMasterName = (
+  campaign: Pick<Campaign, "dungeonMasterName" | "isDungeonMaster">,
+  currentUsername?: string | null,
+): string => {
+  if (campaign.dungeonMasterName) return campaign.dungeonMasterName;
+  if (campaign.isDungeonMaster && currentUsername) return currentUsername;
+  return "Maître du Jeu";
+};
+
+/**
+ * True when the campaign carries an authored story-tree scenario (non-empty
+ * JSON string on `campaignTreeDefinition`). Drives the routing decision in
+ * `CampaignView.handleJoinInvite` and similar UI gates: scenario → Sam's
+ * /lobby → /session flow, no scenario → POC /board quick-launch.
+ */
+export const hasScenario = (campaignTreeDefinition?: string | null): boolean =>
+  !!campaignTreeDefinition?.trim();
+
 export const mapCampaignResponse = (apiCampaign: CampaignDetailResponse): Campaign => {
   return {
     id: apiCampaign.id,
@@ -120,26 +163,22 @@ export const mapCampaignResponse = (apiCampaign: CampaignDetailResponse): Campai
     status: mapCampaignStatus(apiCampaign.status),
     visibility: apiCampaign.isPublic ? "Public" as any : "Private" as any,
     dungeonMasterId: apiCampaign.dungeonMasterId,
-    dungeonMasterName: "Maître du Jeu", // API doesn't provide this
-    dungeonMasterAvatar: "",
+    // Critical: the backend tells us whether the caller is the DM of this
+    // campaign via IsDungeonMaster. Propagating this unblocks the "Lancer la
+    // session" button, which falls back to comparing dungeonMasterId to the
+    // Discord snowflake — never equal (back's DungeonMasterId is an MD5-derived Guid).
+    isDungeonMaster: apiCampaign.isDungeonMaster,
     maxPlayers: apiCampaign.maxPlayers,
     currentPlayers: apiCampaign.memberCount,
     players: apiCampaign.members?.map(m => ({
       id: m.id,
-      username: m.userId, // API doesn't provide username, using userId
+      username: prettyMemberName(m.nickname, m.userId),
       role: mapMemberRole(m.role),
       characterName: m.nickname,
       joinedAt: m.joinedAt,
     })) || [],
-    sessions: [], // API doesn't provide sessions yet
-    totalSessions: apiCampaign.snapshotCount || 0,
-    setting: undefined,
-    startingLevel: 1,
-    currentLevel: 1,
-    tags: [],
     createdAt: apiCampaign.createdAt,
     updatedAt: apiCampaign.updatedAt,
     campaignTreeDefinition: apiCampaign.campaignTreeDefinition,
-    isDungeonMaster: apiCampaign.isDungeonMaster,
   };
 };

@@ -36,7 +36,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     id: "campaign-view",
-    title: "Lancer une session (MJ) / rejoindre (joueur)",
+    title: "Lancement rapide (MJ) / rejoindre (joueur)",
     body: "Quand le MJ lance une session, les autres joueurs reçoivent une popup « Rejoindre ? ». En rejoignant, tu arrives dans le lobby.",
   },
   {

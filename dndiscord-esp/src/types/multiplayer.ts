@@ -27,6 +27,8 @@ export interface PlayerInfo {
   status: ConnectionStatus;
   selectedCharacterId?: string;
   selectedCharacterName?: string;
+  /** Lobby quickstart preset — "warrior" | "mage" | "archer" | undefined. */
+  selectedDefaultTemplate?: string;
 }
 
 export interface SessionInfo {
@@ -55,6 +57,11 @@ export interface UnitAssignment {
   defense: number;
   movementRange: number;
   attackRange: number;
+  /** Server-authoritative spawn position. Present when the back computed it
+   *  at StartOrRestartGameAsync. Absent on pre-rework payloads — fall back to
+   *  local placement in that case. */
+  startX?: number;
+  startY?: number;
 }
 
 export interface GameStartedPayload {
@@ -82,14 +89,10 @@ export interface GridPosition {
   y: number;
 }
 
-// --- Requêtes / résultats d'actions (E2.3) ---
-export interface MoveRequest {
-  unitId: string;
-  targetX: number;
-  targetY: number;
-  path?: GridPosition[];
-}
-
+/**
+ * Outcome shape for the legacy SendUnitMove broadcast — the hub forwards this
+ * verbatim to OthersInGroup. Kept as the live move-broadcast contract.
+ */
 export interface MoveResult {
   unitId: string;
   path: GridPosition[];
@@ -98,48 +101,103 @@ export interface MoveResult {
   error?: string;
 }
 
-export interface AttackRequest {
-  attackerId: string;
-  targetId: string;
-  abilityId: string;
-}
-
-export interface AttackResult {
-  attackerId: string;
-  targetId: string;
-  abilityId: string;
-  diceRoll: number;
-  modifier: number;
-  total: number;
-  hit: boolean;
-  damage?: number;
-  effects?: { type: string; targetId: string; value: number }[];
-  success: boolean;
-  error?: string;
-}
-
-export interface AbilityTargetInfo {
-  targetUnitId?: string;
-  targetX?: number;
-  targetY?: number;
-}
-
-export interface UseAbilityRequest {
-  unitId: string;
-  abilityId: string;
-  target: AbilityTargetInfo;
-}
-
-export interface UseAbilityResult {
-  unitId: string;
-  abilityId: string;
-  success: boolean;
-  effect?: { type: string; targetId: string; value: number };
-  error?: string;
-}
-
 export interface TurnEndedPayload {
   unitId: string;
+  /** Server-authoritative fields from the hub-authoritative rework. Absent on legacy broadcasts. */
+  nextUnitId?: string | null;
+  phase?: ServerCombatPhase;
+  round?: number;
+  outcome?: ServerCombatOutcome | null;
+  /** Full unit roster with AP / HP reset info after the server advances the cursor. */
+  units?: ServerUnitRuntimeState[];
+}
+
+/**
+ * Matches `Multiplayer.Define.CombatPhase` on the back via `JsonStringEnumConverter`.
+ */
+export type ServerCombatPhase =
+  | "FreeRoam"
+  | "Preparation"
+  | "PlayerTurn"
+  | "EnemyTurn"
+  | "Resolved";
+
+/**
+ * Matches `Multiplayer.Define.CombatResult`.
+ */
+export type ServerCombatOutcome = "Victory" | "Defeat" | "Fled";
+
+export interface ServerUnitRuntimeState {
+  unitId: string;
+  ownerUserId: string | null;
+  team: number; // 0=Player, 1=Enemy, 2=Ally, 3=Neutral (Multiplayer.Define.UnitTeam)
+  name: string;
+  positionX: number;
+  positionY: number;
+  currentHp: number;
+  maxHp: number;
+  currentAp: number;
+  maxAp: number;
+  initiative: number;
+  isAlive: boolean;
+}
+
+/**
+ * Server-authoritative payload broadcast when the DM starts combat. Added with
+ * the hub-authoritative rework. Clients apply fields verbatim — no local
+ * initiative rolling, no local phase transition.
+ */
+export interface CombatStartedPayload {
+  phase?: ServerCombatPhase;
+  round?: number;
+  currentUnitId?: string | null;
+  turnOrder?: string[];
+  units?: ServerUnitRuntimeState[];
+  // Legacy fields (pre-rework) kept for back-compat when the server skips the
+  // new payload shape — still populated today by the rewritten DmStartCombat.
+  initiativeOrder?: { unitId: string; initiative: number; controllerId: string }[];
+  enemies?: unknown[];
+}
+
+export interface CombatEndedPayload {
+  result?: ServerCombatOutcome;
+  rewards?: { experienceGained: number; goldGained: number; itemsObtained: string[] };
+}
+
+/**
+ * Wire-level ability-use event. Emitted when a unit fires an ability (attack
+ * or spell) in a multiplayer session. Both the attacker and peers apply the
+ * resulting HP / AP / cooldown changes via the gameSync handler — no client
+ * computes damage independently.
+ */
+export interface AbilityUsedPayload {
+  unitId: string;
+  abilityId: string;
+  targets: string[];
+  effects: AbilityEffectPayload[];
+  apCost?: number;
+  cooldown?: number;
+  diceResult?: { diceType: number; roll: number; modifier: number };
+}
+
+export interface AbilityEffectPayload {
+  /** "Damage" | "Heal" | "Buff" | "Debuff" (server casing) */
+  type: string;
+  targetId: string;
+  value: number;
+}
+
+/** DM-initiated HP adjust (heal or damage, any team). Server clamps delta to
+ *  0..MaxHp; peers apply Hp + IsAlive verbatim and trigger death VFX when
+ *  WasAlive && !IsAlive. */
+export interface UnitHpAdjustedPayload {
+  unitId: string;
+  hp: number;
+  maxHp: number;
+  isAlive: boolean;
+  /** Actual applied delta after clamping (may be less than requested). */
+  delta: number;
+  wasAlive: boolean;
 }
 
 // --- Message séquencé (backend) ---
@@ -151,24 +209,45 @@ export interface GameMessage<T> {
   payload: T;
 }
 
-// --- Snapshot état (simplifié pour le front) ---
-export interface GameStateSnapshotPayload {
-  sessionId: string;
-  combatState?: {
-    isActive: boolean;
-    currentRound: number;
-    currentUnitId: string;
-    initiativeOrder: { unitId: string; initiative: number; controllerId: string }[];
-  };
-  units: Array<{
-    unitId: string;
-    name: string;
-    hp: number;
-    maxHp: number;
-    position: GridPosition;
-    controllerId: string;
-    statusEffects: string[];
-  }>;
-  mapState?: { width: number; height: number; tiles: unknown[] };
-  lastSequenceNumber: number;
+// --- DM Tools Payloads ---
+
+export interface DmMoveTokenPayload {
+  unitId: string;
+  target: GridPosition;
+}
+
+export interface DmHiddenRollPayload {
+  diceType: number;
+  result: number;
+  modifier: number;
+  total: number;
+  label?: string;
+  timestamp: string;
+}
+
+export interface DmGrantItemPayload {
+  targetUserId: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  description?: string;
+}
+
+export interface ItemGrantedPayload {
+  targetUserId: string;
+  targetUserName: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  description?: string;
+  timestamp: string;
+}
+
+export interface DmSpawnUnitPayload {
+  unitId: string;
+  templateId: string;
+  name: string;
+  unitType: string;
+  target: GridPosition;
+  statsJson: string;
 }

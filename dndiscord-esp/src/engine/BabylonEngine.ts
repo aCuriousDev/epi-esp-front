@@ -289,6 +289,10 @@ export class BabylonEngine {
   // ============================================
   
   public async createUnit(unit: Unit): Promise<void> {
+    if (this.hasUnit(unit.id)) {
+      console.warn(`[BabylonEngine] createUnit called for ${unit.id} but already exists — skipping`);
+      return;
+    }
     console.log(`[BabylonEngine] Creating unit ${unit.id} at (${unit.position.x}, ${unit.position.z})`);
     await this.unitRenderer.createUnit(unit);
     this.unitPreviousPositions.set(unit.id, { ...unit.position });
@@ -328,6 +332,14 @@ export class BabylonEngine {
   
   public hasUnit(unitId: string): boolean {
     return this.unitRenderer.getUnitMesh(unitId) !== undefined;
+  }
+
+  /** Every unit id the renderer currently has a mesh for. Used by the
+   *  GameCanvas units effect to diff the store vs the engine and dispose
+   *  meshes for units that were removed (e.g. Play Again cleared the store
+   *  but the ghost skeleton mesh stuck around). */
+  public getTrackedUnitIds(): string[] {
+    return this.unitRenderer.getTrackedUnitIds();
   }
   
   public clearAllUnits(): void {
@@ -390,8 +402,8 @@ export class BabylonEngine {
    * @param visible - true pour rendre visibles, false pour invisibles
    * @param enemyUnitIds - Liste des IDs des unités ennemies
    */
-  public setEnemyVisibility(visible: boolean, enemyUnitIds: string[]): void {
-    this.unitRenderer.setEnemyVisibility(visible, enemyUnitIds);
+  public async setEnemyVisibility(visible: boolean, enemyUnitIds: string[]): Promise<void> {
+    await this.unitRenderer.setEnemyVisibility(visible, enemyUnitIds);
   }
 
   /**
@@ -438,6 +450,15 @@ export class BabylonEngine {
       this.vfxManager.removeIdleAnimation(unitId, mesh);
       await this.vfxManager.playDeathVFX(mesh, team);
     }
+  }
+
+  /** DM revived a dead unit — upright the rig and restore idle animation so
+   *  the body doesn't stay laid out on the tile. */
+  public playReviveVFX(unitId: string): void {
+    const mesh = this.unitRenderer.getUnitMesh(unitId);
+    if (!mesh) return;
+    this.vfxManager.playReviveVFX(mesh);
+    this.vfxManager.addIdleAnimation(mesh, unitId);
   }
   
   /**

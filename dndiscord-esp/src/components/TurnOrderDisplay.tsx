@@ -1,4 +1,5 @@
-import { Component, For } from 'solid-js';
+import { Component, For, Show } from 'solid-js';
+import { Skull } from 'lucide-solid';
 import { gameState, units } from '../game';
 import { Team } from '../types';
 import { getUnitIcon } from './common/icons';
@@ -29,7 +30,7 @@ export const TurnOrderDisplay: Component = () => {
         <For each={gameState.turnOrder}>
           {(unitId, index) => {
             const unit = units[unitId];
-            if (!unit || !unit.isAlive) return null;
+            if (!unit) return null;
 
             const isCurrent = () => index() === gameState.currentUnitIndex;
             const isPlayer = unit.team === Team.PLAYER;
@@ -38,14 +39,18 @@ export const TurnOrderDisplay: Component = () => {
               isPlayer &&
               (!unit.ownerUserId || unit.ownerUserId === me);
 
-            // Team tint on the avatar card itself (subtle).
-            const tileBg = isPlayer
-              ? 'bg-arcindigo-700/50'
-              : 'bg-red-900/45';
+            // Dead units stay in the order (so the DM sees the full combat
+            // timeline + who's still in the fight) but render greyed out
+            // with a skull overlay.
+            const tileBg = !unit.isAlive
+              ? 'bg-slate-700/40 grayscale'
+              : isPlayer
+                ? 'bg-arcindigo-700/50'
+                : 'bg-red-900/45';
 
-            // Ring colour on the current unit — gold for me, green for an
-            // ally (player team, not my unit), red for an enemy.
+            // Ring only on the current (alive) unit.
             const ringClass = () => {
+              if (!unit.isAlive) return 'opacity-50';
               if (!isCurrent()) return 'opacity-70';
               if (!isPlayer) return 'ring-2 ring-red-400 ring-offset-1 ring-offset-game-darker shadow-[0_0_10px_rgba(248,113,113,0.55)] animate-[pulse_1.8s_ease-in-out_infinite]';
               if (isMine) return 'ring-2 ring-game-gold ring-offset-1 ring-offset-game-darker shadow-[0_0_10px_rgba(251,191,36,0.55)] animate-[pulse_1.8s_ease-in-out_infinite]';
@@ -54,12 +59,17 @@ export const TurnOrderDisplay: Component = () => {
 
             return (
               <div
-                class={`flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center transition-all ${tileBg} ${ringClass()}`}
+                class={`relative flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center transition-all ${tileBg} ${ringClass()}`}
                 title={`${unit.name} (Init ${unit.stats.initiative})${
-                  isCurrent() ? ' — en cours' : ''
+                  !unit.isAlive ? ' — vaincu·e' : isCurrent() ? ' — en cours' : ''
                 }`}
               >
                 {getUnitIcon(unit.type, { class: 'w-4 h-4 text-white' })}
+                <Show when={!unit.isAlive}>
+                  <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <Skull class="w-4 h-4 text-red-300/90 drop-shadow-[0_0_2px_rgba(0,0,0,0.9)]" />
+                  </div>
+                </Show>
               </div>
             );
           }}

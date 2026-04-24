@@ -23,15 +23,23 @@ import CharactersComponent from "./pages/CharactersComponent";
 import { AuthCallback, ProtectedRoute } from "./components/auth";
 import { authStore } from "./stores/auth.store";
 import { initDiscordSDK } from "./services/discord";
-import CampaignManagerPage from "./pages/CampaignManagerPage";
+import { initDevLogBridge } from "./services/devLogBridge";
 import CampaignLobbyPage from "./pages/CampaignLobbyPage";
 import CampaignSessionPage from "./pages/CampaignSessionPage";
 import CampaignSessionsListPage from "./pages/CampaignSessionsListPage";
 import CampaignSessionReplayPage from "./pages/CampaignSessionReplayPage";
+// Story-tree authoring UI — WIP, exposed as /campaigns/:id/manager so DMs can
+// preview and continue Sam's work. Not wired to gameplay yet.
+import CampaignManagerPage from "./pages/CampaignManagerPage";
 import SessionInviteListener from "./components/SessionInviteListener";
 import EditCampaign from "./pages/EditCampaign";
 import TutorialOverlay from "./components/TutorialOverlay";
 import CookieConsent from "./components/CookieConsent";
+
+// Dev-only: mirror console output to back log file.
+if (import.meta.env.DEV) {
+  initDevLogBridge();
+}
 
 // Initialize auth state on app load
 authStore.init();

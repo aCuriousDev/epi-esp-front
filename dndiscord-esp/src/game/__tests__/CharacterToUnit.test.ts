@@ -29,8 +29,10 @@ describe('CharacterToUnit / mapAssignmentToUnit', () => {
       ['Paladin', UnitType.WARRIOR],
       ['Moine', UnitType.WARRIOR],
       ['Magicien', UnitType.MAGE],
+      ['Mage', UnitType.MAGE], // lobby quickstart preset (back BuildDefaultAssignment)
       ['Ensorceleur', UnitType.MAGE],
       ['Sorcier', UnitType.MAGE],
+      ['Archer', UnitType.ARCHER], // lobby quickstart preset
       ['Voleur', UnitType.ARCHER],
       ['Rodeur', UnitType.ARCHER],
       ['Barde', UnitType.HEALER],

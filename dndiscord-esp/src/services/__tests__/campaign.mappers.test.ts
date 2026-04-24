@@ -7,6 +7,8 @@ import {
   mapCampaignStatus,
   mapToAPICampaignStatus,
   mapCampaignResponse,
+  displayDungeonMasterName,
+  hasScenario,
   type CampaignDetailResponse,
 } from "../campaign.mappers";
 
@@ -158,5 +160,148 @@ describe("mapCampaignResponse", () => {
     (detail as any).members = null;
     const result = mapCampaignResponse(detail);
     expect(result.players).toEqual([]);
+  });
+
+  it("propagates isDungeonMaster=true", () => {
+    const result = mapCampaignResponse(makeCampaignDetail({ isDungeonMaster: true }));
+    expect(result.isDungeonMaster).toBe(true);
+  });
+
+  it("propagates isDungeonMaster=false", () => {
+    const result = mapCampaignResponse(makeCampaignDetail({ isDungeonMaster: false }));
+    expect(result.isDungeonMaster).toBe(false);
+  });
+
+  it("does not fabricate dungeonMasterName — leaves it undefined for the UI to fall back", () => {
+    const result = mapCampaignResponse(makeCampaignDetail());
+    expect(result.dungeonMasterName).toBeUndefined();
+  });
+
+  it("uses member.nickname when present", () => {
+    const detail = makeCampaignDetail({
+      members: [
+        {
+          id: "m1",
+          userId: "11111111-2222-3333-4444-555555555555",
+          nickname: "Alyssa",
+          role: CampaignMemberRole.Player,
+          status: MembershipStatus.Active,
+          joinedAt: "2024-01-01T00:00:00Z",
+        },
+      ],
+    });
+    const result = mapCampaignResponse(detail);
+    expect(result.players![0].username).toBe("Alyssa");
+  });
+
+  it("falls back to 'Joueur #{short}' when nickname is missing and userId is a GUID", () => {
+    const detail = makeCampaignDetail({
+      members: [
+        {
+          id: "m1",
+          userId: "11111111-2222-3333-4444-555555555555",
+          role: CampaignMemberRole.Player,
+          status: MembershipStatus.Active,
+          joinedAt: "2024-01-01T00:00:00Z",
+        },
+      ],
+    });
+    const result = mapCampaignResponse(detail);
+    expect(result.players![0].username).toBe("Joueur #111111");
+  });
+
+  it("keeps raw userId when nickname is missing and userId is not GUID-shaped", () => {
+    const detail = makeCampaignDetail({
+      members: [
+        {
+          id: "m1",
+          userId: "raw-discord-snowflake",
+          role: CampaignMemberRole.Player,
+          status: MembershipStatus.Active,
+          joinedAt: "2024-01-01T00:00:00Z",
+        },
+      ],
+    });
+    const result = mapCampaignResponse(detail);
+    expect(result.players![0].username).toBe("raw-discord-snowflake");
+  });
+});
+
+describe("displayDungeonMasterName", () => {
+  it("uses campaign.dungeonMasterName when the API provides it", () => {
+    expect(
+      displayDungeonMasterName(
+        { dungeonMasterName: "Thorgar", isDungeonMaster: false },
+        "quentest123",
+      ),
+    ).toBe("Thorgar");
+  });
+
+  it("substitutes the current user's handle when they are the DM and no API name is set", () => {
+    // Core BUG-P case: the API doesn't (yet) carry a DM display name, but
+    // the current user is known to be the DM via `isDungeonMaster` — no need
+    // to show the generic "Maître du Jeu" label when the auth store already
+    // has the concrete handle.
+    expect(
+      displayDungeonMasterName(
+        { isDungeonMaster: true },
+        "quentest123",
+      ),
+    ).toBe("quentest123");
+  });
+
+  it("falls back to 'Maître du Jeu' when the viewer is not the DM and no name is provided", () => {
+    expect(
+      displayDungeonMasterName(
+        { isDungeonMaster: false },
+        "someoneElse",
+      ),
+    ).toBe("Maître du Jeu");
+  });
+
+  it("falls back when the viewer is the DM but the auth store has no username yet", () => {
+    expect(
+      displayDungeonMasterName({ isDungeonMaster: true }, null),
+    ).toBe("Maître du Jeu");
+    expect(
+      displayDungeonMasterName({ isDungeonMaster: true }, undefined),
+    ).toBe("Maître du Jeu");
+  });
+
+  it("prefers the explicit dungeonMasterName even when the viewer is the DM", () => {
+    // Defensive: a future API that denormalises the name wins over the
+    // auth-store shortcut — one source of truth.
+    expect(
+      displayDungeonMasterName(
+        { dungeonMasterName: "Thorgar", isDungeonMaster: true },
+        "quentest123",
+      ),
+    ).toBe("Thorgar");
+  });
+});
+
+describe("hasScenario", () => {
+  it("returns false for null", () => {
+    expect(hasScenario(null)).toBe(false);
+  });
+
+  it("returns false for undefined", () => {
+    expect(hasScenario(undefined)).toBe(false);
+  });
+
+  it("returns false for empty string", () => {
+    expect(hasScenario("")).toBe(false);
+  });
+
+  it("returns false for whitespace-only string", () => {
+    expect(hasScenario("   \n\t  ")).toBe(false);
+  });
+
+  it("returns true for a real JSON payload", () => {
+    expect(hasScenario('{"nodes":[]}')).toBe(true);
+  });
+
+  it("returns true even for a non-JSON non-empty string (drives UI gate, not content validation)", () => {
+    expect(hasScenario("tree")).toBe(true);
   });
 });

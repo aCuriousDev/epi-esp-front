@@ -32,7 +32,9 @@ export class SignalRService {
 
     this.connection = new signalR.HubConnectionBuilder()
       .withUrl(`${API_URL}/hubs/game`, {
-        accessTokenFactory: () => AuthService.getToken() ?? ""
+        accessTokenFactory: () => AuthService.getToken() ?? "",
+        transport: signalR.HttpTransportType.WebSockets,
+        skipNegotiation: true,
       })
       .withAutomaticReconnect(RECONNECT_DELAYS)
       .configureLogging(signalR.LogLevel.Information)

@@ -1,6 +1,6 @@
 /**
  * Free Roam Initialization
- * 
+ *
  * Sets up the game for Free Roam mode - no enemies, no turn system
  */
 
@@ -21,45 +21,14 @@ import {
   cloneAbilities,
 } from '../abilities/AbilityDefinitions';
 import { mapAssignmentToUnit } from '../utils/CharacterToUnit';
-
-const DEFAULT_SPAWN_POSITIONS: GridPosition[] = [
-  { x: 1, z: 1 },
-  { x: 1, z: 3 },
-  { x: 3, z: 1 },
-  { x: 3, z: 3 },
-  { x: 5, z: 1 },
-  { x: 5, z: 3 },
-];
-
-/**
- * Returns the spawn positions for free roam — uses the campaign MapNode's spawnPoint
- * as the primary position (offset by small deltas for multi-unit placement) when a
- * session map config is active, otherwise falls back to hardcoded defaults.
- */
-function getSpawnPositions(): GridPosition[] {
-  const cfg = getSessionMapConfig();
-  if (cfg?.spawnPoint) {
-    const { x, z } = cfg.spawnPoint;
-    // Place the party in a small cluster around the designated spawn point
-    const candidates: GridPosition[] = [
-      { x,         z         },
-      { x: x + 1,  z         },
-      { x,         z: z + 1  },
-      { x: x + 1,  z: z + 1  },
-      { x: x - 1,  z         },
-      { x,         z: z - 1  },
-    ];
-    return candidates.filter(p => p.x >= 0 && p.z >= 0 && p.x < GRID_SIZE && p.z < GRID_SIZE);
-  }
-  return DEFAULT_SPAWN_POSITIONS;
-}
+import { sessionState, isDm } from '../../stores/session.store';
+import { resolveAllySpawns, LEGACY_FALLBACK_SPAWNS } from '../spawn/ResolveAllySpawns';
 
 export function initializeFreeRoam(mapId: string | null = null, unitAssignments?: UnitAssignment[]): void {
   console.log('[initializeFreeRoam] Starting Free Roam initialization...');
-  
-  // Initialize the grid (reuse existing logic)
-  // Pre-set mapId before initializeGrid so the GameCanvas createEffect sees the
-  // correct mapId when it reacts to the setTiles call inside initializeGrid.
+
+  // Pre-set mapId before initializeGrid so the GameCanvas createEffect sees
+  // the correct mapId when it reacts to the setTiles call inside initializeGrid.
   setGameState('mapId', mapId);
 
   console.log('[initializeFreeRoam] Initializing grid...');
@@ -69,12 +38,18 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
   const newUnits: Record<string, Unit> = {};
   console.log('[initializeFreeRoam] Creating player units...');
 
-  const spawnPositions = getSpawnPositions();
-
-  if (unitAssignments && unitAssignments.length > 0) {
-    // Multiplayer: create units from server-provided assignments
-    unitAssignments.forEach((assignment, i) => {
-      const spawnPos = spawnPositions[i % spawnPositions.length];
+  if (unitAssignments !== undefined) {
+    // Multiplayer: server-authoritative assignments. Empty array means
+    // multiplayer with no non-DM players yet (BUG-K), still go this branch.
+    const hubId = sessionState.hubUserId;
+    const filtered = unitAssignments.filter(
+      (a) => !(isDm() && hubId && a.userId === hubId),
+    );
+    filtered.forEach((assignment, i) => {
+      const spawnPos =
+        assignment.startX != null && assignment.startY != null
+          ? { x: assignment.startX, z: assignment.startY }
+          : LEGACY_FALLBACK_SPAWNS[i % LEGACY_FALLBACK_SPAWNS.length];
       const unit = mapAssignmentToUnit(assignment, spawnPos);
       newUnits[unit.id] = unit;
 
@@ -82,13 +57,11 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
       if (tiles[tileKey]) setTiles(tileKey, 'occupiedBy', unit.id);
     });
   } else {
-    // Solo: default 3 hardcoded units
     const playerUnits: Partial<Unit>[] = [
       {
         id: 'player_warrior',
         name: 'Sir Roland',
         type: UnitType.WARRIOR,
-        position: { x: 1, z: 1 },
         abilities: cloneAbilities(WARRIOR_ABILITIES),
         stats: {
           maxHealth: 120,
@@ -106,7 +79,6 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
         id: 'player_mage',
         name: 'Elara',
         type: UnitType.MAGE,
-        position: { x: 0, z: 2 },
         abilities: cloneAbilities(MAGE_ABILITIES),
         stats: {
           maxHealth: 80,
@@ -124,7 +96,6 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
         id: 'player_archer',
         name: 'Theron',
         type: UnitType.ARCHER,
-        position: { x: 2, z: 0 },
         abilities: cloneAbilities(ARCHER_ABILITIES),
         stats: {
           maxHealth: 90,
@@ -140,19 +111,26 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
       },
     ];
 
+    const soloSpawns = resolveAllySpawns({
+      count: playerUnits.length,
+      tiles,
+      gridWidth: GRID_SIZE,
+      gridHeight: GRID_SIZE,
+      spawnPoint: getSessionMapConfig()?.spawnPoint ?? null,
+      seed: Date.now(),
+      legacyFallback: LEGACY_FALLBACK_SPAWNS,
+    });
     playerUnits.forEach((unitData, i) => {
-      // Use the session spawn point when available (set by CampaignSessionPage),
-      // otherwise fall back to the hardcoded default position for this unit.
-      const position = spawnPositions.length > 0
-        ? spawnPositions[i % spawnPositions.length]
-        : unitData.position!;
+      unitData.position = soloSpawns[i] ?? LEGACY_FALLBACK_SPAWNS[i % LEGACY_FALLBACK_SPAWNS.length];
+    });
 
+    playerUnits.forEach((unitData) => {
       const unit: Unit = {
         id: unitData.id!,
         name: unitData.name!,
         type: unitData.type!,
         team: Team.PLAYER,
-        position,
+        position: unitData.position!,
         stats: unitData.stats!,
         abilities: unitData.abilities!,
         statusEffects: [],
@@ -172,12 +150,11 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
   setUnits(newUnits);
   console.log('[initializeFreeRoam] Units set in store');
 
-  // Set Free Roam game state - no turn order, no turn system
   console.log('[initializeFreeRoam] Setting game state...');
   setGameState({
     mode: GameMode.FREE_ROAM,
     phase: GamePhase.FREE_ROAM,
-    turnPhase: undefined as any, // Not used in Free Roam
+    turnPhase: undefined as any,
     currentTurn: 0,
     turnOrder: [],
     currentUnitIndex: 0,
@@ -192,7 +169,5 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
 
   console.log('[initializeFreeRoam] Free Roam mode initialized - Units:', Object.keys(newUnits).length, 'Tiles:', Object.keys(tiles).length);
 
-  // Start exploration ambient music
   playAmbientMusic('exploration');
 }
-

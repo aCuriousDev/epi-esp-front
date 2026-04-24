@@ -49,6 +49,7 @@ export {
   getPlayerUnits,
   getEnemyUnits,
   clearUnits,
+  addUnit,
 } from './stores/UnitsStore';
 
 export {
