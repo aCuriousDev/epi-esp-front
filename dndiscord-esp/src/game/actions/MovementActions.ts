@@ -205,7 +205,6 @@ export function moveUnit(targetPos: GridPosition): boolean {
 
   const isFreeRoam = getIsFreeRoamMode();
   const isPreparation = gameState.phase === GamePhase.COMBAT_PREPARATION;
-  const session = getCurrentSession();
 
   // Phase de préparation : placement direct sur une case de spawn (sans pathfinding)
   if (
