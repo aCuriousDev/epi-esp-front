@@ -28,9 +28,9 @@ import CampaignLobbyPage from "./pages/CampaignLobbyPage";
 import CampaignSessionPage from "./pages/CampaignSessionPage";
 import CampaignSessionsListPage from "./pages/CampaignSessionsListPage";
 import CampaignSessionReplayPage from "./pages/CampaignSessionReplayPage";
-// CampaignManagerPage intentionally unimported: the story-tree authoring UI is
-// disconnected from gameplay today. File kept for a future revival.
-// import CampaignManagerPage from "./pages/CampaignManagerPage";
+// Story-tree authoring UI — WIP, exposed as /campaigns/:id/manager so DMs can
+// preview and continue Sam's work. Not wired to gameplay yet.
+import CampaignManagerPage from "./pages/CampaignManagerPage";
 import SessionInviteListener from "./components/SessionInviteListener";
 import EditCampaign from "./pages/EditCampaign";
 import TutorialOverlay from "./components/TutorialOverlay";
@@ -159,7 +159,14 @@ render(
           </Protected>
         )}
       />
-      {/* /campaigns/:id/manager route removed — story tree is a follow-up */}
+      <Route
+        path="/campaigns/:id/manager"
+        component={() => (
+          <Protected>
+            <CampaignManagerPage />
+          </Protected>
+        )}
+      />
       <Route
         path="/campaigns/:id/lobby"
         component={() => (

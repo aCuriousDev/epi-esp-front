@@ -663,10 +663,14 @@ export default function CampaignView() {
                   </button>
                   <button
                     onClick={handleCampaignManager}
-                    class="py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-white font-semibold hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                    title="Éditeur de scénario (work-in-progress, non branché sur le gameplay)"
+                    class="py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-semibold hover:bg-white/10 transition-all flex items-center justify-center gap-2"
                   >
                     <MapIcon class="w-5 h-5" />
                     Campaign Manager
+                    <span class="ml-1 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      WIP
+                    </span>
                   </button>
                   <button
                     onClick={handleLaunchCampaignSession}
