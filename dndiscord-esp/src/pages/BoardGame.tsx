@@ -668,73 +668,9 @@ const BoardGame: Component = () => {
           getCurrentMode() === GameMode.COMBAT ||
           getCurrentMode() === GameMode.DUNGEON
         }
-        fallback={
-          <div class="panel-game">
-            <h3 class="font-fantasy text-game-gold text-lg mb-4">
-              Free Roam Mode
-            </h3>
-            <div class="space-y-4 text-sm text-gray-300">
-              <p>
-                Explore the map freely without combat restrictions. Move your
-                units anywhere to plan strategies and test formations.
-              </p>
-
-              <div class="space-y-3">
-                <div>
-                  <h4 class="text-game-gold font-semibold mb-2">Features:</h4>
-                  <ul class="space-y-2 text-gray-400">
-                    <li class="flex gap-2">
-                      <Check class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
-                      <span>No enemy units</span>
-                    </li>
-                    <li class="flex gap-2">
-                      <Check class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
-                      <span>Unlimited movement</span>
-                    </li>
-                    <li class="flex gap-2">
-                      <Check class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
-                      <span>No action point costs</span>
-                    </li>
-                    <li class="flex gap-2">
-                      <Check class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
-                      <span>No turn restrictions</span>
-                    </li>
-                  </ul>
-                </div>
-
-                <div>
-                  <h4 class="text-game-gold font-semibold mb-2">How to Use:</h4>
-                  <ul class="space-y-2 text-gray-400">
-                    <li>1. Click on any of your units to select them</li>
-                    <li>2. Click on any highlighted tile to move</li>
-                    <li>3. Switch between units freely</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-        }
       >
         <CombatLog />
       </Show>
-
-      <div class="panel-game">
-        <h4 class="font-fantasy text-game-gold text-sm mb-3">Legend</h4>
-        <div class="space-y-1.5 text-xs">
-          <div class="flex items-center gap-2">
-            <div class="w-4 h-4 rounded bg-blue-500/50 border border-blue-400 flex-shrink-0" />
-            <span class="break-words">Movement Range</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <div class="w-4 h-4 rounded bg-red-500/50 border border-red-400 flex-shrink-0" />
-            <span class="break-words">Attack Range</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <div class="w-4 h-4 rounded bg-green-500/50 border border-green-400 flex-shrink-0" />
-            <span class="break-words">Path Preview</span>
-          </div>
-        </div>
-      </div>
 
       <Show when={sessionState.session && sessionState.session.campaignId}>
         <div class="panel-game">
@@ -1069,7 +1005,7 @@ const BoardGame: Component = () => {
                 combat start then retracts after 5 s. */}
             <div class="absolute left-3 sm:left-4 bottom-4 z-10 flex flex-col gap-2 items-start pl-safe-left pb-safe-bottom">
               <Show when={helpOpen()}>
-                <div class="panel-game text-xs w-[min(16rem,calc(100vw-1.5rem))] lg:max-w-xs relative">
+                <div class="panel-game text-xs w-[min(16rem,calc(100vw-1.5rem))] lg:max-w-xs relative max-h-[80vh] overflow-y-auto">
                   <button
                     class="absolute top-2 right-2 text-slate-400 hover:text-white"
                     onClick={() => setHelpOpen(false)}
@@ -1124,6 +1060,54 @@ const BoardGame: Component = () => {
                       </span>
                     </li>
                   </ul>
+
+                  {/* Legend */}
+                  <div class="mt-4">
+                    <h4 class="text-game-gold font-semibold mb-2 text-sm">Legend</h4>
+                    <div class="space-y-1.5 text-xs">
+                      <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 rounded bg-blue-500/50 border border-blue-400 flex-shrink-0" />
+                        <span>Movement Range</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 rounded bg-red-500/50 border border-red-400 flex-shrink-0" />
+                        <span>Attack Range</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 rounded bg-green-500/50 border border-green-400 flex-shrink-0" />
+                        <span>Path Preview</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Free Roam Mode info — only visible outside combat/dungeon */}
+                  <Show when={getCurrentMode() !== GameMode.COMBAT && getCurrentMode() !== GameMode.DUNGEON}>
+                    <div class="mt-4">
+                      <h4 class="text-game-gold font-semibold mb-2 text-sm">Free Roam Mode</h4>
+                      <p class="text-xs text-gray-400 mb-2">
+                        Explore the map freely without combat restrictions. Move your units anywhere to plan strategies and test formations.
+                      </p>
+                      <ul class="space-y-1 text-xs text-gray-400">
+                        <li class="flex gap-1.5">
+                          <Check class="w-3 h-3 text-green-400 flex-shrink-0 mt-0.5" />
+                          <span>No enemy units</span>
+                        </li>
+                        <li class="flex gap-1.5">
+                          <Check class="w-3 h-3 text-green-400 flex-shrink-0 mt-0.5" />
+                          <span>Unlimited movement</span>
+                        </li>
+                        <li class="flex gap-1.5">
+                          <Check class="w-3 h-3 text-green-400 flex-shrink-0 mt-0.5" />
+                          <span>No action point costs</span>
+                        </li>
+                        <li class="flex gap-1.5">
+                          <Check class="w-3 h-3 text-green-400 flex-shrink-0 mt-0.5" />
+                          <span>No turn restrictions</span>
+                        </li>
+                      </ul>
+                      <p class="text-xs text-gray-500 mt-2">Click a unit, then click a highlighted tile to move.</p>
+                    </div>
+                  </Show>
                 </div>
               </Show>
 
