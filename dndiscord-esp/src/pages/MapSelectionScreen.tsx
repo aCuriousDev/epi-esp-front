@@ -1,7 +1,7 @@
 import { Component, createSignal, onMount, For, Show } from "solid-js";
 import { useNavigate, A } from "@solidjs/router";
 import { ArrowLeft, Plus, Trash2, Edit2 } from "lucide-solid";
-import { getAllMaps, deleteMap, getAllDungeons, deleteDungeon, loadDungeon } from "../services/mapStorage";
+import { fetchMine, deleteMap, getAllDungeons, deleteDungeon, loadDungeon } from "../services/mapRepository";
 import { DungeonCreationWizard } from "../components/DungeonCreationWizard";
 import { safeConfirm } from "../services/ui/confirm";
 
@@ -16,10 +16,11 @@ export default function MapSelectionScreen() {
 		loadData();
 	});
 
-	const loadData = () => {
-		const allMaps = getAllMaps();
-		allMaps.sort((a, b) => b.updatedAt - a.updatedAt);
+	const loadData = async () => {
+		const allMaps = await fetchMine();
+		// DB maps have no mapType in metadata — only exclude legacy dungeon-room entries
 		const standaloneMaps = allMaps.filter(m => {
+			if (!m.id.startsWith('map_')) return true; // DB map — always standalone
 			try {
 				const data = localStorage.getItem(`dndiscord_maps_${m.id}`);
 				if (!data) return true;

@@ -127,8 +127,12 @@ const CampaignLobbyPage: Component = () => {
   onMount(async () => {
     if (!signalRService.isConnected) {
       await signalRService.connect();
-      ensureMultiplayerHandlersRegistered();
     }
+    // Toujours appeler, pas seulement si on vient de se connecter.
+    // Si les handlers ont été réinitialisés (leaveSession / SessionEnded),
+    // GameStarted ne serait pas traité → setGameStarted jamais appelé →
+    // createEffect jamais déclenché → bouton "Lancement…" bloqué indéfiniment.
+    ensureMultiplayerHandlersRegistered();
 
     // Vérifier si une session est déjà en cours pour cette campagne.
     // On n'affiche le bandeau que si la session a une progression réelle
@@ -204,6 +208,15 @@ const CampaignLobbyPage: Component = () => {
     setStarting(true);
     try {
       await startGameHub('campaign');
+      // startGameHub réussit → le serveur va envoyer GameStarted → createEffect navigue.
+      // Timeout de sécurité : si GameStarted n'arrive pas en 8 s (handler manquant,
+      // problème réseau), on réactive le bouton pour que le DM puisse réessayer.
+      setTimeout(() => {
+        setStarting(prev => {
+          if (prev) console.warn('[CampaignLobby] GameStarted not received in time — resetting start button');
+          return false;
+        });
+      }, 8_000);
     } catch (err: any) {
       console.error('[CampaignLobby] startGame failed:', err);
       setStarting(false);

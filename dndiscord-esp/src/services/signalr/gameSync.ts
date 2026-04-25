@@ -548,22 +548,12 @@ async function handleMapSwitched(message: unknown): Promise<void> {
     return;
   }
 
-  // Cache the new map locally so mapStorage.loadMap can resolve it by id
-  // during the re-init below. The payload's `data.id` is the SavedMapData
-  // id the DM generated in the Map Editor; `parsed.mapId` is the backend
-  // campaign-map GUID. loadMap later keys off parsed.mapId, so normalise
-  // the embedded id to match — otherwise initializeGrid falls through to
-  // the default grid and the DM's chosen map never renders (BUG-J).
-  // Failure here means loadMap during re-init will fall through to the default
-  // grid — the exact bug (BUG-J) this block was added to prevent. Re-throw so
-  // the outer .catch fires the user-visible error instead of proceeding with a
-  // broken map. No try/catch swallowing.
-  const data = parsed.parsedData as { id?: string } | null;
-  if (data && typeof data === "object") {
-    data.id = parsed.mapId;
-  }
-  const { saveMap } = await import("../mapStorage");
-  saveMap(data as any);
+  // Cache the new map so loadMap(parsed.mapId) resolves during re-init.
+  // cacheMap with overrideId = parsed.mapId stores the blob under the DB UUID
+  // regardless of the id embedded inside the blob — fixes BUG-J (initializeGrid
+  // was falling through to the default grid because loadMap(UUID) found nothing).
+  const { cacheMap } = await import("../mapRepository");
+  cacheMap(parsed.parsedData as any, parsed.mapId);
 
   const { clearEngineState } = await import("../../components/GameCanvas");
   const prevMapId = gameState.mapId;

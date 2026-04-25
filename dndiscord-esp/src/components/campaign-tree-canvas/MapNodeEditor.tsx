@@ -2,13 +2,53 @@ import { Component, createEffect, createMemo, createSignal, For, onMount, Show }
 import { Portal } from 'solid-js/web';
 import { MapNode, MapNodeData, CellCoord, ExitCell } from './nodes/MapNode';
 import { CampaignNode } from './nodes/CampaignNode';
-import { getAllMaps, loadMap, SavedCellData } from '@/services/mapStorage';
+import { fetchMine, loadMap, type MapMeta, type SavedCellData, type SavedMapData } from '@/services/mapRepository';
+import { getApiUrl } from '@/services/config';
+import { AuthService } from '@/services/auth.service';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type EditorMode = 'spawn' | 'exit-next' | 'exit-end' | 'trap' | 'erase';
 
-interface MapMeta { id: string; name: string; createdAt: number; updatedAt: number }
+// MapMeta imported from mapRepository
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Charge les cellules d'une map pour la prévisualisation.
+ * - ID legacy → localStorage (synchrone, pas de cache ajouté)
+ * - UUID DB   → GET API direct, sans passer par le cache localStorage
+ *               (pas de raison de polluer localStorage juste pour une preview)
+ */
+async function loadCellsForPreview(mapId: string): Promise<SavedCellData[]> {
+  const local = loadMap(mapId);
+  if (local) return local.cells;
+
+  if (!UUID_RE.test(mapId)) return [];
+
+  try {
+    const token = AuthService.getToken();
+    if (!token) return [];
+
+    // Tenter d'abord les maps de campagne, puis les maps user
+    for (const url of [
+      // on n'a pas le campaignId ici — on tente directement les maps user
+      `${getApiUrl()}/api/maps/mine/${mapId}`,
+    ]) {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const record = await res.json() as { data?: string };
+        if (record.data) {
+          const parsed = JSON.parse(record.data) as SavedMapData;
+          return parsed.cells ?? [];
+        }
+      }
+    }
+  } catch {
+    // preview non disponible — grille vide
+  }
+  return [];
+}
 interface Bounds  { minX: number; minZ: number; w: number; h: number }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -280,11 +320,11 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
   const currentMeta  = createMemo(() => maps().find(m => m.id === selMap()));
 
   // ── Mount ─────────────────────────────────────────────────────────────────
-  onMount(() => {
-    setMaps(getAllMaps().sort((a, b) => b.updatedAt - a.updatedAt));
+  onMount(async () => {
+    const maps = await fetchMine();
+    setMaps(maps);
     if (data.selectedMap) {
-      const m = loadMap(data.selectedMap);
-      if (m) setCells(m.cells);
+      setCells(await loadCellsForPreview(data.selectedMap));
     }
     setReady(true);
   });
@@ -353,13 +393,14 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
   const onMouseLeave = () => { setHover(null); setPainting(false); };
 
   // ── Map selection ─────────────────────────────────────────────────────────
-  const handleSelectMap = (mapId: string) => {
+  const handleSelectMap = async (mapId: string) => {
     setSelMap(mapId);
-    props.node.updateMap(mapId);
+    const mapName = maps().find(m => m.id === mapId)?.name;
+    props.node.updateMap(mapId, mapName);
     setSpawn(undefined); props.node.updateSpawnPoint(undefined);
     setExits([] as ExitCell[]); props.node.updateExitCells([]);
     setTraps([]);        props.node.updateTrapCells([]);
-    setCells(mapId ? (loadMap(mapId)?.cells ?? []) : []);
+    setCells(mapId ? await loadCellsForPreview(mapId) : []);
     props.handleUpdateNode(props.node);
   };
 

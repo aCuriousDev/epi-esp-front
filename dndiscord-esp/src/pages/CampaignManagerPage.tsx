@@ -8,6 +8,8 @@ import { Component, createSignal, createEffect, Show, For, onMount, onCleanup } 
 import { ArrowLeft, Book, CheckCircle, Edit, GripHorizontal, Loader2, Map as MapIcon, Save, Sword, XCircle } from 'lucide-solid';
 import { CampaignService, mapCampaignResponse } from '@/services/campaign.service';
 import { Campaign } from '@/types/campaign';
+import { getApiUrl } from '@/services/config';
+import { AuthService } from '@/services/auth.service';
 import { StartNode } from '@/components/campaign-tree-canvas/nodes/StartNode';
 import ChoicesNodeEditor from '@/components/campaign-tree-canvas/ChoicesNodeEditor';
 import { SceneNode } from '@/components/campaign-tree-canvas/nodes/SceneNode';
@@ -79,7 +81,7 @@ const CampaignManager: Component = () => {
     canvasRef()?.importData(json);
   };
 
-  // ─── Mount: load campaign ─────────────────────────────────────────────────
+  // ─── Mount: load campaign + migration auto des maps localStorage ────────────
   onMount(async () => {
     try {
       setLoading(true);
@@ -87,12 +89,96 @@ const CampaignManager: Component = () => {
       const mappedCampaign = mapCampaignResponse(response);
       setCampaign(mappedCampaign);
       handleImport(mappedCampaign.campaignTreeDefinition ?? undefined);
+
+      // Phase 4 — migration idempotente des nœuds carte ayant un selectedMap
+      // au format localStorage ("map_timestamp_..."). On les upload en DB et on
+      // remplace l'ID dans le tree. Si au moins un nœud est mis à jour, on
+      // sauvegarde silencieusement le tree mis à jour.
+      await migrateMapNodes(params.id);
     } catch (err: any) {
       console.error('Failed to load campaign:', err);
     } finally {
       setLoading(false);
     }
   });
+
+  /**
+   * Parcourt les nœuds de type 'map' du canvas.
+   * Pour chaque nœud dont selectedMap est un ID localStorage (/^map_/),
+   * charge le blob depuis localStorage, l'uploade dans la campagne en DB,
+   * et remplace l'ID par l'UUID retourné.
+   * Idempotent : si l'ID est déjà un UUID, le nœud est ignoré.
+   * Si un nœud référence une map introuvable en localStorage, un warning
+   * est affiché dans la console (la map était déjà supprimée).
+   */
+  const migrateMapNodes = async (campaignId: string): Promise<void> => {
+    const cvs = canvasRef()?.getCanvas();
+    if (!cvs) return;
+
+    const token = AuthService.getToken();
+    if (!token) return;
+
+    // Collecter les nœuds carte avec un ID legacy (sync — draw2d est synchrone)
+    const toMigrate: Array<{ fig: any; ud: any }> = [];
+    (cvs as any).getFigures().each((_i: number, fig: any) => {
+      const ud = fig.getUserData?.();
+      if (!ud || ud.type !== 'map') return;
+      if (ud.selectedMap && /^map_/.test(String(ud.selectedMap))) {
+        toMigrate.push({ fig, ud });
+      }
+    });
+
+    if (toMigrate.length === 0) return;
+
+    let migrated = 0;
+    for (const { fig, ud } of toMigrate) {
+      const localKey = `dndiscord_maps_${ud.selectedMap}`;
+      const localData = localStorage.getItem(localKey);
+
+      if (!localData) {
+        console.warn(`[CampaignManager] migration: map "${ud.selectedMap}" not found in localStorage — node "${ud.id}" left unchanged`);
+        continue;
+      }
+
+      try {
+        const parsedMap = JSON.parse(localData) as { name?: string };
+        const res = await fetch(`${getApiUrl()}/api/campaigns/${campaignId}/maps`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ name: parsedMap.name ?? 'Carte', data: localData }),
+        });
+
+        if (!res.ok) {
+          console.warn(`[CampaignManager] migration: upload failed for "${ud.selectedMap}" (HTTP ${res.status})`);
+          continue;
+        }
+
+        const created = await res.json() as { id: string };
+        fig.setUserData({ ...ud, selectedMap: created.id });
+        migrated++;
+      } catch (err) {
+        console.warn(`[CampaignManager] migration: unexpected error for "${ud.selectedMap}":`, err);
+      }
+    }
+
+    if (migrated === 0) return;
+
+    // Sauvegarder silencieusement le tree avec les nouveaux UUIDs
+    try {
+      const canvas = canvasRef();
+      if (!canvas) return;
+      await CampaignService.editCampaignManager(campaignId, {
+        campaignTreeDefinition: canvas.exportData() ?? '',
+      });
+      const treeData = buildSessionTreeFormat();
+      if (treeData) {
+        localStorage.setItem(`dnd-campaign-tree-${campaignId}`, JSON.stringify(treeData));
+      }
+      showToast(`${migrated} carte${migrated > 1 ? 's' : ''} migrée${migrated > 1 ? 's' : ''} vers la base de données`, 'success');
+    } catch (err) {
+      console.warn('[CampaignManager] migration: auto-save after migration failed:', err);
+    }
+  };
 
   // ─── Node selection ───────────────────────────────────────────────────────
   createEffect(() => {

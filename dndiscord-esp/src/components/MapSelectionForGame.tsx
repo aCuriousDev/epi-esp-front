@@ -1,6 +1,6 @@
 import { Component, createSignal, onMount, For, Show } from 'solid-js';
 import { ArrowLeft, Map, Dices } from 'lucide-solid';
-import { getAllMaps, type SavedMapData } from '../services/mapStorage';
+import { fetchMine, type MapMeta } from '../services/mapRepository';
 
 interface MapSelectionForGameProps {
   onSelectMap: (mapId: string | null) => void;
@@ -8,16 +8,14 @@ interface MapSelectionForGameProps {
 }
 
 export const MapSelectionForGame: Component<MapSelectionForGameProps> = (props) => {
-  const [maps, setMaps] = createSignal<Array<{ id: string; name: string; createdAt: number; updatedAt: number }>>([]);
+  const [maps, setMaps] = createSignal<MapMeta[]>([]);
 
   onMount(() => {
     loadMaps();
   });
 
-  const loadMaps = () => {
-    const allMaps = getAllMaps();
-    // Trier par date de mise à jour (plus récent en premier)
-    allMaps.sort((a, b) => b.updatedAt - a.updatedAt);
+  const loadMaps = async () => {
+    const allMaps = await fetchMine();
     setMaps(allMaps);
   };
 

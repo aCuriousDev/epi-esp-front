@@ -128,8 +128,8 @@ export default function CampaignView() {
       // Permet de proposer "Rejoindre" sans code quand le MJ lance une session.
       if (!signalRService.isConnected) {
         await signalRService.connect();
-        ensureMultiplayerHandlersRegistered();
       }
+      ensureMultiplayerHandlersRegistered();
 
       const handler = (data: Record<string, unknown>) => {
         const payload = {
@@ -231,8 +231,8 @@ export default function CampaignView() {
     try {
       if (!signalRService.isConnected) {
         await signalRService.connect();
-        ensureMultiplayerHandlersRegistered();
       }
+      ensureMultiplayerHandlersRegistered();
       await createSession(c.id);
       navigate("/board");
     } catch (e: any) {
@@ -250,8 +250,8 @@ export default function CampaignView() {
     try {
       if (!signalRService.isConnected) {
         await signalRService.connect();
-        ensureMultiplayerHandlersRegistered();
       }
+      ensureMultiplayerHandlersRegistered();
       const res = await joinSession(invite.sessionId);
       if (!res.success) {
         setInviteError(res.message ?? "Impossible de rejoindre la session.");
@@ -284,8 +284,8 @@ export default function CampaignView() {
     try {
       if (!signalRService.isConnected) {
         await signalRService.connect();
-        ensureMultiplayerHandlersRegistered();
       }
+      ensureMultiplayerHandlersRegistered();
       // Utilise joinCampaignSession (cherche par campaignId dans le SessionManager)
       // plutôt que joinSession(db_uuid) qui cherche par l'ID SignalR in-memory.
       const res = await joinCampaignSession(c.id);
@@ -345,8 +345,8 @@ export default function CampaignView() {
     try {
       if (!signalRService.isConnected) {
         await signalRService.connect();
-        ensureMultiplayerHandlersRegistered();
       }
+      ensureMultiplayerHandlersRegistered();
       await createSession(c.id);
       navigate(`/campaigns/${params.id}/lobby`);
     } catch (e: any) {

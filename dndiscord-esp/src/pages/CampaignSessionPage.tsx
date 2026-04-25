@@ -8,9 +8,12 @@ import {
 } from '@/services/campaign.service';
 import { CharacterService } from '@/services/character.service';
 import { setSessionMapConfig } from '@/stores/session-map.store';
-import { getAllMaps } from '@/services/mapStorage';
+import { ensureMapCached } from '@/services/mapRepository';
+import { MapService } from '@/services/map.service';
 import {
   voteForChoice,
+  dmAdvanceNode,
+  dmLaunchCampaignMap,
   subscribeCampaign,
   unsubscribeCampaign,
   selectCharacter,
@@ -29,6 +32,9 @@ interface ChoicesData { id: string; type: 'choices'; title: string; text: string
 interface MapData     {
   id: string; type: 'map'; title: string;
   selectedMap?: string;
+  /** Nom de la carte stocké dans le nœud — disponible pour tous les clients
+   *  sans lookup localStorage (les joueurs n'ont pas la map en local). */
+  selectedMapName?: string;
   spawnPoint?: { x: number; z: number };
   exitCells?:  { x: number; z: number; exitType?: 'next' | 'end' }[];
   trapCells?:  { x: number; z: number }[];
@@ -112,6 +118,8 @@ const CampaignSessionPage: Component = () => {
   const [loading, setLoading]               = createSignal(true);
   const [error, setError]                   = createSignal<string | null>(null);
   const [campaignTitle, setCampaignTitle]   = createSignal('');
+  /** UUID → nom de carte, chargé depuis /api/campaigns/:id/maps */
+  const [campaignMapNames, setCampaignMapNames] = createSignal<Map<string, string>>(new Map());
   const [sessionId, setSessionId]           = createSignal<string | null>(null);
   const [isOffline, setIsOffline]           = createSignal(false);
   const [isSaving, setIsSaving]             = createSignal(false);
@@ -199,8 +207,93 @@ const CampaignSessionPage: Component = () => {
       };
 
       signalRService.on('ChoiceVoted', voteHandler);
+
+      // ── Avancement de nœud par le MJ (scène / carte) ─────────────────────
+      // Le MJ avance localement via followPort, puis diffuse NodeAdvanced.
+      // Les joueurs reçoivent cet événement et se téléportent au nœud cible.
+      // La garde fromNodeId évite un double-avancement si le joueur a déjà
+      // cliqué "Continuer" lui-même (nœud carte accessible à tous).
+      const nodeAdvancedHandler = (data: Record<string, unknown>) => {
+        if (isHost()) return; // le MJ a déjà avancé localement
+        const from = String(data.fromNodeId ?? data.FromNodeId ?? '');
+        const next = String(data.nextNodeId ?? data.NextNodeId ?? '');
+        if (!next) return;
+        if (from && currentNodeId() !== from) return; // pas sur le bon nœud
+        setHistory(h => {
+          const cur = currentNodeId();
+          return cur ? [...h, cur] : h;
+        });
+        setCurrentNodeId(next);
+      };
+      signalRService.on('NodeAdvanced', nodeAdvancedHandler);
+
+      // ── Lancement de carte par le MJ ─────────────────────────────────────
+      // Le MJ navigue lui-même dans launchMap(). Les joueurs reçoivent cet
+      // événement, chargent la carte en cache et naviguent vers le board.
+      const mapLaunchedHandler = async (data: Record<string, unknown>) => {
+        if (isHost()) return; // le MJ est déjà en train de naviguer
+        const raw = String(data.configJson ?? data.ConfigJson ?? '');
+        if (!raw) return;
+        try {
+          const cfg = JSON.parse(raw) as {
+            campaignId: string; sessionId: string | null;
+            nodeId: string; mapId: string;
+            mapData?: string | null;
+            spawnPoint?: { x: number; z: number };
+            exitCells?: { x: number; z: number; exitType?: 'next' | 'end' }[];
+            trapCells?: { x: number; z: number }[];
+          };
+
+          // Mettre la carte en cache depuis le blob inclus dans le broadcast.
+          // Les joueurs ne sont pas owners de la map et ne peuvent pas la
+          // récupérer via /api/maps/mine — on évite un appel API inutile.
+          if (cfg.mapData) {
+            try {
+              const { cacheMap: cacheMapFn } = await import('@/services/mapRepository');
+              const parsed = JSON.parse(cfg.mapData);
+              cacheMapFn(parsed, cfg.mapId);
+            } catch {
+              // blob corrompu — ensureMapCached tentera l'API en fallback
+              await ensureMapCached(cfg.mapId, cfg.campaignId);
+            }
+          } else {
+            await ensureMapCached(cfg.mapId, cfg.campaignId);
+          }
+
+          setSessionMapConfig({
+            campaignId: cfg.campaignId,
+            sessionId:  cfg.sessionId,
+            nodeId:     cfg.nodeId,
+            mapId:      cfg.mapId,
+            spawnPoint: cfg.spawnPoint,
+            exitCells:  cfg.exitCells?.map(e => ({ ...e, exitType: e.exitType ?? 'next' as const })),
+            trapCells:  cfg.trapCells,
+          });
+          navigate('/board?fromSession=1');
+        } catch (e) {
+          console.warn('[CampaignSession] CampaignMapLaunched parse failed:', e);
+        }
+      };
+      signalRService.on('CampaignMapLaunched', mapLaunchedHandler);
+
+      // ── Fin de carte par le MJ (depuis DmPanel "Prochain nœud") ────────────
+      // Les joueurs reçoivent cet événement quand ils sont sur le board et
+      // doivent revenir à la session pour enchaîner le scénario.
+      const mapExitedHandler = (data: Record<string, unknown>) => {
+        if (isHost()) return; // le MJ navigue lui-même via backToSession
+        const nodeId = String(data.nodeId ?? data.NodeId ?? '');
+        if (!nodeId) return;
+        // Naviguer vers la session en mode "mapExit=next" sans autoAdvance —
+        // le MJ diffusera NodeAdvanced une fois qu'il aura avancé côté session.
+        navigate(`/campaigns/${params.id}/session?mapExit=next&resumeNodeId=${encodeURIComponent(nodeId)}`);
+      };
+      signalRService.on('CampaignMapExited', mapExitedHandler);
+
       onCleanup(() => {
         try { signalRService.off('ChoiceVoted', voteHandler); } catch {}
+        try { signalRService.off('NodeAdvanced', nodeAdvancedHandler); } catch {}
+        try { signalRService.off('CampaignMapLaunched', mapLaunchedHandler); } catch {}
+        try { signalRService.off('CampaignMapExited', mapExitedHandler); } catch {}
         if (signalRService.isConnected) {
           unsubscribeCampaign(params.id).catch(() => undefined);
         }
@@ -211,7 +304,17 @@ const CampaignSessionPage: Component = () => {
 
     try {
       setLoading(true);
-      const response = await CampaignService.getCampaign(params.id);
+
+      // Charger la campagne et les noms de cartes en parallèle.
+      // Les noms de cartes sont nécessaires côté joueur (qui n'a pas les maps
+      // en localStorage) pour afficher le nom lisible dans le bloc Carte.
+      const [response] = await Promise.all([
+        CampaignService.getCampaign(params.id),
+        MapService.list(params.id)
+          .then(maps => setCampaignMapNames(new Map(maps.map(m => [m.id, m.name]))))
+          .catch(() => undefined), // non bloquant — fallback sur selectedMapName du nœud
+      ]);
+
       setCampaignTitle(response.name);
 
       // Backend field takes priority; fall back to per-campaign then global localStorage.
@@ -292,6 +395,27 @@ const CampaignSessionPage: Component = () => {
         if (resumeNodeId && tree.nodeMap.has(resumeNodeId)) {
           setCurrentNodeId(resumeNodeId);
         }
+
+        // autoAdvance=1 : le MJ a cliqué "Prochain nœud" depuis le board.
+        // Appeler followPort automatiquement sans attendre un clic supplémentaire.
+        // Seul le MJ advance ; les joueurs suivront via NodeAdvanced.
+        // Si pas de port 'output' → fin de scénario → handleEnd.
+        const autoAdvance = search.get('autoAdvance') === '1';
+        if (autoAdvance && isHost()) {
+          // Attendre que les signaux SolidJS soient propagés (parsedTree, currentNodeId)
+          // avant d'appeler followPort qui les lit en synchrone.
+          setTimeout(async () => {
+            const node = currentNode();
+            if (!node) return;
+            const hasOutput = parsedTree()?.edges.has(`${node.id}::output`);
+            if (hasOutput) {
+              await followPort('output');
+            } else {
+              // Aucun nœud suivant → fin de session
+              await handleEnd();
+            }
+          }, 0);
+        }
       }
     } catch (err: any) {
       console.error('Failed to load campaign session:', err);
@@ -315,17 +439,27 @@ const CampaignSessionPage: Component = () => {
     return tree.nodeMap.get(id) ?? null;
   };
 
-  // ─── Map metadata lookup (name from localStorage) ─────────────────────────
-  // Deferred to call-time so it never runs inside a reactive tracking scope.
-  const getMapName = (mapId: string) =>
-    getAllMaps().find(m => m.id === mapId)?.name ?? mapId;
+  // ─── Map metadata lookup ─────────────────────────────────────────────────
+  // Priorité :
+  //  1. DB  → campaignMapNames chargé via GET /api/campaigns/:id/maps (tous)
+  //  2. Nœud → selectedMapName stocké lors de la sélection dans le Campaign Manager
+  //  3. UUID brut (dernier recours)
+  const getMapName = (node: MapData) =>
+    (node.selectedMap ? campaignMapNames().get(node.selectedMap) : undefined)
+    ?? node.selectedMapName
+    ?? node.selectedMap
+    ?? '';
 
   // ─── Launch map node in BoardGame ──────────────────────────────────────────
-  const launchMap = () => {
+  const launchMap = async () => {
     const node = currentNode() as MapData | null;
     if (!node?.selectedMap) return;
 
-    setSessionMapConfig({
+    // Si la carte est en DB (UUID) et absente du cache localStorage,
+    // on la récupère avant de naviguer — sinon InitGrid tombe sur la grille par défaut.
+    await ensureMapCached(node.selectedMap, params.id);
+
+    const cfg = {
       campaignId: params.id,
       sessionId:  sessionId(),
       nodeId:     node.id,
@@ -334,12 +468,28 @@ const CampaignSessionPage: Component = () => {
       // Normaliser les exitCells : garantir que exitType est toujours défini
       exitCells:  node.exitCells?.map(e => ({ ...e, exitType: e.exitType ?? 'next' as const })),
       trapCells:  node.trapCells,
-    });
+    };
 
+    // Inclure le blob de la carte dans le broadcast — les joueurs ne sont pas
+    // owners de la map et ne peuvent pas la récupérer via /api/maps/mine.
+    // Même pattern que GameStarted qui envoie mapData à tous les clients.
+    const { loadMap: loadMapLocal } = await import('@/services/mapRepository');
+    const mapBlob = loadMapLocal(node.selectedMap);
+    const cfgWithData = {
+      ...cfg,
+      mapData: mapBlob ? JSON.stringify(mapBlob) : null,
+    };
+
+    // Diffuser le lancement aux joueurs AVANT de naviguer
+    dmLaunchCampaignMap(params.id, JSON.stringify(cfgWithData)).catch(e =>
+      console.warn('[CampaignSession] dmLaunchCampaignMap failed:', e)
+    );
+
+    setSessionMapConfig(cfg);
     navigate('/board?fromSession=1');
   };
 
-  const followPort = async (port: string, choiceText?: string) => {
+  const followPort = async (port: string, choiceText?: string, forceDmBroadcast = false) => {
     const tree = parsedTree();
     const node = currentNode();
     if (!tree || !node) return;
@@ -366,6 +516,16 @@ const CampaignSessionPage: Component = () => {
 
     setHistory(h => [...h, node.id]);
     setCurrentNodeId(nextId);
+
+    // Diffuser le changement de nœud aux joueurs.
+    // Les choix sont exclus par défaut (ils passent via ChoiceVoted + checkConsensus),
+    // SAUF si le MJ force le choix (forceDmBroadcast=true) : dans ce cas on
+    // broadcase directement via NodeAdvanced pour que les joueurs suivent sans vote.
+    if (isHost() && (!port.startsWith('choice-') || forceDmBroadcast)) {
+      dmAdvanceNode(params.id, node.id, nextId).catch(e =>
+        console.warn('[CampaignSession] dmAdvanceNode failed:', e)
+      );
+    }
   };
 
   const handleEnd = async () => {
@@ -655,65 +815,87 @@ const CampaignSessionPage: Component = () => {
                                 const hasLink = () => parsedTree()?.edges.has(`${node()?.id}::choice-${i()}`);
 
                                 return (
-                                  <button
-                                    onClick={() => handleVote(i(), choice)}
-                                    disabled={dmIsObserver()}
-                                    title={dmIsObserver() ? 'Seuls les joueurs peuvent voter' : undefined}
-                                    class={`text-left px-5 py-4 rounded-xl border-2 transition-all flex flex-col gap-2 group ${
-                                      dmIsObserver()
-                                        ? 'border-white/10 bg-white/5 opacity-70 cursor-not-allowed'
-                                        : isMine()
-                                          ? 'border-emerald-500 bg-emerald-500/20 shadow-lg shadow-emerald-500/10'
-                                          : 'border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/15 hover:border-emerald-500/50'
-                                    }`}
-                                  >
-                                    {/* Ligne principale */}
-                                    <div class="flex items-center gap-3 w-full">
-                                      <span class={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm flex-shrink-0 transition-colors ${
-                                        isMine()
-                                          ? 'bg-emerald-500/50 border border-emerald-400 text-white'
-                                          : 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400'
-                                      }`}>
-                                        {i() + 1}
-                                      </span>
-                                      <span class="flex-1 text-white font-medium">{choice || `Choix ${i() + 1}`}</span>
-                                      <Show when={hasLink()}>
-                                        <ChevronRight class={`w-4 h-4 transition-colors ${isMine() ? 'text-emerald-300' : 'text-emerald-400/50 group-hover:text-emerald-400'}`} />
-                                      </Show>
-                                    </div>
-
-                                    {/* Dots joueurs */}
-                                    <Show when={totalPlayers() > 1 || voters().length > 0}>
-                                      <div class="flex items-center gap-1.5 pl-10">
-                                        <For each={Array.from({ length: totalPlayers() }, (_, idx) => {
-                                          const voter = voters()[idx];
-                                          return voter ?? null;
-                                        })}>
-                                          {(voter) => (
-                                            <Show
-                                              when={voter}
-                                              fallback={
-                                                <div
-                                                  class="w-2.5 h-2.5 rounded-full bg-white/10 border border-white/20"
-                                                  title="En attente…"
-                                                />
-                                              }
-                                            >
-                                              <div
-                                                class="w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-300 shadow-sm shadow-emerald-400/50"
-                                                title={voter!.name}
-                                              />
-                                            </Show>
-                                          )}
-                                        </For>
-                                        <Show when={voters().length > 0}>
-                                          <span class="text-[10px] text-emerald-400/70 ml-0.5">
-                                            {voters().length}/{totalPlayers()}
-                                          </span>
+                                  // Wrapper div — nécessaire pour placer le bouton "Forcer"
+                                  // en sibling du bouton choix (un <button> ne peut pas
+                                  // contenir un autre <button> — HTML invalide).
+                                  <div class="flex items-stretch gap-2">
+                                    <button
+                                      onClick={() => handleVote(i(), choice)}
+                                      disabled={dmIsObserver()}
+                                      title={dmIsObserver() ? 'Seuls les joueurs peuvent voter' : undefined}
+                                      class={`flex-1 text-left px-5 py-4 rounded-xl border-2 transition-all flex flex-col gap-2 group ${
+                                        dmIsObserver()
+                                          ? 'border-white/10 bg-white/5 opacity-70 cursor-not-allowed'
+                                          : isMine()
+                                            ? 'border-emerald-500 bg-emerald-500/20 shadow-lg shadow-emerald-500/10'
+                                            : 'border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/15 hover:border-emerald-500/50'
+                                      }`}
+                                    >
+                                      {/* Ligne principale */}
+                                      <div class="flex items-center gap-3 w-full">
+                                        <span class={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm flex-shrink-0 transition-colors ${
+                                          isMine()
+                                            ? 'bg-emerald-500/50 border border-emerald-400 text-white'
+                                            : 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400'
+                                        }`}>
+                                          {i() + 1}
+                                        </span>
+                                        <span class="flex-1 text-white font-medium">{choice || `Choix ${i() + 1}`}</span>
+                                        <Show when={hasLink()}>
+                                          <ChevronRight class={`w-4 h-4 transition-colors ${isMine() ? 'text-emerald-300' : 'text-emerald-400/50 group-hover:text-emerald-400'}`} />
                                         </Show>
                                       </div>
+
+                                      {/* Dots joueurs */}
+                                      <Show when={totalPlayers() > 1 || voters().length > 0}>
+                                        <div class="flex items-center gap-1.5 pl-10">
+                                          <For each={Array.from({ length: totalPlayers() }, (_, idx) => {
+                                            const voter = voters()[idx];
+                                            return voter ?? null;
+                                          })}>
+                                            {(voter) => (
+                                              <Show
+                                                when={voter}
+                                                fallback={
+                                                  <div
+                                                    class="w-2.5 h-2.5 rounded-full bg-white/10 border border-white/20"
+                                                    title="En attente…"
+                                                  />
+                                                }
+                                              >
+                                                <div
+                                                  class="w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-300 shadow-sm shadow-emerald-400/50"
+                                                  title={voter!.name}
+                                                />
+                                              </Show>
+                                            )}
+                                          </For>
+                                          <Show when={voters().length > 0}>
+                                            <span class="text-[10px] text-emerald-400/70 ml-0.5">
+                                              {voters().length}/{totalPlayers()}
+                                            </span>
+                                          </Show>
+                                        </div>
+                                      </Show>
+                                    </button>
+
+                                    {/* Bouton "Forcer" — MJ uniquement, sibling du bouton choix.
+                                        Bypasse le vote et avance directement via NodeAdvanced. */}
+                                    <Show when={dmIsObserver() && hasLink()}>
+                                      <button
+                                        onClick={() => {
+                                          if (votingLocked()) return;
+                                          setVotingLocked(true);
+                                          followPort(`choice-${i()}`, choice || `Choix ${i() + 1}`, true);
+                                        }}
+                                        class="self-center flex-shrink-0 flex flex-col items-center justify-center gap-0.5 px-3 py-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[10px] font-semibold hover:bg-amber-500/25 hover:border-amber-400/60 transition-all"
+                                        title="Forcer ce choix sans attendre le consensus des joueurs"
+                                      >
+                                        <ChevronRight class="w-4 h-4" />
+                                        <span>Forcer</span>
+                                      </button>
                                     </Show>
-                                  </button>
+                                  </div>
                                 );
                               }}
                             </For>
@@ -736,7 +918,7 @@ const CampaignSessionPage: Component = () => {
                 <Match when={currentNode()?.type === 'map'}>
                   {(() => {
                     const node = () => currentNode() as MapData;
-                    const mapName = () => node().selectedMap ? getMapName(node().selectedMap!) : null;
+                    const mapName = () => node().selectedMap ? getMapName(node()) : null;
                     const configured = () => !!(node().spawnPoint || (node().exitCells?.length ?? 0) > 0 || (node().trapCells?.length ?? 0) > 0);
                     return (
                       <div>
