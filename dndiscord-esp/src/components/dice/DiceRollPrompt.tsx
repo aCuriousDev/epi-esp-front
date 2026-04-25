@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, Show, onMount } from "solid-js";
+import { createEffect, createMemo, createSignal, Show, onMount, onCleanup } from "solid-js";
 import { Portal } from "solid-js/web";
 import Dice3D from "../common/DiceD20/Dice3D";
 import { signalRService } from "../../services/signalr/SignalRService";
@@ -14,6 +14,17 @@ export default function DiceRollPrompt() {
   const [phase, setPhase] = createSignal<Phase>("prompt");
   const [lastValue, setLastValue] = createSignal<number | null>(null);
   const [reducedMotion, setReducedMotion] = createSignal(false);
+
+  let canceled = false;
+  let pendingTimeout: number | null = null;
+
+  onCleanup(() => {
+    canceled = true;
+    if (pendingTimeout !== null) {
+      window.clearTimeout(pendingTimeout);
+      pendingTimeout = null;
+    }
+  });
 
   onMount(() => {
     setReducedMotion(
@@ -65,8 +76,11 @@ export default function DiceRollPrompt() {
       console.warn("[DiceRollPrompt] SubmitRollResult failed", { requestId: req.requestId, err });
     }
 
+    if (canceled) return; // unmounted between invoke and timeout schedule
     const hold = reducedMotion() ? 900 : 1800;
-    window.setTimeout(() => {
+    pendingTimeout = window.setTimeout(() => {
+      pendingTimeout = null;
+      if (canceled) return;
       setPhase("exit");
       setDiceRequestsState(req.requestId, "myParticipation", "submitted");
     }, hold);
