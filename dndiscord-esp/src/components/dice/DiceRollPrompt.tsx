@@ -5,12 +5,23 @@ import { signalRService } from "../../services/signalr/SignalRService";
 import {
   myPendingRequests,
   setDiceRequestsState,
+  diceRequestsState,
+  type DiceRequest,
 } from "../../stores/diceRequests.store";
 
 type Phase = "prompt" | "rolling" | "result" | "canceled" | "exit";
 
 export default function DiceRollPrompt() {
-  const active = createMemo(() => myPendingRequests()[0] ?? null);
+  const activeId = createMemo<string | null>(() => myPendingRequests()[0]?.requestId ?? null);
+
+  // Resolve the actual request from the store. This re-runs whenever the store
+  // entry for the active id changes, but does NOT cause the keyed <Show> below
+  // to re-mount the subtree.
+  const active = (): DiceRequest | null => {
+    const id = activeId();
+    if (!id) return null;
+    return diceRequestsState[id] ?? null;
+  };
   const [phase, setPhase] = createSignal<Phase>("prompt");
   const [lastValue, setLastValue] = createSignal<number | null>(null);
   const [reducedMotion, setReducedMotion] = createSignal(false);
@@ -32,10 +43,10 @@ export default function DiceRollPrompt() {
     );
   });
 
-  // Reset phase whenever the active request changes.
+  // Reset phase whenever the LOGICAL request changes (not on every store mutation).
   createEffect(() => {
-    const req = active();
-    if (req) {
+    const id = activeId();
+    if (id) {
       setPhase("prompt");
       setLastValue(null);
     }
@@ -108,61 +119,65 @@ export default function DiceRollPrompt() {
   });
 
   return (
-    <Show when={active()}>
-      {(req) => (
-        <Portal>
-          <div
-            class="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm"
-            style={{
-              transition: `opacity ${reducedMotion() ? 120 : 280}ms ease-out`,
-              opacity: phase() === "exit" ? 0 : 1,
-            }}
-          >
-            <p class="text-[11px] font-bold uppercase tracking-[0.25em] text-purple-300 mb-2">
-              [Le MJ demande un jet]
-            </p>
-            <p
-              class={`font-display italic text-2xl mb-6 ${tone().text}`}
-              style={{ transition: "color 220ms cubic-bezier(0.22,1,0.36,1)" }}
-            >
-              {req().label ?? "Jet de dé"}
-            </p>
-
+    <Show when={activeId()} keyed>
+      {(_id) => {
+        const req = active();
+        if (!req) return null;
+        return (
+          <Portal>
             <div
-              class={`relative rounded-2xl border ${tone().border} p-2`}
+              class="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm"
               style={{
-                transition: "box-shadow 600ms cubic-bezier(0.2,0.8,0.2,1)",
-                "box-shadow":
-                  phase() === "result" &&
-                  (lastValue() === 20 || lastValue() === 1)
-                    ? `0 0 60px ${tone().glow}`
-                    : "none",
+                transition: `opacity ${reducedMotion() ? 120 : 280}ms ease-out`,
+                opacity: phase() === "exit" ? 0 : 1,
               }}
             >
-              <Dice3D
-                size={280}
-                rollOnMount={false}
-                forcedValue={req().forcedValue ?? undefined}
-                onRolled={handleRolled}
-              />
-            </div>
+              <p class="text-[11px] font-bold uppercase tracking-[0.25em] text-purple-300 mb-2">
+                [Le MJ demande un jet]
+              </p>
+              <p
+                class={`font-display italic text-2xl mb-6 ${tone().text}`}
+                style={{ transition: "color 220ms cubic-bezier(0.22,1,0.36,1)" }}
+              >
+                {active()?.label ?? "Jet de dé"}
+              </p>
 
-            <Show when={phase() === "prompt"}>
-              <p class="mt-6 text-purple-200/70 text-sm tracking-wide animate-pulse">
-                Appuyez sur le dé pour lancer
-              </p>
-            </Show>
-            <Show when={phase() === "result" && lastValue() != null}>
-              <p class={`mt-4 font-display text-6xl font-bold ${tone().text}`}>
-                {lastValue()}
-              </p>
-            </Show>
-            <Show when={phase() === "canceled"}>
-              <p class="mt-4 text-purple-300/80 italic">Annulé par le MJ</p>
-            </Show>
-          </div>
-        </Portal>
-      )}
+              <div
+                class={`relative rounded-2xl border ${tone().border} p-2`}
+                style={{
+                  transition: "box-shadow 600ms cubic-bezier(0.2,0.8,0.2,1)",
+                  "box-shadow":
+                    phase() === "result" &&
+                    (lastValue() === 20 || lastValue() === 1)
+                      ? `0 0 60px ${tone().glow}`
+                      : "none",
+                }}
+              >
+                <Dice3D
+                  size={280}
+                  rollOnMount={false}
+                  forcedValue={req.forcedValue ?? undefined}
+                  onRolled={handleRolled}
+                />
+              </div>
+
+              <Show when={phase() === "prompt"}>
+                <p class="mt-6 text-purple-200/70 text-sm tracking-wide animate-pulse">
+                  Appuyez sur le dé pour lancer
+                </p>
+              </Show>
+              <Show when={phase() === "result" && lastValue() != null}>
+                <p class={`mt-4 font-display text-6xl font-bold ${tone().text}`}>
+                  {lastValue()}
+                </p>
+              </Show>
+              <Show when={phase() === "canceled"}>
+                <p class="mt-4 text-purple-300/80 italic">Annulé par le MJ</p>
+              </Show>
+            </div>
+          </Portal>
+        );
+      }}
     </Show>
   );
 }
