@@ -4,7 +4,7 @@
  * Sets up all units for the game including player characters and enemies
  */
 
-import { Unit, UnitType, Team, GridPosition } from '../../types';
+import { Unit, UnitType, Team, GridPosition, Ability } from '../../types';
 import type { UnitAssignment } from '../../types/multiplayer';
 import { units, setUnits } from '../stores/UnitsStore';
 import { setTiles } from '../stores/TilesStore';
@@ -13,7 +13,10 @@ import {
   WARRIOR_ABILITIES,
   MAGE_ABILITIES,
   ARCHER_ABILITIES,
-  ENEMY_ABILITIES,
+  SKELETON_WARRIOR_ABILITIES,
+  SKELETON_MAGE_ABILITIES,
+  SKELETON_ROGUE_ABILITIES,
+  SKELETON_MINION_ABILITIES,
   cloneAbilities,
 } from '../abilities/AbilityDefinitions';
 import { loadMap } from '../../services/mapStorage';
@@ -118,16 +121,20 @@ export function getEnemySpawnPositions(mapId: string | null): GridPosition[] {
   return getSpawnZones(mapId).enemy;
 }
 
-const DEFAULT_ENEMIES: Array<{
+interface EnemySpec {
   id: string;
   name: string;
   type: UnitType;
   stats: Unit["stats"];
-}> = [
+  abilities: Ability[];
+}
+
+const DEFAULT_ENEMIES: EnemySpec[] = [
   {
     id: "enemy_skeleton_1",
     name: "Skeleton Warrior",
     type: UnitType.ENEMY_SKELETON,
+    abilities: SKELETON_WARRIOR_ABILITIES,
     stats: {
       maxHealth: 60,
       currentHealth: 60,
@@ -143,7 +150,8 @@ const DEFAULT_ENEMIES: Array<{
   {
     id: "enemy_skeleton_2",
     name: "Skeleton Archer",
-    type: UnitType.ENEMY_SKELETON,
+    type: UnitType.ENEMY_SKELETON_ROGUE,
+    abilities: SKELETON_ROGUE_ABILITIES,
     stats: {
       maxHealth: 50,
       currentHealth: 50,
@@ -160,6 +168,7 @@ const DEFAULT_ENEMIES: Array<{
     id: "enemy_mage_1",
     name: "Skeleton Mage",
     type: UnitType.ENEMY_MAGE,
+    abilities: SKELETON_MAGE_ABILITIES,
     stats: {
       maxHealth: 70,
       currentHealth: 70,
@@ -170,6 +179,23 @@ const DEFAULT_ENEMIES: Array<{
       attackDamage: 16,
       defense: 5,
       initiative: 12,
+    },
+  },
+  {
+    id: "enemy_skeleton_minion_1",
+    name: "Skeleton Minion",
+    type: UnitType.ENEMY_SKELETON_MINION,
+    abilities: SKELETON_MINION_ABILITIES,
+    stats: {
+      maxHealth: 30,
+      currentHealth: 30,
+      maxActionPoints: 4,
+      currentActionPoints: 4,
+      movementRange: 3,
+      attackRange: 1,
+      attackDamage: 6,
+      defense: 2,
+      initiative: 8,
     },
   },
 ];
@@ -233,7 +259,7 @@ export function initializeUnitsMultiplayer(
       team: Team.ENEMY,
       position: spawn,
       stats: e.stats,
-      abilities: cloneAbilities(ENEMY_ABILITIES),
+      abilities: cloneAbilities(e.abilities),
       statusEffects: [],
       isAlive: true,
       hasActed: false,
@@ -367,7 +393,7 @@ export function initializeUnits(mapId: string | null = null): void {
       name: 'Skeleton Warrior',
       type: UnitType.ENEMY_SKELETON,
       position: { x: 8, z: 8 },
-      abilities: cloneAbilities(ENEMY_ABILITIES),
+      abilities: cloneAbilities(SKELETON_WARRIOR_ABILITIES),
       stats: {
         maxHealth: 60,
         currentHealth: 60,
@@ -383,9 +409,9 @@ export function initializeUnits(mapId: string | null = null): void {
     {
       id: 'enemy_skeleton_2',
       name: 'Skeleton Archer',
-      type: UnitType.ENEMY_SKELETON,
+      type: UnitType.ENEMY_SKELETON_ROGUE,
       position: { x: 7, z: 9 },
-      abilities: cloneAbilities(ENEMY_ABILITIES),
+      abilities: cloneAbilities(SKELETON_ROGUE_ABILITIES),
       stats: {
         maxHealth: 50,
         currentHealth: 50,
@@ -403,7 +429,7 @@ export function initializeUnits(mapId: string | null = null): void {
       name: 'Skeleton Mage',
       type: UnitType.ENEMY_MAGE,
       position: { x: 9, z: 7 },
-      abilities: cloneAbilities(ENEMY_ABILITIES),
+      abilities: cloneAbilities(SKELETON_MAGE_ABILITIES),
       stats: {
         maxHealth: 70,
         currentHealth: 70,
@@ -416,8 +442,26 @@ export function initializeUnits(mapId: string | null = null): void {
         initiative: 12,
       },
     },
+    {
+      id: 'enemy_skeleton_minion_1',
+      name: 'Skeleton Minion',
+      type: UnitType.ENEMY_SKELETON_MINION,
+      position: { x: 9, z: 8 },
+      abilities: cloneAbilities(SKELETON_MINION_ABILITIES),
+      stats: {
+        maxHealth: 30,
+        currentHealth: 30,
+        maxActionPoints: 4,
+        currentActionPoints: 4,
+        movementRange: 3,
+        attackRange: 1,
+        attackDamage: 6,
+        defense: 2,
+        initiative: 8,
+      },
+    },
   ];
-  
+
   fillFromPlacementRule(availableEnemyPositions, 'enemy', enemyUnits.length);
 
   console.log('[initializeUnits] Enemy spawn zones loaded:', availableEnemyPositions.length);
@@ -475,7 +519,7 @@ export function initializeUnits(mapId: string | null = null): void {
 export function initializeEnemies(mapId: string | null = null): void {
   const existingUnits = { ...units };
   const newUnits: Record<string, Unit> = {};
-  
+
   // Enemy units
   const enemyUnits: Partial<Unit>[] = [
     {
@@ -483,7 +527,7 @@ export function initializeEnemies(mapId: string | null = null): void {
       name: 'Skeleton Warrior',
       type: UnitType.ENEMY_SKELETON,
       position: { x: 8, z: 8 },
-      abilities: cloneAbilities(ENEMY_ABILITIES),
+      abilities: cloneAbilities(SKELETON_WARRIOR_ABILITIES),
       stats: {
         maxHealth: 60,
         currentHealth: 60,
@@ -499,9 +543,9 @@ export function initializeEnemies(mapId: string | null = null): void {
     {
       id: 'enemy_skeleton_2',
       name: 'Skeleton Archer',
-      type: UnitType.ENEMY_SKELETON,
+      type: UnitType.ENEMY_SKELETON_ROGUE,
       position: { x: 7, z: 9 },
-      abilities: cloneAbilities(ENEMY_ABILITIES),
+      abilities: cloneAbilities(SKELETON_ROGUE_ABILITIES),
       stats: {
         maxHealth: 50,
         currentHealth: 50,
@@ -519,7 +563,7 @@ export function initializeEnemies(mapId: string | null = null): void {
       name: 'Skeleton Mage',
       type: UnitType.ENEMY_MAGE,
       position: { x: 9, z: 7 },
-      abilities: cloneAbilities(ENEMY_ABILITIES),
+      abilities: cloneAbilities(SKELETON_MAGE_ABILITIES),
       stats: {
         maxHealth: 70,
         currentHealth: 70,
@@ -530,6 +574,24 @@ export function initializeEnemies(mapId: string | null = null): void {
         attackDamage: 16,
         defense: 5,
         initiative: 12,
+      },
+    },
+    {
+      id: 'enemy_skeleton_minion_1',
+      name: 'Skeleton Minion',
+      type: UnitType.ENEMY_SKELETON_MINION,
+      position: { x: 9, z: 8 },
+      abilities: cloneAbilities(SKELETON_MINION_ABILITIES),
+      stats: {
+        maxHealth: 30,
+        currentHealth: 30,
+        maxActionPoints: 4,
+        currentActionPoints: 4,
+        movementRange: 3,
+        attackRange: 1,
+        attackDamage: 6,
+        defense: 2,
+        initiative: 8,
       },
     },
   ];

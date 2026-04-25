@@ -47,15 +47,19 @@ export function getUnitIcon(type: string, props?: IconProps): JSX.Element {
   switch (type) {
     case "warrior":
       return <Swords class={cls} />;
+    case "barbarian":
+      return <Swords class={cls} />;
     case "mage":
       return <Wand2 class={cls} />;
     case "archer":
       return <Target class={cls} />;
     case "rogue":
       return <Swords class={cls} />;
-    case "healer":
-      return <Sparkles class={cls} />;
     case "enemy_skeleton":
+      return <Skull class={cls} />;
+    case "enemy_skeleton_rogue":
+      return <Skull class={cls} />;
+    case "enemy_skeleton_minion":
       return <Skull class={cls} />;
     case "enemy_mage":
       return <Wand2 class={cls} />;

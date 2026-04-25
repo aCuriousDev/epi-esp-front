@@ -24,20 +24,23 @@ function makeAssignment(overrides: Partial<UnitAssignment> = {}): UnitAssignment
 describe('CharacterToUnit / mapAssignmentToUnit', () => {
   describe('class to unit type mapping', () => {
     it.each([
+      // Playable classes — each has its own 3D asset and dedicated UnitType
       ['Guerrier', UnitType.WARRIOR],
-      ['Barbare', UnitType.WARRIOR],
+      ['Barbare', UnitType.BARBARIAN],
+      ['Magicien', UnitType.MAGE],
+      ['Rodeur', UnitType.ARCHER],
+      ['Voleur', UnitType.ROGUE],
+      // Lobby quickstart preset labels (back BuildDefaultAssignment)
+      ['Mage', UnitType.MAGE],
+      ['Archer', UnitType.ARCHER],
+      // Legacy non-playable classes (pre-existing characters) — fall back to WARRIOR
       ['Paladin', UnitType.WARRIOR],
       ['Moine', UnitType.WARRIOR],
-      ['Magicien', UnitType.MAGE],
-      ['Mage', UnitType.MAGE], // lobby quickstart preset (back BuildDefaultAssignment)
-      ['Ensorceleur', UnitType.MAGE],
-      ['Sorcier', UnitType.MAGE],
-      ['Archer', UnitType.ARCHER], // lobby quickstart preset
-      ['Voleur', UnitType.ARCHER],
-      ['Rodeur', UnitType.ARCHER],
-      ['Barde', UnitType.HEALER],
-      ['Clerc', UnitType.HEALER],
-      ['Druide', UnitType.HEALER],
+      ['Ensorceleur', UnitType.WARRIOR],
+      ['Sorcier', UnitType.WARRIOR],
+      ['Barde', UnitType.WARRIOR],
+      ['Clerc', UnitType.WARRIOR],
+      ['Druide', UnitType.WARRIOR],
     ])('%s maps to %s', (characterClass, expectedType) => {
       const unit = mapAssignmentToUnit(makeAssignment({ characterClass }), { x: 0, z: 0 });
       expect(unit.type).toBe(expectedType);
@@ -128,9 +131,19 @@ describe('CharacterToUnit / mapAssignmentToUnit', () => {
       expect(unit.abilities.some(a => a.id === 'fireball')).toBe(true);
     });
 
-    it('archer gets archer abilities', () => {
-      const unit = mapAssignmentToUnit(makeAssignment({ characterClass: 'Voleur' }), { x: 0, z: 0 });
+    it('archer (Rodeur) gets archer abilities', () => {
+      const unit = mapAssignmentToUnit(makeAssignment({ characterClass: 'Rodeur' }), { x: 0, z: 0 });
       expect(unit.abilities.some(a => a.id === 'arrow_shot')).toBe(true);
+    });
+
+    it('rogue (Voleur) gets rogue abilities', () => {
+      const unit = mapAssignmentToUnit(makeAssignment({ characterClass: 'Voleur' }), { x: 0, z: 0 });
+      expect(unit.abilities.some(a => a.id === 'sneak_attack')).toBe(true);
+    });
+
+    it('barbarian gets barbarian abilities', () => {
+      const unit = mapAssignmentToUnit(makeAssignment({ characterClass: 'Barbare' }), { x: 0, z: 0 });
+      expect(unit.abilities.some(a => a.id === 'reckless_attack')).toBe(true);
     });
   });
 });
