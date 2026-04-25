@@ -19,7 +19,7 @@ import { getTeleportPositions } from '../../services/mapStorage';
 import { transitionToNextRoom } from './TurnActions';
 import { playMovementDustEffect } from '../vfx/VFXIntegration';
 import { playFootstepSound, playSelectSound } from '../audio/SoundIntegration';
-import { isSessionMapActive, triggerSessionExit } from '../../stores/session-map.store';
+import { isSessionMapActive, requestSessionExit } from '../../stores/session-map.store';
 
 // ============================================
 // UNIT SELECTION
@@ -305,11 +305,13 @@ export function moveUnit(targetPos: GridPosition): boolean {
       setTiles(posToKey(targetPos), 'effects', []);
     }
 
-    // EXIT: trigger session return when a player steps on this cell
+    // EXIT: notify the DM (who confirms) rather than immediately navigating.
+    // BoardGame displays a banner; the DM clicks to actually trigger the transition.
     if (destTile.type === TileType.EXIT && unit.team === Team.PLAYER) {
       if (isSessionMapActive()) {
-        addCombatLog('Sortie atteinte ! Retour au scénario…', 'system');
-        setTimeout(() => triggerSessionExit(), 800);
+        const exitType: 'next' | 'end' = destTile.exitType ?? 'next';
+        addCombatLog(`${unit.name} a atteint la sortie — en attente du MJ…`, 'system');
+        requestSessionExit({ unitName: unit.name, exitType });
       }
     }
   }

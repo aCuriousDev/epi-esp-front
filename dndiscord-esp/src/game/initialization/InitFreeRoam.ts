@@ -45,11 +45,28 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
     const filtered = unitAssignments.filter(
       (a) => !(isDm() && hubId && a.userId === hubId),
     );
+
+    // When the map comes from a campaign session node it may carry an explicit
+    // spawnPoint (authored in the Campaign Manager). Prefer that over per-
+    // assignment coords so all players cluster near the designated entry.
+    const sessionSpawn = getSessionMapConfig()?.spawnPoint ?? null;
+
+    const mpSpawns = resolveAllySpawns({
+      count: filtered.length,
+      tiles,
+      gridWidth: GRID_SIZE,
+      gridHeight: GRID_SIZE,
+      spawnPoint: sessionSpawn,
+      seed: Date.now(),
+      legacyFallback: LEGACY_FALLBACK_SPAWNS,
+    });
+
     filtered.forEach((assignment, i) => {
+      // Priority: server-authoritative startX/Y > session spawnPoint cluster > legacy fallback
       const spawnPos =
         assignment.startX != null && assignment.startY != null
           ? { x: assignment.startX, z: assignment.startY }
-          : LEGACY_FALLBACK_SPAWNS[i % LEGACY_FALLBACK_SPAWNS.length];
+          : (mpSpawns[i] ?? LEGACY_FALLBACK_SPAWNS[i % LEGACY_FALLBACK_SPAWNS.length]);
       const unit = mapAssignmentToUnit(assignment, spawnPos);
       newUnits[unit.id] = unit;
 

@@ -55,6 +55,10 @@ import {
   isSessionMapActive,
   setSessionExitCallback,
   clearSessionExitCallback,
+  pendingSessionExit,
+  clearPendingSessionExit,
+  triggerSessionExit,
+  type ExitType,
 } from "../stores/session-map.store";
 import type { GameStartedPayload } from "../types/multiplayer";
 import { saveMap, type SavedMapData } from "../services/mapStorage";
@@ -118,6 +122,16 @@ const BoardGame: Component = () => {
         // board they must not overlap or the hub keeps broadcasting into a
         // scene it no longer owns.
         (async () => {
+          // Snapshot unit assignments BEFORE leaveSession() — that call invokes
+          // clearSession() which wipes gameStartedPayload and its unitAssignments.
+          // Preserving them here lets the map spawn one character per lobby player
+          // even though the SignalR session is torn down for the story-tree board.
+          // Falls back to undefined (→ solo 3-char defaults) when no lobby was used.
+          const unitAssignments =
+            sessionState.gameStartedPayload?.unitAssignments?.length
+              ? sessionState.gameStartedPayload.unitAssignments
+              : undefined;
+
           if (sessionState.session) {
             try {
               await leaveSession();
@@ -131,7 +145,7 @@ const BoardGame: Component = () => {
           setSelectedMapId(cfg.mapId);
           setAppPhase(AppPhase.IN_GAME);
 
-          setSessionExitCallback(() => backToSession());
+          setSessionExitCallback((exitType) => backToSession(exitType));
 
           let attempts = 0;
           const checkEngine = () => {
@@ -141,7 +155,9 @@ const BoardGame: Component = () => {
               return;
             }
             if (isEngineReady()) {
-              setTimeout(() => startGame(GameMode.FREE_ROAM, cfg.mapId), 150);
+              // Pass multiplayer assignments when available so one character is
+              // spawned per player who was in the lobby. undefined → solo defaults.
+              setTimeout(() => startGame(GameMode.FREE_ROAM, cfg.mapId, null, unitAssignments), 150);
             } else {
               if (mounted) setTimeout(checkEngine, 100);
             }
@@ -362,13 +378,18 @@ const BoardGame: Component = () => {
   };
 
   /** Return to the campaign session page after playing a session map. */
-  const backToSession = () => {
+  const backToSession = (exitType: 'next' | 'end' = 'next') => {
     const cfg = getSessionMapConfig();
+    clearPendingSessionExit();
     clearSessionExitCallback();
     clearSessionMapConfig();
     clearEngineState();
     if (cfg) {
-      navigate(`/campaigns/${cfg.campaignId}/session`);
+      // resumeNodeId lets the session page restore the current position in the tree
+      // instead of always restarting from the first node.
+      navigate(
+        `/campaigns/${cfg.campaignId}/session?mapExit=${exitType}&resumeNodeId=${encodeURIComponent(cfg.nodeId)}`,
+      );
     } else {
       backToModeSelection();
     }
@@ -877,6 +898,94 @@ const BoardGame: Component = () => {
 
             {/* Enemy spawn notification toasts */}
             <EnemySpawnToast />
+
+            {/* ── Session-map exit request ─────────────────────────────────────────
+                When a player steps on an EXIT tile, MovementActions sets
+                pendingSessionExit instead of navigating immediately.
+                – DM sees a full confirmation banner and decides when to trigger.
+                – Other players see a small "waiting for DM" toast.
+            ─────────────────────────────────────────────────────────────────── */}
+            <Show when={isSessionMapActive() && pendingSessionExit() !== null}>
+              <Show
+                when={isSessionHost()}
+                fallback={
+                  /* ── Player toast ──────────────────────────────────────────── */
+                  <div class="absolute bottom-28 left-1/2 -translate-x-1/2 z-50
+                              flex items-center gap-3
+                              px-5 py-3 rounded-2xl
+                              bg-slate-900/90 border border-white/10
+                              backdrop-blur-sm shadow-2xl
+                              pointer-events-none select-none">
+                    <div class="w-5 h-5 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
+                    <span class="text-sm text-slate-300">
+                      <span class="text-amber-400 font-semibold">{pendingSessionExit()?.unitName}</span>
+                      {' '}a atteint la sortie — en attente du MJ…
+                    </span>
+                  </div>
+                }
+              >
+                {/* ── DM confirmation banner ────────────────────────────────── */}
+                <div class="absolute bottom-28 left-1/2 -translate-x-1/2 z-50
+                            flex items-center gap-4
+                            px-5 py-4 rounded-2xl
+                            bg-slate-900/95 border border-white/15
+                            backdrop-blur-sm shadow-2xl">
+
+                  {/* Icon */}
+                  <div class={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                    pendingSessionExit()?.exitType === 'end'
+                      ? 'bg-rose-500/20 border border-rose-500/40'
+                      : 'bg-amber-500/20 border border-amber-500/40'
+                  }`}>
+                    <span class="text-xl">
+                      {pendingSessionExit()?.exitType === 'end' ? '⛔' : '🚪'}
+                    </span>
+                  </div>
+
+                  {/* Text */}
+                  <div class="flex flex-col gap-0.5 min-w-0">
+                    <p class="text-sm font-semibold text-white leading-snug">
+                      <span class={pendingSessionExit()?.exitType === 'end' ? 'text-rose-400' : 'text-amber-400'}>
+                        {pendingSessionExit()?.unitName}
+                      </span>
+                      {' '}a atteint la sortie
+                    </p>
+                    <p class="text-xs text-slate-400">
+                      {pendingSessionExit()?.exitType === 'end'
+                        ? 'Cette sortie met fin au scénario.'
+                        : 'Cette sortie continue vers le bloc suivant.'}
+                    </p>
+                  </div>
+
+                  {/* Buttons */}
+                  <div class="flex gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => clearPendingSessionExit()}
+                      class="px-3 py-2 rounded-xl text-xs font-medium
+                             bg-white/5 border border-white/10 text-slate-400
+                             hover:bg-white/10 hover:text-white transition-all"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      onClick={() => {
+                        const req = pendingSessionExit();
+                        if (!req) return;
+                        clearPendingSessionExit();
+                        triggerSessionExit(req.exitType);
+                      }}
+                      class={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                        pendingSessionExit()?.exitType === 'end'
+                          ? 'bg-rose-600 hover:bg-rose-500 text-white border border-rose-500'
+                          : 'bg-amber-600 hover:bg-amber-500 text-white border border-amber-500'
+                      }`}
+                    >
+                      {pendingSessionExit()?.exitType === 'end' ? '⛔ Terminer' : '🚪 Continuer'}
+                    </button>
+                  </div>
+                </div>
+              </Show>
+            </Show>
 
             {/* Compact unit info card (top-center) + persistent player hotbar
                 (bottom-center) — non-DM UX replacing the old auto-opening

@@ -59,6 +59,7 @@ import { addHiddenRoll, addGrantedItem } from "../../stores/dmTools.store";
 const HUB = {
   createSession: "CreateSession",
   joinSession: "JoinSession",
+  joinCampaignSession: "JoinCampaignSession",
   leaveSession: "LeaveSession",
   kickPlayer: "KickPlayer",
   createRoom: "CreateRoom",
@@ -82,6 +83,7 @@ const HUB = {
   dmSwitchMap: "DmSwitchMap",
   dmAdjustHp: "DmAdjustHp",
   selectDefaultTemplate: "SelectDefaultTemplate",
+  voteForChoice: "VoteForChoice",
 } as const;
 
 async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
@@ -210,6 +212,36 @@ export async function joinSession(sessionId: string): Promise<JoinResult> {
   return result;
 }
 
+/**
+ * Rejoindre la session live d'une campagne par son campaignId.
+ * Résout le problème de l'UUID base-de-données vs ID SignalR in-memory :
+ * le hub cherche directement dans le SessionManager par campaignId.
+ */
+export async function joinCampaignSession(campaignId: string): Promise<JoinResult> {
+  syncHubUserId();
+  clearUnits();
+  clearTiles();
+  resetGameState();
+  const raw = (await signalRService.invoke(
+    HUB.joinCampaignSession,
+    campaignId,
+  )) as Record<string, unknown>;
+  syncHubUserId();
+  const result: JoinResult = {
+    success: !!raw.success,
+    message: raw.message as string | undefined,
+    session: raw.session
+      ? normalizeSession(raw.session as Record<string, unknown>)
+      : undefined,
+  };
+  applyJoinResult(result);
+  if (result.success && result.session) {
+    clearPartyChat();
+    await tryBindDiscordVoiceToSession(result.session.sessionId);
+  }
+  return result;
+}
+
 /** Quitter la session courante. */
 export async function leaveSession(): Promise<void> {
   await signalRService.invoke(HUB.leaveSession);
@@ -258,6 +290,16 @@ export async function selectCharacter(
   characterId: string | null,
 ): Promise<void> {
   await signalRService.invoke(HUB.selectCharacter, characterId);
+}
+
+/** Diffuse le vote d'un joueur pour un choix sur un nœud Choices.
+ * choiceIndex = -1 pour annuler. */
+export async function voteForChoice(
+  campaignId: string,
+  nodeId: string,
+  choiceIndex: number,
+): Promise<void> {
+  await signalRService.invoke(HUB.voteForChoice, campaignId, nodeId, choiceIndex);
 }
 
 /** Pick a quickstart preset (warrior / mage / archer). Mutually exclusive with

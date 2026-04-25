@@ -49,7 +49,7 @@ export interface CampaignFilterRequest {
   search?: string;
   status?: CampaignStatus;
   isPublic?: boolean;
-  roleFilter?: "All" | "AsDungeonMaster" | "AsPlayer";
+  roleFilter?: "All" | "AsDungeonMaster" | "AsPlayer" | "AsMember";
   sortBy?: "CreatedAt" | "UpdatedAt" | "LastPlayedAt" | "Name" | "MemberCount";
   sortDescending?: boolean;
 }
@@ -302,6 +302,18 @@ export const CampaignService = {
     await axios.delete(`${API_URL}/api/campaigns/${campaignId}/members/${memberId}`, {
       headers: getAuthHeaders(),
     });
+  },
+
+  /**
+   * Join a public campaign directly by its ID (no invite code required).
+   */
+  async joinPublicCampaign(campaignId: string): Promise<CampaignDetailResponse> {
+    const response = await axios.post<CampaignDetailResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/join-public`,
+      {},
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
   },
 
   /**

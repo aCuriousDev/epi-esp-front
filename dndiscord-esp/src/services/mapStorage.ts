@@ -75,6 +75,10 @@ export interface SavedAssetData {
 	scale: number;
 	rotationY: number;
 	positionY: number;
+	/** X offset within the cell (wall-edge / corner snapping). 0 = centre. */
+	offsetX?: number;
+	/** Z offset within the cell (wall-edge / corner snapping). 0 = centre. */
+	offsetZ?: number;
 	/** Cases affectées par cet asset (pour les assets multi-cases, ex: crypte, grande table) */
 	affectedCells?: { x: number; z: number }[];
 }
