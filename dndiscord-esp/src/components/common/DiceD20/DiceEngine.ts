@@ -313,7 +313,9 @@ export class DiceEngine {
 
 	private update(): void {
 		const s = this.state;
-		const dt = s.engine.getDeltaTime() / 1000;
+		// Clamp dt so a hidden iframe (Discord Activity channel switch) resuming
+		// with a multi-second delta does not fast-forward through all roll phases.
+		const dt = Math.min(s.engine.getDeltaTime() / 1000, 0.1);
 		if (dt <= 0) return;
 
 		const now = performance.now() / 1000;

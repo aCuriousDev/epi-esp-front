@@ -18,6 +18,8 @@ export interface Dice3DProps {
 	size?: number;
 	/** Roll once automatically on mount. Defaults to true. */
 	rollOnMount?: boolean;
+	/** When set, the roll animation lands on this face instead of a random one. */
+	forcedValue?: number;
 	/** Optional extra CSS class applied to the wrapper. */
 	class?: string;
 	/** Fires after a roll settles — useful for parent-driven flourishes. */
@@ -143,7 +145,7 @@ export function Dice3D(props: Dice3DProps) {
 		vfx.setAmbient(true);
 
 		if (props.rollOnMount ?? true) {
-			window.setTimeout(() => engine?.roll(0.75), 450);
+			window.setTimeout(() => engine?.roll(0.75, props.forcedValue), 450);
 		}
 
 		// React to DPR / container size changes (orientation flips on mobile).
@@ -236,7 +238,7 @@ export function Dice3D(props: Dice3DProps) {
 		const power = Math.max(0.4, Math.min(1, holdPower * 0.55 + flickPower * 0.5 + travelPower * 0.3 + shakeBoost));
 
 		endCharge();
-		engine.roll(power);
+		engine.roll(power, props.forcedValue);
 	};
 
 	const handlePointerCancel = (e: PointerEvent) => {
@@ -268,7 +270,7 @@ export function Dice3D(props: Dice3DProps) {
 		if (isRolling()) return;
 		if (e.key === "Enter" || e.key === " ") {
 			e.preventDefault();
-			engine?.roll(0.75);
+			engine?.roll(0.75, props.forcedValue);
 		}
 	};
 
