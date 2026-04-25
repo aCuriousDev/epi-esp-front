@@ -194,8 +194,12 @@ export default function CreateCharacter() {
 
 	const [prevClass, setPrevClass] = createSignal<string | null>(null);
 
+	// Falls back to the first playable class if selectedClass() is stale (e.g.
+	// restored from sessionStorage or a deprecated key) — avoids a non-null bang.
 	const klass = createMemo(
-		() => PLAYABLE_CLASS_LIST.find((c) => c.key === selectedClass())!
+		() =>
+			PLAYABLE_CLASS_LIST.find((c) => c.key === selectedClass()) ??
+			PLAYABLE_CLASS_LIST[0],
 	);
 
 	const handleCreate = async () => {

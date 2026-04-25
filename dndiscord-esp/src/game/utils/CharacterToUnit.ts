@@ -58,6 +58,9 @@ function abilitiesForType(unitType: UnitType): Ability[] {
 
 function attackRangeForType(unitType: UnitType): number {
   switch (unitType) {
+    case UnitType.WARRIOR:
+    case UnitType.BARBARIAN:
+      return 1;
     case UnitType.MAGE:
       return 5;
     case UnitType.ARCHER:
