@@ -42,9 +42,7 @@ export default function DiceRollPrompt() {
   function closeLocal(): void {
     const req = active();
     if (!req) return;
-    // Mark local participation as submitted/skipped so the store filter removes
-    // this request from myPendingRequests. The store entry itself is not deleted;
-    // the server's RollResultBroadcast (or RollCanceled) keeps it in the shared log.
+    // Flip myParticipation so myPendingRequests filter removes this modal.
     setDiceRequestsState(req.requestId, "myParticipation", "submitted");
   }
 
@@ -60,8 +58,11 @@ export default function DiceRollPrompt() {
     // would unmount the modal mid-animation and swallow the result reveal.
     try {
       await signalRService.invoke("SubmitRollResult", { requestId: req.requestId });
-    } catch {
-      // Non-fatal — either the server dropped or the request was canceled.
+    } catch (err) {
+      // Cancel-race is expected (HubException "Roll request not found"); other
+      // errors (connection drop, hub method missing) are real failures the
+      // user should at least see in devtools.
+      console.warn("[DiceRollPrompt] SubmitRollResult failed", { requestId: req.requestId, err });
     }
 
     const hold = reducedMotion() ? 900 : 1800;

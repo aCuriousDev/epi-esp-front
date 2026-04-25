@@ -116,7 +116,16 @@ export default function DiceRequestListener() {
     const onResult = (message: GameMessage<RollResultBroadcastPayload>) => {
       const p = message.payload;
       const existing = diceRequestsState[p.requestId];
-      if (!existing) return; // result arrived before requested — defensive drop
+      if (!existing) {
+        // Race: rejoin replay can deliver RollResultBroadcast before its
+        // matching RollRequestedDmEcho/Public lands. Surface in devtools so
+        // the failure mode is at least visible during smoke testing.
+        console.warn("[DiceRequestListener] RollResultBroadcast for unknown request", {
+          requestId: p.requestId,
+          userId: p.userId,
+        });
+        return;
+      }
       setDiceRequestsState(p.requestId, "results", p.userId, {
         value: p.value,
         userName: p.userName ?? p.userId,
@@ -129,7 +138,12 @@ export default function DiceRequestListener() {
 
     const onCanceled = (message: GameMessage<RollCanceledPayload>) => {
       const p = message.payload;
-      if (!diceRequestsState[p.requestId]) return;
+      if (!diceRequestsState[p.requestId]) {
+        console.warn("[DiceRequestListener] RollCanceled for unknown request", {
+          requestId: p.requestId,
+        });
+        return;
+      }
       setDiceRequestsState(p.requestId, "status", "canceled");
     };
 

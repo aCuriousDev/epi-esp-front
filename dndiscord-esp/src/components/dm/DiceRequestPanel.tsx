@@ -45,8 +45,11 @@ export default function DiceRequestPanel() {
   async function cancelRoll(requestId: string): Promise<void> {
     try {
       await signalRService.invoke("DmCancelRollRequest", requestId);
-    } catch {
-      // Idempotent server-side — silent swallow.
+    } catch (err) {
+      // Server is idempotent on already-removed requests, but surface real
+      // failures (connection drop, hub method missing) in devtools instead
+      // of leaving the DM with a phantom pending row.
+      console.warn("[DiceRequestPanel] DmCancelRollRequest failed", { requestId, err });
     }
   }
 

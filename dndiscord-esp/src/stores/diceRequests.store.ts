@@ -6,14 +6,9 @@
 import { createStore } from "solid-js/store";
 import { sessionState } from "./session.store";
 
-export type RollStatus = "pending" | "rolling" | "completed" | "canceled";
+export type RollStatus = "pending" | "completed" | "canceled";
 
-export type MyParticipation =
-  | "not-target"
-  | "waiting"
-  | "rolling"
-  | "submitted"
-  | "skipped";
+export type MyParticipation = "not-target" | "waiting" | "submitted";
 
 export interface DiceRequestResult {
   value: number;
@@ -65,5 +60,3 @@ export const myPendingRequests = (): DiceRequest[] => {
 export const pendingRequestsForDm = (): DiceRequest[] =>
   Object.values(state).filter((r) => r.status === "pending");
 
-export const allRequestsLog = (): DiceRequest[] =>
-  Object.values(state).sort((a, b) => b.createdAt - a.createdAt);
