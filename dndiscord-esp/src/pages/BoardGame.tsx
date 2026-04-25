@@ -23,6 +23,9 @@ import { DmPanel } from "../components/dm/DmPanel";
 import DmPlayerInspectPanel from "../components/dm/DmPlayerInspectPanel";
 import { ItemReceivedToast } from "../components/dm/ItemReceivedToast";
 import { EnemySpawnToast } from "../components/dm/EnemySpawnToast";
+import DiceRequestListener from "../components/dice/DiceRequestListener";
+import DiceRollPrompt from "../components/dice/DiceRollPrompt";
+import DiceResultToast from "../components/dice/DiceResultToast";
 import InventoryPanel from "../components/InventoryPanel";
 import WalletPanel from "../components/WalletPanel";
 import { PlayerHotbar } from "../components/hotbar/PlayerHotbar";
@@ -45,9 +48,9 @@ import {
 } from "../game";
 import { getHubUserId } from "../stores/session.store";
 import { GamePhase, AppPhase, GameMode } from "../types";
-import { sessionState, clearSession } from "../stores/session.store";
+import { sessionState, clearSession, getPersistedSession } from "../stores/session.store";
 import { isDm } from "../stores/session.store";
-import { leaveSession, dmRestartGame as dmRestartGameHub } from "../services/signalr/multiplayer.service";
+import { leaveSession, dmRestartGame as dmRestartGameHub, tryRecoverSession } from "../services/signalr/multiplayer.service";
 import { isInSession } from "../stores/session.store";
 import {
   getSessionMapConfig,
@@ -55,11 +58,16 @@ import {
   isSessionMapActive,
   setSessionExitCallback,
   clearSessionExitCallback,
+  pendingSessionExit,
+  clearPendingSessionExit,
+  triggerSessionExit,
+  type ExitType,
 } from "../stores/session-map.store";
 import type { GameStartedPayload } from "../types/multiplayer";
 import { saveMap, type SavedMapData } from "../services/mapStorage";
 import { LogOut } from "lucide-solid";
 import { PartyChatPanel } from "../components/PartyChatPanel";
+import RollHistoryPanel from "../components/dm/RollHistoryPanel";
 import { SessionState } from "../types/multiplayer";
 import { isHost as isSessionHost } from "../stores/session.store";
 import { randomizePreparationPlacement } from "../game/actions/PreparationActions";
@@ -85,7 +93,7 @@ const BoardGame: Component = () => {
   const [isMultiplayer, setIsMultiplayer] = createSignal(false);
   const [fromSession, setFromSession]     = createSignal(false);
 
-  onMount(() => {
+  onMount(async () => {
     const qs = new URLSearchParams(location.search);
 
     // ── Demo mode ───────────────────────────────────────────────────────────
@@ -118,6 +126,16 @@ const BoardGame: Component = () => {
         // board they must not overlap or the hub keeps broadcasting into a
         // scene it no longer owns.
         (async () => {
+          // Snapshot unit assignments BEFORE leaveSession() — that call invokes
+          // clearSession() which wipes gameStartedPayload and its unitAssignments.
+          // Preserving them here lets the map spawn one character per lobby player
+          // even though the SignalR session is torn down for the story-tree board.
+          // Falls back to undefined (→ solo 3-char defaults) when no lobby was used.
+          const unitAssignments =
+            sessionState.gameStartedPayload?.unitAssignments?.length
+              ? sessionState.gameStartedPayload.unitAssignments
+              : undefined;
+
           if (sessionState.session) {
             try {
               await leaveSession();
@@ -131,7 +149,7 @@ const BoardGame: Component = () => {
           setSelectedMapId(cfg.mapId);
           setAppPhase(AppPhase.IN_GAME);
 
-          setSessionExitCallback(() => backToSession());
+          setSessionExitCallback((exitType) => backToSession(exitType));
 
           let attempts = 0;
           const checkEngine = () => {
@@ -141,7 +159,9 @@ const BoardGame: Component = () => {
               return;
             }
             if (isEngineReady()) {
-              setTimeout(() => startGame(GameMode.FREE_ROAM, cfg.mapId), 150);
+              // Pass multiplayer assignments when available so one character is
+              // spawned per player who was in the lobby. undefined → solo defaults.
+              setTimeout(() => startGame(GameMode.FREE_ROAM, cfg.mapId, null, unitAssignments), 150);
             } else {
               if (mounted) setTimeout(checkEngine, 100);
             }
@@ -149,6 +169,23 @@ const BoardGame: Component = () => {
           checkEngine();
         })();
         return;
+      }
+    }
+
+    // ── Session rehydration on F5 ───────────────────────────────────────────
+    // After a hard reload of /board the in-memory `sessionState.session` is
+    // wiped (it lives in a SolidJS store). The persisted session id still
+    // sits in sessionStorage though. Without rehydrating here we'd fall
+    // through to the "no session → mode selection" branch and unmount the
+    // <DiceRequestListener> that lives under <Show when={IN_GAME}>, so any
+    // RejoinSession + DiceRollRequested replay from the back would have no
+    // listener to receive it. Mirror RoomJoinScreen.onMount's recovery flow.
+    if (!sessionState.session && getPersistedSession()) {
+      console.log("[BoardGame] No in-memory session; attempting recovery from sessionStorage");
+      try {
+        await tryRecoverSession();
+      } catch (err) {
+        console.warn("[BoardGame] tryRecoverSession threw", err);
       }
     }
 
@@ -362,13 +399,18 @@ const BoardGame: Component = () => {
   };
 
   /** Return to the campaign session page after playing a session map. */
-  const backToSession = () => {
+  const backToSession = (exitType: 'next' | 'end' = 'next') => {
     const cfg = getSessionMapConfig();
+    clearPendingSessionExit();
     clearSessionExitCallback();
     clearSessionMapConfig();
     clearEngineState();
     if (cfg) {
-      navigate(`/campaigns/${cfg.campaignId}/session`);
+      // resumeNodeId lets the session page restore the current position in the tree
+      // instead of always restarting from the first node.
+      navigate(
+        `/campaigns/${cfg.campaignId}/session?mapExit=${exitType}&resumeNodeId=${encodeURIComponent(cfg.nodeId)}`,
+      );
     } else {
       backToModeSelection();
     }
@@ -647,73 +689,16 @@ const BoardGame: Component = () => {
           getCurrentMode() === GameMode.COMBAT ||
           getCurrentMode() === GameMode.DUNGEON
         }
-        fallback={
-          <div class="panel-game">
-            <h3 class="font-fantasy text-game-gold text-lg mb-4">
-              Free Roam Mode
-            </h3>
-            <div class="space-y-4 text-sm text-gray-300">
-              <p>
-                Explore the map freely without combat restrictions. Move your
-                units anywhere to plan strategies and test formations.
-              </p>
-
-              <div class="space-y-3">
-                <div>
-                  <h4 class="text-game-gold font-semibold mb-2">Features:</h4>
-                  <ul class="space-y-2 text-gray-400">
-                    <li class="flex gap-2">
-                      <Check class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
-                      <span>No enemy units</span>
-                    </li>
-                    <li class="flex gap-2">
-                      <Check class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
-                      <span>Unlimited movement</span>
-                    </li>
-                    <li class="flex gap-2">
-                      <Check class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
-                      <span>No action point costs</span>
-                    </li>
-                    <li class="flex gap-2">
-                      <Check class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
-                      <span>No turn restrictions</span>
-                    </li>
-                  </ul>
-                </div>
-
-                <div>
-                  <h4 class="text-game-gold font-semibold mb-2">How to Use:</h4>
-                  <ul class="space-y-2 text-gray-400">
-                    <li>1. Click on any of your units to select them</li>
-                    <li>2. Click on any highlighted tile to move</li>
-                    <li>3. Switch between units freely</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-        }
       >
         <CombatLog />
       </Show>
 
-      <div class="panel-game">
-        <h4 class="font-fantasy text-game-gold text-sm mb-3">Legend</h4>
-        <div class="space-y-1.5 text-xs">
-          <div class="flex items-center gap-2">
-            <div class="w-4 h-4 rounded bg-blue-500/50 border border-blue-400 flex-shrink-0" />
-            <span class="break-words">Movement Range</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <div class="w-4 h-4 rounded bg-red-500/50 border border-red-400 flex-shrink-0" />
-            <span class="break-words">Attack Range</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <div class="w-4 h-4 rounded bg-green-500/50 border border-green-400 flex-shrink-0" />
-            <span class="break-words">Path Preview</span>
-          </div>
+      <Show when={sessionState.session && sessionState.session.campaignId}>
+        <div class="panel-game">
+          <h4 class="font-fantasy text-game-gold text-sm mb-3">Jets de dés</h4>
+          <RollHistoryPanel />
         </div>
-      </div>
+      </Show>
 
       <Show
         when={
@@ -878,6 +863,99 @@ const BoardGame: Component = () => {
             {/* Enemy spawn notification toasts */}
             <EnemySpawnToast />
 
+            {/* DM-triggered D20 roll request feature */}
+            <DiceRequestListener />
+            <DiceRollPrompt />
+            <DiceResultToast />
+
+            {/* ── Session-map exit request ─────────────────────────────────────────
+                When a player steps on an EXIT tile, MovementActions sets
+                pendingSessionExit instead of navigating immediately.
+                – DM sees a full confirmation banner and decides when to trigger.
+                – Other players see a small "waiting for DM" toast.
+            ─────────────────────────────────────────────────────────────────── */}
+            <Show when={isSessionMapActive() && pendingSessionExit() !== null}>
+              <Show
+                when={isSessionHost()}
+                fallback={
+                  /* ── Player toast ──────────────────────────────────────────── */
+                  <div class="absolute bottom-28 left-1/2 -translate-x-1/2 z-50
+                              flex items-center gap-3
+                              px-5 py-3 rounded-2xl
+                              bg-slate-900/90 border border-white/10
+                              backdrop-blur-sm shadow-2xl
+                              pointer-events-none select-none">
+                    <div class="w-5 h-5 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
+                    <span class="text-sm text-slate-300">
+                      <span class="text-amber-400 font-semibold">{pendingSessionExit()?.unitName}</span>
+                      {' '}a atteint la sortie — en attente du MJ…
+                    </span>
+                  </div>
+                }
+              >
+                {/* ── DM confirmation banner ────────────────────────────────── */}
+                <div class="absolute bottom-28 left-1/2 -translate-x-1/2 z-50
+                            flex items-center gap-4
+                            px-5 py-4 rounded-2xl
+                            bg-slate-900/95 border border-white/15
+                            backdrop-blur-sm shadow-2xl">
+
+                  {/* Icon */}
+                  <div class={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                    pendingSessionExit()?.exitType === 'end'
+                      ? 'bg-rose-500/20 border border-rose-500/40'
+                      : 'bg-amber-500/20 border border-amber-500/40'
+                  }`}>
+                    <span class="text-xl">
+                      {pendingSessionExit()?.exitType === 'end' ? '⛔' : '🚪'}
+                    </span>
+                  </div>
+
+                  {/* Text */}
+                  <div class="flex flex-col gap-0.5 min-w-0">
+                    <p class="text-sm font-semibold text-white leading-snug">
+                      <span class={pendingSessionExit()?.exitType === 'end' ? 'text-rose-400' : 'text-amber-400'}>
+                        {pendingSessionExit()?.unitName}
+                      </span>
+                      {' '}a atteint la sortie
+                    </p>
+                    <p class="text-xs text-slate-400">
+                      {pendingSessionExit()?.exitType === 'end'
+                        ? 'Cette sortie met fin au scénario.'
+                        : 'Cette sortie continue vers le bloc suivant.'}
+                    </p>
+                  </div>
+
+                  {/* Buttons */}
+                  <div class="flex gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => clearPendingSessionExit()}
+                      class="px-3 py-2 rounded-xl text-xs font-medium
+                             bg-white/5 border border-white/10 text-slate-400
+                             hover:bg-white/10 hover:text-white transition-all"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      onClick={() => {
+                        const req = pendingSessionExit();
+                        if (!req) return;
+                        clearPendingSessionExit();
+                        triggerSessionExit(req.exitType);
+                      }}
+                      class={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                        pendingSessionExit()?.exitType === 'end'
+                          ? 'bg-rose-600 hover:bg-rose-500 text-white border border-rose-500'
+                          : 'bg-amber-600 hover:bg-amber-500 text-white border border-amber-500'
+                      }`}
+                    >
+                      {pendingSessionExit()?.exitType === 'end' ? '⛔ Terminer' : '🚪 Continuer'}
+                    </button>
+                  </div>
+                </div>
+              </Show>
+            </Show>
+
             {/* Compact unit info card (top-center) + persistent player hotbar
                 (bottom-center) — non-DM UX replacing the old auto-opening
                 drawer. DM keeps the drawer via the effect above. The
@@ -1036,7 +1114,7 @@ const BoardGame: Component = () => {
                 combat start then retracts after 5 s. */}
             <div class="absolute left-3 sm:left-4 bottom-4 z-10 flex flex-col gap-2 items-start pl-safe-left pb-safe-bottom">
               <Show when={helpOpen()}>
-                <div class="panel-game text-xs w-[min(16rem,calc(100vw-1.5rem))] lg:max-w-xs relative">
+                <div class="panel-game text-xs w-[min(16rem,calc(100vw-1.5rem))] lg:max-w-xs relative max-h-[80vh] overflow-y-auto">
                   <button
                     class="absolute top-2 right-2 text-slate-400 hover:text-white"
                     onClick={() => setHelpOpen(false)}
@@ -1091,6 +1169,54 @@ const BoardGame: Component = () => {
                       </span>
                     </li>
                   </ul>
+
+                  {/* Legend */}
+                  <div class="mt-4">
+                    <h4 class="text-game-gold font-semibold mb-2 text-sm">Legend</h4>
+                    <div class="space-y-1.5 text-xs">
+                      <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 rounded bg-blue-500/50 border border-blue-400 flex-shrink-0" />
+                        <span>Movement Range</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 rounded bg-red-500/50 border border-red-400 flex-shrink-0" />
+                        <span>Attack Range</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 rounded bg-green-500/50 border border-green-400 flex-shrink-0" />
+                        <span>Path Preview</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Free Roam Mode info — only visible outside combat/dungeon */}
+                  <Show when={getCurrentMode() !== GameMode.COMBAT && getCurrentMode() !== GameMode.DUNGEON}>
+                    <div class="mt-4">
+                      <h4 class="text-game-gold font-semibold mb-2 text-sm">Free Roam Mode</h4>
+                      <p class="text-xs text-gray-400 mb-2">
+                        Explore the map freely without combat restrictions. Move your units anywhere to plan strategies and test formations.
+                      </p>
+                      <ul class="space-y-1 text-xs text-gray-400">
+                        <li class="flex gap-1.5">
+                          <Check class="w-3 h-3 text-green-400 flex-shrink-0 mt-0.5" />
+                          <span>No enemy units</span>
+                        </li>
+                        <li class="flex gap-1.5">
+                          <Check class="w-3 h-3 text-green-400 flex-shrink-0 mt-0.5" />
+                          <span>Unlimited movement</span>
+                        </li>
+                        <li class="flex gap-1.5">
+                          <Check class="w-3 h-3 text-green-400 flex-shrink-0 mt-0.5" />
+                          <span>No action point costs</span>
+                        </li>
+                        <li class="flex gap-1.5">
+                          <Check class="w-3 h-3 text-green-400 flex-shrink-0 mt-0.5" />
+                          <span>No turn restrictions</span>
+                        </li>
+                      </ul>
+                      <p class="text-xs text-gray-500 mt-2">Click a unit, then click a highlighted tile to move.</p>
+                    </div>
+                  </Show>
                 </div>
               </Show>
 

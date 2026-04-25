@@ -193,18 +193,30 @@ class GridCell {
 	 * @param assetStackManager - Le gestionnaire d'empilement pour repositionner les meshes
 	 */
 	public restackAssets(assetStackManager: AssetStackManager): void {
+		// Assets placed in edge/corner mode have a non-zero X or Z local offset.
+		// They sit at ground level beside centre assets and must NOT be treated as
+		// part of the sequential centre stack — otherwise deleting a centre asset
+		// would push them upward.
+		const EDGE_EPSILON = 0.01;
 		let currentHeight = this.groundTopY;
 		for (const stackedAsset of this.stackedAssets) {
-			// Repositionner le mesh au sommet courant de la pile
-			assetStackManager.positionMeshAtHeight(stackedAsset.mesh, currentHeight, 0);
-			
+			const isEdgeOrCorner =
+				Math.abs(stackedAsset.mesh.position.x) > EDGE_EPSILON ||
+				Math.abs(stackedAsset.mesh.position.z) > EDGE_EPSILON;
+
+			const targetY = isEdgeOrCorner ? this.groundTopY : currentHeight;
+			assetStackManager.positionMeshAtHeight(stackedAsset.mesh, targetY, 0);
+
 			// Recalculer les positions Y relatives
 			const newPositions = assetStackManager.calculateCellRelativeYPositions(stackedAsset.mesh, 0);
 			stackedAsset.bottomY = newPositions.bottomY;
 			stackedAsset.topY = newPositions.topY;
 			stackedAsset.height = newPositions.height;
-			
-			currentHeight = stackedAsset.topY;
+
+			// Only advance the centre stack cursor for centre assets
+			if (!isEdgeOrCorner) {
+				currentHeight = stackedAsset.topY;
+			}
 		}
 	}
 
@@ -305,6 +317,8 @@ class GridCell {
 				scale: sa.mesh.scaling.x, // Assume uniform scaling
 				rotationY,
 				positionY: sa.mesh.position.y,
+				offsetX: sa.mesh.position.x || undefined,
+				offsetZ: sa.mesh.position.z || undefined,
 			};
 			// Inclure les cellules affectées pour les assets multi-cases
 			if (getAffectedCells) {
@@ -737,6 +751,34 @@ class AssetStackManager {
 // Flat list of every available asset — used by the library search
 const ALL_ASSETS: MapAsset[] = ASSET_CATEGORIES.flatMap(c => c.assets);
 
+// ── Placement mode ────────────────────────────────────────────────────────
+/** Where within the cell the asset is positioned. */
+type PlacementMode = 'center' | 'edge' | 'corner';
+
+/**
+ * Returns the (x, z) local offset to apply to an asset based on the chosen
+ * placement mode and the current rotation (in radians).
+ *
+ * • center : (0, 0) — no offset
+ * • edge   : the asset hugs the wall in the direction it faces (sin/cos of rot)
+ * • corner : the asset sits in the nearest corner to the facing direction
+ *            (rotation shifted by π/4 maps each 90° quadrant to one corner)
+ */
+function computePlacementOffset(rotRad: number, mode: PlacementMode): { x: number; z: number } {
+	const SNAP_DIST = 0.45;
+	if (mode === 'edge') {
+		return { x: Math.sin(rotRad) * SNAP_DIST, z: -Math.cos(rotRad) * SNAP_DIST };
+	}
+	if (mode === 'corner') {
+		const sh = rotRad + Math.PI / 4;
+		return {
+			x: (Math.sin(sh) >= 0 ? 1 : -1) * SNAP_DIST,
+			z: (Math.cos(sh) <= 0 ? 1 : -1) * SNAP_DIST,
+		};
+	}
+	return { x: 0, z: 0 };
+}
+
 // ── User-managed favorites (localStorage) ─────────────────────────────────
 const USER_FAVORITES_KEY = 'dndiscord_editor_favorites';
 
@@ -797,6 +839,8 @@ export default function MapEditor() {
 		return filterCategories(base, searchQuery());
 	};
 	const [rotationAngle, setRotationAngle] = createSignal(0);
+	const [placementMode, setPlacementMode] = createSignal<PlacementMode>('center');
+	const [showGrid, setShowGrid] = createSignal(true);
 	const [deleteMode, setDeleteMode] = createSignal(false);
 	const [editMode, setEditMode] = createSignal(false);
 	const [editingAsset, setEditingAsset] = createSignal<{ asset: MapAsset; cell: GridCell; mesh: AbstractMesh } | null>(null);
@@ -926,6 +970,7 @@ export default function MapEditor() {
 	// clicks the same asset again to deselect).
 	let editingOriginalMesh: AbstractMesh | null = null;
 	let editingOriginalEmissives: Array<{ mat: StandardMaterial | PBRMaterial; orig: Color3 }> = [];
+	let gridLineMeshes: AbstractMesh[] = [];
 	const EDIT_TINT = new Color3(0.2, 0.55, 1);
 
 	const tintEditingMesh = (root: AbstractMesh) => {
@@ -1133,16 +1178,25 @@ export default function MapEditor() {
 	// Forces a world-matrix recompute so the new angle shows on the very
 	// next render instead of waiting for the user to move the cursor.
 	createEffect(() => {
-		// Read rotationAngle unconditionally so Solid tracks it even when
-		// previewMesh isn't ready yet — once the preview loads later,
-		// repositionPreviewOnCell picks up the current angle.
+		// Read rotationAngle AND placementMode unconditionally so Solid tracks
+		// both even when previewMesh isn't ready yet.
 		const rotationRad = (rotationAngle() * Math.PI) / 180;
+		const offset = computePlacementOffset(rotationRad, placementMode());
 		if (previewMesh && !previewMesh.isDisposed() && scene && (selectedAsset() || editingAsset() || lightMode())) {
 			// Always include the GLTF base offset so the ghost matches the placed mesh.
 			previewMesh.rotation.y = previewBaseRotationY + rotationRad;
+			previewMesh.position.x = offset.x;
+			previewMesh.position.z = offset.z;
 			previewMesh.computeWorldMatrix(true);
 			previewMesh.getChildMeshes(false).forEach((child) => child.computeWorldMatrix(true));
 		}
+	});
+
+	// Auto-switch placement mode based on selected asset type:
+	// Toggle grid line visibility reactively.
+	createEffect(() => {
+		const visible = showGrid();
+		gridLineMeshes.forEach(m => { if (!m.isDisposed()) m.isVisible = visible; });
 	});
 
 	// Find asset by path
@@ -1231,17 +1285,21 @@ export default function MapEditor() {
 						const cellNode = cell.getCellNode();
 						if (cellNode) {
 							mesh.parent = cellNode;
-							mesh.position.set(0, assetData.positionY, 0);
+							mesh.position.set(
+								assetData.offsetX ?? 0,
+								assetData.positionY,
+								assetData.offsetZ ?? 0,
+							);
 							mesh.computeWorldMatrix(true);
 							mesh.getChildMeshes(false).forEach(child => child.computeWorldMatrix(true));
-							
+
 							// Store asset info in metadata
 							mesh.metadata = {
 								assetId: assetData.assetId,
 								assetPath: assetData.assetPath,
 								assetType: assetData.assetType,
 							};
-							
+
 							// Position and add to stack
 							assetStackManager.positionMeshAtHeight(mesh, assetData.positionY, 0);
 							const stackedAsset = assetStackManager.createStackedAsset(mesh, asset, 0);
@@ -1595,21 +1653,26 @@ export default function MapEditor() {
 		const minZ = -halfSize;
 		const maxZ = halfSize;
 		
-		// Grid lines
+		// Grid lines — stored in gridLineMeshes so visibility can be toggled.
+		gridLineMeshes = [];
 		for (let i = 0; i <= GRID_SIZE; i++) {
 			const x = minX + (i * TILE_SIZE);
 			const line = MeshBuilder.CreateLines(`gridLineX_${i}`, {
-				points: [new Vector3(x, 0.01, minZ), new Vector3(x, 0.01, maxZ)],
+				points: [new Vector3(x, 0.12, minZ), new Vector3(x, 0.12, maxZ)],
 			}, scene);
 			line.color = gridColor;
+			line.isVisible = showGrid();
+			gridLineMeshes.push(line);
 		}
 
 		for (let i = 0; i <= GRID_SIZE; i++) {
 			const z = minZ + (i * TILE_SIZE);
 			const line = MeshBuilder.CreateLines(`gridLineZ_${i}`, {
-				points: [new Vector3(minX, 0.01, z), new Vector3(maxX, 0.01, z)],
+				points: [new Vector3(minX, 0.12, z), new Vector3(maxX, 0.12, z)],
 			}, scene);
 			line.color = gridColor;
+			line.isVisible = showGrid();
+			gridLineMeshes.push(line);
 		}
 
 		// Invisible pickable planes for each cell
@@ -1620,8 +1683,8 @@ export default function MapEditor() {
 			if (!cellNode) return;
 			
 			const plane = MeshBuilder.CreatePlane(`cellPlane_${cell.x}_${cell.z}`, {
-				width: TILE_SIZE * 0.98,
-				height: TILE_SIZE * 0.98
+				width: TILE_SIZE * 1.0,
+				height: TILE_SIZE * 1.0
 			}, scene);
 			plane.rotation.x = Math.PI / 2;
 			plane.position.set(0, 0.5, 0); // Position plus haute pour être au-dessus des assets
@@ -1819,7 +1882,10 @@ export default function MapEditor() {
 		const cellNode = cell.getCellNode();
 		if (!cellNode) return;
 		previewMesh.parent = cellNode;
-		previewMesh.position.set(0, 0, 0);
+		// Apply placement-mode offset so the preview ghost matches exactly where
+		// the asset will be committed (centre / bord / coin).
+		const offset = computePlacementOffset(rotationRad, placementMode());
+		previewMesh.position.set(offset.x, 0, offset.z);
 		previewMesh.computeWorldMatrix(true);
 		previewMesh.getChildMeshes(false).forEach((child) => child.computeWorldMatrix(true));
 
@@ -2354,9 +2420,11 @@ export default function MapEditor() {
 			const cellNode = cell.getCellNode();
 			if (!cellNode) return;
 			mesh.parent = cellNode;
-			
-			// 4. Initialiser la position au centre de la cellule
-			mesh.position.set(0, 0, 0);
+
+			// 4. Appliquer l'offset de placement (centre / bord / coin)
+			const rotRad = (rotationAngle() * Math.PI) / 180;
+			const pOffset = computePlacementOffset(rotRad, placementMode());
+			mesh.position.set(pOffset.x, 0, pOffset.z);
 			
 			// 5. Forcer le recalcul des matrices world après le parenting
 			mesh.computeWorldMatrix(true);
@@ -2384,17 +2452,26 @@ export default function MapEditor() {
 			} else {
 				const wh = workingHeight();
 				if (wh === 'auto') {
-					// Auto: empiler au-dessus de la pile effective (comportement par défaut)
-					let effectiveStackHeight = cell.getStackHeight();
+					let effectiveStackHeight: number;
 
-					// Vérifier les assets d'autres cellules qui débordent sur celle-ci
-					const externalAssets = gridManager.getAssetsAffectingCell(gridX, gridZ);
-					for (const extMesh of externalAssets) {
-						const isInStack = cell.getStackedAssets().some(sa => sa.mesh === extMesh);
-						const isGround = cell.getGround() === extMesh;
-						if (isInStack || isGround) continue;
-						const extTopY = assetStackManager.calculateWorldTopY(extMesh);
-						effectiveStackHeight = Math.max(effectiveStackHeight, extTopY);
+					if (placementMode() !== 'center') {
+						// Bord / coin : l'asset est décalé en XZ et n'entre pas en
+						// collision avec les objets au centre. On part du ras du sol
+						// pour ne pas le faire flotter au-dessus de la pile centrale.
+						effectiveStackHeight = cell.getGroundTopY();
+					} else {
+						// Centre : empiler au-dessus de la pile effective (défaut).
+						effectiveStackHeight = cell.getStackHeight();
+
+						// Vérifier les assets d'autres cellules qui débordent sur celle-ci
+						const externalAssets = gridManager.getAssetsAffectingCell(gridX, gridZ);
+						for (const extMesh of externalAssets) {
+							const isInStack = cell.getStackedAssets().some(sa => sa.mesh === extMesh);
+							const isGround = cell.getGround() === extMesh;
+							if (isInStack || isGround) continue;
+							const extTopY = assetStackManager.calculateWorldTopY(extMesh);
+							effectiveStackHeight = Math.max(effectiveStackHeight, extTopY);
+						}
 					}
 
 					assetStackManager.positionMeshAtHeight(mesh, effectiveStackHeight, 0);
@@ -3377,10 +3454,9 @@ export default function MapEditor() {
 					<div class="space-y-2">
 						<For each={visibleCategories()}>
 							{(category) => {
-								// Auto-expand when in Favoris tab or when searching so the
-								// user doesn't have to click every accordion header.
+								// Auto-expand when searching so the user doesn't have to
+								// click every accordion header. Toggle works freely otherwise.
 								const isExpanded = () =>
-									activePaletteTab() === "favoris" ||
 									searchQuery().length > 0 ||
 									expandedCategories().has(category.id);
 								const toggleCategory = () => {
@@ -3490,6 +3566,37 @@ export default function MapEditor() {
 						<p class="mt-2 text-xs text-slate-400">
 							Raccourcis Q / D. La rotation est appliquée au preview
 							et enregistrée avec l'objet posé.
+						</p>
+					</div>
+				)}
+
+				{/* ── Placement Mode ─────────────────────────────────── */}
+				{(selectedAsset() || editingAsset()) && selectedAsset()?.type !== 'floor' && (
+					<div class="mb-4">
+						<label class="block text-sm text-slate-300 mb-2">Position dans la case</label>
+						<div class="flex gap-1">
+							{([
+								{ mode: 'center' as PlacementMode, label: '⬛', title: 'Centre' },
+								{ mode: 'edge'   as PlacementMode, label: '🧱', title: 'Bord (mur)' },
+								{ mode: 'corner' as PlacementMode, label: '🏛️', title: 'Coin / pilier' },
+							] as const).map(({ mode, label, title }) => (
+								<button
+									class={`flex-1 py-1.5 rounded-lg border text-sm transition ${
+										placementMode() === mode
+											? 'bg-purple-600/50 border-purple-400/60 text-white'
+											: 'bg-black/30 border-white/10 text-slate-400 hover:text-slate-200 hover:bg-black/50'
+									}`}
+									onClick={() => setPlacementMode(mode)}
+									title={title}
+								>
+									{label} {title}
+								</button>
+							))}
+						</div>
+						<p class="mt-1.5 text-[10px] text-slate-500">
+							{placementMode() === 'center' && 'Asset centré dans la case.'}
+							{placementMode() === 'edge'   && 'Asset collé au bord selon sa rotation — idéal pour les murs.'}
+							{placementMode() === 'corner' && 'Asset dans le coin le plus proche de sa rotation — idéal pour les piliers.'}
 						</p>
 					</div>
 				)}
@@ -3758,6 +3865,20 @@ export default function MapEditor() {
 							Cliquez sur une cellule pour y déposer la lumière. Utilisez le mode suppression pour retirer une lumière existante.
 						</p>
 					</Show>
+				</div>
+
+				{/* ── Affichage grille ────────────────────────────── */}
+				<div class="mb-3">
+					<button
+						class={`w-full px-4 py-2 rounded-lg text-sm transition ${
+							showGrid()
+								? "bg-teal-600/70 hover:bg-teal-600 text-white border border-teal-400/40"
+								: "bg-black/40 hover:bg-black/60 border border-white/10 text-slate-200"
+						}`}
+						onClick={() => setShowGrid(v => !v)}
+					>
+						{showGrid() ? "⊞ Grille visible" : "⊟ Grille masquée"}
+					</button>
 				</div>
 
 				{/* ── Export / Import ─────────────────────────────── */}

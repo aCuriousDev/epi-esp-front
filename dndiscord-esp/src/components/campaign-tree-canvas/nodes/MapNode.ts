@@ -7,14 +7,22 @@ export interface CellCoord {
   z: number;
 }
 
+/** Type d'une sortie : 'next' → bloc suivant dans l'arbre, 'end' → fin de scénario. */
+export type ExitType = 'next' | 'end';
+
+export interface ExitCell extends CellCoord {
+  /** Comportement déclenché quand un joueur marche sur cette case sortie. */
+  exitType: ExitType;
+}
+
 export interface MapNodeData extends BaseNodeData {
   type: 'map';
   title?: string;
   selectedMap?: string;
   /** Point d'apparition des joueurs (coordonnées de la grille) */
   spawnPoint?: CellCoord;
-  /** Cases de sortie de la carte */
-  exitCells?: CellCoord[];
+  /** Cases de sortie de la carte (chaque case porte son type : suite ou fin) */
+  exitCells?: ExitCell[];
   /** Cases de pièges */
   trapCells?: CellCoord[];
 }
@@ -65,7 +73,7 @@ export class MapNode extends CampaignNode {
     this.setUserData(this.nodeData);
   }
 
-  public updateExitCells(cells: CellCoord[]): void {
+  public updateExitCells(cells: ExitCell[]): void {
     (this.nodeData as MapNodeData).exitCells = cells;
     this.setUserData(this.nodeData);
   }

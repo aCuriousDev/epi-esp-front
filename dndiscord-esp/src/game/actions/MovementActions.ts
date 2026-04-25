@@ -4,53 +4,22 @@
  * Handles unit selection, movement, and path preview
  */
 
-import { batch } from "solid-js";
-import { produce } from "solid-js/store";
-import {
-  GridPosition,
-  GamePhase,
-  TurnPhase,
-  Team,
-  GameMode,
-  TileType,
-} from "../../types";
-import {
-  gameState,
-  setGameState,
-  addCombatLog,
-  getIsFreeRoamMode,
-  getIsDungeonMode,
-} from "../stores/GameStateStore";
-import { units, setUnits } from "../stores/UnitsStore";
-import {
-  tiles,
-  setTiles,
-  pathfinder,
-  updatePathfinder,
-} from "../stores/TilesStore";
-import { posToKey } from "../utils/GridUtils";
-import {
-  getCurrentSession,
-  getHubUserId,
-  isInSession,
-} from "../../stores/session.store";
-import { isHost as getIsHost } from "../../stores/session.store";
-import {
-  sendUnitMove,
-  dmMoveToken,
-} from "../../services/signalr/multiplayer.service";
-import {
-  getAllySpawnPositions,
-  getEnemySpawnPositions,
-} from "../initialization/InitUnits";
-import { getTeleportPositions } from "../../services/mapStorage";
-import { transitionToNextRoom } from "./TurnActions";
-import { playMovementDustEffect } from "../vfx/VFXIntegration";
-import { playFootstepSound, playSelectSound } from "../audio/SoundIntegration";
-import {
-  isSessionMapActive,
-  triggerSessionExit,
-} from "../../stores/session-map.store";
+import { batch } from 'solid-js';
+import { produce } from 'solid-js/store';
+import { GridPosition, GamePhase, TurnPhase, Team, GameMode, TileType } from '../../types';
+import { gameState, setGameState, addCombatLog, getIsFreeRoamMode, getIsDungeonMode } from '../stores/GameStateStore';
+import { units, setUnits } from '../stores/UnitsStore';
+import { tiles, setTiles, pathfinder, updatePathfinder } from '../stores/TilesStore';
+import { posToKey } from '../utils/GridUtils';
+import { getCurrentSession, getHubUserId, isInSession } from '../../stores/session.store';
+import { isHost as getIsHost } from '../../stores/session.store';
+import { sendUnitMove, dmMoveToken } from '../../services/signalr/multiplayer.service';
+import { getAllySpawnPositions, getEnemySpawnPositions } from '../initialization/InitUnits';
+import { getTeleportPositions } from '../../services/mapStorage';
+import { transitionToNextRoom } from './TurnActions';
+import { playMovementDustEffect } from '../vfx/VFXIntegration';
+import { playFootstepSound, playSelectSound } from '../audio/SoundIntegration';
+import { isSessionMapActive, requestSessionExit } from '../../stores/session-map.store';
 
 // ============================================
 // UNIT SELECTION
@@ -444,11 +413,13 @@ export function moveUnit(targetPos: GridPosition): boolean {
       setTiles(posToKey(targetPos), "effects", []);
     }
 
-    // EXIT: trigger session return when a player steps on this cell
+    // EXIT: notify the DM (who confirms) rather than immediately navigating.
+    // BoardGame displays a banner; the DM clicks to actually trigger the transition.
     if (destTile.type === TileType.EXIT && unit.team === Team.PLAYER) {
       if (isSessionMapActive()) {
-        addCombatLog("Sortie atteinte ! Retour au scénario…", "system");
-        setTimeout(() => triggerSessionExit(), 800);
+        const exitType: 'next' | 'end' = destTile.exitType ?? 'next';
+        addCombatLog(`${unit.name} a atteint la sortie — en attente du MJ…`, 'system');
+        requestSessionExit({ unitName: unit.name, exitType });
       }
     }
   }

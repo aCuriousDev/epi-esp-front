@@ -162,14 +162,14 @@ export function playDiceShakeSound(): void {
   getOrCreate().playDiceShake();
 }
 
-export function playDiceCritSuccessSound(): void {
+export function playDiceCritSuccessSound(opts?: { volume?: number }): void {
   if (!soundSettings.sfxEnabled()) return;
-  getOrCreate().playDiceCritSuccess();
+  getOrCreate().playDiceCritSuccess(opts);
 }
 
-export function playDiceCritFailSound(): void {
+export function playDiceCritFailSound(opts?: { volume?: number }): void {
   if (!soundSettings.sfxEnabled()) return;
-  getOrCreate().playDiceCritFail();
+  getOrCreate().playDiceCritFail(opts);
 }
 
 export function playDiceWindupSound(): void {

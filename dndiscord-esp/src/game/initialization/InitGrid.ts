@@ -60,6 +60,8 @@ function applySessionMapOverrides(newTiles: Record<string, any>): void {
       newTiles[key].type        = TileType.EXIT;
       newTiles[key].walkable    = true;   // players must be able to step on them
       newTiles[key].movementCost = 1;
+      // Store the exit behaviour so MovementActions can forward it to the session.
+      newTiles[key].exitType    = cell.exitType ?? 'next';
     }
   }
 

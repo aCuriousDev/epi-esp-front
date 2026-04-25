@@ -28,16 +28,8 @@ import {
 } from "../../game/stores/TilesStore";
 import { gameState, setGameState } from "../../game/stores/GameStateStore";
 import { posToKey } from "../../game/utils/GridUtils";
-import {
-  sessionState,
-  isHost,
-  sessionHasDm,
-  setSessionError,
-} from "../../stores/session.store";
-import {
-  applyCombatStarted,
-  applyAuthoritativeCombatStarted,
-} from "./combatStarted";
+import { sessionState, setSessionState, isHost, sessionHasDm, setSessionError } from "../../stores/session.store";
+import { applyCombatStarted, applyAuthoritativeCombatStarted } from "./combatStarted";
 import { applyMapSwitched } from "./mapSwitched";
 import { getAllySpawnPositions } from "../../game/initialization/InitUnits";
 import {
@@ -607,6 +599,14 @@ async function handleMapSwitched(message: unknown): Promise<void> {
       }
     }
     throw err;
+  }
+
+  // Keep session-store mirror in sync so subsequent DmRestartGame calls
+  // (post-Victory "Play Again" in GameOverScreen) pass the new UUID instead
+  // of the lobby's original localStorage mapId — otherwise the server's
+  // session.MapId gets clobbered and F5/rejoin returns the original map.
+  if (sessionState.session) {
+    setSessionState("session", "mapId", parsed.mapId);
   }
 
   addCombatLog(`[MJ] Nouvelle carte : ${parsed.name}`, "system");
