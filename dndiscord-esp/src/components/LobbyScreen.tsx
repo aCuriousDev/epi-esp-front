@@ -33,11 +33,13 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
   const [characters, setCharacters] = createSignal<CharacterDto[]>([]);
   const [selectedCharId, setSelectedCharId] = createSignal<string | null>(null);
   type DefaultTemplate = "warrior" | "mage" | "archer";
-  const [selectedTemplate, setSelectedTemplate] = createSignal<DefaultTemplate | null>(null);
+  const [selectedTemplate, setSelectedTemplate] =
+    createSignal<DefaultTemplate | null>(null);
   const [maps, setMaps] = createSignal<Array<{ id: string; name: string }>>([]);
   const [selectedMapId, setSelectedMapId] = createSignal<string | null>(null);
   const [copied, setCopied] = createSignal(false);
   const [starting, setStarting] = createSignal(false);
+  const [startError, setStartError] = createSignal<string | null>(null);
 
   onMount(async () => {
     try {
@@ -84,7 +86,8 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
 
   const handleTemplateSelect = async (template: DefaultTemplate) => {
     // Toggle off if the same preset is tapped twice.
-    const next: DefaultTemplate | null = selectedTemplate() === template ? null : template;
+    const next: DefaultTemplate | null =
+      selectedTemplate() === template ? null : template;
     setSelectedTemplate(next);
     setSelectedCharId(null);
     try {
@@ -94,13 +97,22 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
     }
   };
 
-  const DEFAULT_TEMPLATES: Array<{ id: DefaultTemplate; label: string; blurb: string }> = [
+  const DEFAULT_TEMPLATES: Array<{
+    id: DefaultTemplate;
+    label: string;
+    blurb: string;
+  }> = [
     { id: "warrior", label: "⚔️ Guerrier", blurb: "120 PV · mêlée puissante" },
-    { id: "mage",    label: "🔮 Mage",     blurb: "80 PV · dégâts à distance" },
-    { id: "archer",  label: "🏹 Archer",   blurb: "100 PV · mobile, longue portée" },
+    { id: "mage", label: "🔮 Mage", blurb: "80 PV · dégâts à distance" },
+    {
+      id: "archer",
+      label: "🏹 Archer",
+      blurb: "100 PV · mobile, longue portée",
+    },
   ];
 
   const handleStartGame = async () => {
+    setStartError(null);
     const mapId = selectedMapId();
     if (
       !mapId &&
@@ -122,6 +134,11 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
       await startGameHub(mapId ?? "default");
     } catch (err: any) {
       console.error("[Lobby] startGame failed:", err);
+      setStartError(
+        err?.message ??
+          err?.toString?.() ??
+          "Impossible de lancer la partie (erreur inconnue).",
+      );
       setStarting(false);
     }
   };
@@ -129,16 +146,27 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
   /** Upload the local map to the campaign if the server doesn't already have
    * one with the same name. Never throws — the start-game flow proceeds on
    * any error. */
-  async function maybePushMapToCampaign(campaignId: string, mapId: string): Promise<void> {
+  async function maybePushMapToCampaign(
+    campaignId: string,
+    mapId: string,
+  ): Promise<void> {
     try {
       const local = loadMapLocal(mapId);
       if (!local) return;
       const existing = await MapService.list(campaignId);
-      const alreadyThere = existing.some(m => m.name.toLowerCase() === local.name.toLowerCase());
+      const alreadyThere = existing.some(
+        (m) => m.name.toLowerCase() === local.name.toLowerCase(),
+      );
       if (alreadyThere) return;
-      await MapService.create(campaignId, { name: local.name, data: JSON.stringify(local) });
+      await MapService.create(campaignId, {
+        name: local.name,
+        data: JSON.stringify(local),
+      });
     } catch (err) {
-      console.warn("[Lobby] maybePushMapToCampaign: best-effort seed failed", err);
+      console.warn(
+        "[Lobby] maybePushMapToCampaign: best-effort seed failed",
+        err,
+      );
     }
   }
 
@@ -150,15 +178,20 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
       // hub throws we still want local state cleaned up, otherwise the user
       // ends up on the menu screen with a ghost session banner. Log for dev
       // visibility; clear unconditionally.
-      console.warn("[Lobby] leaveSession hub call failed, clearing local state", err);
+      console.warn(
+        "[Lobby] leaveSession hub call failed, clearing local state",
+        err,
+      );
       clearSession();
     }
     props.onLeave();
   };
 
   const playerCount = () => session()?.players.length ?? 0;
+  const MIN_PLAYERS_TO_START = 2;
   // Allow host (DM) to force-start alone for testing
-  const canStart = () => (amHost() || playerCount() >= 2) && !starting();
+  const canStart = () =>
+    (amHost() || playerCount() >= MIN_PLAYERS_TO_START) && !starting();
 
   return (
     <div class="relative min-h-screen w-full overflow-hidden bg-brand-gradient">
@@ -208,7 +241,11 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                         class={`w-2.5 h-2.5 rounded-full ${player.status === "Connected" ? "bg-green-400" : "bg-gray-500"}`}
                         aria-hidden="true"
                       />
-                      <span class="sr-only">{player.status === "Connected" ? "Connecté" : "Déconnecté"}</span>
+                      <span class="sr-only">
+                        {player.status === "Connected"
+                          ? "Connecté"
+                          : "Déconnecté"}
+                      </span>
                       <span class="text-white font-medium">
                         {player.userName}
                       </span>
@@ -241,7 +278,9 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
               {/* Quickstart presets — no persisted character required. Each preset
                   maps server-side to a different class with its own stats
                   (BuildDefaultAssignment in GameHub). */}
-              <p class="text-xs text-white/60 uppercase tracking-wider mb-2">Départ rapide</p>
+              <p class="text-xs text-white/60 uppercase tracking-wider mb-2">
+                Départ rapide
+              </p>
               <div class="grid grid-cols-3 gap-2 mb-4">
                 <For each={DEFAULT_TEMPLATES}>
                   {(tpl) => (
@@ -261,7 +300,9 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
               </div>
 
               <Show when={characters().length > 0}>
-                <p class="text-xs text-white/60 uppercase tracking-wider mb-2">Mes personnages</p>
+                <p class="text-xs text-white/60 uppercase tracking-wider mb-2">
+                  Mes personnages
+                </p>
                 <div class="space-y-2">
                   <For each={characters()}>
                     {(char) => (
@@ -276,7 +317,8 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                         <div class="flex justify-between items-center">
                           <span class="font-medium">{char.name}</span>
                           <span class="text-sm text-slate-400">
-                            {char.class} Nv.{char.level} - {char.maxHitPoints} PV
+                            {char.class} Nv.{char.level} - {char.maxHitPoints}{" "}
+                            PV
                           </span>
                         </div>
                       </button>
@@ -326,9 +368,15 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                   ? "Lancement..."
                   : `Lancer la partie (${playerCount()} joueurs)`}
               </button>
-              <Show when={playerCount() < 2 && !amHost()}>
+              <Show when={playerCount() < MIN_PLAYERS_TO_START && !amHost()}>
                 <p class="text-center text-sm text-slate-400 mt-2">
-                  Au moins 2 joueurs requis pour commencer.
+                  Au moins {MIN_PLAYERS_TO_START} joueur
+                  {MIN_PLAYERS_TO_START > 1 ? "s" : ""} requis pour commencer.
+                </p>
+              </Show>
+              <Show when={startError()}>
+                <p class="text-center text-sm text-red-200 mt-3" role="alert">
+                  {startError()}
                 </p>
               </Show>
             </div>

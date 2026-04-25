@@ -5,7 +5,7 @@ import { DmOverlay } from "./DmOverlay";
 import { dialogueState } from "../../stores/dialogue.store";
 import { gridToWorld } from "../../game/utils/GridUtils";
 import { units } from "../../game/stores/UnitsStore";
-import { getEngine } from "../GameCanvas";
+import { getEngine, isEngineReady } from "../GameCanvas";
 
 // ============================================
 // Types
@@ -29,6 +29,9 @@ export const DialogueOverlay: Component = () => {
   let observer: any = null;
 
   createEffect(() => {
+    // isEngineReady() is a reactive signal — re-runs this effect when engine initialises.
+    // Without it, getEngine() returns null on first mount and the observer is never registered.
+    if (!isEngineReady()) return;
     const eng = getEngine();
     if (!eng) return;
 
@@ -50,8 +53,12 @@ export const DialogueOverlay: Component = () => {
       if (!camera) return;
 
       const engine = scene.getEngine();
-      const width = engine.getRenderWidth();
-      const height = engine.getRenderHeight();
+      // Use CSS canvas dimensions, not internal render dimensions.
+      // getRenderWidth/Height reflect hardwareScalingLevel (0.5–1.5) and diverge
+      // from CSS pixels — Vector3.Project output would be offset by that factor.
+      const canvas = engine.getRenderingCanvas();
+      const width = canvas?.clientWidth ?? engine.getRenderWidth();
+      const height = canvas?.clientHeight ?? engine.getRenderHeight();
       const vp = camera.viewport.toGlobal(width, height);
       const identity = Matrix.Identity();
       const viewProjection = scene.getTransformMatrix();

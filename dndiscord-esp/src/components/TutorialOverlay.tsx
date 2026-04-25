@@ -58,8 +58,10 @@ export default function TutorialOverlay() {
   const [targetRect, setTargetRect] = createSignal<DOMRect | null>(null);
   const [cardStyle, setCardStyle] = createSignal<Record<string, string>>({});
   const [pulseKey, setPulseKey] = createSignal(0);
-  let rafId: number | null = null;
   let cardRef: HTMLDivElement | undefined;
+  let resizeObserver: ResizeObserver | null = null;
+  let scrollListenerActive = false;
+  let updateRaf: number | null = null;
 
   onMount(() => {
     if (!authStore.isAuthenticated()) return;
@@ -71,6 +73,79 @@ export default function TutorialOverlay() {
   const step = () => TUTORIAL_STEPS[tutorialState.stepIndex];
   const isLast = () => tutorialState.stepIndex >= TUTORIAL_STEPS.length - 1;
   const isFirst = () => tutorialState.stepIndex <= 0;
+
+  const updateLayout = () => {
+    const t = step()?.target;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    if (!t) {
+      setTargetRect(null);
+      setCardStyle(computeCardStyle(null, vw, vh));
+      return;
+    }
+
+    const el = document.querySelector(
+      `[data-tutorial="${t}"]`,
+    ) as HTMLElement | null;
+
+    if (!el) {
+      setTargetRect(null);
+      setCardStyle(computeCardStyle(null, vw, vh));
+      return;
+    }
+
+    const r = el.getBoundingClientRect();
+    setTargetRect(r);
+    setCardStyle(computeCardStyle(r, vw, vh));
+  };
+
+  const scheduleUpdate = () => {
+    if (!tutorialState.active) return;
+    if (updateRaf) return;
+    updateRaf = requestAnimationFrame(() => {
+      updateRaf = null;
+      updateLayout();
+    });
+  };
+
+  const cleanupObservers = () => {
+    if (resizeObserver) {
+      resizeObserver.disconnect();
+      resizeObserver = null;
+    }
+    if (scrollListenerActive) {
+      window.removeEventListener("scroll", scheduleUpdate, true);
+      scrollListenerActive = false;
+    }
+    if (updateRaf) {
+      cancelAnimationFrame(updateRaf);
+      updateRaf = null;
+    }
+  };
+
+  const setupObserversForCurrentStep = () => {
+    cleanupObservers();
+    if (!tutorialState.active) return;
+
+    scheduleUpdate();
+
+    window.addEventListener("scroll", scheduleUpdate, true);
+    scrollListenerActive = true;
+
+    const t = step()?.target;
+    if (!t) return;
+
+    const el = document.querySelector(
+      `[data-tutorial="${t}"]`,
+    ) as HTMLElement | null;
+    if (!el) return;
+
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => scheduleUpdate());
+      resizeObserver.observe(el);
+    }
+  };
 
   createEffect(() => {
     if (!tutorialState.active) return;
@@ -99,78 +174,25 @@ export default function TutorialOverlay() {
     void idx;
   });
 
-  // Track target rect (no scroll every frame)
+  // Track target rect: update on step change + scroll/resize/target resize
   createEffect(() => {
-    if (!tutorialState.active) {
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = null;
+    const active = tutorialState.active;
+    const idx = tutorialState.stepIndex;
+    const target = step()?.target;
+    void idx;
+    void target;
+
+    if (!active) {
+      cleanupObservers();
       return;
     }
 
-    const target = step()?.target;
+    setupObserversForCurrentStep();
 
-    const tick = () => {
-      if (!tutorialState.active) return;
-      const t = step()?.target;
-      if (!t) {
-        setTargetRect(null);
-        setCardStyle(
-          computeCardStyle(null, window.innerWidth, window.innerHeight),
-        );
-      } else {
-        const el = document.querySelector(
-          `[data-tutorial="${t}"]`,
-        ) as HTMLElement | null;
-        if (el) {
-          setTargetRect(el.getBoundingClientRect());
-          setCardStyle(
-            computeCardStyle(
-              el.getBoundingClientRect(),
-              window.innerWidth,
-              window.innerHeight,
-            ),
-          );
-        } else {
-          setTargetRect(null);
-          setCardStyle(
-            computeCardStyle(null, window.innerWidth, window.innerHeight),
-          );
-        }
-      }
-      rafId = requestAnimationFrame(tick);
-    };
-
-    if (rafId) cancelAnimationFrame(rafId);
-    rafId = requestAnimationFrame(tick);
-
-    const onResize = () => {
-      const t = step()?.target;
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      if (!t) {
-        setTargetRect(null);
-        setCardStyle(computeCardStyle(null, vw, vh));
-        return;
-      }
-      const el = document.querySelector(
-        `[data-tutorial="${t}"]`,
-      ) as HTMLElement | null;
-      if (el) {
-        const r = el.getBoundingClientRect();
-        setTargetRect(r);
-        setCardStyle(computeCardStyle(r, vw, vh));
-      } else {
-        setTargetRect(null);
-        setCardStyle(computeCardStyle(null, vw, vh));
-      }
-    };
+    const onResize = () => scheduleUpdate();
     window.addEventListener("resize", onResize);
     onCleanup(() => {
       window.removeEventListener("resize", onResize);
-      if (rafId) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
-      }
     });
   });
 
@@ -186,8 +208,7 @@ export default function TutorialOverlay() {
   });
 
   onCleanup(() => {
-    if (rafId) cancelAnimationFrame(rafId);
-    rafId = null;
+    cleanupObservers();
   });
 
   const goNext = () => {
