@@ -28,7 +28,12 @@ import {
 } from "../../game/stores/TilesStore";
 import { gameState, setGameState } from "../../game/stores/GameStateStore";
 import { posToKey } from "../../game/utils/GridUtils";
-import { sessionState, isHost, sessionHasDm } from "../../stores/session.store";
+import {
+  sessionState,
+  isHost,
+  sessionHasDm,
+  setSessionError,
+} from "../../stores/session.store";
 import {
   applyCombatStarted,
   applyAuthoritativeCombatStarted,
@@ -70,6 +75,13 @@ function toFrontendPos(p: { x: number; y: number }): GridPosition {
   return { x: p.x, z: p.y };
 }
 
+/**
+ * CONTRACT: `payload.units` must contain **every** occupant of the grid
+ * (players, enemies, NPCs). Any unit absent from the payload will have its
+ * tile cleared (occupiedBy → null) and become walkable for pathfinding, which
+ * silently breaks collision for server-untracked units such as client-side NPCs.
+ * If the backend ever omits a unit class, add it to the snapshot or guard here.
+ */
 function applySnapshot(payload: GameStateSnapshotPayload): void {
   if (!payload?.units?.length) {
     console.warn("[gameSync] FullStateSync received empty units payload", payload);
@@ -141,7 +153,9 @@ export function registerGameSyncHandlers(): void {
     // replay on rejoin will reconcile.
     if (!tiles[posToKey(dest)]) return;
 
-    applyUnitMove(unitId, dest.x, dest.z, payload.apCost ?? 1);
+    // Default to 0, not 1: a DM-driven free-move has apCost:0 and peers must
+    // not silently deduct 1 AP, which would desync them from the server state.
+    applyUnitMove(unitId, dest.x, dest.z, payload.apCost ?? 0);
 
     // Only clear local preview/highlights if this is the unit I have selected.
     // Other clients may have a different unit selected — don't disrupt their UI.
@@ -199,10 +213,25 @@ export function registerGameSyncHandlers(): void {
         return;
       }
 
-      // Legacy broadcast — minimal UI reset so the client doesn't hang.
+      // Legacy broadcast — server did not include nextUnitId/phase so
+      // applyTurnEnded could not determine the new cursor position.
+      // Apply the unit roster so AP / cooldowns / hasActed are at least in
+      // sync, surface a visible log, then request a full resync from the
+      // server so the turn cursor recovers server-authoritatively.
+      // (The FullStateSync response is handled by the handler registered
+      // below and will reconcile positions/HP without requiring a reload.)
       console.warn("[gameSync] TurnEnded legacy path — server did not emit nextUnitId/phase", payload);
+      if (payload.units?.length) {
+        applyUnitsSnapshot(payload.units, { decrementCooldowns: false, resetActivityFlags: true });
+      }
+      addCombatLog("[Système] Resynchronisation de tour en cours…", "system");
       setGameState("selectedUnit", null);
       setGameState("turnPhase", "SELECT_UNIT" as any);
+      // Fire-and-forget: failure is non-fatal — the DM can always force a
+      // manual resync. The FullStateSync handler picks up the response.
+      signalRService.invoke("RequestFullState").catch((err: unknown) => {
+        console.warn("[gameSync] RequestFullState after legacy TurnEnded failed:", err);
+      });
     },
   );
 
@@ -493,9 +522,20 @@ export function registerGameSyncHandlers(): void {
   // / setGameState would surface as an unhandled rejection. Wrap the async
   // body in a named helper and attach an explicit .catch.
   signalRService.on("MapSwitched", (message: unknown) => {
-    void handleMapSwitched(message).catch((err) =>
-      console.error("[gameSync] MapSwitched handler threw", err),
-    );
+    void handleMapSwitched(message).catch((err) => {
+      console.error("[gameSync] MapSwitched handler threw", err);
+      // Players whose map switch failed are left on the old map with no
+      // indication — they see the DM succeed while they're stuck. Surface
+      // both a combat-log entry (visible in the in-game feed) and a session
+      // error toast so the player knows to reload.
+      addCombatLog(
+        "[MJ] Échec du changement de carte — retour à la précédente.",
+        "system",
+      );
+      setSessionError(
+        "Le changement de carte a échoué. Si le problème persiste, rechargez la page.",
+      );
+    });
   });
 
   signalRService.on(
@@ -522,16 +562,16 @@ async function handleMapSwitched(message: unknown): Promise<void> {
   // campaign-map GUID. loadMap later keys off parsed.mapId, so normalise
   // the embedded id to match — otherwise initializeGrid falls through to
   // the default grid and the DM's chosen map never renders (BUG-J).
-  try {
-    const data = parsed.parsedData as { id?: string } | null;
-    if (data && typeof data === "object") {
-      data.id = parsed.mapId;
-    }
-    const { saveMap } = await import("../mapStorage");
-    saveMap(data as any);
-  } catch (err) {
-    console.warn("[gameSync] Failed to cache switched map locally", err);
+  // Failure here means loadMap during re-init will fall through to the default
+  // grid — the exact bug (BUG-J) this block was added to prevent. Re-throw so
+  // the outer .catch fires the user-visible error instead of proceeding with a
+  // broken map. No try/catch swallowing.
+  const data = parsed.parsedData as { id?: string } | null;
+  if (data && typeof data === "object") {
+    data.id = parsed.mapId;
   }
+  const { saveMap } = await import("../mapStorage");
+  saveMap(data as any);
 
   const { clearEngineState } = await import("../../components/GameCanvas");
   const prevMapId = gameState.mapId;

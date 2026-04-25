@@ -192,6 +192,18 @@ export function previewPath(targetPos: GridPosition): void {
 // UNIT MOVEMENT
 // ============================================
 
+/**
+ * Move the currently-selected unit to `targetPos`.
+ *
+ * Returns `true` synchronously as soon as the optimistic local state is applied
+ * — **before** the SignalR broadcast resolves. Any caller chaining "on success"
+ * logic (combat log, end-turn auto-advance) therefore executes on a move that
+ * may still be rolled back ~50 ms later if the network call fails.
+ *
+ * For POC scope this is acceptable: failures are rare and a subsequent
+ * FullStateSync reconciles the store. Do not rely on the return value as a
+ * confirmed-by-server signal.
+ */
 export function moveUnit(targetPos: GridPosition): boolean {
   const unit = gameState.selectedUnit ? units[gameState.selectedUnit] : null;
   if (!unit) return false;
@@ -294,6 +306,25 @@ export function moveUnit(targetPos: GridPosition): boolean {
 
   const rollbackOptimisticMove = (err: unknown) => {
     console.warn("[MovementActions] move broadcast failed, rollback", err);
+
+    // Stale-rollback guard: if the unit has already moved to a different tile
+    // by the time the SignalR .catch fires (user clicked another destination
+    // before the network round-trip completed), applying the old prevPos would
+    // overwrite newer correct state and corrupt tile occupancy. Skip the
+    // rollback and let the next FullStateSync reconcile instead.
+    const currentUnit = units[unit.id];
+    if (!currentUnit) return;
+    const stillAtDest =
+      currentUnit.position.x === targetPos.x &&
+      currentUnit.position.z === targetPos.z;
+    if (!stillAtDest) {
+      console.warn(
+        "[MovementActions] rollback skipped — unit already moved again; FullStateSync will reconcile",
+        { unitId: unit.id },
+      );
+      return;
+    }
+
     batch(() => {
       // Restore tile occupancy
       setTiles(posToKey(targetPos), "occupiedBy", prevDestOccupiedBy);

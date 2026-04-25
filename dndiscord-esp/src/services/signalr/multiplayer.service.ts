@@ -110,7 +110,7 @@ async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
     );
 
     if (!res.ok) {
-      const text = await res.text().catch(() => "");
+      const text = await res.text().catch((e: unknown) => (e instanceof Error ? e.message : String(e)));
       console.warn("party-chat bind failed:", res.status, text);
     } else {
       console.log("party-chat bind ok", {
@@ -497,10 +497,15 @@ export function registerMultiplayerHandlers(): void {
       : undefined;
 
     if (!unit) {
-      console.warn(
-        "[partyChat] No unit matched authorUserId — bubble suppressed",
-        authorUserId,
-      );
+      // Expected for the DM (no unit on the board) — warn only when an
+      // authorUserId was provided but matched nothing, which signals a real
+      // ownership-mapping bug rather than a legitimate DM message.
+      if (authorUserId) {
+        console.warn(
+          "[partyChat] authorUserId present but matched no player unit — bubble suppressed; check ownerUserId mapping",
+          authorUserId,
+        );
+      }
       return;
     }
 
@@ -560,6 +565,10 @@ export function registerMultiplayerHandlers(): void {
       }
     } catch (err) {
       console.warn("[multiplayer] SessionEnded navigate failed", err);
+      // Navigation may be blocked (e.g. Discord Activity CSP). The board is
+      // already torn down (clearSession/clearUnits/clearTiles ran above), so
+      // the player is stuck with no path home — surface an actionable message.
+      setSessionError("La session a pris fin. Veuillez rafraîchir la page.");
     }
   });
 }
@@ -665,6 +674,12 @@ export function ensureMultiplayerHandlersRegistered(): void {
       await rejoinSession(sid);
     } catch (err) {
       console.warn("Auto-rejoin after reconnect failed:", err);
+      // Both reconnect legs failed. The SignalR group membership is gone —
+      // future broadcasts won't arrive. Surface an actionable error so the
+      // player knows they need to reload rather than waiting indefinitely.
+      setSessionError(
+        "Reconnexion impossible — rechargez l'application pour rejoindre la session.",
+      );
     }
   });
 }
