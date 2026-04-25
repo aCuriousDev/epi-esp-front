@@ -8,14 +8,12 @@ import {
 } from '@/services/campaign.service';
 import { CharacterService } from '@/services/character.service';
 import { setSessionMapConfig } from '@/stores/session-map.store';
-import { getAllMaps, saveMap } from '@/services/mapStorage';
-import { isInSession } from '@/stores/session.store';
+import { getAllMaps } from '@/services/mapStorage';
 import {
   voteForChoice,
   subscribeCampaign,
   unsubscribeCampaign,
   selectCharacter,
-  dmLaunchCampaignMap,
 } from '@/services/signalr/multiplayer.service';
 import { signalRService } from '@/services/signalr/SignalRService';
 import { ensureMultiplayerHandlersRegistered } from '@/services/signalr/multiplayer.service';
@@ -201,50 +199,8 @@ const CampaignSessionPage: Component = () => {
       };
 
       signalRService.on('ChoiceVoted', voteHandler);
-
-      // ── Réception du lancement de carte côté joueur ──────────────────────
-      // Le MJ diffuse "CampaignMapLaunched" quand il clique sur "Lancer la
-      // carte".  Tous les abonnés (joueurs inclus) reçoivent la config +
-      // les données de la carte, les sauvegardent localement puis naviguent
-      // vers /board?fromSession=1. Le DM ne recevra pas cet événement (il
-      // aura déjà navigué), mais les players oui.
-      const mapLaunchHandler = (data: Record<string, unknown>) => {
-        const configStr = String(data.configJson ?? data.ConfigJson ?? '{}');
-        const mapDataStr = data.mapData ?? data.MapData;
-
-        // Persist the map tiles so initializeGrid finds them in localStorage
-        if (mapDataStr && typeof mapDataStr === 'string') {
-          try {
-            const parsed = JSON.parse(mapDataStr);
-            if (parsed?.id) saveMap(parsed);
-          } catch (e) {
-            console.warn('[CampaignSession] Failed to parse/save received mapData:', e);
-          }
-        }
-
-        try {
-          const cfg = JSON.parse(configStr);
-          if (cfg?.mapId) {
-            setSessionMapConfig({
-              campaignId: cfg.campaignId ?? params.id,
-              sessionId:  cfg.sessionId  ?? sessionId(),
-              nodeId:     cfg.nodeId     ?? '',
-              mapId:      cfg.mapId,
-              spawnPoint: cfg.spawnPoint,
-              exitCells:  cfg.exitCells,
-              trapCells:  cfg.trapCells,
-            });
-            navigate('/board?fromSession=1');
-          }
-        } catch (e) {
-          console.warn('[CampaignSession] Failed to parse CampaignMapLaunched configJson:', e);
-        }
-      };
-
-      signalRService.on('CampaignMapLaunched', mapLaunchHandler);
       onCleanup(() => {
         try { signalRService.off('ChoiceVoted', voteHandler); } catch {}
-        try { signalRService.off('CampaignMapLaunched', mapLaunchHandler); } catch {}
         if (signalRService.isConnected) {
           unsubscribeCampaign(params.id).catch(() => undefined);
         }
@@ -365,11 +321,11 @@ const CampaignSessionPage: Component = () => {
     getAllMaps().find(m => m.id === mapId)?.name ?? mapId;
 
   // ─── Launch map node in BoardGame ──────────────────────────────────────────
-  const launchMap = async () => {
+  const launchMap = () => {
     const node = currentNode() as MapData | null;
     if (!node?.selectedMap) return;
 
-    const cfg = {
+    setSessionMapConfig({
       campaignId: params.id,
       sessionId:  sessionId(),
       nodeId:     node.id,
@@ -378,23 +334,7 @@ const CampaignSessionPage: Component = () => {
       // Normaliser les exitCells : garantir que exitType est toujours défini
       exitCells:  node.exitCells?.map(e => ({ ...e, exitType: e.exitType ?? 'next' as const })),
       trapCells:  node.trapCells,
-    };
-
-    // Set local config first so the DM's own navigate(/board) reads it immediately
-    setSessionMapConfig(cfg);
-
-    // In multiplayer: broadcast to all campaign subscribers so every player
-    // also navigates to the board with the correct map config + map data.
-    // The broadcast is fire-and-forget (catch logged) — we navigate right after.
-    if (isInSession()) {
-      try {
-        const mapEntry = getAllMaps().find(m => m.id === node.selectedMap);
-        const mapData  = mapEntry ? JSON.stringify(mapEntry) : null;
-        await dmLaunchCampaignMap(params.id, JSON.stringify(cfg), mapData);
-      } catch (e) {
-        console.warn('[CampaignSession] Failed to broadcast map launch:', e);
-      }
-    }
+    });
 
     navigate('/board?fromSession=1');
   };

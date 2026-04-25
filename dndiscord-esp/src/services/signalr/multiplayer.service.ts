@@ -84,7 +84,6 @@ const HUB = {
   dmAdjustHp: "DmAdjustHp",
   selectDefaultTemplate: "SelectDefaultTemplate",
   voteForChoice: "VoteForChoice",
-  dmLaunchCampaignMap: "DmLaunchCampaignMap",
 } as const;
 
 async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
@@ -291,19 +290,6 @@ export async function selectCharacter(
   characterId: string | null,
 ): Promise<void> {
   await signalRService.invoke(HUB.selectCharacter, characterId);
-}
-
-/**
- * DM broadcasts a campaign map launch to all campaign subscribers.
- * configJson — serialised SessionMapConfig (including nodeId, mapId, spawnPoint, etc.)
- * mapData    — full JSON map tile data; null in solo (no peers to hydrate).
- */
-export async function dmLaunchCampaignMap(
-  campaignId: string,
-  configJson: string,
-  mapData: string | null,
-): Promise<void> {
-  await signalRService.invoke(HUB.dmLaunchCampaignMap, campaignId, configJson, mapData);
 }
 
 /** Diffuse le vote d'un joueur pour un choix sur un nœud Choices.
