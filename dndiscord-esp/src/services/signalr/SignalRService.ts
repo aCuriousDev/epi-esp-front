@@ -25,6 +25,42 @@ export class SignalRService {
       throw new Error('No token available. Please login first.');
     }
 
+    // Idempotent: if a connection already exists and is alive, reuse it.
+    // Building a fresh HubConnection drops every prior `.on(...)` registration,
+    // which silently loses all SignalR event handlers (including dice ones).
+    // Multiple components (SessionInviteListener, CampaignView, LobbyScreen, etc.)
+    // call connect() at startup; without this guard the second call wipes
+    // handlers registered against the first connection.
+    if (this.connection) {
+      const state = this.connection.state;
+      if (
+        state === signalR.HubConnectionState.Connected ||
+        state === signalR.HubConnectionState.Connecting ||
+        state === signalR.HubConnectionState.Reconnecting
+      ) {
+        console.log(
+          '[SignalRService] connect() called but connection already alive (state:',
+          state,
+          ') — reusing'
+        );
+        return;
+      }
+      if (state === signalR.HubConnectionState.Disconnected) {
+        // Reuse the existing connection object; restart it to preserve handlers.
+        try {
+          await this.connection.start();
+          console.log('[SignalRService] reused disconnected connection, restarted');
+          return;
+        } catch (err) {
+          console.warn(
+            '[SignalRService] restart of disconnected connection failed; rebuilding',
+            err
+          );
+          // Fall through to rebuild path.
+        }
+      }
+    }
+
     // Clear lifecycle callbacks from previous connection to prevent stacking
     this._closeCallbacks = [];
     this._reconnectedCallbacks = [];
