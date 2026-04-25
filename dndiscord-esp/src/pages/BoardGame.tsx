@@ -63,6 +63,7 @@ import type { GameStartedPayload } from "../types/multiplayer";
 import { saveMap, type SavedMapData } from "../services/mapStorage";
 import { LogOut } from "lucide-solid";
 import { PartyChatPanel } from "../components/PartyChatPanel";
+import RollHistoryPanel from "../components/dm/RollHistoryPanel";
 import { SessionState } from "../types/multiplayer";
 import { isHost as isSessionHost } from "../stores/session.store";
 import { randomizePreparationPlacement } from "../game/actions/PreparationActions";
@@ -734,6 +735,13 @@ const BoardGame: Component = () => {
           </div>
         </div>
       </div>
+
+      <Show when={sessionState.session && sessionState.session.campaignId}>
+        <div class="panel-game">
+          <h4 class="font-fantasy text-game-gold text-sm mb-3">Jets de dés</h4>
+          <RollHistoryPanel />
+        </div>
+      </Show>
 
       <Show
         when={

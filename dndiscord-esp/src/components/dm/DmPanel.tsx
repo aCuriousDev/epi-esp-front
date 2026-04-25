@@ -41,7 +41,6 @@ import {
   dmSwitchMap,
 } from "../../services/signalr/multiplayer.service";
 import { MapService, type CampaignMapRecord } from "../../services/map.service";
-import RollHistoryPanel from "./RollHistoryPanel";
 import { getAllMaps, loadMap } from "../../services/mapStorage";
 import { units, addUnit } from "../../game/stores/UnitsStore";
 import { setTiles, updatePathfinder } from "../../game/stores/TilesStore";
@@ -75,7 +74,7 @@ export const DmPanel: Component = () => {
   // enabling tile-click-to-move. Decouples selection from the move tool —
   // earlier "move" default meant every click risked a teleport. The DM now
   // switches to "Déplacer" explicitly when they want drag-to-move.
-  const [activeTab, setActiveTab] = createSignal<"select" | "move" | "roll" | "dice-request" | "spawn" | "maps" | "roll-history">("select");
+  const [activeTab, setActiveTab] = createSignal<"select" | "move" | "roll" | "dice-request" | "spawn" | "maps">("select");
 
   // Dice
   const [diceType, setDiceType] = createSignal(20);
@@ -179,7 +178,7 @@ export const DmPanel: Component = () => {
     else { setDmSpawnTemplate(tplId); setDmDragUnit(null); }
   };
 
-  const switchTab = (tab: "select" | "move" | "roll" | "dice-request" | "spawn" | "maps" | "roll-history") => {
+  const switchTab = (tab: "select" | "move" | "roll" | "dice-request" | "spawn" | "maps") => {
     setActiveTab(tab);
     setDmDragUnit(null);
     setDmSpawnTemplate(null);
@@ -344,9 +343,6 @@ export const DmPanel: Component = () => {
             <DmTab active={activeTab() === "roll"} onClick={() => switchTab("roll")} label="Dés" />
             <DmTab active={activeTab() === "dice-request"} onClick={() => switchTab("dice-request")} label="Jet D20" />
             <Show when={getCurrentSession()?.campaignId}>
-              <DmTab active={activeTab() === "roll-history"} onClick={() => switchTab("roll-history")} label="Journal" />
-            </Show>
-            <Show when={getCurrentSession()?.campaignId}>
               <DmTab active={activeTab() === "maps"} onClick={() => { switchTab("maps"); void loadMapsIfNeeded(); }} label="Cartes" />
             </Show>
           </div>
@@ -451,11 +447,6 @@ export const DmPanel: Component = () => {
           {/* ── REQUEST TAB ── DM asks players to roll a public D20 */}
           <Show when={activeTab() === "dice-request"}>
             <DiceRequestPanel />
-          </Show>
-
-          {/* ── JOURNAL TAB ── recent dice roll history for the campaign */}
-          <Show when={activeTab() === "roll-history"}>
-            <RollHistoryPanel />
           </Show>
 
           {/* ── MAPS TAB ── DM-only scene switcher pulling from persisted maps */}
