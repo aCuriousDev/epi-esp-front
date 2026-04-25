@@ -13,6 +13,7 @@ import type {
 } from "../types/multiplayer";
 import { PlayerRole } from "../types/multiplayer";
 import { clearDmToolsState } from "./dmTools.store";
+import { clearDiceRequests } from "./diceRequests.store";
 
 export interface SessionStoreState {
   /** Session courante (null si pas en session). */
@@ -99,6 +100,7 @@ export function clearSession(): void {
   clearPersistedSession();
   clearPersistedGameStarted();
   clearDmToolsState();
+  clearDiceRequests();
   setSessionState({
     session: null,
     isLoading: false,

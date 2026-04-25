@@ -905,14 +905,17 @@ export class SoundManager {
   }
 
   /** Nat-20 fanfare — bright triumphant flourish layered over the dice settle. */
-  playDiceCritSuccess(): void {
+  playDiceCritSuccess(opts?: { volume?: number }): void {
     this.resume();
+    const v = opts?.volume ?? 1.0;
     const now = this.ctx.currentTime;
+    const master = this.ctx.createGain(); master.gain.value = v;
+    master.connect(this.uiBus);
     ['C5','E5','G5','C6','E6'].forEach((n, i) => {
       const t = now + i * 0.055;
-      this.note(nf(n), t, 0.42, this.uiBus, 'sine',
+      this.note(nf(n), t, 0.42, master, 'sine',
         { attack: 0.003, decay: 0.06, sustain: 0.35, release: 0.22, peak: 0.18 });
-      this.note(nf(n) * 1.004, t, 0.42, this.uiBus, 'sine',
+      this.note(nf(n) * 1.004, t, 0.42, master, 'sine',
         { attack: 0.003, decay: 0.06, sustain: 0.35, release: 0.22, peak: 0.1 });
     });
     const sh = this.ctx.createBufferSource(); sh.buffer = this.white(0.45);
@@ -920,13 +923,13 @@ export class SoundManager {
     sg.gain.setValueAtTime(0, now);
     sg.gain.linearRampToValueAtTime(0.08, now + 0.06);
     sg.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
-    sh.connect(this.hp(6000)).connect(sg).connect(this.uiBus); sh.start(now);
+    sh.connect(this.hp(6000)).connect(sg).connect(master); sh.start(now);
     // Deep, regal boom underneath
     const boom = this.ctx.createOscillator(); boom.type = 'sine';
     boom.frequency.setValueAtTime(90, now); boom.frequency.exponentialRampToValueAtTime(40, now + 0.4);
     const bg = this.gain(0);
     bg.gain.setValueAtTime(0.16, now); bg.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-    boom.connect(bg).connect(this.uiBus); boom.start(now); boom.stop(now + 0.55);
+    boom.connect(bg).connect(master); boom.start(now); boom.stop(now + 0.55);
   }
 
   /** Low rising whoosh — plays at the start of a throw's windup. */
@@ -987,20 +990,23 @@ export class SoundManager {
   }
 
   /** Nat-1 sting — dissonant fall + hollow thud. */
-  playDiceCritFail(): void {
+  playDiceCritFail(opts?: { volume?: number }): void {
     this.resume();
+    const v = opts?.volume ?? 1.0;
     const now = this.ctx.currentTime;
+    const master = this.ctx.createGain(); master.gain.value = v;
+    master.connect(this.uiBus);
     const o = this.ctx.createOscillator(); o.type = 'sawtooth';
     o.frequency.setValueAtTime(340, now);
     o.frequency.exponentialRampToValueAtTime(90, now + 0.55);
     const g = this.gain(0);
     g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(0.12, now + 0.03);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-    o.connect(this.lp(1400)).connect(g).connect(this.uiBus); o.start(now); o.stop(now + 0.65);
+    o.connect(this.lp(1400)).connect(g).connect(master); o.start(now); o.stop(now + 0.65);
 
-    this.note(nf('E3'), now + 0.08, 0.55, this.uiBus, 'sawtooth',
+    this.note(nf('E3'), now + 0.08, 0.55, master, 'sawtooth',
       { attack: 0.02, decay: 0.1, sustain: 0.2, release: 0.3, peak: 0.07 });
-    this.note(nf('Bb3'), now + 0.08, 0.55, this.uiBus, 'sawtooth',
+    this.note(nf('Bb3'), now + 0.08, 0.55, master, 'sawtooth',
       { attack: 0.02, decay: 0.1, sustain: 0.2, release: 0.3, peak: 0.07 });
 
     const th = this.ctx.createOscillator(); th.type = 'sine';
@@ -1008,7 +1014,7 @@ export class SoundManager {
     const tg = this.gain(0);
     tg.gain.setValueAtTime(0.22, now + 0.02);
     tg.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
-    th.connect(tg).connect(this.uiBus); th.start(now + 0.02); th.stop(now + 0.34);
+    th.connect(tg).connect(master); th.start(now + 0.02); th.stop(now + 0.34);
   }
 
   // ============================================

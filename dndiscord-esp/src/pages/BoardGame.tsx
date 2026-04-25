@@ -23,6 +23,9 @@ import { DmPanel } from "../components/dm/DmPanel";
 import DmPlayerInspectPanel from "../components/dm/DmPlayerInspectPanel";
 import { ItemReceivedToast } from "../components/dm/ItemReceivedToast";
 import { EnemySpawnToast } from "../components/dm/EnemySpawnToast";
+import DiceRequestListener from "../components/dice/DiceRequestListener";
+import DiceRollPrompt from "../components/dice/DiceRollPrompt";
+import DiceResultToast from "../components/dice/DiceResultToast";
 import InventoryPanel from "../components/InventoryPanel";
 import WalletPanel from "../components/WalletPanel";
 import { PlayerHotbar } from "../components/hotbar/PlayerHotbar";
@@ -45,9 +48,9 @@ import {
 } from "../game";
 import { getHubUserId } from "../stores/session.store";
 import { GamePhase, AppPhase, GameMode } from "../types";
-import { sessionState, clearSession } from "../stores/session.store";
+import { sessionState, clearSession, getPersistedSession } from "../stores/session.store";
 import { isDm } from "../stores/session.store";
-import { leaveSession, dmRestartGame as dmRestartGameHub } from "../services/signalr/multiplayer.service";
+import { leaveSession, dmRestartGame as dmRestartGameHub, tryRecoverSession } from "../services/signalr/multiplayer.service";
 import { isInSession } from "../stores/session.store";
 import {
   getSessionMapConfig,
@@ -64,6 +67,7 @@ import type { GameStartedPayload } from "../types/multiplayer";
 import { saveMap, type SavedMapData } from "../services/mapStorage";
 import { LogOut } from "lucide-solid";
 import { PartyChatPanel } from "../components/PartyChatPanel";
+import RollHistoryPanel from "../components/dm/RollHistoryPanel";
 import { SessionState } from "../types/multiplayer";
 import { isHost as isSessionHost } from "../stores/session.store";
 import { randomizePreparationPlacement } from "../game/actions/PreparationActions";
@@ -89,7 +93,7 @@ const BoardGame: Component = () => {
   const [isMultiplayer, setIsMultiplayer] = createSignal(false);
   const [fromSession, setFromSession]     = createSignal(false);
 
-  onMount(() => {
+  onMount(async () => {
     const qs = new URLSearchParams(location.search);
 
     // ── Demo mode ───────────────────────────────────────────────────────────
@@ -165,6 +169,23 @@ const BoardGame: Component = () => {
           checkEngine();
         })();
         return;
+      }
+    }
+
+    // ── Session rehydration on F5 ───────────────────────────────────────────
+    // After a hard reload of /board the in-memory `sessionState.session` is
+    // wiped (it lives in a SolidJS store). The persisted session id still
+    // sits in sessionStorage though. Without rehydrating here we'd fall
+    // through to the "no session → mode selection" branch and unmount the
+    // <DiceRequestListener> that lives under <Show when={IN_GAME}>, so any
+    // RejoinSession + DiceRollRequested replay from the back would have no
+    // listener to receive it. Mirror RoomJoinScreen.onMount's recovery flow.
+    if (!sessionState.session && getPersistedSession()) {
+      console.log("[BoardGame] No in-memory session; attempting recovery from sessionStorage");
+      try {
+        await tryRecoverSession();
+      } catch (err) {
+        console.warn("[BoardGame] tryRecoverSession threw", err);
       }
     }
 
@@ -668,73 +689,16 @@ const BoardGame: Component = () => {
           getCurrentMode() === GameMode.COMBAT ||
           getCurrentMode() === GameMode.DUNGEON
         }
-        fallback={
-          <div class="panel-game">
-            <h3 class="font-fantasy text-game-gold text-lg mb-4">
-              Free Roam Mode
-            </h3>
-            <div class="space-y-4 text-sm text-gray-300">
-              <p>
-                Explore the map freely without combat restrictions. Move your
-                units anywhere to plan strategies and test formations.
-              </p>
-
-              <div class="space-y-3">
-                <div>
-                  <h4 class="text-game-gold font-semibold mb-2">Features:</h4>
-                  <ul class="space-y-2 text-gray-400">
-                    <li class="flex gap-2">
-                      <Check class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
-                      <span>No enemy units</span>
-                    </li>
-                    <li class="flex gap-2">
-                      <Check class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
-                      <span>Unlimited movement</span>
-                    </li>
-                    <li class="flex gap-2">
-                      <Check class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
-                      <span>No action point costs</span>
-                    </li>
-                    <li class="flex gap-2">
-                      <Check class="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
-                      <span>No turn restrictions</span>
-                    </li>
-                  </ul>
-                </div>
-
-                <div>
-                  <h4 class="text-game-gold font-semibold mb-2">How to Use:</h4>
-                  <ul class="space-y-2 text-gray-400">
-                    <li>1. Click on any of your units to select them</li>
-                    <li>2. Click on any highlighted tile to move</li>
-                    <li>3. Switch between units freely</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-        }
       >
         <CombatLog />
       </Show>
 
-      <div class="panel-game">
-        <h4 class="font-fantasy text-game-gold text-sm mb-3">Legend</h4>
-        <div class="space-y-1.5 text-xs">
-          <div class="flex items-center gap-2">
-            <div class="w-4 h-4 rounded bg-blue-500/50 border border-blue-400 flex-shrink-0" />
-            <span class="break-words">Movement Range</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <div class="w-4 h-4 rounded bg-red-500/50 border border-red-400 flex-shrink-0" />
-            <span class="break-words">Attack Range</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <div class="w-4 h-4 rounded bg-green-500/50 border border-green-400 flex-shrink-0" />
-            <span class="break-words">Path Preview</span>
-          </div>
+      <Show when={sessionState.session && sessionState.session.campaignId}>
+        <div class="panel-game">
+          <h4 class="font-fantasy text-game-gold text-sm mb-3">Jets de dés</h4>
+          <RollHistoryPanel />
         </div>
-      </div>
+      </Show>
 
       <Show
         when={
@@ -898,6 +862,11 @@ const BoardGame: Component = () => {
 
             {/* Enemy spawn notification toasts */}
             <EnemySpawnToast />
+
+            {/* DM-triggered D20 roll request feature */}
+            <DiceRequestListener />
+            <DiceRollPrompt />
+            <DiceResultToast />
 
             {/* ── Session-map exit request ─────────────────────────────────────────
                 When a player steps on an EXIT tile, MovementActions sets
@@ -1145,7 +1114,7 @@ const BoardGame: Component = () => {
                 combat start then retracts after 5 s. */}
             <div class="absolute left-3 sm:left-4 bottom-4 z-10 flex flex-col gap-2 items-start pl-safe-left pb-safe-bottom">
               <Show when={helpOpen()}>
-                <div class="panel-game text-xs w-[min(16rem,calc(100vw-1.5rem))] lg:max-w-xs relative">
+                <div class="panel-game text-xs w-[min(16rem,calc(100vw-1.5rem))] lg:max-w-xs relative max-h-[80vh] overflow-y-auto">
                   <button
                     class="absolute top-2 right-2 text-slate-400 hover:text-white"
                     onClick={() => setHelpOpen(false)}
@@ -1200,6 +1169,54 @@ const BoardGame: Component = () => {
                       </span>
                     </li>
                   </ul>
+
+                  {/* Legend */}
+                  <div class="mt-4">
+                    <h4 class="text-game-gold font-semibold mb-2 text-sm">Legend</h4>
+                    <div class="space-y-1.5 text-xs">
+                      <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 rounded bg-blue-500/50 border border-blue-400 flex-shrink-0" />
+                        <span>Movement Range</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 rounded bg-red-500/50 border border-red-400 flex-shrink-0" />
+                        <span>Attack Range</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 rounded bg-green-500/50 border border-green-400 flex-shrink-0" />
+                        <span>Path Preview</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Free Roam Mode info — only visible outside combat/dungeon */}
+                  <Show when={getCurrentMode() !== GameMode.COMBAT && getCurrentMode() !== GameMode.DUNGEON}>
+                    <div class="mt-4">
+                      <h4 class="text-game-gold font-semibold mb-2 text-sm">Free Roam Mode</h4>
+                      <p class="text-xs text-gray-400 mb-2">
+                        Explore the map freely without combat restrictions. Move your units anywhere to plan strategies and test formations.
+                      </p>
+                      <ul class="space-y-1 text-xs text-gray-400">
+                        <li class="flex gap-1.5">
+                          <Check class="w-3 h-3 text-green-400 flex-shrink-0 mt-0.5" />
+                          <span>No enemy units</span>
+                        </li>
+                        <li class="flex gap-1.5">
+                          <Check class="w-3 h-3 text-green-400 flex-shrink-0 mt-0.5" />
+                          <span>Unlimited movement</span>
+                        </li>
+                        <li class="flex gap-1.5">
+                          <Check class="w-3 h-3 text-green-400 flex-shrink-0 mt-0.5" />
+                          <span>No action point costs</span>
+                        </li>
+                        <li class="flex gap-1.5">
+                          <Check class="w-3 h-3 text-green-400 flex-shrink-0 mt-0.5" />
+                          <span>No turn restrictions</span>
+                        </li>
+                      </ul>
+                      <p class="text-xs text-gray-500 mt-2">Click a unit, then click a highlighted tile to move.</p>
+                    </div>
+                  </Show>
                 </div>
               </Show>
 

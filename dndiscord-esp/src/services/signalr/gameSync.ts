@@ -14,7 +14,7 @@ import { produce } from "solid-js/store";
 import { tiles, setTiles, updatePathfinder } from "../../game/stores/TilesStore";
 import { gameState, setGameState } from "../../game/stores/GameStateStore";
 import { posToKey } from "../../game/utils/GridUtils";
-import { sessionState, isHost, sessionHasDm } from "../../stores/session.store";
+import { sessionState, setSessionState, isHost, sessionHasDm } from "../../stores/session.store";
 import { applyCombatStarted, applyAuthoritativeCombatStarted } from "./combatStarted";
 import { applyMapSwitched } from "./mapSwitched";
 import { getAllySpawnPositions } from "../../game/initialization/InitUnits";
@@ -379,6 +379,14 @@ async function handleMapSwitched(message: unknown): Promise<void> {
   const assignments = sessionState.gameStartedPayload?.unitAssignments;
   const { startGame } = await import("../../game");
   startGame(GameMode.FREE_ROAM, parsed.mapId, null, assignments);
+
+  // Keep session-store mirror in sync so subsequent DmRestartGame calls
+  // (post-Victory "Play Again" in GameOverScreen) pass the new UUID instead
+  // of the lobby's original localStorage mapId — otherwise the server's
+  // session.MapId gets clobbered and F5/rejoin returns the original map.
+  if (sessionState.session) {
+    setSessionState("session", "mapId", parsed.mapId);
+  }
 
   addCombatLog(`[MJ] Nouvelle carte : ${parsed.name}`, "system");
 }
