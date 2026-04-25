@@ -71,6 +71,7 @@ export default function DiceRollPrompt() {
   async function handleRolled(value: number): Promise<void> {
     const req = active();
     if (!req) return;
+    const myRequestId = req.requestId;
     setLastValue(value);
     setPhase("result");
 
@@ -79,12 +80,12 @@ export default function DiceRollPrompt() {
     // `myPendingRequests` filter reads "waiting" only, and flipping off early
     // would unmount the modal mid-animation and swallow the result reveal.
     try {
-      await signalRService.invoke("SubmitRollResult", { requestId: req.requestId });
+      await signalRService.invoke("SubmitRollResult", { requestId: myRequestId });
     } catch (err) {
       // Cancel-race is expected (HubException "Roll request not found"); other
       // errors (connection drop, hub method missing) are real failures the
       // user should at least see in devtools.
-      console.warn("[DiceRollPrompt] SubmitRollResult failed", { requestId: req.requestId, err });
+      console.warn("[DiceRollPrompt] SubmitRollResult failed", { requestId: myRequestId, err });
     }
 
     if (canceled) return; // unmounted between invoke and timeout schedule
@@ -92,8 +93,17 @@ export default function DiceRollPrompt() {
     pendingTimeout = window.setTimeout(() => {
       pendingTimeout = null;
       if (canceled) return;
+      // If the queue has already advanced (server's RollResultBroadcast with
+      // requestComplete=true flipped status to "completed", which the
+      // myPendingRequests filter excludes), activeId now points at the NEXT
+      // request and the reset effect has already set phase="prompt" for it.
+      // Stamping "exit" here would zero the new modal's opacity (Bug A:
+      // invisible modal during multi-roll spam). Skip the visual flip in that
+      // case; the submitted-flag write is also redundant since the request is
+      // already filtered out.
+      if (activeId() !== myRequestId) return;
       setPhase("exit");
-      setDiceRequestsState(req.requestId, "myParticipation", "submitted");
+      setDiceRequestsState(myRequestId, "myParticipation", "submitted");
     }, hold);
   }
 
