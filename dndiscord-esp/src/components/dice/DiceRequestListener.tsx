@@ -48,16 +48,22 @@ interface RollCanceledPayload {
 
 export default function DiceRequestListener() {
   onMount(() => {
-    const me = () => sessionState.hubUserId ?? "";
-
     const onRollRequested = (message: GameMessage<RollRequestedPayload>) => {
       const p = message.payload;
+      const meUserId = sessionState.hubUserId;
+      if (!meUserId) {
+        console.warn(
+          "[DiceRequestListener] RollRequested arrived before hubUserId was set",
+          { requestId: p.requestId }
+        );
+        return;
+      }
       // This event reaches the targeted player only.
       setDiceRequestsState(p.requestId, {
         requestId: p.requestId,
         diceType: p.diceType,
         label: p.label,
-        targetUserIds: [me()],
+        targetUserIds: [meUserId],
         dmUserId: "",
         status: "pending",
         expectedCount: 1,
@@ -70,12 +76,20 @@ export default function DiceRequestListener() {
 
     const onDmEcho = (message: GameMessage<RollRequestedDmEchoPayload>) => {
       const p = message.payload;
+      const meUserId = sessionState.hubUserId;
+      if (!meUserId) {
+        console.warn(
+          "[DiceRequestListener] RollRequestedDmEcho arrived before hubUserId was set",
+          { requestId: p.requestId }
+        );
+        return;
+      }
       if (diceRequestsState[p.requestId]) {
         // Already populated (e.g. from Public event dedupe chain). Update metadata.
         setDiceRequestsState(p.requestId, {
           targetUserIds: p.targetUserIds,
           expectedCount: p.expectedCount,
-          dmUserId: me(),
+          dmUserId: meUserId,
         });
         return;
       }
@@ -84,7 +98,7 @@ export default function DiceRequestListener() {
         diceType: p.diceType,
         label: p.label,
         targetUserIds: p.targetUserIds,
-        dmUserId: me(),
+        dmUserId: meUserId,
         status: "pending",
         expectedCount: p.expectedCount,
         forcedValue: null,
