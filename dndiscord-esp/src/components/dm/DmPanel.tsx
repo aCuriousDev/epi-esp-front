@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-solid";
 import { isDm, getOtherPlayers, getCurrentSession } from "../../stores/session.store";
+import DiceRequestPanel from "./DiceRequestPanel";
 import {
   dmToolsState,
   dmDragUnit,
@@ -47,21 +48,39 @@ import { addCombatLog, gameState } from "../../game/stores/GameStateStore";
 import { posToKey } from "../../game/utils/GridUtils";
 import { UnitType, Team, GamePhase } from "../../types";
 import type { Unit, GridPosition } from "../../types";
-import { ENEMY_ABILITIES, cloneAbilities } from "../../game/abilities/AbilityDefinitions";
+import {
+  cloneAbilities,
+  SKELETON_WARRIOR_ABILITIES,
+  SKELETON_MAGE_ABILITIES,
+  SKELETON_ROGUE_ABILITIES,
+  SKELETON_MINION_ABILITIES,
+} from "../../game/abilities/AbilityDefinitions";
+import type { Ability } from "../../types";
 
 // ─── Enemy Templates ───────────────────────────────────────────────
 
-interface EnemyTemplate { id: string; name: string; icon: string; unitType: UnitType; stats: Unit["stats"]; }
+interface EnemyTemplate {
+  id: string;
+  name: string;
+  icon: string;
+  unitType: UnitType;
+  stats: Unit["stats"];
+  abilities: Ability[];
+}
 
 const ENEMY_CATALOGUE: EnemyTemplate[] = [
   { id: "skeleton_warrior", name: "Squelette", icon: "💀", unitType: UnitType.ENEMY_SKELETON,
+    abilities: SKELETON_WARRIOR_ABILITIES,
     stats: { maxHealth: 60, currentHealth: 60, maxActionPoints: 5, currentActionPoints: 5, movementRange: 3, attackRange: 1, attackDamage: 12, defense: 5, initiative: 10 } },
-  { id: "skeleton_archer", name: "Squelette Arc", icon: "🏹", unitType: UnitType.ENEMY_SKELETON,
+  { id: "skeleton_rogue", name: "Squelette Arc", icon: "🏹", unitType: UnitType.ENEMY_SKELETON_ROGUE,
+    abilities: SKELETON_ROGUE_ABILITIES,
     stats: { maxHealth: 50, currentHealth: 50, maxActionPoints: 5, currentActionPoints: 5, movementRange: 2, attackRange: 4, attackDamage: 10, defense: 3, initiative: 14 } },
   { id: "skeleton_mage", name: "Nécromancien", icon: "🔮", unitType: UnitType.ENEMY_MAGE,
+    abilities: SKELETON_MAGE_ABILITIES,
     stats: { maxHealth: 70, currentHealth: 70, maxActionPoints: 6, currentActionPoints: 6, movementRange: 2, attackRange: 5, attackDamage: 16, defense: 5, initiative: 12 } },
-  { id: "skeleton_boss", name: "Boss Mort-vivant", icon: "👹", unitType: UnitType.ENEMY_SKELETON,
-    stats: { maxHealth: 120, currentHealth: 120, maxActionPoints: 7, currentActionPoints: 7, movementRange: 4, attackRange: 2, attackDamage: 22, defense: 10, initiative: 16 } },
+  { id: "skeleton_minion", name: "Minion", icon: "🦴", unitType: UnitType.ENEMY_SKELETON_MINION,
+    abilities: SKELETON_MINION_ABILITIES,
+    stats: { maxHealth: 30, currentHealth: 30, maxActionPoints: 4, currentActionPoints: 4, movementRange: 3, attackRange: 1, attackDamage: 6, defense: 2, initiative: 8 } },
 ];
 
 // ═══════════════════════════════════════════════════════════════════
@@ -73,7 +92,7 @@ export const DmPanel: Component = () => {
   // enabling tile-click-to-move. Decouples selection from the move tool —
   // earlier "move" default meant every click risked a teleport. The DM now
   // switches to "Déplacer" explicitly when they want drag-to-move.
-  const [activeTab, setActiveTab] = createSignal<"select" | "move" | "roll" | "spawn" | "maps">("select");
+  const [activeTab, setActiveTab] = createSignal<"select" | "move" | "roll" | "dice-request" | "spawn" | "maps">("select");
 
   // Dice
   const [diceType, setDiceType] = createSignal(20);
@@ -123,7 +142,7 @@ export const DmPanel: Component = () => {
       const uid = `dm_spawn_${tpl.id}_${crypto.randomUUID()}`;
       const unit: Unit = {
         id: uid, name: tpl.name, type: tpl.unitType, team: Team.ENEMY, position: pos,
-        stats: { ...tpl.stats }, abilities: cloneAbilities(ENEMY_ABILITIES),
+        stats: { ...tpl.stats }, abilities: cloneAbilities(tpl.abilities),
         statusEffects: [], isAlive: true, hasActed: false, hasMoved: false,
       };
 
@@ -177,7 +196,7 @@ export const DmPanel: Component = () => {
     else { setDmSpawnTemplate(tplId); setDmDragUnit(null); }
   };
 
-  const switchTab = (tab: "select" | "move" | "roll" | "spawn" | "maps") => {
+  const switchTab = (tab: "select" | "move" | "roll" | "dice-request" | "spawn" | "maps") => {
     setActiveTab(tab);
     setDmDragUnit(null);
     setDmSpawnTemplate(null);
@@ -340,6 +359,7 @@ export const DmPanel: Component = () => {
             <DmTab active={activeTab() === "move"} onClick={() => switchTab("move")} label="Déplacer" />
             <DmTab active={activeTab() === "spawn"} onClick={() => switchTab("spawn")} label="Invoquer" />
             <DmTab active={activeTab() === "roll"} onClick={() => switchTab("roll")} label="Dés" />
+            <DmTab active={activeTab() === "dice-request"} onClick={() => switchTab("dice-request")} label="Jet D20" />
             <Show when={getCurrentSession()?.campaignId}>
               <DmTab active={activeTab() === "maps"} onClick={() => { switchTab("maps"); void loadMapsIfNeeded(); }} label="Cartes" />
             </Show>
@@ -440,6 +460,11 @@ export const DmPanel: Component = () => {
                 </div>
               </Show>
             </div>
+          </Show>
+
+          {/* ── REQUEST TAB ── DM asks players to roll a public D20 */}
+          <Show when={activeTab() === "dice-request"}>
+            <DiceRequestPanel />
           </Show>
 
           {/* ── MAPS TAB ── DM-only scene switcher pulling from persisted maps */}

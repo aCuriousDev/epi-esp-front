@@ -53,11 +53,13 @@ export interface TileEffect {
 
 export enum UnitType {
   WARRIOR = 'warrior',
+  BARBARIAN = 'barbarian',
   MAGE = 'mage',
   ROGUE = 'rogue',
   ARCHER = 'archer',
-  HEALER = 'healer',
   ENEMY_SKELETON = 'enemy_skeleton',
+  ENEMY_SKELETON_ROGUE = 'enemy_skeleton_rogue',
+  ENEMY_SKELETON_MINION = 'enemy_skeleton_minion',
   ENEMY_MAGE = 'enemy_mage',
 }
 

@@ -72,11 +72,15 @@ export class UnitRenderer {
   private readonly MODEL_PATHS: Record<string, string> = {
     // Player models
     [UnitType.WARRIOR]: '/models/characters/knight/knight.glb',
+    [UnitType.BARBARIAN]: '/models/characters/barbarian/barbarian.glb',
     [UnitType.MAGE]: '/models/characters/mage/mage.glb',
     [UnitType.ARCHER]: '/models/characters/ranger/ranger.glb',
-    
+    [UnitType.ROGUE]: '/models/characters/rogue/rogue.glb',
+
     // Enemy models
     [UnitType.ENEMY_SKELETON]: '/models/enemies/skeleton_warrior/skeleton_warrior.glb',
+    [UnitType.ENEMY_SKELETON_ROGUE]: '/models/enemies/skeleton_rogue/skeleton_rogue.glb',
+    [UnitType.ENEMY_SKELETON_MINION]: '/models/enemies/skeleton_minion/skeleton_minion.glb',
     [UnitType.ENEMY_MAGE]: '/models/enemies/skeleton_mage/skeleton_mage.glb',
   };
   
@@ -120,7 +124,6 @@ export class UnitRenderer {
     
     let mesh: AbstractMesh;
     
-    // Determine model path (handle special case for Skeleton Archer)
     const modelPath = this.getModelPath(unit);
     
     if (modelPath) {
@@ -146,16 +149,9 @@ export class UnitRenderer {
   }
 
   /**
-   * Get the model path for a unit
-   * Handles special cases like Skeleton Archer (uses rogue model)
+   * Get the model path for a unit by its UnitType.
    */
   private getModelPath(unit: Unit): string | null {
-    // Special case: Skeleton Archer uses the rogue model variant
-    if (unit.type === UnitType.ENEMY_SKELETON && unit.name.includes('Archer')) {
-      return '/models/enemies/skeleton_rogue/skeleton_rogue.glb';
-    }
-    
-    // Default: use type-based mapping
     return this.MODEL_PATHS[unit.type] || null;
   }
 
@@ -771,19 +767,12 @@ export class UnitRenderer {
   }
 
   /**
-   * Preload all character models (player and enemy)
-   * 
-   * Preloads:
-   * - Player models: Knight, Mage, Ranger
-   * - Enemy models: Skeleton Warrior, Skeleton Mage
-   * - Enemy variant: Skeleton Rogue (loaded separately for Skeleton Archer)
+   * Preload all character models (player and enemy).
+   * One path per UnitType, all taken from MODEL_PATHS.
    */
   public async preloadModels(): Promise<void> {
-    const modelPaths = [
-      ...Object.values(this.MODEL_PATHS),
-      '/models/enemies/skeleton_rogue/skeleton_rogue.glb', // For Skeleton Archer variant
-    ];
-    
+    const modelPaths = Object.values(this.MODEL_PATHS);
+
     try {
       await this.modelLoader.preloadModels(modelPaths);
       console.log('All character models (player + enemy) preloaded successfully');
