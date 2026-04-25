@@ -48,9 +48,9 @@ import {
 } from "../game";
 import { getHubUserId } from "../stores/session.store";
 import { GamePhase, AppPhase, GameMode } from "../types";
-import { sessionState, clearSession } from "../stores/session.store";
+import { sessionState, clearSession, getPersistedSession } from "../stores/session.store";
 import { isDm } from "../stores/session.store";
-import { leaveSession, dmRestartGame as dmRestartGameHub } from "../services/signalr/multiplayer.service";
+import { leaveSession, dmRestartGame as dmRestartGameHub, tryRecoverSession } from "../services/signalr/multiplayer.service";
 import { isInSession } from "../stores/session.store";
 import {
   getSessionMapConfig,
@@ -88,7 +88,7 @@ const BoardGame: Component = () => {
   const [isMultiplayer, setIsMultiplayer] = createSignal(false);
   const [fromSession, setFromSession]     = createSignal(false);
 
-  onMount(() => {
+  onMount(async () => {
     const qs = new URLSearchParams(location.search);
 
     // ── Demo mode ───────────────────────────────────────────────────────────
@@ -152,6 +152,23 @@ const BoardGame: Component = () => {
           checkEngine();
         })();
         return;
+      }
+    }
+
+    // ── Session rehydration on F5 ───────────────────────────────────────────
+    // After a hard reload of /board the in-memory `sessionState.session` is
+    // wiped (it lives in a SolidJS store). The persisted session id still
+    // sits in sessionStorage though. Without rehydrating here we'd fall
+    // through to the "no session → mode selection" branch and unmount the
+    // <DiceRequestListener> that lives under <Show when={IN_GAME}>, so any
+    // RejoinSession + DiceRollRequested replay from the back would have no
+    // listener to receive it. Mirror RoomJoinScreen.onMount's recovery flow.
+    if (!sessionState.session && getPersistedSession()) {
+      console.log("[BoardGame] No in-memory session; attempting recovery from sessionStorage");
+      try {
+        await tryRecoverSession();
+      } catch (err) {
+        console.warn("[BoardGame] tryRecoverSession threw", err);
       }
     }
 
