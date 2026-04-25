@@ -200,6 +200,7 @@ export function registerGameSyncHandlers(): void {
       }
 
       // Legacy broadcast — minimal UI reset so the client doesn't hang.
+      console.warn("[gameSync] TurnEnded legacy path — server did not emit nextUnitId/phase", payload);
       setGameState("selectedUnit", null);
       setGameState("turnPhase", "SELECT_UNIT" as any);
     },
