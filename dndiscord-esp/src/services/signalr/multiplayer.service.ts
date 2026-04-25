@@ -38,7 +38,7 @@ import { registerGameSyncHandlers } from "./gameSync";
 import { clearUnits } from "../../game/stores/UnitsStore";
 import { clearTiles } from "../../game/stores/TilesStore";
 import { resetGameState, gameState, setGameState } from "../../game/stores/GameStateStore";
-import { GamePhase } from "../../types";
+import { GamePhase, Team } from "../../types";
 import { authStore } from "../../stores/auth.store";
 import { AuthService } from "../auth.service";
 import { loadMap } from "../mapStorage";
@@ -51,7 +51,7 @@ import {
 } from "../../stores/partyChat.store";
 import { showDmMessage, showPlayerBubble } from "../../stores/dialogue.store";
 import {
-  getPlayerUnits,
+  units,
   removeUnitsByOwnerUserId,
 } from "../../game/stores/UnitsStore";
 import { addHiddenRoll, addGrantedItem } from "../../stores/dmTools.store";
@@ -484,15 +484,25 @@ export function registerMultiplayerHandlers(): void {
       return;
     }
 
-    const players = getPlayerUnits();
+    // Include dead units — a player can still talk after being downed.
+    const players = Object.values(units).filter(
+      (u) => u.team === Team.PLAYER,
+    );
     if (players.length === 0) return;
 
-    const unit =
-      (authorUserId
-        ? players.find(
-            (u) => String(u.ownerUserId ?? "").toLowerCase() === authorUserId,
-          )
-        : undefined) ?? players[0];
+    const unit = authorUserId
+      ? players.find(
+          (u) => String(u.ownerUserId ?? "").toLowerCase() === authorUserId,
+        )
+      : undefined;
+
+    if (!unit) {
+      console.warn(
+        "[partyChat] No unit matched authorUserId — bubble suppressed",
+        authorUserId,
+      );
+      return;
+    }
 
     // Deterministic-ish color per author
     const palette = [
