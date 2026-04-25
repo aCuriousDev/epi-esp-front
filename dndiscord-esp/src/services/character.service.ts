@@ -78,7 +78,7 @@ export interface CharacterDto {
   id: string;
   name: string;
   level: number;
-  experiencePoints: number;
+  experiencePoints?: number;
   class: CharacterClass;
   race: CharacterRace;
   currentHitPoints: number;

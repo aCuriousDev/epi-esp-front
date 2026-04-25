@@ -59,8 +59,12 @@ import {
   getPlayerUnits,
   removeUnitsByOwnerUserId,
 } from "../../game/stores/UnitsStore";
-import { addHiddenRoll, addGrantedItem } from "../../stores/dmTools.store";
-import { addCharacterProgressed, addGoldGranted } from "../../stores/dmTools.store";
+import {
+  addHiddenRoll,
+  addGrantedItem,
+  addCharacterProgressed,
+  addGoldGranted,
+} from "../../stores/dmTools.store";
 
 const HUB = {
   createSession: "CreateSession",

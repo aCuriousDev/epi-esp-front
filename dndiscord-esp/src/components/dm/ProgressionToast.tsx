@@ -48,30 +48,29 @@ export const ProgressionToast: Component = () => {
       () => dmToolsState.characterProgressions.length,
       (len, prevLen) => {
         if (prevLen === undefined || len <= prevLen) return;
-        const latest = dmToolsState.characterProgressions[len - 1];
-        if (!latest) return;
-
         const myId = getHubUserId();
-        if (!myId || latest.targetUserId.toLowerCase() !== myId.toLowerCase()) return;
-
-        if (latest.levelUps > 0) {
-          pushToast({
-            kind: "progress",
-            title: "Niveau supérieur !",
-            body: `Niv. ${latest.previousLevel} -> ${latest.newLevel} (+${latest.levelUps})`,
-            accentClass: "from-yellow-950/95 to-amber-900/90 border-amber-500/30",
-          });
-          playLevelUpSound();
-          return;
+        if (!myId) return;
+        for (let i = prevLen; i < len; i++) {
+          const evt = dmToolsState.characterProgressions[i];
+          if (!evt || evt.targetUserId.toLowerCase() !== myId.toLowerCase()) continue;
+          if (evt.levelUps > 0) {
+            pushToast({
+              kind: "progress",
+              title: "Niveau supérieur !",
+              body: `Niv. ${evt.previousLevel} -> ${evt.newLevel} (+${evt.levelUps})`,
+              accentClass: "from-yellow-950/95 to-amber-900/90 border-amber-500/30",
+            });
+            playLevelUpSound();
+          } else {
+            pushToast({
+              kind: "progress",
+              title: "XP reçue",
+              body: `+${evt.awardedExperience} XP`,
+              accentClass: "from-indigo-950/95 to-violet-900/90 border-violet-500/30",
+            });
+            playNotificationSound();
+          }
         }
-
-        pushToast({
-          kind: "progress",
-          title: "XP reçue",
-          body: `+${latest.awardedExperience} XP`,
-          accentClass: "from-indigo-950/95 to-violet-900/90 border-violet-500/30",
-        });
-        playNotificationSound();
       },
     ),
   );
@@ -81,22 +80,22 @@ export const ProgressionToast: Component = () => {
       () => dmToolsState.goldGranted.length,
       (len, prevLen) => {
         if (prevLen === undefined || len <= prevLen) return;
-        const latest = dmToolsState.goldGranted[len - 1];
-        if (!latest) return;
-
         const myId = getHubUserId();
-        if (!myId || latest.targetUserId.toLowerCase() !== myId.toLowerCase()) return;
-
-        const amount = latest.amount ?? latest.goldDelta;
-        const currency = coinLabel(latest.currencyType);
-        const sign = amount > 0 ? "+" : "";
-        pushToast({
-          kind: "gold",
-          title: amount >= 0 ? "Bourse modifiée" : "Monnaie retirée",
-          body: `${sign}${amount} ${currency} (total PO ${latest.goldPieces})`,
-          accentClass: "from-amber-950/95 to-orange-900/90 border-orange-500/30",
-        });
-        playNotificationSound();
+        if (!myId) return;
+        for (let i = prevLen; i < len; i++) {
+          const evt = dmToolsState.goldGranted[i];
+          if (!evt || evt.targetUserId.toLowerCase() !== myId.toLowerCase()) continue;
+          const amount = evt.amount ?? evt.goldDelta;
+          const currency = coinLabel(evt.currencyType);
+          const sign = amount > 0 ? "+" : "";
+          pushToast({
+            kind: "gold",
+            title: amount >= 0 ? "Bourse modifiée" : "Monnaie retirée",
+            body: `${sign}${amount} ${currency} (total PO ${evt.goldPieces})`,
+            accentClass: "from-amber-950/95 to-orange-900/90 border-orange-500/30",
+          });
+          playNotificationSound();
+        }
       },
     ),
   );
@@ -111,7 +110,7 @@ export const ProgressionToast: Component = () => {
       <For each={toasts()}>
         {(toast) => (
           <div
-            class={`pointer-events-auto backdrop-blur rounded-xl border px-4 py-3 shadow-2xl max-w-xs animate-pulse ${toast.accentClass}`}
+            class={`pointer-events-auto backdrop-blur rounded-xl border px-4 py-3 shadow-2xl max-w-xs ${toast.accentClass}`}
             style={{
               animation: "dm-slide-in 0.38s cubic-bezier(.4,0,.2,1)",
             }}

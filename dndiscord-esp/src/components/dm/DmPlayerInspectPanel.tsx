@@ -309,8 +309,6 @@ export default function DmPlayerInspectPanel() {
         targetUserId: player.userId,
         amount,
         currencyType: goldType(),
-        // Legacy field for older backend compatibility.
-        goldPieces: amount,
       });
     } catch (e) {
       console.error("[DM Inspect] Grant gold failed:", e);
@@ -442,7 +440,7 @@ export default function DmPlayerInspectPanel() {
                         <StatMini label="CHA" value={character()!.abilities.charisma} />
                       </div>
                       <div class="text-[9px] text-purple-200/70 text-center">
-                        XP stockée: <span class="font-mono text-white/85">{character()!.experiencePoints}</span> / 1000
+                        XP stockée: <span class="font-mono text-white/85">{character()!.experiencePoints ?? 0}</span>
                       </div>
                     </Show>
                     <div class="flex items-center gap-1">

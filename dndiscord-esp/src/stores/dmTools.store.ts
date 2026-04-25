@@ -79,11 +79,11 @@ export function addGrantedItem(item: ItemGrantedPayload): void {
 }
 
 export function addCharacterProgressed(evt: CharacterProgressedPayload): void {
-  setState("characterProgressions", (prev) => [...prev, evt]);
+  setState("characterProgressions", (prev) => [...prev, evt].slice(-100));
 }
 
 export function addGoldGranted(evt: GoldGrantedPayload): void {
-  setState("goldGranted", (prev) => [...prev, evt]);
+  setState("goldGranted", (prev) => [...prev, evt].slice(-100));
 }
 
 /** Record a spawned enemy (for toast notifications). */

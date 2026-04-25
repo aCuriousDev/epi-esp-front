@@ -266,8 +266,6 @@ export interface DmGrantGoldPayload {
   targetUserId: string;
   amount: number;
   currencyType: "cp" | "sp" | "ep" | "gp" | "pp";
-  // Legacy compatibility with older backends.
-  goldPieces: number;
 }
 
 export interface CharacterProgressedPayload {
