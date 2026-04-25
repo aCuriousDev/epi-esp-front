@@ -37,6 +37,7 @@ import {
   isHost as getIsHost,
   isDm,
   isInSession,
+  setSessionError,
 } from "../stores/session.store";
 import {
   dmDragUnit,
@@ -86,6 +87,12 @@ export const GameCanvas: Component = () => {
         console.log("[GameCanvas] Existing engine disposed");
       } catch (e) {
         console.error("[GameCanvas] Error disposing existing engine:", e);
+        // A failed dispose leaks GPU resources and Babylon listeners. Layering
+        // a new BabylonEngine on top would compound the corruption. Abort mount
+        // and surface a visible error so the player knows to reload.
+        engineInstance = null;
+        setSessionError("Erreur moteur 3D — rechargez la page.");
+        return;
       }
       engineInstance = null;
     }
@@ -675,15 +682,12 @@ export const GameCanvas: Component = () => {
       if (dragId) {
         const unit = units[dragId];
         if (unit) {
-          import("../services/signalr/multiplayer.service")
-            .then(({ dmMoveToken }) => {
-              dmMoveToken({
-                unitId: dragId,
-                target: { x: pos.x, y: pos.z } as any,
-              });
-            })
-            .catch((err) => console.warn("[DM] move broadcast failed:", err));
+          // Save pre-move state for rollback before the optimistic update.
+          const oldPos = { ...unit.position };
           const oldKey = posToKey(unit.position);
+
+          // Optimistic update — apply immediately so the DM sees the move
+          // reflected on their board before the SignalR round-trip completes.
           if (tiles[oldKey]) setTiles(oldKey, "occupiedBy", null);
           setTiles(tileKey, "occupiedBy", dragId);
           setUnits(
@@ -702,6 +706,39 @@ export const GameCanvas: Component = () => {
           prevPositions.set(dragId, { ...pos });
 
           setDmDragUnit(null);
+
+          // Broadcast to server. Returning dmMoveToken(...) inside .then chains
+          // its promise so .catch handles both the dynamic-import failure AND
+          // the SignalR invoke rejection (previously only the import was caught).
+          import("../services/signalr/multiplayer.service")
+            .then(({ dmMoveToken }) =>
+              dmMoveToken({
+                unitId: dragId,
+                target: { x: pos.x, y: pos.z } as any,
+              }),
+            )
+            .catch((err) => {
+              console.warn("[DM] move broadcast rejected — rolling back:", err);
+              // Stale-check: only rollback if the unit hasn't moved again since
+              // (mirrors MovementActions.rollbackOptimisticMove guard).
+              const currentPos = units[dragId]?.position;
+              if (currentPos?.x === pos.x && currentPos?.z === pos.z) {
+                setTiles(tileKey, "occupiedBy", null);
+                if (tiles[oldKey]) setTiles(oldKey, "occupiedBy", dragId);
+                setUnits(
+                  dragId,
+                  produce((u: any) => {
+                    u.position = oldPos;
+                  }),
+                );
+                updatePathfinder();
+                if (engineInstance && engineInstance.hasUnit(dragId)) {
+                  engineInstance.updateUnit({ ...unit, position: oldPos });
+                }
+                prevPositions.set(dragId, { ...oldPos });
+              }
+              setSessionError("DM token move failed — board rolled back.");
+            });
         } else {
           setDmDragUnit(null);
         }
