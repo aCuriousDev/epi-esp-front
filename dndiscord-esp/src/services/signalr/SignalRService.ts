@@ -13,6 +13,15 @@ export class SignalRService {
   private _reconnectingCallbacks: Array<() => void> = [];
   /** Hub userId (Guid) received from Connected event. */
   public hubUserId: string | null = null;
+  /**
+   * Resolves when the server's `Connected` event arrives (which carries the
+   * hub userId). Hoisted to the instance so idempotent connect() calls during
+   * Connecting/Reconnecting can await the in-flight handshake instead of
+   * returning before hubUserId lands — which would race
+   * ensureMultiplayerHandlersRegistered → syncHubUserId and leave the session
+   * store's hubUserId null (breaks rejoin replay + ownership checks).
+   */
+  private _connectedPromise: Promise<void> | null = null;
 
   constructor() {}
 
@@ -33,16 +42,27 @@ export class SignalRService {
     // handlers registered against the first connection.
     if (this.connection) {
       const state = this.connection.state;
+      if (state === signalR.HubConnectionState.Connected) {
+        console.log('[SignalRService] connect() reuse: already Connected');
+        return;
+      }
       if (
-        state === signalR.HubConnectionState.Connected ||
         state === signalR.HubConnectionState.Connecting ||
         state === signalR.HubConnectionState.Reconnecting
       ) {
+        // Wait for the in-flight handshake so callers see hubUserId populated
+        // before they invoke hub methods or call syncHubUserId().
         console.log(
-          '[SignalRService] connect() called but connection already alive (state:',
+          '[SignalRService] connect() during',
           state,
-          ') — reusing'
+          '— awaiting in-flight Connected'
         );
+        if (this._connectedPromise) {
+          await Promise.race([
+            this._connectedPromise,
+            new Promise((r) => setTimeout(r, 3000)),
+          ]);
+        }
         return;
       }
       if (state === signalR.HubConnectionState.Disconnected) {
@@ -76,7 +96,7 @@ export class SignalRService {
       .configureLogging(signalR.LogLevel.Information)
       .build();
 
-    const connectedPromise = new Promise<void>((resolve) => {
+    this._connectedPromise = new Promise<void>((resolve) => {
       this.connection!.on('Connected', (data) => {
         console.log('Connected to SignalR:', data);
         if (data?.userId) {
@@ -85,6 +105,7 @@ export class SignalRService {
         resolve();
       });
     });
+    const connectedPromise = this._connectedPromise;
 
     this.connection.on('Pong', (timestamp) => {
       console.log('Pong received at:', timestamp);
