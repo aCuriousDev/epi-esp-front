@@ -120,30 +120,21 @@ const BoardGame: Component = () => {
       const cfg = getSessionMapConfig();
       if (cfg) {
         console.log("[BoardGame] Session map mode — mapId:", cfg.mapId);
-        // Guard 1 — leave any active SignalR session before entering the
-        // story-tree FREE_ROAM flow. The two session concepts (campaign
-        // story-tree vs combat hub) coexist at the lobby layer; inside the
-        // board they must not overlap or the hub keeps broadcasting into a
-        // scene it no longer owns.
+        // Guard 1 — we intentionally keep the SignalR session alive here.
+        // The campaign story-tree flow launched this board for all session
+        // members via CampaignMapLaunched; calling leaveSession() would
+        // broadcast SessionEnded to all players and redirect them to "/".
+        // The session stays alive so party-chat and DM tools remain usable.
+        // Guard 2 (isSessionMapActive) in the gameStartedPayload effect
+        // prevents any stale payload from overwriting the session-map state.
         (async () => {
-          // Snapshot unit assignments BEFORE leaveSession() — that call invokes
-          // clearSession() which wipes gameStartedPayload and its unitAssignments.
-          // Preserving them here lets the map spawn one character per lobby player
-          // even though the SignalR session is torn down for the story-tree board.
+          // Snapshot unit assignments from the live payload (lobby characters).
           // Falls back to undefined (→ solo 3-char defaults) when no lobby was used.
           const unitAssignments =
             sessionState.gameStartedPayload?.unitAssignments?.length
               ? sessionState.gameStartedPayload.unitAssignments
               : undefined;
 
-          if (sessionState.session) {
-            try {
-              await leaveSession();
-            } catch (err) {
-              console.warn("[BoardGame] leaveSession on fromSession entry failed", err);
-              clearSession();
-            }
-          }
           setFromSession(true);
           setSelectedMode(GameMode.FREE_ROAM);
           setSelectedMapId(cfg.mapId);
