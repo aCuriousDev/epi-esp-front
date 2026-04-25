@@ -167,6 +167,31 @@ export default function DiceRequestListener() {
     signalRService.on("RollResultBroadcast", onResult);
     signalRService.on("RollCanceled", onCanceled);
 
+    // Ask the server to replay any pending roll requests now that we have
+    // listeners bound and hubUserId is in the store. The hub used to do this
+    // automatically on connect, but the events raced our listener mount and
+    // the sessionState.hubUserId hydration — SignalR dropped them with
+    // "No client method with the name 'rollrequested' found".
+    const tryReplay = async () => {
+      // Wait up to 1s for hubUserId to land. Set by syncHubUserId() inside
+      // ensureMultiplayerHandlersRegistered which runs slightly after
+      // signalRService.connect resolves.
+      for (let attempt = 0; attempt < 20; attempt++) {
+        if (sessionState.hubUserId) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      if (!sessionState.hubUserId) {
+        console.warn("[DiceRequestListener] hubUserId never landed; skipping replay");
+        return;
+      }
+      try {
+        await signalRService.invoke("RequestRollReplay");
+      } catch (err) {
+        console.warn("[DiceRequestListener] RequestRollReplay failed", err);
+      }
+    };
+    void tryReplay();
+
     onCleanup(() => {
       signalRService.off("RollRequested", onRollRequested);
       signalRService.off("RollRequestedDmEcho", onDmEcho);
