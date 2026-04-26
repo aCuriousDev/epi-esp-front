@@ -1,5 +1,5 @@
 import { Component, Show, onMount, onCleanup, createSignal, createEffect } from "solid-js";
-import { useNavigate, useLocation } from "@solidjs/router";
+import { useNavigate, useLocation, useParams } from "@solidjs/router";
 import { ArrowLeft, RotateCcw, Check, Hand, MousePointer, Move as MoveIcon, Flag, HelpCircle, X, Settings as SettingsIcon } from "lucide-solid";
 import { InGameSettingsModal } from "../components/InGameSettingsModal";
 import { getPhaseIcon } from "../components/common/icons";
@@ -72,6 +72,7 @@ import { randomizePreparationPlacement } from "../game/actions/PreparationAction
 const BoardGame: Component = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const params = useParams<{ mode?: string }>();
 
   // Tracks whether the component is still mounted.  Every checkEngine loop
   // reads this flag before scheduling the next tick so orphaned timeouts
@@ -266,6 +267,28 @@ const BoardGame: Component = () => {
     setIsMultiplayer(true);
     setAppPhase(AppPhase.ROOM_JOIN);
   };
+
+  onMount(() => {
+    const m = params.mode?.toLowerCase();
+    if (!m) return; // No param → keep legacy behavior (mode picker fallback).
+    switch (m) {
+      case "exploration":
+        startMode(GameMode.FREE_ROAM);
+        break;
+      case "combat":
+        startMode(GameMode.COMBAT);
+        break;
+      case "dungeon":
+        startMode(GameMode.DUNGEON);
+        break;
+      case "multiplayer":
+        goToMultiplayer();
+        break;
+      default:
+        // Unknown mode → keep mode picker as fallback.
+        break;
+    }
+  });
 
   const onRoomReady = () => {
     setAppPhase(AppPhase.LOBBY);
