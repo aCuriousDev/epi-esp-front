@@ -48,6 +48,8 @@ import { playDeathSound } from "../../game/audio/SoundIntegration";
 
 import { addCombatLog } from "../../game/stores/GameStateStore";
 import { addSpawnedEnemy } from "../../stores/dmTools.store";
+import { TileType } from "../../types";
+import { isSessionMapActive, requestSessionExit } from "../../stores/session-map.store";
 
 /**
  * Payload minimal attendu par l'évènement `FullStateSync`.
@@ -148,6 +150,19 @@ export function registerGameSyncHandlers(): void {
     // Default to 0, not 1: a DM-driven free-move has apCost:0 and peers must
     // not silently deduct 1 AP, which would desync them from the server state.
     applyUnitMove(unitId, dest.x, dest.z, payload.apCost ?? 0);
+
+    // ── Notification EXIT côté MJ ─────────────────────────────────────────
+    // Le client qui contrôle l'unité appelle requestSessionExit localement
+    // dans MovementActions. Le MJ reçoit UnitMoved via SignalR et n'exécute
+    // pas MovementActions → il ne voit jamais le bandeau de confirmation.
+    // On reproduit ici la même détection pour le MJ uniquement.
+    if (isHost() && isSessionMapActive()) {
+      const destTile = tiles[posToKey(dest)];
+      if (destTile?.type === TileType.EXIT && unitData?.team === Team.PLAYER) {
+        const exitType: 'next' | 'end' = (destTile as any).exitType ?? 'next';
+        requestSessionExit({ unitName: unitData.name, exitType });
+      }
+    }
 
     // Only clear local preview/highlights if this is the unit I have selected.
     // Other clients may have a different unit selected — don't disrupt their UI.
