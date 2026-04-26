@@ -364,7 +364,7 @@ export default function CreateCharacter() {
 								>
 									<img
 										class="w-20 h-20 object-contain mx-auto"
-										src={`/assets/classes/${prevClass()}.png`}
+										src={`/assets/classes/${prevClass()}.png?v=${__APP_VERSION__}`}
 										alt="Previous class"
 									/>
 								</div>
@@ -372,7 +372,7 @@ export default function CreateCharacter() {
 							<div class="class-art art-enter">
 								<img
 									class="w-20 h-20 object-contain mx-auto"
-									src={`/assets/classes/${selectedClass()}.png`}
+									src={`/assets/classes/${selectedClass()}.png?v=${__APP_VERSION__}`}
 									alt={klass().name}
 								/>
 							</div>
