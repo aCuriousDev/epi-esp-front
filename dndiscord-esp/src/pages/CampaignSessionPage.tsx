@@ -274,7 +274,7 @@ const CampaignSessionPage: Component = () => {
             exitCells:  cfg.exitCells?.map(e => ({ ...e, exitType: e.exitType ?? 'next' as const })),
             trapCells:  cfg.trapCells,
           });
-          navigate('/board?fromSession=1');
+          navigate('/practice/session?fromSession=1');
         } catch (e) {
           console.warn('[CampaignSession] CampaignMapLaunched parse failed:', e);
         }
@@ -491,7 +491,7 @@ const CampaignSessionPage: Component = () => {
     );
 
     setSessionMapConfig(cfg);
-    navigate('/board?fromSession=1');
+    navigate('/practice/session?fromSession=1');
   };
 
   const followPort = async (port: string, choiceText?: string, forceDmBroadcast = false) => {

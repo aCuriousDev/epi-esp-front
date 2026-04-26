@@ -133,10 +133,13 @@ const BoardGame: Component = () => {
         // joueurs et les renvoyait vers "/". La session est gardée en vie le
         // temps du board et peut être reprise quand on revient à la session.
         (async () => {
-          const unitAssignments =
-            sessionState.gameStartedPayload?.unitAssignments?.length
-              ? sessionState.gameStartedPayload.unitAssignments
-              : undefined;
+          // En mode session, on passe toujours un tableau pour rester sur la
+          // branche multiplayer de initializeFreeRoam. Si undefined, cette
+          // branche spawne les 3 personnages solo par défaut (Sir Roland /
+          // Elara / Theron), ce qui est incorrect quand on vient d'une session
+          // avec de vrais joueurs. Un tableau vide = aucun spawn = correct.
+          const unitAssignments: import("../types/multiplayer").UnitAssignment[] =
+            sessionState.gameStartedPayload?.unitAssignments ?? [];
 
           setFromSession(true);
           setSelectedMode(GameMode.FREE_ROAM);

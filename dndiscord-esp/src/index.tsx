@@ -69,7 +69,13 @@ function RouterRoot(props: RouteSectionProps) {
 
 function BoardRedirect() {
   const navigate = useNavigate();
-  onMount(() => navigate("/practice", { replace: true }));
+  onMount(() => {
+    // Préserver le query string pour les liens legacy (/board?fromSession=1, /board?demo=1).
+    // Sans ça, ?fromSession=1 est perdu et le lancement de carte atterrit sur
+    // PracticeModeSelectPage au lieu de BoardGame.
+    const qs = window.location.search;
+    navigate(qs ? `/practice/session${qs}` : "/practice", { replace: true });
+  });
   return null;
 }
 
