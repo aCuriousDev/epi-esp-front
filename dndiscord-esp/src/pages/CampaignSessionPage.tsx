@@ -1,6 +1,7 @@
 import { Component, createSignal, onMount, Show, For, Switch, Match } from 'solid-js';
 import { useNavigate, useParams } from '@solidjs/router';
-import { ArrowLeft, BookOpen, Map as MapIcon, Sword, ChevronRight, Loader2, Play } from 'lucide-solid';
+import { BookOpen, Map as MapIcon, Sword, ChevronRight, Loader2, Play } from 'lucide-solid';
+import { writeLastCampaignId } from '../hooks/useLastCampaign';
 import {
   CampaignService,
   type AdvanceSessionRequest,
@@ -36,21 +37,21 @@ function parseTree(json: string): ParsedTree {
   try {
     raw = JSON.parse(json);
   } catch {
-    throw new Error('Scénario corrompu — rouvrir et resauvegarder dans le Campaign Manager.');
+    throw new Error('Corrupted scenario — reopen and re-save in the Campaign Manager.');
   }
 
   // Validate top-level shape so downstream code never silently iterates over
   // non-arrays (which would produce an empty nodeMap / no start-node, giving
-  // the confusing "pas de point de départ" error instead of a real diagnosis).
+  // the confusing "no start point" error instead of a real diagnosis).
   if (typeof raw !== 'object' || raw === null) {
-    throw new Error('Scénario invalide : format inattendu (objet attendu).');
+    throw new Error('Invalid scenario: unexpected format (object expected).');
   }
   const tree = raw as { nodes?: unknown; connections?: unknown };
   if (!Array.isArray(tree.nodes)) {
-    throw new Error('Scénario invalide : le champ "nodes" est absent ou n\'est pas un tableau.');
+    throw new Error('Invalid scenario: the "nodes" field is missing or is not an array.');
   }
   if (!Array.isArray(tree.connections)) {
-    throw new Error('Scénario invalide : le champ "connections" est absent ou n\'est pas un tableau.');
+    throw new Error('Invalid scenario: the "connections" field is missing or is not an array.');
   }
 
   const nodeMap = new Map<string, NodeData>();
@@ -83,6 +84,10 @@ const CampaignSessionPage: Component = () => {
   const [currentNodeId, setCurrentNodeId]   = createSignal<string | undefined>();
   const [history, setHistory]               = createSignal<string[]>([]);
 
+  onMount(() => {
+    writeLastCampaignId(params.id);
+  });
+
   onMount(async () => {
     try {
       setLoading(true);
@@ -98,7 +103,7 @@ const CampaignSessionPage: Component = () => {
         null;
 
       if (!treeJson) {
-        setError('Cette campagne ne possède pas encore de scénario. Définissez-en un dans le Campaign Manager.');
+        setError('This campaign has no scenario yet. Define one in the Campaign Manager.');
         return;
       }
 
@@ -106,7 +111,7 @@ const CampaignSessionPage: Component = () => {
       setParsedTree(tree);
 
       if (!tree.firstNodeId) {
-        setError('Le scénario ne possède pas de point de départ. Connectez un bloc au nœud de départ dans le Campaign Manager.');
+        setError('The scenario has no starting point. Connect a block to the start node in the Campaign Manager.');
         return;
       }
 
@@ -121,7 +126,7 @@ const CampaignSessionPage: Component = () => {
       setCurrentNodeId(tree.firstNodeId);
     } catch (err: any) {
       console.error('Failed to load campaign session:', err);
-      setError('Impossible de charger la campagne.');
+      setError('Failed to load campaign.');
     } finally {
       setLoading(false);
     }
@@ -154,7 +159,7 @@ const CampaignSessionPage: Component = () => {
       trapCells:  node.trapCells,
     });
 
-    navigate('/board?fromSession=1');
+    navigate("/practice/exploration?fromSession=1");
   };
 
   const followPort = async (port: string, choiceText?: string) => {
@@ -215,12 +220,12 @@ const CampaignSessionPage: Component = () => {
       <div class="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
         <span class="text-3xl">🏁</span>
       </div>
-      <p class="text-slate-400 text-lg font-medium">Fin du scénario</p>
+      <p class="text-slate-400 text-lg font-medium">End of scenario</p>
       <button
         onClick={handleEnd}
         class="px-6 py-3 bg-white/10 hover:bg-white/15 border border-white/20 text-white rounded-xl transition-all font-medium"
       >
-        Terminer la session
+        End session
       </button>
     </div>
   );
@@ -228,33 +233,24 @@ const CampaignSessionPage: Component = () => {
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{
-      width: '100vw', 'min-height': '100vh',
-      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1a 100%)',
-      color: '#d4d4d4', 'font-family': 'system-ui, sans-serif',
-      display: 'flex', 'flex-direction': 'column',
-    }}>
+    <div class="w-full min-h-full flex flex-col" style={{ color: '#d4d4d4', 'font-family': 'system-ui, sans-serif' }}>
       {/* Offline mode banner — shown when backend session creation failed */}
       <Show when={isOffline()}>
         <div class="flex-shrink-0 flex items-center justify-center gap-2 px-4 py-2 bg-amber-600/20 border-b border-amber-500/30 text-amber-300 text-xs">
           <span>⚠</span>
-          <span>Mode hors-ligne — la progression ne sera pas sauvegardée sur le serveur.</span>
+          <span>Offline mode — progress will not be saved to the server.</span>
         </div>
       </Show>
 
-      {/* Header */}
-      <header class="sticky top-0 z-20 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-black/40 backdrop-blur-md">
-        <button onClick={() => navigate(`/campaigns/${params.id}`)} class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors">
-          <ArrowLeft class="w-5 h-5" />
-          <span class="hidden sm:inline">Retour</span>
-        </button>
+      {/* Session HUD header */}
+      <header class="sticky top-0 z-20 flex items-center justify-between pl-16 sm:pl-20 pr-6 py-4 border-b border-white/10 bg-black/40 backdrop-blur-md">
         <div class="text-center">
-          <p class="text-xs text-purple-400 uppercase tracking-wider">Session en cours</p>
+          <p class="text-xs text-purple-400 uppercase tracking-wider">Session in progress</p>
           <h1 class="font-display text-lg text-white">{campaignTitle()}</h1>
         </div>
         <div class="flex items-center gap-2 text-sm text-slate-400 min-w-[80px] justify-end">
           <Show when={isSaving()}><Loader2 class="w-3 h-3 animate-spin text-purple-400" /></Show>
-          <Show when={history().length > 0}><span>{history().length + 1} blocs</span></Show>
+          <Show when={history().length > 0}><span>{history().length + 1} blocks</span></Show>
         </div>
       </header>
 
@@ -263,7 +259,7 @@ const CampaignSessionPage: Component = () => {
         <Show when={loading()}>
           <div class="flex flex-col items-center gap-4 text-slate-400">
             <Loader2 class="w-10 h-10 animate-spin text-purple-400" />
-            <p>Chargement du scénario…</p>
+            <p>Loading scenario…</p>
           </div>
         </Show>
 
@@ -273,9 +269,9 @@ const CampaignSessionPage: Component = () => {
             <div class="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
               <span class="text-3xl">⚠️</span>
             </div>
-            <p class="text-red-400 font-medium mb-2">Impossible de lancer la session</p>
+            <p class="text-red-400 font-medium mb-2">Failed to start session</p>
             <p class="text-slate-400 text-sm mb-6">{error()}</p>
-            <button onClick={() => navigate(`/campaigns/${params.id}`)} class="px-6 py-3 bg-white/10 hover:bg-white/15 border border-white/20 text-white rounded-xl transition-all">Retour</button>
+            <button onClick={() => navigate(`/campaigns/${params.id}`)} class="px-6 py-3 bg-white/10 hover:bg-white/15 border border-white/20 text-white rounded-xl transition-all">Back</button>
           </div>
         </Show>
 
@@ -301,7 +297,7 @@ const CampaignSessionPage: Component = () => {
             <div class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
               <Switch fallback={
                 <Show when={!currentNode()}>
-                  <div class="text-center text-slate-400 py-6">Aucun bloc à afficher.</div>
+                  <div class="text-center text-slate-400 py-6">No block to display.</div>
                 </Show>
               }>
                 {/* SCENE */}
@@ -309,14 +305,14 @@ const CampaignSessionPage: Component = () => {
                   <div>
                     <div class="flex items-center gap-3 mb-6">
                       <div class="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center"><BookOpen class="w-5 h-5 text-purple-400" /></div>
-                      <div><p class="text-xs text-purple-400 uppercase tracking-wider font-medium">Scène</p><h2 class="text-2xl font-display text-white">{(currentNode() as SceneData)?.title || 'Scène sans titre'}</h2></div>
+                      <div><p class="text-xs text-purple-400 uppercase tracking-wider font-medium">Scene</p><h2 class="text-2xl font-display text-white">{(currentNode() as SceneData)?.title || 'Untitled scene'}</h2></div>
                     </div>
                     <div class="bg-white/5 border border-white/10 rounded-2xl p-6 mb-8 leading-relaxed text-slate-200 text-lg whitespace-pre-wrap min-h-[120px]">
-                      <Show when={(currentNode() as SceneData)?.text} fallback={<span class="text-slate-500 italic">Aucun texte pour cette scène.</span>}>{(currentNode() as SceneData)?.text}</Show>
+                      <Show when={(currentNode() as SceneData)?.text} fallback={<span class="text-slate-500 italic">No text for this scene.</span>}>{(currentNode() as SceneData)?.text}</Show>
                     </div>
                     <div class="flex justify-end">
                       <Show when={hasPort('output')} fallback={<EndBanner />}>
-                        <button onClick={() => followPort('output')} class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-xl transition-all">Continuer <ChevronRight class="w-5 h-5" /></button>
+                        <button onClick={() => followPort('output')} class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-xl transition-all">Continue <ChevronRight class="w-5 h-5" /></button>
                       </Show>
                     </div>
                   </div>
@@ -329,7 +325,7 @@ const CampaignSessionPage: Component = () => {
                       <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
                         <svg class="w-5 h-5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
                       </div>
-                      <div><p class="text-xs text-emerald-400 uppercase tracking-wider font-medium">Choix</p><h2 class="text-2xl font-display text-white">{(currentNode() as ChoicesData)?.title || 'Choix sans titre'}</h2></div>
+                      <div><p class="text-xs text-emerald-400 uppercase tracking-wider font-medium">Choices</p><h2 class="text-2xl font-display text-white">{(currentNode() as ChoicesData)?.title || 'Untitled choices'}</h2></div>
                     </div>
                     <Show when={(currentNode() as ChoicesData)?.text}>
                       <div class="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6 leading-relaxed text-slate-200 text-lg whitespace-pre-wrap">{(currentNode() as ChoicesData)?.text}</div>
@@ -340,7 +336,7 @@ const CampaignSessionPage: Component = () => {
                           {(choice, i) => (
                             <button onClick={() => followPort(`choice-${i()}`, choice)} class="text-left px-5 py-4 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 rounded-xl text-white font-medium transition-all flex items-center gap-3 group">
                               <span class="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold text-sm flex-shrink-0">{i() + 1}</span>
-                              <span class="flex-1">{choice || `Choix ${i() + 1}`}</span>
+                              <span class="flex-1">{choice || `Choice ${i() + 1}`}</span>
                               <Show when={parsedTree()?.edges.has(`${currentNode()?.id}::choice-${i()}`)}><ChevronRight class="w-4 h-4 text-emerald-400/60 group-hover:text-emerald-400 transition-colors" /></Show>
                             </button>
                           )}
@@ -355,10 +351,10 @@ const CampaignSessionPage: Component = () => {
                   <div>
                     <div class="flex items-center gap-3 mb-6">
                       <div class="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center"><Sword class="w-5 h-5 text-red-400" /></div>
-                      <div><p class="text-xs text-red-400 uppercase tracking-wider font-medium">Combat</p><h2 class="text-2xl font-display text-white">{(currentNode() as CombatData)?.title || 'Combat sans titre'}</h2></div>
+                      <div><p class="text-xs text-red-400 uppercase tracking-wider font-medium">Combat</p><h2 class="text-2xl font-display text-white">{(currentNode() as CombatData)?.title || 'Untitled combat'}</h2></div>
                     </div>
-                    <div class="bg-red-500/5 border border-red-500/20 rounded-2xl p-6 mb-8 text-center"><Sword class="w-12 h-12 text-red-400/40 mx-auto mb-3" /><p class="text-slate-400 italic">La gestion des combats arrive bientôt.</p></div>
-                    <div class="flex justify-end"><Show when={hasPort('output')} fallback={<EndBanner />}><button onClick={() => followPort('output')} class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-semibold rounded-xl transition-all">Passer <ChevronRight class="w-5 h-5" /></button></Show></div>
+                    <div class="bg-red-500/5 border border-red-500/20 rounded-2xl p-6 mb-8 text-center"><Sword class="w-12 h-12 text-red-400/40 mx-auto mb-3" /><p class="text-slate-400 italic">Combat management coming soon.</p></div>
+                    <div class="flex justify-end"><Show when={hasPort('output')} fallback={<EndBanner />}><button onClick={() => followPort('output')} class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-semibold rounded-xl transition-all">Skip <ChevronRight class="w-5 h-5" /></button></Show></div>
                   </div>
                 </Match>
 
@@ -376,8 +372,8 @@ const CampaignSessionPage: Component = () => {
                             <MapIcon class="w-5 h-5 text-blue-400" />
                           </div>
                           <div>
-                            <p class="text-xs text-blue-400 uppercase tracking-wider font-medium">Carte</p>
-                            <h2 class="text-2xl font-display text-white">{node().title || 'Carte sans titre'}</h2>
+                            <p class="text-xs text-blue-400 uppercase tracking-wider font-medium">Map</p>
+                            <h2 class="text-2xl font-display text-white">{node().title || 'Untitled map'}</h2>
                           </div>
                         </div>
 
@@ -387,7 +383,7 @@ const CampaignSessionPage: Component = () => {
                           fallback={
                             <div class="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-6 mb-8 flex flex-col items-center gap-3 text-center">
                               <MapIcon class="w-14 h-14 text-blue-400/30" />
-                              <p class="text-slate-500 italic">Aucune carte configurée pour ce bloc.</p>
+                              <p class="text-slate-500 italic">No map configured for this block.</p>
                             </div>
                           }
                         >
@@ -396,7 +392,7 @@ const CampaignSessionPage: Component = () => {
                             <div class="flex items-center gap-3">
                               <MapIcon class="w-8 h-8 text-blue-400/50 flex-shrink-0" />
                               <div>
-                                <p class="text-xs text-blue-400 uppercase tracking-wider mb-0.5">Carte</p>
+                                <p class="text-xs text-blue-400 uppercase tracking-wider mb-0.5">Map</p>
                                 <p class="text-xl font-display text-white">{mapName()}</p>
                               </div>
                             </div>
@@ -416,7 +412,7 @@ const CampaignSessionPage: Component = () => {
                                 </Show>
                                 <Show when={(node().trapCells?.length ?? 0) > 0}>
                                   <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-red-500/15 border border-red-500/30 text-red-400 text-sm">
-                                    ✕ {node().trapCells!.length} piège{node().trapCells!.length !== 1 ? 's' : ''}
+                                    ✕ {node().trapCells!.length} trap{node().trapCells!.length !== 1 ? 's' : ''}
                                   </span>
                                 </Show>
                               </div>
@@ -429,7 +425,7 @@ const CampaignSessionPage: Component = () => {
                             class="w-full flex items-center justify-center gap-3 px-6 py-4 mb-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl transition-all text-lg shadow-lg shadow-blue-900/30"
                           >
                             <Play class="w-5 h-5" />
-                            Lancer la carte
+                            Launch map
                           </button>
                         </Show>
 
@@ -440,7 +436,7 @@ const CampaignSessionPage: Component = () => {
                               onClick={() => followPort('output')}
                               class="flex items-center gap-2 px-5 py-2.5 bg-white/8 hover:bg-white/12 border border-white/15 text-slate-300 hover:text-white rounded-xl transition-all text-sm"
                             >
-                              Continuer le scénario <ChevronRight class="w-4 h-4" />
+                              Continue scenario <ChevronRight class="w-4 h-4" />
                             </button>
                           </Show>
                         </div>

@@ -244,7 +244,7 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
 
       <button
         onClick={handleLeave}
-        class="settings-btn !fixed !top-4 !left-4 !right-auto"
+        class="in-game-back-btn !fixed !top-4 !left-4 !right-auto"
         aria-label="Leave room"
       >
         <ArrowLeft class="w-5 h-5 text-white" />

@@ -31,17 +31,17 @@ export const DungeonSelectionForGame: Component<DungeonSelectionForGameProps> = 
 
 	return (
 		<div class="w-full h-screen flex items-center justify-center bg-game-darker relative">
-			<button onClick={props.onBack} class="settings-btn" aria-label="Retour">
-				<ArrowLeft class="settings-icon h-5 w-5" />
+			<button onClick={props.onBack} class="in-game-back-btn" aria-label="Back">
+				<ArrowLeft class="in-game-back-icon h-5 w-5" />
 			</button>
 
 			<div class="max-w-4xl w-full px-4 sm:px-8">
 				<div class="text-center mb-12">
 					<h1 class="font-fantasy text-3xl sm:text-4xl md:text-5xl text-game-gold mb-4 flex items-center justify-center gap-3">
 					<Castle class="w-8 h-8 sm:w-10 sm:h-10" />
-					Sélectionner un Donjon
+					Select a Dungeon
 				</h1>
-					<p class="text-xl text-gray-300">Choisissez le donjon à explorer</p>
+					<p class="text-xl text-gray-300">Choose a dungeon to explore</p>
 				</div>
 
 				<Show
@@ -50,7 +50,7 @@ export const DungeonSelectionForGame: Component<DungeonSelectionForGameProps> = 
 						<div class="bg-black/40 backdrop-blur-sm rounded-xl p-8 border border-white/10 text-center">
 							<p class="text-slate-300">Aucun donjon disponible</p>
 							<p class="text-slate-400 text-sm mt-2">
-								Créez un donjon dans l'éditeur de maps pour commencer
+								Create a dungeon in the map editor to get started
 							</p>
 						</div>
 					}
@@ -72,7 +72,7 @@ export const DungeonSelectionForGame: Component<DungeonSelectionForGameProps> = 
 													{dungeon.totalRooms} salles
 												</span>
 												<span>•</span>
-												<span>Modifié le {formatDate(dungeon.updatedAt)}</span>
+												<span>Edited {formatDate(dungeon.updatedAt)}</span>
 											</div>
 										</div>
 										<div class="text-purple-400 opacity-0 group-hover:opacity-100 transition text-2xl">

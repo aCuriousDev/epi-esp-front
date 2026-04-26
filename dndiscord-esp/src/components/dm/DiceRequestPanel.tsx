@@ -36,7 +36,7 @@ export default function DiceRequestPanel() {
       setLabel("");
       setSelected([]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue");
+      setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setSending(false);
     }
@@ -69,7 +69,7 @@ export default function DiceRequestPanel() {
           checked={targetAll()}
           onChange={(e) => setTargetAll(e.currentTarget.checked)}
         />
-        <span>Tous les joueurs</span>
+        <span>All players</span>
       </label>
 
       <Show when={!targetAll()}>
@@ -96,7 +96,7 @@ export default function DiceRequestPanel() {
         onClick={requestRoll}
       >
         <Dices class="w-3 h-3" />
-        Demander un jet
+        Request a roll
       </button>
 
       <Show when={error()}>
@@ -111,7 +111,7 @@ export default function DiceRequestPanel() {
               return (
                 <div class="flex items-center gap-1 text-[10px] text-purple-300/80 bg-purple-500/5 rounded-lg px-2 py-1 border border-purple-500/15">
                   <span class="flex-1 truncate">
-                    {req.label ?? "Jet de dé"}
+                    {req.label ?? "Dice roll"}
                   </span>
                   <span>
                     {submittedCount()}/{req.expectedCount}
@@ -119,7 +119,7 @@ export default function DiceRequestPanel() {
                   <button
                     class="text-rose-400/60 hover:text-rose-300"
                     onClick={() => cancelRoll(req.requestId)}
-                    aria-label="Annuler"
+                    aria-label="Cancel"
                   >
                     <X class="w-2.5 h-2.5" />
                   </button>

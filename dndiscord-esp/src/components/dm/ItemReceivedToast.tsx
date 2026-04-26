@@ -62,7 +62,7 @@ export const ItemReceivedToast: Component = () => {
               </div>
               <div>
                 <p class="text-xs text-amber-400 font-semibold">
-                  Objet reçu !
+                  Item received!
                 </p>
                 <p class="text-sm text-white font-bold mt-0.5">
                   {toast.itemName}

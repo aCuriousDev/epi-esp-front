@@ -6,11 +6,11 @@ import type { CurrencyType } from "../types/multiplayer";
 
 export function coinLabel(type: CurrencyType): string {
   switch (type) {
-    case "cp": return "pièces de cuivre";
-    case "sp": return "pièces d'argent";
-    case "ep": return "pièces d'électrum";
-    case "gp": return "pièces d'or";
-    case "pp": return "pièces de platine";
+    case "cp": return "copper pieces";
+    case "sp": return "silver pieces";
+    case "ep": return "electrum pieces";
+    case "gp": return "gold pieces";
+    case "pp": return "platinum pieces";
     default: {
       console.warn("[coinLabel] unknown currency:", type);
       return String(type);

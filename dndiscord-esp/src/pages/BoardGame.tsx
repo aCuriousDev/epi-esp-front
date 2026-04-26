@@ -1,5 +1,5 @@
 import { Component, Show, onMount, onCleanup, createSignal, createEffect } from "solid-js";
-import { useNavigate, useLocation } from "@solidjs/router";
+import { useNavigate, useLocation, useParams } from "@solidjs/router";
 import { ArrowLeft, RotateCcw, Check, Hand, MousePointer, Move as MoveIcon, Flag, HelpCircle, X, Settings as SettingsIcon } from "lucide-solid";
 import { InGameSettingsModal } from "../components/InGameSettingsModal";
 import { getPhaseIcon } from "../components/common/icons";
@@ -13,7 +13,6 @@ import { UnitInfoPanel } from "../components/UnitInfoPanel";
 import { CombatLog } from "../components/CombatLog";
 import { TurnOrderDisplay } from "../components/TurnOrderDisplay";
 import { GameOverScreen } from "../components/GameOverScreen";
-import { ModeSelectionScreen } from "../components/ModeSelectionScreen";
 import { MapSelectionForGame } from "../components/MapSelectionForGame";
 import { DungeonSelectionForGame } from "../components/DungeonSelectionForGame";
 import { RoomJoinScreen } from "../components/RoomJoinScreen";
@@ -48,6 +47,7 @@ import {
   selectUnit,
 } from "../game";
 import { getHubUserId } from "../stores/session.store";
+import { t } from "../i18n";
 import { GamePhase, AppPhase, GameMode } from "../types";
 import { sessionState, clearSession, getPersistedSession } from "../stores/session.store";
 import { isDm } from "../stores/session.store";
@@ -72,6 +72,7 @@ import { randomizePreparationPlacement } from "../game/actions/PreparationAction
 const BoardGame: Component = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const params = useParams<{ mode?: string }>();
 
   // Tracks whether the component is still mounted.  Every checkEngine loop
   // reads this flag before scheduling the next tick so orphaned timeouts
@@ -266,6 +267,28 @@ const BoardGame: Component = () => {
     setIsMultiplayer(true);
     setAppPhase(AppPhase.ROOM_JOIN);
   };
+
+  onMount(() => {
+    const m = params.mode?.toLowerCase();
+    if (!m) return; // No param → keep legacy behavior (mode picker fallback).
+    switch (m) {
+      case "exploration":
+        startMode(GameMode.FREE_ROAM);
+        break;
+      case "combat":
+        startMode(GameMode.COMBAT);
+        break;
+      case "dungeon":
+        startMode(GameMode.DUNGEON);
+        break;
+      case "multiplayer":
+        goToMultiplayer();
+        break;
+      default:
+        // Unknown mode → keep mode picker as fallback.
+        break;
+    }
+  });
 
   const onRoomReady = () => {
     setAppPhase(AppPhase.LOBBY);
@@ -632,7 +655,7 @@ const BoardGame: Component = () => {
             }}
           >
             <LogOut class="w-4 h-4" />
-            Quitter la session
+            Leave session
           </button>
         </div>
       </Show>
@@ -675,7 +698,7 @@ const BoardGame: Component = () => {
 
       <Show when={sessionState.session && sessionState.session.campaignId}>
         <div class="panel-game">
-          <h4 class="font-fantasy text-game-gold text-sm mb-3">Jets de dés</h4>
+          <h4 class="font-fantasy text-game-gold text-sm mb-3">Dice rolls</h4>
           <RollHistoryPanel />
         </div>
       </Show>
@@ -726,12 +749,7 @@ const BoardGame: Component = () => {
                   fallback={
                     <Show
                       when={appPhase() === AppPhase.DUNGEON_SETUP}
-                      fallback={
-                        <ModeSelectionScreen
-                          onSelectMode={startMode}
-                          onSelectMultiplayer={goToMultiplayer}
-                        />
-                      }
+                      fallback={null}
                     >
                       <DungeonSelectionForGame
                         onSelectDungeon={selectDungeon}
@@ -764,20 +782,13 @@ const BoardGame: Component = () => {
     >
       <div class="w-full h-screen-dynamic flex flex-col bg-game-darker overflow-hidden pb-safe-bottom">
         {/* Header */}
-        <header class="h-14 shrink-0 bg-gradient-to-r from-brandStart/90 to-brandEnd/90 backdrop-blur-sm border-b border-white/10 flex items-center justify-between px-3 sm:px-4 pt-safe-top">
+        <header class="h-14 shrink-0 bg-gradient-to-r from-brandStart/90 to-brandEnd/90 backdrop-blur-sm border-b border-white/10 flex items-center justify-between pl-16 sm:pl-20 pr-3 sm:pr-4 pt-safe-top">
           <div class="flex items-center gap-2 sm:gap-3">
-            <button
-              onClick={() => fromSession() ? backToSession() : returnToMenu()}
-              class="flex items-center justify-center w-9 h-9 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 transition-colors"
-              aria-label={fromSession() ? "Retour à la session" : "Retour au menu"}
-            >
-              <ArrowLeft class="w-4 h-4 text-white" />
-            </button>
             <button
               onClick={() => setSettingsOpen(true)}
               class="flex items-center justify-center w-9 h-9 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 transition-colors"
-              aria-label="Paramètres"
-              title="Paramètres rapides"
+              aria-label="Settings"
+              title="Quick settings"
             >
               <SettingsIcon class="w-4 h-4 text-white" />
             </button>
@@ -793,7 +804,7 @@ const BoardGame: Component = () => {
                 class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-purple-500/40 bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 text-sm transition-colors"
               >
                 <ArrowLeft class="w-3.5 h-3.5" />
-                <span class="hidden sm:inline">Retour à la session</span>
+                <span class="hidden sm:inline">Back to session</span>
               </button>
             </Show>
             {/* Quitter — any MP participant (BUG-I). Drawer Quitter is DM-only. */}
@@ -806,10 +817,10 @@ const BoardGame: Component = () => {
                   } catch (_) {}
                   returnToMenu();
                 }}
-                title="Quitter la session"
+                title="Leave session"
               >
                 <LogOut class="w-3.5 h-3.5" />
-                <span class="hidden sm:inline">Quitter</span>
+                <span class="hidden sm:inline">Leave</span>
               </button>
             </Show>
             {/* Restart: solo-only or DM-only (non-host can't blow up MP for everyone). */}
@@ -819,7 +830,7 @@ const BoardGame: Component = () => {
                 onClick={() => restartGame()}
               >
                 <RotateCcw class="w-3.5 h-3.5" />
-                <span class="hidden sm:inline">Recommencer</span>
+                <span class="hidden sm:inline">Restart</span>
               </button>
             </Show>
           </div>
@@ -907,7 +918,7 @@ const BoardGame: Component = () => {
               <Show when={gameState.dungeon}>
                 <div class="px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold bg-purple-600/80 text-white whitespace-nowrap flex items-center gap-1.5">
                   {getPhaseIcon("dungeon")}
-                  Salle {(gameState.dungeon?.currentRoomIndex ?? 0) + 1}/
+                  Room {(gameState.dungeon?.currentRoomIndex ?? 0) + 1}/
                   {gameState.dungeon?.totalRooms}
                 </div>
               </Show>
@@ -946,7 +957,7 @@ const BoardGame: Component = () => {
                   class="px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold bg-game-gold text-game-darker hover:bg-amber-400 transition shadow-lg whitespace-nowrap"
                   onClick={() => startCombatFromPreparation()}
                 >
-                  Prêt
+                  Ready
                 </button>
                 <Show when={isSessionHost()}>
                   <button
@@ -954,9 +965,9 @@ const BoardGame: Component = () => {
                     onClick={() =>
                       randomizePreparationPlacement(gameState.mapId ?? null)
                     }
-                    title="Place aléatoirement joueurs et ennemis sur les zones de spawn"
+                    title="Randomly place players and enemies on spawn zones"
                   >
-                    Placement aléatoire
+                    Random placement
                   </button>
                 </Show>
               </Show>
@@ -966,9 +977,9 @@ const BoardGame: Component = () => {
             <Show when={gameState.phase === GamePhase.COMBAT_PREPARATION}>
               <div class="absolute top-14 sm:top-16 left-1/2 -translate-x-1/2 z-10 panel-game w-[min(90%,40rem)] text-center">
                 <p class="text-xs sm:text-sm text-gray-300">
-                  Placez vos personnages sur les cases alliées (bleues), puis
-                  cliquez sur <strong class="text-game-gold">Prêt</strong> pour
-                  lancer le combat.
+                  Place your characters on the allied tiles (blue), then
+                  click <strong class="text-game-gold">Ready</strong> to
+                  start combat.
                 </p>
               </div>
             </Show>
@@ -985,7 +996,7 @@ const BoardGame: Component = () => {
                   aria-expanded={leftDrawerOpen()}
                   aria-controls="left-drawer"
                 >
-                  {leftDrawerOpen() ? "Fermer infos" : "Infos"}
+                  {leftDrawerOpen() ? t("boardgame.drawer.closeInfo") : "Infos"}
                 </button>
               </Show>
               <Show when={isInSession() && !isDm()}>
@@ -999,7 +1010,7 @@ const BoardGame: Component = () => {
                 aria-expanded={rightDrawerOpen()}
                 aria-controls="right-drawer"
               >
-                {rightDrawerOpen() ? "Fermer journal" : "Journal"}
+                {rightDrawerOpen() ? t("boardgame.drawer.closeLog") : t("boardgame.drawer.log")}
               </button>
             </div>
 
@@ -1013,7 +1024,7 @@ const BoardGame: Component = () => {
                   <button
                     class="absolute top-2 right-2 text-slate-400 hover:text-white"
                     onClick={() => setHelpOpen(false)}
-                    aria-label="Fermer l'aide"
+                    aria-label={t("boardgame.hud.closeHelp")}
                   >
                     <X class="w-3.5 h-3.5" />
                   </button>
@@ -1023,14 +1034,14 @@ const BoardGame: Component = () => {
                       <Hand class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
                       <span>
                         <span class="text-gray-300 font-medium">Tap</span> —
-                        sélectionner / déplacer / attaquer
+                        select / move / attack
                       </span>
                     </li>
                     <li class="flex items-start gap-2">
                       <MoveIcon class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
                       <span>
                         <span class="text-gray-300 font-medium">Drag</span> —
-                        orbiter / panner la caméra
+                        orbit / pan the camera
                       </span>
                     </li>
                     <li class="flex items-start gap-2">
@@ -1045,21 +1056,21 @@ const BoardGame: Component = () => {
                     <li class="flex items-start gap-2">
                       <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
                       <span>
-                        <span class="text-gray-300 font-medium">Clic</span> —
-                        sélectionner / déplacer / attaquer
+                        <span class="text-gray-300 font-medium">Click</span> —
+                        select / move / attack
                       </span>
                     </li>
                     <li class="flex items-start gap-2">
                       <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
                       <span>
-                        <span class="text-gray-300 font-medium">Clic droit + drag</span> —
-                        orbiter la caméra
+                        <span class="text-gray-300 font-medium">Right-click + drag</span> —
+                        orbit camera
                       </span>
                     </li>
                     <li class="flex items-start gap-2">
                       <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
                       <span>
-                        <span class="text-gray-300 font-medium">Molette</span> —
+                        <span class="text-gray-300 font-medium">Scroll wheel</span> —
                         zoom
                       </span>
                     </li>
@@ -1119,8 +1130,8 @@ const BoardGame: Component = () => {
                 <button
                   class="w-9 h-9 flex items-center justify-center rounded-full border border-white/20 bg-game-dark/85 backdrop-blur text-white shadow-lg hover:bg-game-dark transition-colors focus-ring-gold"
                   onClick={() => setHelpOpen((v) => !v)}
-                  title={helpOpen() ? "Fermer l'aide" : "Aide & contrôles"}
-                  aria-label={helpOpen() ? "Fermer l'aide" : "Ouvrir l'aide"}
+                  title={helpOpen() ? "Close help" : "Help & controls"}
+                  aria-label={helpOpen() ? t("boardgame.hud.closeHelp") : "Open help"}
                   aria-expanded={helpOpen()}
                 >
                   <HelpCircle class="w-4 h-4" />
@@ -1128,7 +1139,7 @@ const BoardGame: Component = () => {
                 <button
                   class="btn-game text-xs sm:text-sm py-1.5 px-3 flex items-center gap-2"
                   onClick={() => resetCamera()}
-                  title="Réinitialiser la caméra"
+                  title="Reset camera"
                 >
                   <RotateCcw class="w-3.5 h-3.5" />
                   <span>Reset View</span>
@@ -1147,7 +1158,7 @@ const BoardGame: Component = () => {
               <Show when={canEndPlayerTurn() && isDm()}>
                 <Show when={endTurnPending()}>
                   <div class="px-3 py-1.5 rounded-lg bg-amber-600/90 text-white text-xs font-medium shadow-lg border border-white/10 animate-pulse">
-                    Aucun AP dépensé — reclique pour confirmer
+                    No AP spent — click again to confirm
                   </div>
                 </Show>
                 <button
@@ -1160,7 +1171,7 @@ const BoardGame: Component = () => {
                   title="Terminer le tour"
                 >
                   <Flag class="w-4 h-4" />
-                  <span>{endTurnPending() ? "Confirmer" : "Fin du tour"}</span>
+                  <span>{endTurnPending() ? t("boardgame.hud.confirm") : t("boardgame.hud.endTurn")}</span>
                 </button>
               </Show>
 
@@ -1171,10 +1182,10 @@ const BoardGame: Component = () => {
                 <button
                   class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-lg transition-colors focus-ring-gold bg-red-600/90 hover:bg-red-500 text-white border border-red-400/40"
                   onClick={() => endUnitTurn()}
-                  title="MJ : passer le tour de cet ennemi"
+                  title="DM: skip this enemy's turn"
                 >
                   <Flag class="w-4 h-4" />
-                  <span>Passer tour ennemi</span>
+                  <span>Skip enemy turn</span>
                 </button>
               </Show>
             </div>
@@ -1193,13 +1204,13 @@ const BoardGame: Component = () => {
             >
               <div class="flex items-center justify-between">
                 <h3 class="font-fantasy text-game-gold text-sm">
-                  Informations
+                  {t("boardgame.drawer.info")}
                 </h3>
                 <button
                   class="text-xs px-2 py-1 rounded border border-white/20 text-gray-300"
                   onClick={closeDrawers}
                 >
-                  Fermer
+                  {t("boardgame.drawer.close")}
                 </button>
               </div>
               {renderLeftPanelContent()}
@@ -1212,12 +1223,12 @@ const BoardGame: Component = () => {
               }`}
             >
               <div class="flex items-center justify-between">
-                <h3 class="font-fantasy text-game-gold text-sm">Journal</h3>
+                <h3 class="font-fantasy text-game-gold text-sm">{t("boardgame.drawer.log")}</h3>
                 <button
                   class="text-xs px-2 py-1 rounded border border-white/20 text-gray-300"
                   onClick={closeDrawers}
                 >
-                  Fermer
+                  {t("boardgame.drawer.close")}
                 </button>
               </div>
               {renderRightPanelContent()}
@@ -1243,7 +1254,7 @@ function getPhaseText(phase: GamePhase): string {
     case GamePhase.SETUP:
       return "Setting up...";
     case GamePhase.COMBAT_PREPARATION:
-      return "Phase de pr\u00e9paration";
+      return "Preparation Phase";
     case GamePhase.PLAYER_TURN:
       return "Your Turn";
     case GamePhase.ENEMY_TURN:

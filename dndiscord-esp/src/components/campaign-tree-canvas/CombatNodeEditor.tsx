@@ -92,7 +92,7 @@ const CombatNodeEditor: Component<CombatNodeEditorProps> = (props) => {
           onInput={(e) => handleUpdateTitle(e.currentTarget.value)}
           onKeyDown={(e) => e.stopPropagation()}
           onBlur={() => props.handleUpdateNode(props.node)}
-          placeholder="Nom affiché sur le canvas..."
+          placeholder="Name shown on canvas..."
           style={fieldStyle}
         />
       </div>
@@ -105,7 +105,7 @@ const CombatNodeEditor: Component<CombatNodeEditorProps> = (props) => {
           onChange={(e) => handleUpdateMap(e.currentTarget.value)}
           style={{ ...fieldStyle, cursor: 'pointer' }}
         >
-          <option value="">— Sélectionner une carte —</option>
+          <option value="">— Select a map —</option>
           <For each={HARDCODED_MAPS}>
             {(map) => (
               <option value={map.id}>
@@ -116,14 +116,14 @@ const CombatNodeEditor: Component<CombatNodeEditorProps> = (props) => {
         </select>
         <Show when={currentMap()}>
           <p style={{ 'font-size': '0.8rem', color: '#888', 'margin-top': '0.25rem' }}>
-            Dimensions : {currentMap()!.dimension.width} × {currentMap()!.dimension.height} cases
+            Dimensions: {currentMap()!.dimension.width} × {currentMap()!.dimension.height} tiles
           </p>
         </Show>
       </div>
 
       {/* Difficulté */}
       <div style={{ 'margin-bottom': '1.5rem' }}>
-        <label style={labelStyle}>Difficulté :</label>
+        <label style={labelStyle}>Difficulty:</label>
         <select
           value={difficulty()}
           onChange={(e) => handleUpdateDifficulty(e.currentTarget.value as 'easy' | 'medium' | 'hard')}
@@ -138,7 +138,7 @@ const CombatNodeEditor: Component<CombatNodeEditorProps> = (props) => {
       {/* Villains */}
       <div>
         <div style={{ display: 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '0.5rem' }}>
-          <label style={{ 'font-weight': '500', 'font-size': '0.9rem' }}>⚔️ Ennemis :</label>
+          <label style={{ 'font-weight': '500', 'font-size': '0.9rem' }}>⚔️ Enemies:</label>
           <button
             onClick={handleAddVillain}
             style={{ padding: '0.25rem 0.5rem', background: '#8b0000', border: 'none', 'border-radius': '3px', color: 'white', cursor: 'pointer', 'font-size': '0.85rem' }}
@@ -149,7 +149,7 @@ const CombatNodeEditor: Component<CombatNodeEditorProps> = (props) => {
 
         <Show
           when={villains().length > 0}
-          fallback={<p style={{ color: '#888', 'font-size': '0.9rem', 'font-style': 'italic' }}>Aucun ennemi défini</p>}
+          fallback={<p style={{ color: '#888', 'font-size': '0.9rem', 'font-style': 'italic' }}>No enemies defined</p>}
         >
           <div style={{ display: 'flex', 'flex-direction': 'column', gap: '0.75rem' }}>
             <For each={villains()}>

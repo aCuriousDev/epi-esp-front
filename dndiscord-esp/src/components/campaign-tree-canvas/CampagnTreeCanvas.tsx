@@ -346,7 +346,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
 
     // Confirmation avant d'effacer
     if (canvas.getFigures().getSize() > 0) {
-      if (!safeConfirm("Êtes-vous sûr de vouloir effacer tous les nœuds ?")) {
+      if (!safeConfirm("Are you sure you want to clear all nodes?")) {
         return;
       }
     }
@@ -645,7 +645,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
               width: "32px",
               height: "32px",
             }}
-            title="Zoom arrière"
+            title="Zoom out"
           >
             −
           </button>
@@ -663,7 +663,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
               "line-height": 1,
               "min-width": "40px",
             }}
-            title="Réinitialiser le zoom"
+            title="Reset zoom"
           >
             {Math.round(currentZoom() * 100)}%
           </button>
@@ -703,9 +703,9 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
             "font-weight": "500",
             "white-space": "nowrap",
           }}
-          title="Adapter à la page"
+          title="Fit to page"
         >
-          📐 Adapter
+          📐 Fit
         </button>
 
         {/* Clear all — hidden in read-only mode */}
@@ -723,7 +723,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
               "font-weight": "500",
               "white-space": "nowrap",
             }}
-            title="Effacer tous les nœuds"
+            title="Clear all nodes"
           >
             Effacer
           </button>
@@ -751,7 +751,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
             color: tokens.text.high,
           }}
         >
-          Types de nœuds
+          Node types
         </div>
         <div
           style={{
@@ -772,7 +772,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
                 "border-radius": "3px",
               }}
             />
-            <span style={{ color: tokens.text.high }}>Story (Scène)</span>
+            <span style={{ color: tokens.text.high }}>Story (Scene)</span>
           </div>
           <div
             style={{ display: "flex", "align-items": "center", gap: "0.5rem" }}

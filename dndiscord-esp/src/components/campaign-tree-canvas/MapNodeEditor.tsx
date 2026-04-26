@@ -18,10 +18,10 @@ const CELL_MAX  = 52;
 const H_RESERVE = 240; // px reserved for board chrome (header + toolbar + footer)
 
 const MODE_CFG: Record<EditorMode, { label: string; clr: string; bg: string; border: string; hint: string }> = {
-  spawn: { label: '⊙ Spawn',   clr: '#22c55e', bg: 'rgba(34,197,94,0.15)',  border: '#22c55e', hint: 'Cliquez pour définir le point d\'apparition des joueurs.' },
-  exit:  { label: '⬆ Sortie',  clr: '#fbbf24', bg: 'rgba(251,191,36,0.15)', border: '#fbbf24', hint: 'Cliquez (ou glissez) pour marquer les sorties de la carte.' },
-  trap:  { label: '✕ Piège',   clr: '#ef4444', bg: 'rgba(239,68,68,0.15)',  border: '#ef4444', hint: 'Cliquez (ou glissez) pour marquer les cases de pièges.' },
-  erase: { label: '✦ Effacer', clr: '#94a3b8', bg: 'rgba(148,163,184,0.1)', border: '#475569', hint: 'Cliquez pour effacer le marqueur de cette case.' },
+  spawn: { label: '⊙ Spawn',   clr: '#22c55e', bg: 'rgba(34,197,94,0.15)',  border: '#22c55e', hint: 'Click to define the player spawn point.' },
+  exit:  { label: '⬆ Exit',  clr: '#fbbf24', bg: 'rgba(251,191,36,0.15)', border: '#fbbf24', hint: 'Click (or drag) to mark map exits.' },
+  trap:  { label: '✕ Trap',   clr: '#ef4444', bg: 'rgba(239,68,68,0.15)',  border: '#ef4444', hint: 'Click (or drag) to mark trap tiles.' },
+  erase: { label: '✦ Erase', clr: '#94a3b8', bg: 'rgba(148,163,184,0.1)', border: '#475569', hint: 'Click to clear the marker on this tile.' },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -351,7 +351,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
           onInput={e => handleUpdateTitle(e.currentTarget.value)}
           onKeyDown={e => e.stopPropagation()}
           onBlur={() => props.handleUpdateNode(props.node)}
-          placeholder="Nom affiché sur le canvas..."
+          placeholder="Name shown on canvas..."
           style={fieldStyle}
         />
       </div>
@@ -363,9 +363,9 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
           when={maps().length > 0}
           fallback={
             <div style={{ background: '#10151f', border: '1px dashed #2a3a6a', 'border-radius': '6px', padding: '0.75rem', 'text-align': 'center' }}>
-              <p style={{ margin: '0 0 0.2rem', 'font-size': '0.85rem', color: '#5a7090' }}>Aucune carte sauvegardée</p>
+              <p style={{ margin: '0 0 0.2rem', 'font-size': '0.85rem', color: '#5a7090' }}>No saved maps</p>
               <p style={{ margin: 0, 'font-size': '0.78rem', color: '#344566' }}>
-                Créez-en une depuis le <strong style={{ color: '#4a6090' }}>Map Editor</strong>
+                Create one from the <strong style={{ color: '#4a6090' }}>Map Editor</strong>
               </p>
             </div>
           }
@@ -375,7 +375,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
             onChange={e => handleSelectMap(e.currentTarget.value)}
             style={{ ...fieldStyle, cursor: 'pointer' }}
           >
-            <option value="">— Sélectionner une carte —</option>
+            <option value="">— Select a map —</option>
             <For each={maps()}>
               {m => <option value={m.id}>{m.name}</option>}
             </For>
@@ -390,7 +390,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
         <Show when={!hasGrid()}>
           <div style={{ background: '#10151f', border: '1px dashed #2a3060', 'border-radius': '6px', padding: '0.75rem', 'text-align': 'center', 'margin-bottom': '1rem' }}>
             <p style={{ margin: 0, 'font-size': '0.82rem', color: '#5a6a8a' }}>
-              Cette carte ne contient aucune case — éditez-la dans le Map Editor.
+              This map has no tiles — edit it in the Map Editor.
             </p>
           </div>
         </Show>
@@ -427,7 +427,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                 'border-radius': '4px', padding: '0.15rem 0.45rem',
                 'white-space': 'nowrap',
               }}>
-                Configurée
+                Configured
               </span>
             </Show>
           </div>
@@ -452,7 +452,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                 ⬆ {exits().length} sortie{exits().length !== 1 ? 's' : ''}
               </span>
               <span style={{ color: traps().length > 0 ? '#ef4444' : '#3a2020' }}>
-                ✕ {traps().length} piège{traps().length !== 1 ? 's' : ''}
+                ✕ {traps().length} trap{traps().length !== 1 ? 's' : ''}
               </span>
             </div>
           </Show>
@@ -474,7 +474,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
               'letter-spacing': '0.02em',
             }}
           >
-            {isConfigured() ? '✏️ Éditer la carte' : '⚡ Instancier la carte'}
+            {isConfigured() ? '✏️ Edit map' : '⚡ Instantiate map'}
           </button>
 
         </Show>
@@ -482,7 +482,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
 
       {/* ── Note ────────────────────────────────────────────────────────── */}
       <p style={{ margin: '1.25rem 0 0', 'font-size': '0.73rem', color: '#2d3a4a', 'line-height': 1.4 }}>
-        💡 Les cartes se créent dans le <strong style={{ color: '#3a5070' }}>Map Editor</strong> (menu principal).
+        💡 Maps are created in the <strong style={{ color: '#3a5070' }}>Map Editor</strong> (main menu).
       </p>
 
       {/* ═══════════════════════════════════════════════════════════════════
@@ -530,7 +530,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                     {currentMeta()?.name ?? 'Carte'}
                   </p>
                   <p style={{ margin: 0, 'font-size': '0.73rem', color: '#3a5a80' }}>
-                    Placement des actions · grille {b().w}×{b().h}
+                    Action placement · grid {b().w}×{b().h}
                   </p>
                 </div>
                 <button
@@ -626,8 +626,8 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                 {/* Legend */}
                 <div style={{ display: 'flex', gap: '1rem', flex: 1, 'flex-wrap': 'wrap' }}>
                   <span style={{ 'font-size': '0.74rem', color: '#22c55e' }}>● Spawn</span>
-                  <span style={{ 'font-size': '0.74rem', color: '#fbbf24' }}>■ Sortie</span>
-                  <span style={{ 'font-size': '0.74rem', color: '#ef4444' }}>✕ Piège</span>
+                  <span style={{ 'font-size': '0.74rem', color: '#fbbf24' }}>■ Exit</span>
+                  <span style={{ 'font-size': '0.74rem', color: '#ef4444' }}>✕ Trap</span>
                   <span style={{ 'font-size': '0.74rem', color: '#22d3ee' }}>◆ Objet</span>
                 </div>
 
@@ -640,7 +640,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                     ⬆ {exits().length} sortie{exits().length !== 1 ? 's' : ''}
                   </span>
                   <span style={{ color: traps().length > 0 ? '#ef4444' : '#3a1010' }}>
-                    ✕ {traps().length} piège{traps().length !== 1 ? 's' : ''}
+                    ✕ {traps().length} trap{traps().length !== 1 ? 's' : ''}
                   </span>
                 </div>
 
@@ -660,7 +660,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                     'white-space': 'nowrap',
                   }}
                 >
-                  ✓ Valider
+                  ✓ Confirm
                 </button>
               </div>
 

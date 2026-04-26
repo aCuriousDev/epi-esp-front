@@ -297,7 +297,7 @@ export function moveUnit(targetPos: GridPosition): boolean {
               setTiles(posToKey(targetPos), 'occupiedBy', null);
             }
           }));
-          addCombatLog(`${unit.name} déclenche un piège ! −${effect.value} PV`, 'damage');
+          addCombatLog(`${unit.name} triggers a trap! −${effect.value} HP`, 'damage');
         }
       }
       // Disarm trap after first trigger
@@ -308,7 +308,7 @@ export function moveUnit(targetPos: GridPosition): boolean {
     // EXIT: trigger session return when a player steps on this cell
     if (destTile.type === TileType.EXIT && unit.team === Team.PLAYER) {
       if (isSessionMapActive()) {
-        addCombatLog('Sortie atteinte ! Retour au scénario…', 'system');
+        addCombatLog('Exit reached! Returning to scenario…', 'system');
         setTimeout(() => triggerSessionExit(), 800);
       }
     }
@@ -350,7 +350,7 @@ export function moveUnit(targetPos: GridPosition): boolean {
       (p) => p.x === targetPos.x && p.z === targetPos.z
     );
     if (isOnTeleport) {
-      addCombatLog('Portail de téléportation activé ! Transition vers la salle suivante...', 'system');
+      addCombatLog('Teleportation portal activated! Transitioning to next room...', 'system');
       setTimeout(() => {
         transitionToNextRoom();
       }, 500);

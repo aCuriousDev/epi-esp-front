@@ -73,7 +73,7 @@ export default function RollHistoryPanel() {
   return (
     <div class="mt-2 space-y-1.5">
       <Show when={loading()}>
-        <p class="text-[10px] text-purple-300/50 text-center py-2">Chargement…</p>
+        <p class="text-[10px] text-purple-300/50 text-center py-2">Loading…</p>
       </Show>
       <Show when={error()}>
         <p class="text-rose-400 text-xs">{error()}</p>

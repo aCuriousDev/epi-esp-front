@@ -144,13 +144,13 @@ export default function DiceRollPrompt() {
           }}
         >
           <p class="text-[11px] font-bold uppercase tracking-[0.25em] text-purple-300 mb-2">
-            [Le MJ demande un jet]
+            [The DM requests a roll]
           </p>
           <p
             class={`font-display italic text-2xl mb-6 ${tone().text}`}
             style={{ transition: "color 220ms cubic-bezier(0.22,1,0.36,1)" }}
           >
-            {active()?.label ?? "Jet de dé"}
+            {active()?.label ?? "Dice roll"}
           </p>
 
           <div
@@ -174,7 +174,7 @@ export default function DiceRollPrompt() {
 
           <Show when={phase() === "prompt"}>
             <p class="mt-6 text-purple-200/70 text-sm tracking-wide animate-pulse">
-              Appuyez sur le dé pour lancer
+              Press the die to roll
             </p>
           </Show>
           <Show when={phase() === "result" && lastValue() != null}>
@@ -183,7 +183,7 @@ export default function DiceRollPrompt() {
             </p>
           </Show>
           <Show when={phase() === "canceled"}>
-            <p class="mt-4 text-purple-300/80 italic">Annulé par le MJ</p>
+            <p class="mt-4 text-purple-300/80 italic">Cancelled by the DM</p>
           </Show>
         </div>
       </Portal>

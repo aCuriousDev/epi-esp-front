@@ -64,15 +64,15 @@ export const ProgressionToast: Component = () => {
           if (evt.levelUps > 0) {
             pushToast({
               kind: "progress",
-              title: "Niveau supérieur !",
-              body: `Niv. ${evt.previousLevel} -> ${evt.newLevel} (+${evt.levelUps})`,
+              title: "Level up!",
+              body: `Lv. ${evt.previousLevel} -> ${evt.newLevel} (+${evt.levelUps})`,
               accentClass: "from-yellow-950/95 to-amber-900/90 border-amber-500/30",
             });
             playLevelUpSound();
           } else {
             pushToast({
               kind: "progress",
-              title: "XP reçue",
+              title: "XP received",
               body: `+${evt.awardedExperience} XP`,
               accentClass: "from-indigo-950/95 to-violet-900/90 border-violet-500/30",
             });
@@ -99,7 +99,7 @@ export const ProgressionToast: Component = () => {
           const total = totalForCurrency(evt);
           pushToast({
             kind: "gold",
-            title: amount >= 0 ? "Bourse modifiée" : "Monnaie retirée",
+            title: amount >= 0 ? "Wallet updated" : "Currency removed",
             body: `${sign}${amount} ${currency} (total ${total.count} ${total.key})`,
             accentClass: "from-amber-950/95 to-orange-900/90 border-orange-500/30",
           });
@@ -114,7 +114,7 @@ export const ProgressionToast: Component = () => {
     pushToast({
       kind: "progress",
       title: "Progression",
-      body: `${evt.targetCharacterName} atteint le niveau ${evt.newLevel} (+${evt.levelUps})`,
+      body: `${evt.targetCharacterName} reached level ${evt.newLevel} (+${evt.levelUps})`,
       accentClass: "from-indigo-950/95 to-violet-900/90 border-violet-500/30",
     });
     playNotificationSound();
@@ -125,7 +125,7 @@ export const ProgressionToast: Component = () => {
     const sign = evt.amount > 0 ? "+" : "";
     pushToast({
       kind: "gold",
-      title: evt.amount >= 0 ? "Monnaie reçue" : "Monnaie retirée",
+      title: evt.amount >= 0 ? "Currency received" : "Currency removed",
       body: `${evt.targetCharacterName} : ${sign}${evt.amount} ${coinLabel(evt.currencyType)}`,
       accentClass: "from-amber-950/95 to-orange-900/90 border-orange-500/30",
     });

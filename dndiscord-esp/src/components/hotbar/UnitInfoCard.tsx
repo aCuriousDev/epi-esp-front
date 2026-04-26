@@ -37,7 +37,7 @@ export const UnitInfoCard: Component = () => {
           isEnemy()
             ? "from-red-500 to-rose-400"
             : "from-emerald-500 to-teal-400";
-        const label = () => (isEnemy() ? "Ennemi" : "Allié");
+        const label = () => (isEnemy() ? "Enemy" : "Ally");
         const labelColour = () =>
           isEnemy() ? "text-red-300" : "text-emerald-300";
 
