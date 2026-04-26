@@ -1,6 +1,7 @@
 import { Component, createSignal, onMount, Show, For, Switch, Match } from 'solid-js';
 import { useNavigate, useParams } from '@solidjs/router';
-import { ArrowLeft, BookOpen, Map as MapIcon, Sword, ChevronRight, Loader2, Play } from 'lucide-solid';
+import { BookOpen, Map as MapIcon, Sword, ChevronRight, Loader2, Play } from 'lucide-solid';
+import { writeLastCampaignId } from '../hooks/useLastCampaign';
 import {
   CampaignService,
   type AdvanceSessionRequest,
@@ -82,6 +83,10 @@ const CampaignSessionPage: Component = () => {
   const [parsedTree, setParsedTree]         = createSignal<ParsedTree | null>(null);
   const [currentNodeId, setCurrentNodeId]   = createSignal<string | undefined>();
   const [history, setHistory]               = createSignal<string[]>([]);
+
+  onMount(() => {
+    writeLastCampaignId(params.id);
+  });
 
   onMount(async () => {
     try {
@@ -228,33 +233,24 @@ const CampaignSessionPage: Component = () => {
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{
-      width: '100vw', 'min-height': '100vh',
-      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1a 100%)',
-      color: '#d4d4d4', 'font-family': 'system-ui, sans-serif',
-      display: 'flex', 'flex-direction': 'column',
-    }}>
+    <div class="w-full min-h-full flex flex-col" style={{ color: '#d4d4d4', 'font-family': 'system-ui, sans-serif' }}>
       {/* Offline mode banner — shown when backend session creation failed */}
       <Show when={isOffline()}>
         <div class="flex-shrink-0 flex items-center justify-center gap-2 px-4 py-2 bg-amber-600/20 border-b border-amber-500/30 text-amber-300 text-xs">
           <span>⚠</span>
-          <span>Mode hors-ligne — la progression ne sera pas sauvegardée sur le serveur.</span>
+          <span>Offline mode — progress will not be saved to the server.</span>
         </div>
       </Show>
 
-      {/* Header */}
+      {/* Session HUD header */}
       <header class="sticky top-0 z-20 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-black/40 backdrop-blur-md">
-        <button onClick={() => navigate(`/campaigns/${params.id}`)} class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors">
-          <ArrowLeft class="w-5 h-5" />
-          <span class="hidden sm:inline">Retour</span>
-        </button>
         <div class="text-center">
-          <p class="text-xs text-purple-400 uppercase tracking-wider">Session en cours</p>
+          <p class="text-xs text-purple-400 uppercase tracking-wider">Session in progress</p>
           <h1 class="font-display text-lg text-white">{campaignTitle()}</h1>
         </div>
         <div class="flex items-center gap-2 text-sm text-slate-400 min-w-[80px] justify-end">
           <Show when={isSaving()}><Loader2 class="w-3 h-3 animate-spin text-purple-400" /></Show>
-          <Show when={history().length > 0}><span>{history().length + 1} blocs</span></Show>
+          <Show when={history().length > 0}><span>{history().length + 1} blocks</span></Show>
         </div>
       </header>
 
