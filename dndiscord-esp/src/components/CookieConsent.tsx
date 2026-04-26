@@ -5,18 +5,18 @@ import { Cookie, Shield, Sliders, X } from "lucide-solid";
 import { consentStore } from "../stores/consent.store";
 import { useEscapeToClose } from "../hooks/useModalAccessibility";
 
-// Routes sur lesquelles la bannière n'a pas lieu d'être (l'utilisateur
-// est par définition déjà en train de consulter la divulgation complète).
+// Routes where the banner has no purpose (the user is by definition
+// already viewing the full disclosure).
 const LEGAL_PATHS = ["/privacy", "/terms", "/legal", "/cookies"];
 
 /**
- * Bannière d'information RGPD.
+ * GDPR information banner.
  *
- * DnDiscord n'utilise que du stockage local exempté de consentement
- * (authentification + préférences d'interface, au sens CNIL). La bannière
- * est donc informative : on liste ce qui est stocké, l'utilisateur peut
- * consulter la politique de confidentialité, vider ses préférences locales,
- * et acquitter avec « J'ai compris ».
+ * DnDiscord only uses local storage that is exempt from consent
+ * (authentication + interface preferences, per CNIL). The banner is
+ * therefore informational: we list what is stored, the user can review
+ * the privacy policy, clear their local preferences, and acknowledge
+ * with "Got it".
  */
 
 type StorageCategory = {
@@ -30,7 +30,7 @@ type StorageCategory = {
 const CATEGORIES: StorageCategory[] = [
   {
     key: "essential",
-    title: "Essentiels",
+    title: "Essential",
     description:
       "Required for the service to work (authentication, multiplayer session, content you create). They cannot be disabled.",
     essential: true,
@@ -75,9 +75,9 @@ const CATEGORIES: StorageCategory[] = [
 
 export default function CookieConsent() {
   const location = useLocation();
-  // On masque la bannière sur les pages légales : l'utilisateur est
-  // manifestement déjà informé puisqu'il y navigue, et l'overlay bottom
-  // occulte une partie de la page de divulgation sur mobile.
+  // Hide the banner on legal pages: the user is clearly already
+  // informed since they navigated there, and the bottom overlay covers
+  // part of the disclosure page on mobile.
   const shouldShowBanner = createMemo(
     () =>
       consentStore.bannerOpen() &&
@@ -104,7 +104,7 @@ function ConsentBanner() {
   return (
     <div
       role="dialog"
-      aria-label="Information sur le stockage local"
+      aria-label="Local storage information"
       aria-describedby="cookie-consent-desc"
       class="cookie-banner fixed inset-x-0 bottom-0 z-[60] p-3 sm:p-4"
     >
@@ -123,15 +123,14 @@ function ConsentBanner() {
               id="cookie-consent-desc"
               class="text-slate-300/90 text-sm leading-relaxed"
             >
-              DnDiscord utilise uniquement le <strong>stockage local</strong> de
-              your browser to authenticate via Discord and store
-              your game preferences. No advertising tracker or analytics tool
-              d'analyse tiers.{" "}
+              DnDiscord only uses your browser's <strong>local storage</strong>{" "}
+              to authenticate via Discord and store your game preferences. No
+              advertising tracker, no third-party analytics tool.{" "}
               <A
                 href="/privacy"
                 class="text-purple-300 hover:text-purple-200 underline underline-offset-2"
               >
-                En savoir plus
+                Learn more
               </A>
               .
             </p>
@@ -150,7 +149,7 @@ function ConsentBanner() {
                 onClick={() => consentStore.acknowledge()}
                 class="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-medium text-sm transition-colors"
               >
-                J'ai compris
+                Got it
               </button>
               <button
                 onClick={() => consentStore.openPreferences()}
@@ -170,8 +169,8 @@ function ConsentBanner() {
 function PreferencesModal() {
   useEscapeToClose(consentStore.preferencesOpen, consentStore.closePreferences);
   let closeBtn: HTMLButtonElement | undefined;
-  // Autofocus sur le bouton de fermeture au montage pour que Tab / Enter
-  // / ESC fonctionnent directement sans click préalable.
+  // Autofocus the close button on mount so Tab / Enter / ESC work
+  // directly without a prior click.
   queueMicrotask(() => closeBtn?.focus());
 
   function handleClearPreferences() {
@@ -200,7 +199,7 @@ function PreferencesModal() {
             ref={closeBtn}
             onClick={() => consentStore.closePreferences()}
             class="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
-            aria-label="Fermer"
+            aria-label="Close"
           >
             <X class="w-5 h-5" />
           </button>
@@ -224,12 +223,12 @@ function PreferencesModal() {
                     when={cat.essential}
                     fallback={
                       <span class="px-2 py-0.5 rounded-full text-[11px] bg-slate-500/20 text-slate-300">
-                        Optionnels
+                        Optional
                       </span>
                     }
                   >
                     <span class="px-2 py-0.5 rounded-full text-[11px] bg-purple-500/20 text-purple-200">
-                      Toujours actifs
+                      Always on
                     </span>
                   </Show>
                 </header>
@@ -254,12 +253,12 @@ function PreferencesModal() {
 
           <section class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4">
             <h3 class="text-amber-200 font-medium text-sm mb-1">
-              Ce que nous ne faisons pas
+              What we don't do
             </h3>
             <ul class="list-disc list-inside text-slate-300 text-xs space-y-1">
-              <li>Aucun cookie publicitaire, aucun traceur cross-site.</li>
+              <li>No advertising cookies, no cross-site trackers.</li>
               <li>
-                Aucun outil d'analyse tiers (Google Analytics, Meta Pixel, etc.).
+                No third-party analytics (Google Analytics, Meta Pixel, etc.).
               </li>
               <li>No resale of data to commercial partners.</li>
             </ul>
@@ -278,7 +277,7 @@ function PreferencesModal() {
             onClick={() => consentStore.acknowledge()}
             class="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-medium text-sm transition-colors"
           >
-            J'ai compris
+            Got it
           </button>
         </div>
       </div>
