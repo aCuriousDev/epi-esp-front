@@ -2,6 +2,8 @@
 
 SolidJS + TypeScript frontend for the DnDiscord Discord Activity. Players join the Activity inside a Discord voice channel, land in a full-screen iframe that runs a 3D turn-based D&D board game, then close the Activity when the session ends without ever leaving Discord. The app talks to `epi-esp-back` (.NET 9) over REST (axios) and real-time (SignalR WebSocket), renders the battle map with BabylonJS 7.x, and ships as a single Docker container served by nginx.
 
+🚀 **Live deployment:** [dndiscord.cadran.app](https://dndiscord.cadran.app/) — companion backend repo: [epi-esp-back](https://github.com/aCuriousDev/epi-esp-back).
+
 **CSP constraints that shape every technical decision**: the iframe sandbox forbids `eval`, `Function()`, inline blob workers, and all external CDNs. All fonts, icons, and scripts must be bundled or self-hosted. BabylonJS loaders must use `LoadAssetContainerAsync` + instantiated templates — no dynamic `eval`-based shader compilation tricks. Blob workers are replaced with main-thread equivalents.
 
 ---
