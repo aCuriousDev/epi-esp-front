@@ -13,7 +13,6 @@ import { UnitInfoPanel } from "../components/UnitInfoPanel";
 import { CombatLog } from "../components/CombatLog";
 import { TurnOrderDisplay } from "../components/TurnOrderDisplay";
 import { GameOverScreen } from "../components/GameOverScreen";
-import { ModeSelectionScreen } from "../components/ModeSelectionScreen";
 import { MapSelectionForGame } from "../components/MapSelectionForGame";
 import { DungeonSelectionForGame } from "../components/DungeonSelectionForGame";
 import { RoomJoinScreen } from "../components/RoomJoinScreen";
@@ -749,12 +748,7 @@ const BoardGame: Component = () => {
                   fallback={
                     <Show
                       when={appPhase() === AppPhase.DUNGEON_SETUP}
-                      fallback={
-                        <ModeSelectionScreen
-                          onSelectMode={startMode}
-                          onSelectMultiplayer={goToMultiplayer}
-                        />
-                      }
+                      fallback={null}
                     >
                       <DungeonSelectionForGame
                         onSelectDungeon={selectDungeon}
