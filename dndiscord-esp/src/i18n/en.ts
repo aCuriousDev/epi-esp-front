@@ -261,6 +261,18 @@ export const en = {
   "page.mapSelection.room": "Room {n}",
   "page.mapSelection.deleteMapConfirm": "Are you sure you want to delete this map?",
   "page.mapSelection.deleteDungeonConfirm": "Are you sure you want to delete this dungeon and all its rooms?",
+  "page.mapSelection.empty": "No maps or dungeons yet. Create one above.",
+
+  // Map Editor list page (P5e)
+  "page.mapEditor.actions.newMap": "New classic map",
+  "page.mapEditor.actions.newDungeon": "New dungeon",
+  "page.mapEditor.section.dungeons": "Dungeons",
+  "page.mapEditor.section.maps": "Classic maps",
+  "page.mapEditor.dungeon.rooms": "{n} rooms",
+  "page.mapEditor.dungeon.editedAt": "Edited {when}",
+  "page.mapEditor.map.createdAt": "Created {when}",
+  "page.mapEditor.map.editedAt": "Edited {when}",
+  "page.mapEditor.dungeon.roomLabel": "Room {n}",
 
   // CampaignView
   "campaignView.dungeonMaster": "Dungeon Master",
