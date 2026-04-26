@@ -895,3 +895,32 @@ select.dm-input option {
   animation: dnd-d20-float 5s var(--grimoire-ease) infinite,
              dnd-d20-glow 3.5s ease-in-out infinite;
 }
+
+@keyframes dnd-live-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(52,211,153,0.45),
+      0 0 22px rgba(52,211,153,0.20),
+      0 8px 24px rgba(0,0,0,0.40);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(52,211,153,0.85),
+      0 0 38px rgba(52,211,153,0.50),
+      0 8px 28px rgba(0,0,0,0.45);
+  }
+}
+.dnd-live-pulse {
+  animation: dnd-live-pulse 2.2s ease-in-out infinite;
+}
+@keyframes dnd-live-dot {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.25); }
+}
+.dnd-live-dot {
+  animation: dnd-live-dot 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dnd-live-pulse,
+  .dnd-live-dot { animation: none; }
+}

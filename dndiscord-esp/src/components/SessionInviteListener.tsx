@@ -121,7 +121,10 @@ export default function SessionInviteListener() {
         return;
       }
       setInvite(null);
-      navigate(i.campaignId ? `/campaigns/${i.campaignId}/session` : "/practice");
+      // No scenario gate available outside the campaign page — the multiplayer
+      // lobby (BoardGame at /practice/multiplayer) handles both POC Quick Launch
+      // and recovers to LobbyScreen via the existing-session branch in onMount.
+      navigate(i.campaignId ? `/practice/multiplayer` : "/practice");
     } catch (err: any) {
       setError(err?.message ?? "Failed to join session.");
     } finally {
