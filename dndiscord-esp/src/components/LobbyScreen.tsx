@@ -2,12 +2,14 @@ import {
   Component,
   createSignal,
   createEffect,
+  onCleanup,
   onMount,
   For,
   Show,
 } from "solid-js";
-import { ArrowLeft, Copy, Check } from "lucide-solid";
+import { Copy, Check } from "lucide-solid";
 import { sessionState, isHost, clearSession } from "../stores/session.store";
+import { useGameShellExit } from "../layouts/GameShell";
 import { PlayerRole, type PlayerInfo } from "../types/multiplayer";
 import {
   selectCharacter,
@@ -211,6 +213,16 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
     props.onLeave();
   };
 
+  // Wire the GameShell top-left Exit button to perform a real session leave
+  // (hub invoke + local clear) instead of plain history-back. Without this,
+  // the user could navigate away while still being a participant on the
+  // server, leaving a ghost in the room.
+  const exitApi = useGameShellExit();
+  onMount(() => {
+    exitApi.setExitHandler(handleLeave);
+    onCleanup(() => exitApi.setExitHandler(null));
+  });
+
   const playerCount = () => session()?.players.length ?? 0;
   // Allow host (DM) to force-start alone for testing
   const canStart = () => (amHost() || playerCount() >= 2) && !starting();
@@ -239,19 +251,11 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
   };
 
   return (
-    <div class="relative min-h-screen w-full overflow-hidden bg-brand-gradient">
-      <div class="vignette absolute inset-0" />
+    <div class="relative h-full w-full overflow-hidden bg-brand-gradient">
+      <div class="vignette absolute inset-0 pointer-events-none" />
 
-      <button
-        onClick={handleLeave}
-        class="in-game-back-btn !fixed !top-4 !left-4 !right-auto"
-        aria-label="Leave room"
-      >
-        <ArrowLeft class="w-5 h-5 text-white" />
-      </button>
-
-      <main class="relative z-10 flex min-h-screen items-center justify-center p-6 sm:p-10">
-        <div class="max-w-3xl w-full space-y-6">
+      <main class="relative z-10 h-full overflow-y-auto flex flex-col p-6 sm:p-10">
+        <div class="my-auto mx-auto max-w-3xl w-full space-y-6">
           {/* Room Code */}
           <div class="text-center">
             <p class="text-slate-200/70 text-sm mb-2">Room code</p>
