@@ -313,6 +313,23 @@ export const en = {
   "createCharacter.submitting": "Creating…",
   "createCharacter.errorNameRequired": "Please enter a name for your character.",
 
+  // CampaignSessionReplayPage
+  "sessionReplay.loading": "Loading session…",
+  "sessionReplay.loadError": "Failed to load session.",
+  "sessionReplay.loadingScenario": "Loading scenario…",
+  "sessionReplay.legend.visitedNode": "Visited node",
+  "sessionReplay.legend.traversedPath": "Traversed path",
+  "sessionReplay.journal.title": "Session journal",
+  "sessionReplay.journal.steps.one": "step visited",
+  "sessionReplay.journal.steps.other": "steps visited",
+  "sessionReplay.journal.empty": "No steps recorded.",
+  "sessionReplay.endState.completed": "Session completed",
+  "sessionReplay.endState.abandoned": "Session abandoned",
+  "sessionReplay.nodeType.scene": "Scene",
+  "sessionReplay.nodeType.choices": "Choices",
+  "sessionReplay.nodeType.combat": "Combat",
+  "sessionReplay.nodeType.map": "Map",
+
   // CampaignSessionsListPage
   "sessionsList.loading": "Loading sessions…",
   "sessionsList.loadError": "Failed to load sessions.",

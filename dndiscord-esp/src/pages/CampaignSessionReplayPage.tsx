@@ -1,29 +1,27 @@
 import { Component, createSignal, For, onMount, Show } from 'solid-js';
 import { useNavigate, useParams } from '@solidjs/router';
 import {
-  ArrowLeft,
   BookOpen,
   ChevronRight,
   Clock,
   Loader2,
-  Map as MapIcon,
-  Sword,
 } from 'lucide-solid';
 import {
   CampaignService,
   type GameSessionResponse,
   GameSessionStatus,
-  type SessionHistoryEntryResponse,
 } from '@/services/campaign.service';
 import {
   CampaignTreeCanvas,
   type CampaignTreeCanvasRef,
 } from '@/components/campaign-tree-canvas/CampagnTreeCanvas';
+import PageMeta from '../layouts/PageMeta';
+import { t } from '../i18n';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatDate(s: string): string {
-  return new Date(s).toLocaleDateString('fr-FR', {
+  return new Date(s).toLocaleDateString('en-US', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -46,18 +44,18 @@ function formatDuration(startedAt: string, endedAt?: string): string {
 
 const NODE_TYPE_CFG: Record<
   string,
-  { label: string; color: string; icon: string }
+  { labelKey: string; color: string; icon: string }
 > = {
-  scene:   { label: 'Scène',   color: '#a855f7', icon: '📖' },
-  choices: { label: 'Choix',   color: '#22c55e', icon: '🔀' },
-  combat:  { label: 'Combat',  color: '#ef4444', icon: '⚔️' },
-  map:     { label: 'Carte',   color: '#3b82f6', icon: '🗺️' },
+  scene:   { labelKey: 'sessionReplay.nodeType.scene',   color: '#a855f7', icon: '📖' },
+  choices: { labelKey: 'sessionReplay.nodeType.choices', color: '#22c55e', icon: '🔀' },
+  combat:  { labelKey: 'sessionReplay.nodeType.combat',  color: '#ef4444', icon: '⚔️' },
+  map:     { labelKey: 'sessionReplay.nodeType.map',     color: '#3b82f6', icon: '🗺️' },
 };
 
-const STATUS_CFG: Record<GameSessionStatus, { label: string; cls: string }> = {
-  [GameSessionStatus.Active]:    { label: 'En cours',    cls: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30' },
-  [GameSessionStatus.Completed]: { label: 'Terminée',   cls: 'text-purple-400  bg-purple-500/15  border-purple-500/30'  },
-  [GameSessionStatus.Abandoned]: { label: 'Abandonnée', cls: 'text-slate-400   bg-slate-500/15   border-slate-500/30'   },
+const STATUS_CFG: Record<GameSessionStatus, { labelKey: string; cls: string }> = {
+  [GameSessionStatus.Active]:    { labelKey: 'sessionsList.status.active',    cls: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30' },
+  [GameSessionStatus.Completed]: { labelKey: 'sessionsList.status.completed', cls: 'text-purple-400  bg-purple-500/15  border-purple-500/30'  },
+  [GameSessionStatus.Abandoned]: { labelKey: 'sessionsList.status.abandoned', cls: 'text-slate-400   bg-slate-500/15   border-slate-500/30'   },
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -133,7 +131,7 @@ const CampaignSessionReplayPage: Component = () => {
       applyHighlight(sess, camp.campaignTreeDefinition);
     } catch (e) {
       console.error('[Replay] Failed to load session:', e);
-      setError('Impossible de charger la session.');
+      setError(t('sessionReplay.loadError'));
       setCanvasLoaded(true); // unblock spinner on error too
     } finally {
       setLoading(false);
@@ -156,57 +154,18 @@ const CampaignSessionReplayPage: Component = () => {
         height: '100vh',
         display: 'flex',
         'flex-direction': 'column',
-        background: 'linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f0f1a 100%)',
         color: '#d4d4d4',
         'font-family': 'system-ui,sans-serif',
         overflow: 'hidden',
       }}
     >
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header class="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-black/40 backdrop-blur-md z-20">
-        <button
-          onClick={() => navigate(`/campaigns/${params.id}/sessions`)}
-          class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
-        >
-          <ArrowLeft class="w-5 h-5" />
-          <span class="hidden sm:inline">Sessions</span>
-        </button>
-
-        <div class="text-center">
-          <p class="text-xs text-purple-400 uppercase tracking-wider font-medium">
-            Replay de session
-          </p>
-          <h1 class="font-display text-lg text-white">{campaignName()}</h1>
-        </div>
-
-        {/* Session meta */}
-        <Show when={sess()}>
-          {(s) => {
-            const cfg =
-              STATUS_CFG[s().status] ?? STATUS_CFG[GameSessionStatus.Abandoned];
-            return (
-              <div class="flex flex-col items-end gap-1 text-xs text-slate-400 min-w-[100px]">
-                <span class={`px-2 py-0.5 rounded-full border font-medium ${cfg.cls}`}>
-                  {cfg.label}
-                </span>
-                <span class="flex items-center gap-1">
-                  <Clock class="w-3 h-3" />
-                  {formatDuration(s().startedAt, s().endedAt)}
-                </span>
-              </div>
-            );
-          }}
-        </Show>
-        <Show when={!sess()}>
-          <div class="w-24" />
-        </Show>
-      </header>
+      <PageMeta title={t('page.sessionReplay.title')} />
 
       {/* ── Loading / Error ─────────────────────────────────────────────────── */}
       <Show when={loading()}>
         <div class="flex-1 flex flex-col items-center justify-center gap-4 text-slate-400">
           <Loader2 class="w-10 h-10 animate-spin text-purple-400" />
-          <p>Chargement de la session…</p>
+          <p>{t('sessionReplay.loading')}</p>
         </div>
       </Show>
 
@@ -217,7 +176,7 @@ const CampaignSessionReplayPage: Component = () => {
             onClick={() => navigate(`/campaigns/${params.id}/sessions`)}
             class="px-6 py-3 bg-white/10 hover:bg-white/15 border border-white/20 text-white rounded-xl transition-all"
           >
-            Retour
+            {t('topbar.back')}
           </button>
         </div>
       </Show>
@@ -232,7 +191,7 @@ const CampaignSessionReplayPage: Component = () => {
               <div class="absolute inset-0 flex items-center justify-center z-10 bg-black/30 backdrop-blur-sm">
                 <div class="flex flex-col items-center gap-3 text-slate-400">
                   <Loader2 class="w-8 h-8 animate-spin text-purple-400" />
-                  <p class="text-sm">Chargement du scénario…</p>
+                  <p class="text-sm">{t('sessionReplay.loadingScenario')}</p>
                 </div>
               </div>
             </Show>
@@ -240,9 +199,9 @@ const CampaignSessionReplayPage: Component = () => {
             {/* Legend overlay */}
             <div class="absolute top-3 left-3 z-10 flex items-center gap-2 px-3 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10 text-xs text-slate-400">
               <span class="w-3 h-3 rounded-sm bg-[#166534] border border-[#22c55e] flex-shrink-0" />
-              Nœud visité
+              {t('sessionReplay.legend.visitedNode')}
               <span class="w-6 h-0.5 bg-[#22c55e] flex-shrink-0 ml-1" />
-              Chemin emprunté
+              {t('sessionReplay.legend.traversedPath')}
             </div>
 
             <CampaignTreeCanvas
@@ -257,19 +216,20 @@ const CampaignSessionReplayPage: Component = () => {
             <div class="px-5 py-4 border-b border-white/10">
               <h2 class="font-display text-base text-white flex items-center gap-2">
                 <BookOpen class="w-4 h-4 text-purple-400" />
-                Journal de session
+                {t('sessionReplay.journal.title')}
               </h2>
               <p class="text-xs text-slate-500 mt-0.5">
-                {sess()!.entries.length} étape
-                {sess()!.entries.length !== 1 ? 's' : ''} parcourue
-                {sess()!.entries.length !== 1 ? 's' : ''}
+                {sess()!.entries.length}{' '}
+                {sess()!.entries.length !== 1
+                  ? t('sessionReplay.journal.steps.other')
+                  : t('sessionReplay.journal.steps.one')}
               </p>
             </div>
 
             <div class="flex-1 overflow-y-auto px-4 py-4 space-y-2">
               <Show when={sess()!.entries.length === 0}>
                 <p class="text-slate-600 text-sm italic text-center py-8">
-                  Aucune étape enregistrée.
+                  {t('sessionReplay.journal.empty')}
                 </p>
               </Show>
 
@@ -306,7 +266,7 @@ const CampaignSessionReplayPage: Component = () => {
                           </p>
                         </Show>
                         <p class="text-xs text-slate-600 mt-0.5">
-                          {new Date(entry.visitedAt).toLocaleTimeString('fr-FR', {
+                          {new Date(entry.visitedAt).toLocaleTimeString('en-US', {
                             hour: '2-digit',
                             minute: '2-digit',
                           })}
@@ -326,8 +286,8 @@ const CampaignSessionReplayPage: Component = () => {
                   <div class="pb-2">
                     <p class="text-slate-400 text-sm font-medium">
                       {sess()!.status === GameSessionStatus.Completed
-                        ? 'Session terminée'
-                        : 'Session abandonnée'}
+                        ? t('sessionReplay.endState.completed')
+                        : t('sessionReplay.endState.abandoned')}
                     </p>
                     <Show when={sess()!.endedAt}>
                       <p class="text-xs text-slate-600">
