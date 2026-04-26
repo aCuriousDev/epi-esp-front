@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+Dnd/node_modules/
+
+# Build outputs
+dist/
+build/
+*.log
+*.tsbuildinfo
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+
+# AI assistants
+.cursor/
+.cursorrules
+CLAUDE.md
+.claude/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vite
+.vite/
+
+# BMAD tooling
+_bmad/
+_bmad-output/
+
+# Docs / Notion exports
+docs/
+
+# code-review-graph (strict ignore)
+.code-review-graph/
+.code-review-graphignore
+.code-review-graph*
+
+# graphify
+graphify-out/
+.graphify_*
+.graphifyignore
+

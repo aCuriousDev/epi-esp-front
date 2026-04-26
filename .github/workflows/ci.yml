@@ -1,4 +1,4 @@
-name: CI
+name: Front CI
 
 on:
   push:
@@ -13,36 +13,61 @@ defaults:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: latest
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Cache pnpm dependencies
+      # The committed package-lock.json is generated on Windows and lacks the
+      # Linux rollup binary, so CI deletes it and reinstalls fresh. Cache the
+      # npm download directory keyed on package.json content to skip the
+      # network round-trip on unchanged dependency sets.
+      - name: Cache ~/.npm
         uses: actions/cache@v4
         with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('dndiscord-esp/pnpm-lock.yaml') }}
-          restore-keys: ${{ runner.os }}-pnpm-
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('dndiscord-esp/package.json') }}
+          restore-keys: npm-${{ runner.os }}-
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: rm -f package-lock.json && npm install
 
-      - name: Type check
-        run: pnpm exec tsc --noEmit --skipLibCheck
+      - name: Typecheck
+        run: npx tsc -b
+
+      - name: Test
+        run: npx vitest run
 
       - name: Build
-        run: pnpm run build
+        run: npx vite build
+
+      # Catches nginx.conf syntax errors before they reach Dokploy. The bug
+      # that prompted this step: a regex with `{8,}` was parsed as a
+      # directive block and crash-looped the production container.
+      - name: Validate nginx.conf
+        run: docker run --rm -v $PWD/nginx.conf:/etc/nginx/conf.d/default.conf:ro nginx:alpine nginx -t
+
+      # Build the production Docker image and confirm it starts. Catches
+      # Dockerfile typos, missing files in COPY, multi-stage build issues,
+      # and runtime startup failures (the same class of bug as the nginx
+      # crash-loop above — `nginx -t` is the targeted gate, this is the
+      # belt-and-braces parity check with what Dokploy actually runs).
+      - name: Production image smoke test
+        run: |
+          docker build -t front-smoke .
+          docker run -d --name front-smoke -p 8080:80 front-smoke
+          for i in 1 2 3 4 5; do
+            if curl -fsS http://localhost:8080/ -o /dev/null; then
+              echo "Smoke OK"
+              docker rm -f front-smoke
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Smoke FAILED — container did not respond"
+          docker logs front-smoke
+          docker rm -f front-smoke
+          exit 1

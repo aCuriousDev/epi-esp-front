@@ -1,0 +1,72 @@
+import { Match, Show, Switch } from "solid-js";
+import { JSX } from "solid-js/jsx-runtime";
+
+interface ButtonMenuProps {
+  className?: string;
+  label?: string;
+  subLabel?: string;
+  icon?: JSX.Element;
+  imageUrl?: string;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
+  onClick?: () => void | undefined;
+  "data-tutorial"?: string;
+}
+
+export default function ButtonMenu({
+  label,
+  subLabel,
+  icon,
+  imageUrl,
+  className,
+  onClick,
+  onMouseEnter,
+  onMouseLeave,
+  "data-tutorial": dataTutorial,
+}: ButtonMenuProps) {
+  return (
+    <div
+      class={`${className || ""} menu-row w-full sm:w-auto`}
+      data-tutorial={dataTutorial}
+    >
+      {/* Badge/Avatar shown only when there's a label */}
+      <Show when={label}>
+        <Switch fallback={<></>}>
+          <Match when={icon != undefined}>
+            <span class="menu-badge">
+              <span class="menu-badge-inner">{icon}</span>
+            </span>
+          </Match>
+          <Match when={imageUrl != undefined}>
+            <span class="menu-avatar">
+              <img
+                src={imageUrl}
+                alt=""
+                class="w-full h-full object-cover rounded-full"
+              />
+            </span>
+          </Match>
+        </Switch>
+      </Show>
+
+      {/* Button - different styles for label vs icon-only */}
+      <button
+        class={label ? "menu-button" : "menu-button-icon"}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
+        onClick={onClick}
+      >
+        {label ? (
+          <div class="flex flex-col items-center">
+            <span class="font-old text-lg">{label}</span>
+            {subLabel && (
+              <span class="text-xs text-slate-300/80 mt-0.5">{subLabel}</span>
+            )}
+          </div>
+        ) : (
+          <span class="text-white">{icon}</span>
+        )}
+      </button>
+    </div>
+  );
+}

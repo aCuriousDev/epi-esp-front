@@ -1,0 +1,839 @@
+import { Component, onMount, onCleanup, createEffect, createSignal, untrack } from 'solid-js';
+import { BabylonEngine } from '../engine/BabylonEngine';
+import {
+  gameState,
+  setGameState,
+  tiles,
+  setTiles,
+  units,
+  setUnits,
+  selectUnit,
+  deselectUnit,
+  previewPath,
+  moveUnit,
+  useAbility,
+  executeEnemyTurn,
+  posToKey,
+  getIsFreeRoamMode,
+  getEnemyUnits,
+  getCurrentUnit,
+  getAllySpawnPositions,
+  updatePathfinder,
+} from '../game';
+import { produce } from 'solid-js/store';
+import { setVFXEngine } from '../game/vfx/VFXIntegration';
+import { SoundManager } from '../engine/audio/SoundManager';
+import { setSoundEngine } from '../game/audio/SoundIntegration';
+import { soundSettings } from '../stores/sound.store';
+import { isHost as getIsHost, isDm, isInSession } from '../stores/session.store';
+import { dmDragUnit, setDmDragUnit, dmSpawnTemplate, setDmSpawnTemplate, dmActiveMode, setDmInspectedUnit, dmToolsState } from '../stores/dmTools.store';
+import { GamePhase, TurnPhase, Team, Unit, GridPosition, GameMode } from '../types';
+
+let engineInstance: BabylonEngine | null = null;
+let soundInstance: SoundManager | null = null;
+let lastExecutedEnemyIndex: number | null = null;
+
+// Export loading state as a signal
+export const [isEngineReady, setIsEngineReady] = createSignal(false);
+
+export const GameCanvas: Component = () => {
+  let canvasRef: HTMLCanvasElement | undefined;
+  
+  onMount(async () => {
+    if (!canvasRef) return;
+    
+    console.log('[GameCanvas] ===== COMPONENT MOUNTING =====');
+    console.log('[GameCanvas] Existing engine:', !!engineInstance);
+    console.log('[GameCanvas] Canvas ref:', !!canvasRef);
+    
+    // If there's an existing engine, dispose it. engine.dispose() releases
+    // the entire scene; no need to call clearAll first.
+    if (engineInstance) {
+      console.log('[GameCanvas] WARNING: Found existing engine! Disposing...');
+      try {
+        engineInstance.dispose();
+        console.log('[GameCanvas] Existing engine disposed');
+      } catch (e) {
+        console.error('[GameCanvas] Error disposing existing engine:', e);
+      }
+      engineInstance = null;
+    }
+    
+    // Reset the ready signal
+    setIsEngineReady(false);
+    
+    // Clear previous positions map for fresh start
+    prevPositions.clear();
+    console.log('[GameCanvas] Previous positions cleared, ready for fresh start');
+    
+    console.log('[GameCanvas] Creating new BabylonEngine...');
+    // Create Babylon engine
+    engineInstance = new BabylonEngine(canvasRef);
+    setVFXEngine(engineInstance);
+
+    // Create Sound engine
+    soundInstance = new SoundManager();
+    soundInstance.ambientVolume = soundSettings.musicVolume();
+    soundInstance.sfxVolume = soundSettings.sfxVolume();
+    setSoundEngine(soundInstance);
+    
+    // Setup click handlers
+    engineInstance.setOnTileClick((pos) => {
+      handleTileClick(pos.x, pos.z);
+    });
+    
+    engineInstance.setOnTileHover((pos) => {
+      handleTileHover(pos.x, pos.z);
+    });
+    
+    engineInstance.setOnUnitClick((unitId) => {
+      handleUnitClick(unitId);
+    });
+    
+    // Start render loop
+    engineInstance.startRenderLoop();
+    
+    // Wait for all models to preload
+    await engineInstance.waitForReady();
+    setIsEngineReady(true);
+    console.log('[GameCanvas] Engine ready, models preloaded');
+  });
+  
+  onCleanup(() => {
+    console.log('[GameCanvas] ===== COMPONENT UNMOUNTING =====');
+    console.log('[GameCanvas] Engine instance exists:', !!engineInstance);
+    console.log('[GameCanvas] prevPositions size:', prevPositions.size);
+    
+    if (engineInstance) {
+      console.log('[GameCanvas] Disposing engine...');
+      try {
+        setVFXEngine(null);
+        engineInstance.dispose();
+        console.log('[GameCanvas] Engine disposed successfully');
+      } catch (e) {
+        console.error('[GameCanvas] Error disposing engine:', e);
+      }
+      engineInstance = null;
+    }
+    if (soundInstance) {
+      setSoundEngine(null);
+      soundInstance.dispose();
+      soundInstance = null;
+    }
+    setIsEngineReady(false);
+    prevPositions.clear();
+    console.log('[GameCanvas] ===== CLEANUP COMPLETE =====');
+  });
+
+  // Sync sound settings reactively
+  createEffect(() => {
+    if (!soundInstance) return;
+    soundInstance.ambientVolume = soundSettings.musicEnabled() ? soundSettings.musicVolume() : 0;
+    soundInstance.sfxVolume = soundSettings.sfxEnabled() ? soundSettings.sfxVolume() : 0;
+  });
+  
+  // Create grid when tiles change (only after engine is ready).
+  // Guards:
+  //   - skip the initial "stores cleared" firing (tileCount === 0)
+  //   - coalesce rapid re-fires while a createGrid is already in flight, so
+  //     a restart mid-load doesn't leave two parallel grid-build passes
+  //     racing to populate the scene.
+  let createGridInFlight: Promise<void> | null = null;
+  let pendingCreateGrid: { tiles: typeof tiles; mapId: string | null } | null = null;
+
+  const runCreateGrid = async (mapId: string | null) => {
+    // Double-check the engine is both alive AND ready — returnToMenu calls
+    // clearEngineState() then resetGameState() in quick succession; the tiles
+    // effect can re-fire during that window. Without this guard the build
+    // kicks off against a disposed Babylon scene and we get a storm of
+    // "Scene has been disposed" errors for every tile model load.
+    if (!engineInstance || !isEngineReady()) return;
+    try {
+      console.log('[GameCanvas] Creating grid (mapId:', mapId, ')');
+      await engineInstance.createGrid(tiles, mapId);
+      console.log('[GameCanvas] Grid creation complete');
+    } catch (error) {
+      console.error('[GameCanvas] Failed to create grid:', error);
+    } finally {
+      createGridInFlight = null;
+      const queued = pendingCreateGrid;
+      pendingCreateGrid = null;
+      if (queued && engineInstance && isEngineReady()) {
+        createGridInFlight = runCreateGrid(queued.mapId);
+      }
+    }
+  };
+
+  createEffect(() => {
+    const tileCount = Object.keys(tiles).length;
+    const currentMapId = gameState.mapId;
+
+    if (!engineInstance || !isEngineReady() || tileCount === 0) return;
+
+    if (createGridInFlight) {
+      pendingCreateGrid = { tiles, mapId: currentMapId };
+      console.log('[GameCanvas] createGrid already in flight — queueing latest tiles');
+      return;
+    }
+
+    createGridInFlight = runCreateGrid(currentMapId);
+  });
+  
+  // Track previous unit positions for movement animation
+  const prevPositions = new Map<string, GridPosition>();
+  // Track previous aliveness to detect dead->alive transitions on the same
+  // unit id — the death VFX leaves the rig rotated on its back, so reusing
+  // the mesh for a respawn (Play Again / restart) keeps it laid down until
+  // we force a revive. A Play Again path triggers this because clearUnits +
+  // re-seed keeps the same player id.
+  const prevAlive = new Map<string, boolean>();
+  
+  // Lock to prevent concurrent effect execution
+  let isProcessingUnits = false;
+  let pendingRerun = false;
+  
+  // Defensive reactive fallback: if both stores empty out while the engine
+  // is alive (e.g. logout path), clean the scene. The primary restart flow
+  // calls engine.clearAll() explicitly from BoardGame.restartGame.
+  createEffect(() => {
+    const unitCount = Object.keys(units).length;
+    const tileCount = Object.keys(tiles).length;
+
+    if (unitCount === 0 && tileCount === 0 && prevPositions.size > 0 && engineInstance) {
+      console.log('[GameCanvas] Stores cleared - clearing engine game objects (fallback)');
+      void engineInstance.clearAll();
+      prevPositions.clear();
+    }
+  });
+  
+  // Unified unit management: create/update units when units change (only after engine is ready)
+  // CRITICAL: SolidJS only tracks dependencies accessed SYNCHRONOUSLY in the effect body.
+  // We must access unit positions in the sync part to trigger re-runs when positions change.
+  createEffect(() => {
+    // Build a snapshot of all unit data SYNCHRONOUSLY to set up proper reactivity tracking
+    // This ensures the effect re-runs when ANY unit's position changes
+    const unitIds = Object.keys(units);
+    const unitSnapshots: Array<{
+      id: string;
+      unit: Unit;
+      currentPos: GridPosition;
+    }> = [];
+    
+    for (const id of unitIds) {
+      const unit = units[id];
+      if (unit) {
+        // IMPORTANT: Accessing unit.position.x and unit.position.z here sets up reactive tracking!
+        const currentPos = { x: unit.position.x, z: unit.position.z };
+        unitSnapshots.push({ id, unit, currentPos });
+      }
+    }
+    
+    if (!engineInstance || !isEngineReady()) return;
+    if (isProcessingUnits) {
+      pendingRerun = true;
+      return;
+    }
+    
+    // Process units sequentially to handle async model loading
+    // Use the snapshot data captured synchronously above
+    isProcessingUnits = true;
+    pendingRerun = false;
+    // Capture the engine reference at task start so a mid-flight dispose
+    // (returnToMenu / leaveSession) doesn't turn every .hasUnit / .createUnit
+    // into an unhandled null deref. Each iteration bails early if the engine
+    // was swapped out for null between awaits.
+    const engine = engineInstance;
+    (async () => {
+      try {
+        if (!engine) return;
+        // Dispose engine meshes whose store entry has been removed (e.g.
+        // Play Again wiped the units store but the skeleton mesh would
+        // otherwise linger as a ghost on the map).
+        const liveIds = new Set(unitIds);
+        for (const id of engine.getTrackedUnitIds()) {
+          if (!liveIds.has(id)) {
+            engine.removeUnit(id);
+            prevPositions.delete(id);
+            prevAlive.delete(id);
+          }
+        }
+
+        for (const { id, unit, currentPos } of unitSnapshots) {
+          if (engineInstance !== engine) return;
+          const exists = engine.hasUnit(id);
+          const prevPos = prevPositions.get(id);
+          const wasAlive = prevAlive.get(id);
+          prevAlive.set(id, unit.isAlive);
+
+          if (!exists) {
+            await engine.createUnit(unit);
+            if (engineInstance !== engine) return;
+            // After async load, check if position changed in the store while loading
+            // (e.g. DM moved the unit right after spawning it)
+            const liveUnit = units[id];
+            if (liveUnit && (liveUnit.position.x !== currentPos.x || liveUnit.position.z !== currentPos.z)) {
+              engine.updateUnit(liveUnit);
+              prevPositions.set(id, { x: liveUnit.position.x, z: liveUnit.position.z });
+            } else {
+              prevPositions.set(id, { ...currentPos });
+            }
+          } else {
+            const positionChanged = prevPos && (prevPos.x !== currentPos.x || prevPos.z !== currentPos.z);
+            if (positionChanged) {
+              engine.updateUnit(unit);
+              prevPositions.set(id, { ...currentPos });
+            }
+            // Skip updateUnit when position hasn't changed to avoid
+            // animation stacking that causes units to float upward
+
+            // Dead->alive transition on the same mesh id means the store
+            // re-seeded a respawn (Play Again, heal past zero, etc). The
+            // death VFX left the rig laid out on the tile; upright it now
+            // so the respawned unit doesn't look like a corpse that can
+            // still move around.
+            if (wasAlive === false && unit.isAlive) {
+              engine.playReviveVFX(id);
+            }
+          }
+        }
+
+        if (engineInstance !== engine) return;
+        // Mettre à jour la visibilité des ennemis après création/mise à jour des unités
+        const phase = gameState.phase;
+        const enemyUnits = getEnemyUnits();
+        const enemyUnitIds = enemyUnits.map(u => u.id);
+        const shouldBeVisible = phase !== GamePhase.COMBAT_PREPARATION;
+
+        if (enemyUnitIds.length > 0) {
+          engine.setEnemyVisibility(shouldBeVisible, enemyUnitIds);
+        }
+      } finally {
+        isProcessingUnits = false;
+        // If the effect was triggered while we were processing, re-process now
+        // to pick up any units that were missed (e.g. DM spawned while processing)
+        if (pendingRerun && engineInstance === engine && engine) {
+          pendingRerun = false;
+          const freshIds = Object.keys(units);
+          for (const id of freshIds) {
+            if (engineInstance !== engine) break;
+            const u = units[id];
+            if (u && !engine.hasUnit(id)) {
+              await engine.createUnit(u);
+              prevPositions.set(id, { x: u.position.x, z: u.position.z });
+            }
+          }
+          if (engineInstance === engine) {
+            const freshPhase = gameState.phase;
+            const freshEnemies = getEnemyUnits();
+            const freshEnemyIds = freshEnemies.map(u => u.id);
+            const freshVisible = freshPhase !== GamePhase.COMBAT_PREPARATION;
+            if (freshEnemyIds.length > 0) {
+              engine.setEnemyVisibility(freshVisible, freshEnemyIds);
+            }
+          }
+        }
+      }
+    })();
+  });
+  
+  // Gérer la visibilité des ennemis selon la phase du jeu
+  // NOTE: Only reacts to phase changes. Unit creation already handles visibility
+  // inside the async processing loop above (after meshes are created).
+  createEffect(() => {
+    if (!engineInstance || !isEngineReady()) return;
+    
+    const phase = gameState.phase;
+    
+    const enemyUnits = getEnemyUnits();
+    const enemyUnitIds = enemyUnits.map(u => u.id);
+    
+    console.log(`[GameCanvas] Visibility effect triggered - Phase: ${phase}, Enemy count: ${enemyUnitIds.length}`);
+    
+    // En phase de préparation : rendre les ennemis invisibles
+    // Sinon : rendre les ennemis visibles
+    const shouldBeVisible = phase !== GamePhase.COMBAT_PREPARATION;
+    
+    if (enemyUnitIds.length > 0) {
+      console.log(`[GameCanvas] Setting enemy visibility to ${shouldBeVisible ? 'VISIBLE' : 'INVISIBLE'} for ${enemyUnitIds.length} enemies`);
+      engineInstance.setEnemyVisibility(shouldBeVisible, enemyUnitIds);
+    } else {
+      console.warn(`[GameCanvas] No enemy units found for visibility update`);
+    }
+  });
+
+  // Gérer l'indicateur de ping pour montrer quelle unité doit jouer
+  // Le ping disparaît dès qu'une action est effectuée (déplacement ou sort)
+  let previousCurrentUnitId: string | null = null;
+  let previousCurrentUnitPosition: GridPosition | null = null;
+  let previousCurrentUnitAP: number | null = null;
+  
+  createEffect(() => {
+    if (!engineInstance || !isEngineReady()) return;
+    
+    // Surveiller la phase et l'index de l'unité actuelle
+    const phase = gameState.phase;
+    const currentUnitIndex = gameState.currentUnitIndex;
+    const turnOrder = gameState.turnOrder;
+    
+    // Ne montrer le ping que pendant les phases de combat (pas en préparation)
+    if (phase === GamePhase.COMBAT_PREPARATION || phase === GamePhase.SETUP || phase === GamePhase.GAME_OVER) {
+      engineInstance.updateTurnIndicator(null);
+      previousCurrentUnitId = null;
+      previousCurrentUnitPosition = null;
+      previousCurrentUnitAP = null;
+      return;
+    }
+    
+    // Obtenir l'unité actuelle
+    const currentUnit = getCurrentUnit();
+    
+    if (!currentUnit || !currentUnit.isAlive) {
+      engineInstance.updateTurnIndicator(null);
+      previousCurrentUnitId = null;
+      previousCurrentUnitPosition = null;
+      previousCurrentUnitAP = null;
+      return;
+    }
+    
+    // Vérifier si c'est une nouvelle unité (nouveau tour)
+    const isNewUnit = currentUnit.id !== previousCurrentUnitId;
+    
+    // Vérifier si l'unité a effectué une action :
+    // - Position a changé (déplacement)
+    // - Action points ont diminué (sort ou déplacement)
+    const positionChanged = previousCurrentUnitPosition && 
+      (previousCurrentUnitPosition.x !== currentUnit.position.x || 
+       previousCurrentUnitPosition.z !== currentUnit.position.z);
+    const apDecreased = previousCurrentUnitAP !== null && 
+      currentUnit.stats.currentActionPoints < previousCurrentUnitAP;
+    
+    // Si c'est une nouvelle unité, afficher le ping
+    if (isNewUnit) {
+      engineInstance.updateTurnIndicator(currentUnit.id);
+      previousCurrentUnitId = currentUnit.id;
+      previousCurrentUnitPosition = { ...currentUnit.position };
+      previousCurrentUnitAP = currentUnit.stats.currentActionPoints;
+    } 
+    // Si l'unité a effectué une action, cacher le ping
+    else if (positionChanged || apDecreased) {
+      engineInstance.updateTurnIndicator(null);
+      // Garder les valeurs pour éviter de réafficher le ping
+      previousCurrentUnitPosition = { ...currentUnit.position };
+      previousCurrentUnitAP = currentUnit.stats.currentActionPoints;
+    }
+    // Sinon, mettre à jour les valeurs de suivi
+    else {
+      previousCurrentUnitPosition = { ...currentUnit.position };
+      previousCurrentUnitAP = currentUnit.stats.currentActionPoints;
+    }
+  });
+  
+  // Surveiller les changements de HP pour afficher les dégâts
+  const previousUnitHealth: Map<string, number> = new Map();
+  
+  createEffect(() => {
+    if (!engineInstance || !isEngineReady()) return;
+    const engine = engineInstance;
+
+    // Surveiller toutes les unités pour détecter les changements de HP
+    Object.keys(units).forEach(unitId => {
+      const unit = units[unitId];
+      if (!unit) return;
+
+      const previousHP = previousUnitHealth.get(unitId);
+      const currentHP = unit.stats.currentHealth;
+
+      // Si l'HP a diminué, afficher les dégâts
+      if (previousHP !== undefined && previousHP > currentHP && previousHP > 0) {
+        const damage = previousHP - currentHP;
+        if (damage > 0) {
+          engine.showDamageNumber(unitId, damage);
+        }
+      }
+      
+      // Mettre à jour la valeur précédente
+      previousUnitHealth.set(unitId, currentHP);
+    });
+  });
+  
+  // When DM activates a tool mode, clear game selection & show all tiles as highlighted
+  createEffect(() => {
+    const mode = dmActiveMode();
+    const dragId = dmDragUnit();
+    const spawnTpl = dmSpawnTemplate();
+
+    if (!mode) return; // not in DM mode — don't touch game state
+
+    // Clear normal game selection
+    setGameState('selectedUnit', null);
+
+    // When DM has a unit or spawn template selected, highlight ALL tiles on the map
+    if (dragId || spawnTpl) {
+      const allPositions = untrack(() =>
+        Object.values(tiles)
+          .filter((t) => t && t.position)
+          .map((t) => ({ x: t.position.x, z: t.position.z }))
+      );
+      setGameState('highlightedTiles', allPositions);
+    } else {
+      setGameState('highlightedTiles', []);
+    }
+  });
+
+  // En phase de préparation, s'assurer que toutes les cases alliées sont toujours visibles
+  createEffect(() => {
+    if (gameState.phase === GamePhase.COMBAT_PREPARATION && !gameState.selectedUnit && !dmActiveMode()) {
+      const allyPositions = getAllySpawnPositions(gameState.mapId);
+      if (allyPositions.length > 0 && JSON.stringify(gameState.highlightedTiles) !== JSON.stringify(allyPositions)) {
+        setGameState('highlightedTiles', allyPositions);
+      }
+    }
+  });
+
+  // Update highlights when highlighted tiles change
+  createEffect(() => {
+    if (!engineInstance) return;
+    
+    const highlighted = gameState.highlightedTiles;
+    const targetable = gameState.targetableTiles;
+    
+    if (targetable.length > 0) {
+      engineInstance.showTargetRange(targetable);
+    } else if (highlighted.length > 0) {
+      engineInstance.showMovementRange(highlighted);
+    } else {
+      engineInstance.clearHighlights();
+    }
+  });
+  
+  // Update path preview
+  createEffect(() => {
+    if (!engineInstance) return;
+    
+    const path = gameState.pathPreview;
+    if (path.length > 0) {
+      engineInstance.showPathPreview(path);
+    } else {
+      engineInstance.clearPathPreview();
+    }
+  });
+  
+  // Selection pulse VFX - pulsing ring under selected unit
+  createEffect(() => {
+    if (!engineInstance) return;
+    
+    const selectedId = gameState.selectedUnit;
+    if (selectedId && units[selectedId]) {
+      const unit = units[selectedId];
+      engineInstance.showSelectionPulse(unit.position, unit.team as string);
+    } else {
+      engineInstance.clearSelectionPulse();
+    }
+  });
+  
+  // Toggle post-processing combat mode based on game mode
+  createEffect(() => {
+    if (!engineInstance) return;
+    const isCombat = gameState.mode === GameMode.COMBAT;
+    engineInstance.setCombatMode(isCombat);
+  });
+  
+  // Handle enemy turn. In solo the embedded AI drives enemies; in multiplayer
+  // we disable it and let the DM play enemies manually via the EnemyHotbar —
+  // running the AI independently on each client led to drift (moves computed
+  // on client A weren't seen on client B, turn indices desynchronised, and
+  // combat state stopped advancing).
+  let enemyTurnTimeout: number | null = null;
+
+  createEffect(() => {
+    const isEnemyTurn = gameState.phase === GamePhase.ENEMY_TURN;
+    const currentIndex = gameState.currentUnitIndex;
+
+    if (enemyTurnTimeout !== null) {
+      clearTimeout(enemyTurnTimeout);
+      enemyTurnTimeout = null;
+    }
+
+    // AI tick runs on the DM's client only in multiplayer — the DM is
+    // authoritative for enemy actions, and executeEnemyTurn submits its
+    // moves / attacks / end-turn through the hub, which broadcasts to the
+    // whole group. Players would double-submit if they also ran the tick.
+    // Solo play has no session, so `!isInSession()` lets the single client
+    // drive AI. The DmPanel "IA auto" toggle (dmToolsState.aiAutoPlay) gates
+    // this further: when disabled, the DM pilots enemies manually via the
+    // EnemyHotbar; without that gate the toggle had no effect in MP.
+    const autoAiEnabled =
+      (!isInSession() || getIsHost()) && dmToolsState.aiAutoPlay;
+    if (autoAiEnabled && isEnemyTurn && lastExecutedEnemyIndex !== currentIndex) {
+      lastExecutedEnemyIndex = currentIndex;
+      enemyTurnTimeout = setTimeout(async () => {
+        if (gameState.phase === GamePhase.ENEMY_TURN && gameState.currentUnitIndex === currentIndex) {
+          await executeEnemyTurn();
+        }
+        enemyTurnTimeout = null;
+      }, 500) as unknown as number;
+    } else if (!isEnemyTurn) {
+      lastExecutedEnemyIndex = null;
+    }
+  });
+  
+  function handleTileClick(x: number, z: number): void {
+    const pos = { x, z };
+    const tileKey = posToKey(pos);
+    const tile = tiles[tileKey];
+    
+    if (!tile) return;
+
+    // --- DM tool mode: block normal game logic, only handle DM actions ---
+    if (dmActiveMode()) {
+      const dragId = dmDragUnit();
+      if (dragId) {
+        const unit = units[dragId];
+        if (unit) {
+          import('../services/signalr/multiplayer.service').then(({ dmMoveToken }) => {
+            dmMoveToken({ unitId: dragId, target: { x: pos.x, y: pos.z } as any });
+          }).catch(err => console.warn('[DM] move broadcast failed:', err));
+          const oldKey = posToKey(unit.position);
+          if (tiles[oldKey]) setTiles(oldKey, 'occupiedBy', null);
+          setTiles(tileKey, 'occupiedBy', dragId);
+          setUnits(dragId, produce((u: any) => { u.position = pos; }));
+          updatePathfinder();
+
+          // Directly update the engine mesh to avoid race with async createEffect
+          if (engineInstance && engineInstance.hasUnit(dragId)) {
+            engineInstance.updateUnit({ ...unit, position: pos });
+          }
+          // Keep prevPositions in sync so the reactive effect won't re-process
+          prevPositions.set(dragId, { ...pos });
+
+          setDmDragUnit(null);
+        } else {
+          setDmDragUnit(null);
+        }
+        return;
+      }
+
+      const spawnTpl = dmSpawnTemplate();
+      if (spawnTpl) {
+        window.dispatchEvent(new CustomEvent('dm-tile-click', { detail: pos }));
+        return;
+      }
+
+      // DM mode active but no drag/spawn → allow unit selection on map
+      if (tile.occupiedBy) {
+        handleUnitClick(tile.occupiedBy);
+      }
+      return;
+    }
+    
+    const isFreeRoam = getIsFreeRoamMode();
+    
+    // Phase de préparation : déplacer l'unité alliée sur une case alliée surlignée
+    if (gameState.phase === GamePhase.COMBAT_PREPARATION) {
+      if (gameState.selectedUnit && gameState.highlightedTiles.length > 0) {
+        const isHighlighted = gameState.highlightedTiles.some((t) => t.x === x && t.z === z);
+        if (isHighlighted) {
+          moveUnit(pos);
+          return;
+        }
+      }
+      if (tile.occupiedBy) {
+        handleUnitClick(tile.occupiedBy);
+      }
+      return;
+    }
+    
+    // Free Roam Mode - simplified logic
+    if (isFreeRoam) {
+      // If unit is selected and tile is highlighted (movement available)
+      if (gameState.selectedUnit && gameState.highlightedTiles.length > 0) {
+        const isHighlighted = gameState.highlightedTiles.some(
+          (t) => t.x === x && t.z === z
+        );
+        if (isHighlighted) {
+          moveUnit(pos);
+          return;
+        }
+      }
+      
+      // If tile has a unit, try to select it
+      if (tile.occupiedBy) {
+        handleUnitClick(tile.occupiedBy);
+      }
+      return;
+    }
+    
+    // Combat Mode - original logic
+    // If in target selection mode, use ability
+    if (gameState.selectedAbility && gameState.targetableTiles.length > 0) {
+      const isValidTarget = gameState.targetableTiles.some(
+        (t) => t.x === x && t.z === z
+      );
+      if (isValidTarget) {
+        useAbility(pos);
+      }
+      return;
+    }
+    
+    // If unit is selected and tile is highlighted (movement)
+    if (gameState.selectedUnit && gameState.turnPhase === TurnPhase.MOVE) {
+      const isHighlighted = gameState.highlightedTiles.some(
+        (t) => t.x === x && t.z === z
+      );
+      if (isHighlighted) {
+        moveUnit(pos);
+        return;
+      }
+    }
+    
+    // If tile has a unit, try to select it
+    if (tile.occupiedBy) {
+      handleUnitClick(tile.occupiedBy);
+    }
+  }
+  
+  function handleTileHover(x: number, z: number): void {
+    const isFreeRoam = getIsFreeRoamMode();
+    const isPreparation = gameState.phase === GamePhase.COMBAT_PREPARATION;
+    
+    // Pas d'aperçu de chemin en phase de préparation (placement direct)
+    if (isPreparation) return;
+    
+    // Show path preview when hovering over valid movement tiles
+    if (gameState.selectedUnit && gameState.highlightedTiles.length > 0) {
+      // In Free Roam, always allow preview if unit selected
+      // In Combat, check turn phase
+      const allowPreview = isFreeRoam || gameState.turnPhase === TurnPhase.MOVE;
+      
+      if (allowPreview) {
+        const isHighlighted = gameState.highlightedTiles.some(
+          (t) => t.x === x && t.z === z
+        );
+        if (isHighlighted) {
+          previewPath({ x, z });
+        }
+      }
+    }
+  }
+  
+  function handleUnitClick(unitId: string): void {
+    const unit = units[unitId];
+    if (!unit) return;
+
+    // DM inspect works on any unit — alive OR dead — so the DM can revive
+    // downed units via the HP-adjust tool. Other interactions (move, attack,
+    // combat targeting) still require the target to be alive.
+    //
+    // Exception: when the DM clicks the CURRENT combat unit (its turn), we
+    // skip the short-circuit and fall through to the combat-turn select
+    // path below. That path shows the AP-gated blue reach tiles and lets
+    // the DM pilot the enemy like a player instead of forcing them into
+    // the force-move tool. Non-current units still open inspect.
+    if (isDm() && !dmActiveMode()) {
+      const isCurrentCombatUnit =
+        unit.isAlive &&
+        gameState.phase !== GamePhase.FREE_ROAM &&
+        gameState.phase !== GamePhase.GAME_OVER &&
+        gameState.turnOrder[gameState.currentUnitIndex] === unitId;
+      if (!isCurrentCombatUnit) {
+        setDmInspectedUnit(unitId);
+        selectUnit(unitId);
+        return;
+      }
+    }
+
+    if (!unit.isAlive) return;
+
+    const isFreeRoam = getIsFreeRoamMode();
+    const isPreparation = gameState.phase === GamePhase.COMBAT_PREPARATION;
+
+    // DM move mode: clicking a unit on the map selects/deselects it for teleport
+    if (dmActiveMode() === "move") {
+      if (dmDragUnit() === unitId) {
+        setDmDragUnit(null);
+      } else {
+        setDmDragUnit(unitId);
+      }
+      return;
+    }
+
+    // Click the already-selected unit → deselect. Lets the player back out
+    // of a selection without having to click empty ground, which on mobile
+    // is easy to miss and grabs the camera instead.
+    const alreadySelected = gameState.selectedUnit === unitId;
+
+    // Phase de préparation : ne sélectionner que les unités alliées
+    if (isPreparation) {
+      if (unit.team === Team.PLAYER) {
+        if (alreadySelected) deselectUnit();
+        else selectUnit(unitId);
+      }
+      return;
+    }
+
+    // Free Roam Mode - allow selecting player units (DM can select any).
+    // Toggle-to-deselect on the selected unit for mobile-friendly UX.
+    if (isFreeRoam) {
+      if (unit.team === Team.PLAYER || getIsHost()) {
+        if (alreadySelected) deselectUnit();
+        else selectUnit(unitId);
+      }
+      return;
+    }
+
+    // Combat Mode — include ENEMY_TURN when the DM is the one clicking so
+    // the DM can drive enemies with AP-gated movement + abilities via the
+    // same blue-reach UX players get on PLAYER_TURN.
+    const isDmCombatTurn =
+      getIsHost() && gameState.phase === GamePhase.ENEMY_TURN;
+    if (gameState.phase === GamePhase.PLAYER_TURN || isDmCombatTurn) {
+      // Ability targeting: click a legal target to fire. On PLAYER_TURN
+      // targets are enemies; on ENEMY_TURN (DM piloting), targets are
+      // players/allies. Accept anything the selectedAbility marked reachable.
+      if (gameState.selectedAbility) {
+        const pos = unit.position;
+        const isValidTarget = gameState.targetableTiles.some(
+          (t) => t.x === pos.x && t.z === pos.z
+        );
+        if (isValidTarget) {
+          useAbility(pos);
+          return;
+        }
+      }
+
+      if (alreadySelected) deselectUnit();
+      else selectUnit(unitId);
+    }
+  }
+  
+  return (
+    <canvas
+      ref={canvasRef}
+      class="w-full h-full block"
+      touch-action="none"
+    />
+  );
+};
+
+export function getEngine(): BabylonEngine | null {
+  return engineInstance;
+}
+
+export async function clearEngineState(): Promise<void> {
+  console.log('[GameCanvas] clearEngineState called');
+  if (engineInstance) {
+    // Flip isEngineReady off BEFORE we start tearing down, so the tiles /
+    // units reactive effects see a not-ready engine and bail early instead
+    // of racing a createGrid against a disposed scene.
+    setIsEngineReady(false);
+    await engineInstance.clearAll();
+    // Mark ready again so subsequent startGame calls can repopulate the scene.
+    setIsEngineReady(true);
+  }
+}
+
+export function resetCamera(): void {
+  if (engineInstance) {
+    engineInstance.resetCamera();
+  }
+}

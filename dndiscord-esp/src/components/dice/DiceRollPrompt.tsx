@@ -1,0 +1,192 @@
+import { createEffect, createMemo, createSignal, Show, onMount, onCleanup } from "solid-js";
+import { Portal } from "solid-js/web";
+import Dice3D from "../common/DiceD20/Dice3D";
+import { signalRService } from "../../services/signalr/SignalRService";
+import {
+  myPendingRequests,
+  setDiceRequestsState,
+  diceRequestsState,
+  type DiceRequest,
+} from "../../stores/diceRequests.store";
+
+type Phase = "prompt" | "rolling" | "result" | "canceled" | "exit";
+
+export default function DiceRollPrompt() {
+  const activeId = createMemo<string | null>(() => myPendingRequests()[0]?.requestId ?? null);
+
+  // Resolve the actual request from the store. This re-runs whenever the store
+  // entry for the active id changes, but does NOT cause the keyed <Show> below
+  // to re-mount the subtree.
+  const active = (): DiceRequest | null => {
+    const id = activeId();
+    if (!id) return null;
+    return diceRequestsState[id] ?? null;
+  };
+  const [phase, setPhase] = createSignal<Phase>("prompt");
+  const [lastValue, setLastValue] = createSignal<number | null>(null);
+  const [reducedMotion, setReducedMotion] = createSignal(false);
+
+  let canceled = false;
+  let pendingTimeout: number | null = null;
+
+  onCleanup(() => {
+    canceled = true;
+    if (pendingTimeout !== null) {
+      window.clearTimeout(pendingTimeout);
+      pendingTimeout = null;
+    }
+  });
+
+  onMount(() => {
+    setReducedMotion(
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    );
+  });
+
+  // Reset phase whenever the LOGICAL request changes (not on every store mutation).
+  createEffect(() => {
+    const id = activeId();
+    if (id) {
+      setPhase("prompt");
+      setLastValue(null);
+    }
+  });
+
+  // React to cancellation mid-flight.
+  createEffect(() => {
+    const req = active();
+    if (req && req.status === "canceled" && phase() !== "exit") {
+      setPhase("canceled");
+      window.setTimeout(() => closeLocal(), 1000);
+    }
+  });
+
+  function closeLocal(): void {
+    const req = active();
+    if (!req) return;
+    // Flip myParticipation so myPendingRequests filter removes this modal.
+    setDiceRequestsState(req.requestId, "myParticipation", "submitted");
+  }
+
+  async function handleRolled(value: number): Promise<void> {
+    const req = active();
+    if (!req) return;
+    const myRequestId = req.requestId;
+    setLastValue(value);
+    setPhase("result");
+
+    // Fire-and-forget. If the server has already canceled the request, the hub
+    // silently ignores our submit. We do NOT flip myParticipation yet — the
+    // `myPendingRequests` filter reads "waiting" only, and flipping off early
+    // would unmount the modal mid-animation and swallow the result reveal.
+    try {
+      await signalRService.invoke("SubmitRollResult", { requestId: myRequestId });
+    } catch (err) {
+      // Cancel-race is expected (HubException "Roll request not found"); other
+      // errors (connection drop, hub method missing) are real failures the
+      // user should at least see in devtools.
+      console.warn("[DiceRollPrompt] SubmitRollResult failed", { requestId: myRequestId, err });
+    }
+
+    if (canceled) return; // unmounted between invoke and timeout schedule
+    const hold = reducedMotion() ? 900 : 1800;
+    pendingTimeout = window.setTimeout(() => {
+      pendingTimeout = null;
+      if (canceled) return;
+      // If the queue has already advanced (server's RollResultBroadcast with
+      // requestComplete=true flipped status to "completed", which the
+      // myPendingRequests filter excludes), activeId now points at the NEXT
+      // request and the reset effect has already set phase="prompt" for it.
+      // Stamping "exit" here would zero the new modal's opacity (Bug A:
+      // invisible modal during multi-roll spam). Skip the visual flip in that
+      // case; the submitted-flag write is also redundant since the request is
+      // already filtered out.
+      if (activeId() !== myRequestId) return;
+      setPhase("exit");
+      setDiceRequestsState(myRequestId, "myParticipation", "submitted");
+    }, hold);
+  }
+
+  const tone = createMemo(() => {
+    const v = lastValue();
+    if (v === 20)
+      return {
+        border: "border-amber-400",
+        text: "text-amber-300",
+        glow: "rgba(244,197,66,0.55)",
+      };
+    if (v === 1)
+      return {
+        border: "border-rose-500",
+        text: "text-rose-400",
+        glow: "rgba(159,18,57,0.55)",
+      };
+    return {
+      border: "border-purple-500/40",
+      text: "text-purple-100",
+      glow: "transparent",
+    };
+  });
+
+  return (
+    // Non-keyed Show — subtree mounts ONCE when the first request lands and
+    // stays mounted across queue advances. Switching from req1 to req2 only
+    // updates the reactive `forcedValue` prop on the persistent Dice3D, so the
+    // Babylon engine is NOT disposed/rebuilt between queued rolls. Subtree
+    // only unmounts when the queue is fully drained (activeId() === null).
+    <Show when={activeId() != null}>
+      <Portal>
+        <div
+          class="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm"
+          style={{
+            transition: `opacity ${reducedMotion() ? 120 : 280}ms ease-out`,
+            opacity: phase() === "exit" ? 0 : 1,
+          }}
+        >
+          <p class="text-[11px] font-bold uppercase tracking-[0.25em] text-purple-300 mb-2">
+            [The DM requests a roll]
+          </p>
+          <p
+            class={`font-display italic text-2xl mb-6 ${tone().text}`}
+            style={{ transition: "color 220ms cubic-bezier(0.22,1,0.36,1)" }}
+          >
+            {active()?.label ?? "Dice roll"}
+          </p>
+
+          <div
+            class={`relative rounded-2xl border ${tone().border} p-2`}
+            style={{
+              transition: "box-shadow 600ms cubic-bezier(0.2,0.8,0.2,1)",
+              "box-shadow":
+                phase() === "result" &&
+                (lastValue() === 20 || lastValue() === 1)
+                  ? `0 0 60px ${tone().glow}`
+                  : "none",
+            }}
+          >
+            <Dice3D
+              size={280}
+              rollOnMount={false}
+              forcedValue={active()?.forcedValue ?? undefined}
+              onRolled={handleRolled}
+            />
+          </div>
+
+          <Show when={phase() === "prompt"}>
+            <p class="mt-6 text-purple-200/70 text-sm tracking-wide animate-pulse">
+              Press the die to roll
+            </p>
+          </Show>
+          <Show when={phase() === "result" && lastValue() != null}>
+            <p class={`mt-4 font-display text-6xl font-bold ${tone().text}`}>
+              {lastValue()}
+            </p>
+          </Show>
+          <Show when={phase() === "canceled"}>
+            <p class="mt-4 text-purple-300/80 italic">Cancelled by the DM</p>
+          </Show>
+        </div>
+      </Portal>
+    </Show>
+  );
+}
