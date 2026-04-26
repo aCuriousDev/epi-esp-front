@@ -285,7 +285,7 @@ export function Dice3D(props: Dice3DProps) {
 			}}
 			role="button"
 			tabindex={0}
-			aria-label={`D20: ${currentValue()}. Cliquez, maintenez ou secouez pour relancer.`}
+			aria-label={`D20: ${currentValue()}. Click, hold and shake, or flick to roll.`}
 			title="Click, hold-and-shake, or flick to roll"
 			onPointerDown={handlePointerDown}
 			onPointerMove={handlePointerMove}

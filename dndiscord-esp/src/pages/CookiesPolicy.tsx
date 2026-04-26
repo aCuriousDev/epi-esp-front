@@ -10,96 +10,96 @@ type StorageSection = {
   key: string;
   title: string;
   summary: string;
-  status: "essentiel" | "preference";
+  status: "essential" | "preference";
   items: StorageItem[];
 };
 
 const SECTIONS: StorageSection[] = [
   {
     key: "auth",
-    title: "Authentification",
+    title: "Authentication",
     summary:
-      "Indispensable pour vous garder connecté·e après votre authentification Discord. Exempté de consentement (CNIL — traceurs d'authentification).",
-    status: "essentiel",
+      "Required to keep you signed in after your Discord authentication. Exempt from consent (CNIL — authentication trackers).",
+    status: "essential",
     items: [
       {
         name: "token",
-        purpose: "Jeton JWT signé par nos serveurs pour maintenir votre session.",
-        duration: "7 jours (renouvelé à chaque connexion).",
+        purpose: "JWT token signed by our servers to maintain your session.",
+        duration: "7 days (renewed on each sign-in).",
       },
     ],
   },
   {
     key: "session",
-    title: "Session multijoueur",
+    title: "Multiplayer session",
     summary:
-      "Permet de retrouver une partie en cours après un rafraîchissement. Effacé à la fermeture de l'onglet.",
-    status: "essentiel",
+      "Lets you resume an in-progress game after a refresh. Cleared when the tab is closed.",
+    status: "essential",
     items: [
       {
         name: "dndiscord_session",
         purpose:
-          "Identifiant de la session multijoueur active et de l'utilisateur du hub.",
-        duration: "Jusqu'à fermeture de l'onglet (sessionStorage).",
+          "Identifier of the active multiplayer session and hub user.",
+        duration: "Until tab close (sessionStorage).",
       },
       {
         name: "dndiscord_game_started",
-        purpose: "Payload de la partie en cours, survit au refresh.",
-        duration: "Jusqu'à fermeture de l'onglet (sessionStorage).",
+        purpose: "Payload of the current game, survives refresh.",
+        duration: "Until tab close (sessionStorage).",
       },
     ],
   },
   {
     key: "content",
-    title: "Contenu utilisateur mis en cache",
+    title: "Cached user content",
     summary:
-      "Cache local des personnages et cartes que vous créez, pour accélérer leur affichage. Donnée strictement fonctionnelle.",
-    status: "essentiel",
+      "Local cache of the characters and maps you create, to speed up display. Strictly functional data.",
+    status: "essential",
     items: [
       {
         name: "dndiscord_characters",
-        purpose: "Liste de vos personnages mise en cache.",
-        duration: "Jusqu'à suppression manuelle ou du compte.",
+        purpose: "Cached list of your characters.",
+        duration: "Until manual deletion or account removal.",
       },
       {
         name: "dndiscord_maps_*",
-        purpose: "Cartes de jeu que vous avez créées.",
-        duration: "Jusqu'à suppression manuelle.",
+        purpose: "Game maps you have created.",
+        duration: "Until manual deletion.",
       },
       {
         name: "dndiscord_dungeons_*",
-        purpose: "Donjons que vous avez dessinés dans l'éditeur.",
-        duration: "Jusqu'à suppression manuelle.",
+        purpose: "Dungeons you have drawn in the editor.",
+        duration: "Until manual deletion.",
       },
     ],
   },
   {
     key: "preferences",
-    title: "Préférences d'interface",
+    title: "Interface preferences",
     summary:
-      "Mémorisent vos réglages (graphismes, son, tutoriel). Exemptés de consentement au titre de la personnalisation d'interface (CNIL), vous pouvez les effacer à tout moment depuis « Paramétrer ».",
+      'Stores your settings (graphics, sound, tutorial). Exempt from consent under interface personalization (CNIL); you can clear them at any time from "Manage".',
     status: "preference",
     items: [
       {
         name: "dnd-graphics-settings",
         purpose:
-          "Qualité 3D, résolution d'ombres, effets visuels, mise à l'échelle.",
-        duration: "Jusqu'à effacement manuel.",
+          "3D quality, shadow resolution, visual effects, scaling.",
+        duration: "Until manual deletion.",
       },
       {
         name: "dnd-sound-settings",
-        purpose: "Volume et état musique / effets.",
-        duration: "Jusqu'à effacement manuel.",
+        purpose: "Volume and music/effects state.",
+        duration: "Until manual deletion.",
       },
       {
         name: "dndiscord_tutorial_completed",
-        purpose: "Mémorise que vous avez vu le tutoriel d'onboarding.",
-        duration: "Jusqu'à effacement manuel.",
+        purpose: "Remembers that you have seen the onboarding tutorial.",
+        duration: "Until manual deletion.",
       },
       {
         name: "dndiscord_consent_v1",
-        purpose: "Indique que vous avez pris connaissance de la présente politique.",
-        duration: "Jusqu'à effacement manuel.",
+        purpose: "Indicates that you have acknowledged this policy.",
+        duration: "Until manual deletion.",
       },
     ],
   },
@@ -130,35 +130,35 @@ export default function CookiesPolicy() {
           class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
         >
           <ArrowLeft class="w-5 h-5" />
-          <span class="hidden sm:inline">Retour</span>
+          <span class="hidden sm:inline">Back</span>
         </button>
         <h1 class="font-display text-xl text-white tracking-wide flex items-center gap-2">
           <Cookie class="w-5 h-5 text-purple-400" />
-          Politique cookies
+          Cookies policy
         </h1>
         <div class="w-24" />
       </header>
 
       <main class="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 py-8 pb-20 space-y-6">
-        <Card title="En bref">
+        <Card title="At a glance">
           <p>
-            DnDiscord <strong>n'utilise aucun cookie HTTP</strong> et{" "}
-            <strong>aucun traceur tiers</strong> (pas de Google Analytics,
-            pas de Meta Pixel, pas de marketing, pas de publicité, pas de
-            <em> fingerprinting</em>). Le service s'appuie exclusivement
-            sur le <strong>stockage local</strong> de votre navigateur
+            DnDiscord <strong>uses no HTTP cookies</strong> and{" "}
+            <strong>no third-party trackers</strong> (no Google Analytics,
+            no Meta Pixel, no marketing, no advertising, no
+            <em> fingerprinting</em>). The service relies exclusively
+            on your browser's <strong>local storage</strong>
             (<code class="px-1 py-0.5 bg-black/30 rounded text-xs">localStorage</code>{" "}
-            et{" "}
+            and{" "}
             <code class="px-1 py-0.5 bg-black/30 rounded text-xs">sessionStorage</code>
-            ) pour vous authentifier, sauvegarder vos préférences et
-            mémoriser votre session multijoueur.
+            ) to authenticate you, save your preferences, and
+            remember your multiplayer session.
           </p>
           <p>
-            Toutes les catégories utilisées relèvent de cas{" "}
-            <strong>exemptés de consentement</strong> au sens de la CNIL
-            (authentification, personnalisation d'interface, contenu
-            fonctionnel). Vous pouvez néanmoins consulter le détail
-            ci-dessous et vider à tout moment vos préférences locales.
+            All categories used fall under cases{" "}
+            <strong>exempt from consent</strong> as defined by the CNIL
+            (authentication, interface personalization, functional
+            content). You can nonetheless review the details
+            below and clear your local preferences at any time.
           </p>
           <div class="flex flex-wrap items-center gap-3 pt-2">
             <button
@@ -166,66 +166,65 @@ export default function CookiesPolicy() {
               class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-sm transition-colors"
             >
               <Sliders class="w-4 h-4" />
-              Paramétrer mon stockage local
+              Manage my local storage
             </button>
             <button
               onClick={handleClear}
               disabled={cleared()}
               class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-sm transition-colors disabled:opacity-60"
             >
-              <Show when={cleared()} fallback={<>Effacer mes préférences locales</>}>
+              <Show when={cleared()} fallback={<>Clear my local preferences</>}>
                 <Check class="w-4 h-4 text-green-400" />
-                <span class="text-green-300">Préférences effacées</span>
+                <span class="text-green-300">Preferences cleared</span>
               </Show>
             </button>
           </div>
         </Card>
 
-        <Card title="1. Cadre légal">
+        <Card title="1. Legal framework">
           <p>
-            Cette politique est établie conformément à :
+            This policy is established in accordance with:
           </p>
           <ul class="list-disc list-inside space-y-1 text-sm">
             <li>
-              la <strong>Directive ePrivacy</strong> 2002/58/CE modifiée ;
+              the <strong>Directive ePrivacy</strong> 2002/58/CE as amended;
             </li>
             <li>
-              l'article <strong>82 de la loi n° 78-17</strong> « Informatique
-              et Libertés » (stockage et accès à des informations sur
-              l'équipement terminal de l'utilisateur) ;
+              <strong>art. 82 de la loi n° 78-17 « Informatique et Libertés »</strong>{" "}
+              (storage and access to information on the user's terminal
+              equipment);
             </li>
             <li>
-              la <strong>Recommandation cookies</strong> de la CNIL
-              (délibération n° 2020-092 mise à jour) ;
+              the <strong>Recommandation cookies de la CNIL (délibération n° 2020-092 mise à jour)</strong>;
             </li>
             <li>
-              le <strong>RGPD</strong> (règlement UE 2016/679) pour le
-              traitement des données personnelles éventuellement associées.
+              the <strong>RGPD</strong> (règlement UE 2016/679) for the
+              processing of any associated personal data.
             </li>
           </ul>
         </Card>
 
-        <Card title="2. Traceurs exemptés de consentement">
+        <Card title="2. Trackers exempt from consent">
           <p>
-            La CNIL considère exemptés de consentement les traceurs dont la
-            finalité exclusive est strictement nécessaire au service
-            demandé par l'utilisateur, notamment :
+            The CNIL considers trackers exempt from consent when their
+            sole purpose is strictly necessary for the service
+            requested by the user, in particular:
           </p>
           <ul class="list-disc list-inside space-y-1 text-sm">
-            <li>authentification auprès du service ;</li>
+            <li>authentication with the service;</li>
             <li>
-              personnalisation d'interface (langue, thème, préférences
-              graphiques) ;
+              interface personalization (language, theme, graphics
+              preferences);
             </li>
             <li>
-              équilibrage de charge et sécurité (protection contre les
-              abus).
+              load balancing and security (protection against
+              abuse).
             </li>
           </ul>
           <p>
-            Tous les éléments de stockage utilisés par DnDiscord relèvent
-            de ces catégories. Aucun consentement préalable n'est donc
-            juridiquement requis.
+            All storage items used by DnDiscord fall under
+            these categories. No prior consent is therefore
+            legally required.
           </p>
         </Card>
 
@@ -238,69 +237,66 @@ export default function CookiesPolicy() {
           )}
         </For>
 
-        <Card title={`${SECTIONS.length + 3}. Ce que nous ne faisons pas`}>
+        <Card title={`${SECTIONS.length + 3}. What we don't do`}>
           <ul class="list-disc list-inside space-y-1 text-sm">
-            <li>Aucun cookie HTTP n'est déposé par le service.</li>
+            <li>No HTTP cookies are set by the service.</li>
             <li>
-              Aucun traceur publicitaire, aucun traceur cross-site, aucune
-              empreinte numérique (fingerprinting).
+              No advertising trackers, no cross-site trackers, no
+              digital fingerprinting.
             </li>
             <li>
-              Aucun outil d'analyse tiers (Google Analytics, Meta Pixel,
+              No third-party analytics tools (Google Analytics, Meta Pixel,
               Hotjar, TikTok Pixel, etc.).
             </li>
-            <li>Aucune revente ou location de données à un tiers.</li>
+            <li>No resale or rental of data to any third party.</li>
           </ul>
         </Card>
 
-        <Card title={`${SECTIONS.length + 4}. Gestion et exercice des droits`}>
+        <Card title={`${SECTIONS.length + 4}. Management and exercise of rights`}>
           <p>
-            Vous pouvez à tout moment :
+            You can at any time:
           </p>
           <ul class="list-disc list-inside space-y-1 text-sm">
             <li>
-              <strong>consulter</strong> la liste complète des éléments de
-              stockage via le bouton « Paramétrer mon stockage local » en
-              haut de cette page ;
+              <strong>view</strong> the full list of storage items
+              via the "Manage my local storage" button at the top of this page;
             </li>
             <li>
-              <strong>effacer vos préférences locales</strong> via le
-              bouton dédié ou depuis l'onglet « Confidentialité & données »
-              des paramètres ;
+              <strong>clear your local preferences</strong> via the
+              dedicated button or from the "Privacy &amp; data" tab
+              in settings;
             </li>
             <li>
-              <strong>supprimer l'ensemble de vos données</strong> (compte,
-              personnages, campagnes…) en demandant l'effacement de votre
-              compte (RGPD art. 17) depuis les paramètres.
+              <strong>delete all your data</strong> (account,
+              characters, campaigns…) by requesting deletion of your
+              account (RGPD art. 17) from settings.
             </li>
           </ul>
           <p>
-            Vous conservez par ailleurs la maîtrise complète du stockage
-            local depuis les paramètres de votre navigateur (section
-            « Cookies et données de site »).
+            You also retain full control over local storage
+            from your browser settings (under "Cookies and site data").
           </p>
         </Card>
 
-        <Card title={`${SECTIONS.length + 5}. Évolution de la politique`}>
+        <Card title={`${SECTIONS.length + 5}. Policy evolution`}>
           <p>
-            Si DnDiscord venait à intégrer à l'avenir un traceur soumis à
-            consentement (par exemple un outil d'analyse tiers), la
-            présente politique serait mise à jour et un{" "}
-            <strong>mécanisme de consentement explicite</strong> conforme à
-            la Recommandation CNIL serait mis en place avant toute
-            activation (bannière avec boutons « Accepter » et « Refuser »
-            d'égale simplicité).
+            Should DnDiscord integrate a consent-required tracker in the
+            future (for example a third-party analytics tool), this
+            policy would be updated and an{" "}
+            <strong>explicit consent mechanism</strong> compliant with
+            the CNIL Recommendation would be put in place before any
+            activation (banner with equally prominent "Accept" and "Decline"
+            buttons).
           </p>
         </Card>
 
         <Card title={`${SECTIONS.length + 6}. Contact`}>
           <p>
-            Toute question relative à la présente politique peut être
-            adressée à {ORG.name} :
+            Any question regarding this policy may be addressed to {ORG.name}:
           </p>
           <ul class="text-sm space-y-1">
             <li>
-              Contact RGPD :{" "}
+              GDPR contact:{" "}
               <a
                 href={`mailto:${ORG.privacyEmail}`}
                 class="text-purple-300 underline"
@@ -309,7 +305,7 @@ export default function CookiesPolicy() {
               </a>
             </li>
             <li>
-              Délégué à la protection des données :{" "}
+              Data protection officer:{" "}
               <a
                 href={`mailto:${ORG.dpoEmail}`}
                 class="text-purple-300 underline"
@@ -322,19 +318,19 @@ export default function CookiesPolicy() {
 
         <nav class="flex flex-wrap items-center gap-x-3 gap-y-2 pt-6 text-sm text-slate-400">
           <A href="/privacy" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
-            Politique de confidentialité
+            Privacy policy
           </A>
           <span class="text-slate-600">·</span>
           <A href="/terms" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
-            Conditions générales
+            Terms of service
           </A>
           <span class="text-slate-600">·</span>
           <A href="/legal" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
-            Mentions légales
+            Legal notice
           </A>
         </nav>
         <p class="pt-2 text-xs text-slate-500">
-          En vigueur depuis le {ORG.lastUpdated}.
+          In effect since {ORG.lastUpdated}.
         </p>
       </main>
 
@@ -369,9 +365,9 @@ function StorageTable(props: { items: StorageItem[] }) {
       <table class="w-full text-xs sm:text-sm">
         <thead>
           <tr class="text-left border-b border-white/10 text-slate-400">
-            <th class="py-2 pr-3 font-medium">Clé</th>
-            <th class="py-2 pr-3 font-medium">Finalité</th>
-            <th class="py-2 pr-3 font-medium">Durée</th>
+            <th class="py-2 pr-3 font-medium">Key</th>
+            <th class="py-2 pr-3 font-medium">Purpose</th>
+            <th class="py-2 pr-3 font-medium">Duration</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-white/5">
