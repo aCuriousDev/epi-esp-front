@@ -48,6 +48,8 @@ import { playDeathSound } from "../../game/audio/SoundIntegration";
 
 import { addCombatLog } from "../../game/stores/GameStateStore";
 import { addSpawnedEnemy } from "../../stores/dmTools.store";
+import { TileType } from "../../types";
+import { isSessionMapActive, requestSessionExit } from "../../stores/session-map.store";
 
 /**
  * Payload minimal attendu par l'évènement `FullStateSync`.
@@ -148,6 +150,19 @@ export function registerGameSyncHandlers(): void {
     // Default to 0, not 1: a DM-driven free-move has apCost:0 and peers must
     // not silently deduct 1 AP, which would desync them from the server state.
     applyUnitMove(unitId, dest.x, dest.z, payload.apCost ?? 0);
+
+    // ── Notification EXIT côté MJ ─────────────────────────────────────────
+    // Le client qui contrôle l'unité appelle requestSessionExit localement
+    // dans MovementActions. Le MJ reçoit UnitMoved via SignalR et n'exécute
+    // pas MovementActions → il ne voit jamais le bandeau de confirmation.
+    // On reproduit ici la même détection pour le MJ uniquement.
+    if (isHost() && isSessionMapActive()) {
+      const destTile = tiles[posToKey(dest)];
+      if (destTile?.type === TileType.EXIT && unitData?.team === Team.PLAYER) {
+        const exitType: 'next' | 'end' = (destTile as any).exitType ?? 'next';
+        requestSessionExit({ unitName: unitData.name, exitType });
+      }
+    }
 
     // Only clear local preview/highlights if this is the unit I have selected.
     // Other clients may have a different unit selected — don't disrupt their UI.
@@ -548,22 +563,12 @@ async function handleMapSwitched(message: unknown): Promise<void> {
     return;
   }
 
-  // Cache the new map locally so mapStorage.loadMap can resolve it by id
-  // during the re-init below. The payload's `data.id` is the SavedMapData
-  // id the DM generated in the Map Editor; `parsed.mapId` is the backend
-  // campaign-map GUID. loadMap later keys off parsed.mapId, so normalise
-  // the embedded id to match — otherwise initializeGrid falls through to
-  // the default grid and the DM's chosen map never renders (BUG-J).
-  // Failure here means loadMap during re-init will fall through to the default
-  // grid — the exact bug (BUG-J) this block was added to prevent. Re-throw so
-  // the outer .catch fires the user-visible error instead of proceeding with a
-  // broken map. No try/catch swallowing.
-  const data = parsed.parsedData as { id?: string } | null;
-  if (data && typeof data === "object") {
-    data.id = parsed.mapId;
-  }
-  const { saveMap } = await import("../mapStorage");
-  saveMap(data as any);
+  // Cache the new map so loadMap(parsed.mapId) resolves during re-init.
+  // cacheMap with overrideId = parsed.mapId stores the blob under the DB UUID
+  // regardless of the id embedded inside the blob — fixes BUG-J (initializeGrid
+  // was falling through to the default grid because loadMap(UUID) found nothing).
+  const { cacheMap } = await import("../mapRepository");
+  cacheMap(parsed.parsedData as any, parsed.mapId);
 
   const { clearEngineState } = await import("../../components/GameCanvas");
   const prevMapId = gameState.mapId;

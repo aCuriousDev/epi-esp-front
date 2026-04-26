@@ -129,8 +129,8 @@ export default function CampaignView() {
       // Permet de proposer "Rejoindre" sans code quand le MJ lance une session.
       if (!signalRService.isConnected) {
         await signalRService.connect();
-        ensureMultiplayerHandlersRegistered();
       }
+      ensureMultiplayerHandlersRegistered();
 
       const handler = (data: Record<string, unknown>) => {
         const payload = {
@@ -223,19 +223,26 @@ export default function CampaignView() {
     return t("campaignView.relativeTime.monthsAgo", { n: diffMonths });
   };
 
-  /** Créer une session GameHub pour cette campagne et aller au board (DM uniquement). */
+  /** Créer une session GameHub et aller au lobby Quick Launch (DM uniquement).
+   *  En mode Quick Launch le MJ choisit la carte dans le lobby et lance
+   *  directement le board — pas besoin d'arbre de scénario. */
   const handleLaunchSession = async () => {
     const c = campaign();
-    if (!c || !isOwner()) return;
+    if (!c || !isOwner() || launchingSession()) return;
     setLaunchError(null);
     setLaunchingSession(true);
     try {
       if (!signalRService.isConnected) {
         await signalRService.connect();
-        ensureMultiplayerHandlersRegistered();
       }
+      ensureMultiplayerHandlersRegistered();
       await createSession(c.id);
-      navigate(`/campaigns/${c.id}/session`);
+      // Quick Launch reuses the sandbox multiplayer lobby (LobbyScreen) — the
+      // session is already in the store with `campaignId` set, so BoardGame's
+      // onMount session-rehydration jumps straight to AppPhase.LOBBY.
+      // Routing through the stripped CampaignLobbyPage was the post-rework
+      // regression: it dropped map selection + default templates.
+      navigate(`/practice/multiplayer`);
     } catch (e: any) {
       setLaunchError(e?.message ?? "Failed to create session.");
     } finally {
@@ -251,8 +258,8 @@ export default function CampaignView() {
     try {
       if (!signalRService.isConnected) {
         await signalRService.connect();
-        ensureMultiplayerHandlersRegistered();
       }
+      ensureMultiplayerHandlersRegistered();
       const res = await joinSession(invite.sessionId);
       if (!res.success) {
         setInviteError(res.message ?? "Failed to join session.");
@@ -260,14 +267,13 @@ export default function CampaignView() {
       }
       setSessionInvite(null);
       // Route based on whether the campaign has an authored story-tree:
-      //   - With scenario → Sam's lobby → session → board?fromSession=1 chain.
-      //   - Without scenario (POC "Lancement rapide" flow) → straight to /board.
-      // Mirrors SessionInviteListener which always routes to /board for
-      // campaigns reached via the global notification outside this page.
+      //   - With scenario → CampaignLobbyPage → /session (story tree) → maps.
+      //   - Without scenario (POC Quick Launch flow) → /practice/multiplayer
+      //     so the joiner lands in the same sandbox LobbyScreen as the DM.
       if (invite.campaignId && hasScenario(campaign()?.campaignTreeDefinition)) {
         navigate(`/campaigns/${invite.campaignId}/lobby`);
       } else {
-        navigate(invite.campaignId ? `/campaigns/${invite.campaignId}/session` : "/practice");
+        navigate(invite.campaignId ? `/practice/multiplayer` : "/practice");
       }
     } catch (e: any) {
       setInviteError(e?.message ?? "Failed to join session.");
@@ -285,8 +291,8 @@ export default function CampaignView() {
     try {
       if (!signalRService.isConnected) {
         await signalRService.connect();
-        ensureMultiplayerHandlersRegistered();
       }
+      ensureMultiplayerHandlersRegistered();
       // Utilise joinCampaignSession (cherche par campaignId dans le SessionManager)
       // plutôt que joinSession(db_uuid) qui cherche par l'ID SignalR in-memory.
       const res = await joinCampaignSession(c.id);
@@ -340,14 +346,14 @@ export default function CampaignView() {
 
   const handleLaunchCampaignSession = async () => {
     const c = campaign();
-    if (!c || !isOwner()) return;
+    if (!c || !isOwner() || launchingSession()) return;
     setLaunchError(null);
     setLaunchingSession(true);
     try {
       if (!signalRService.isConnected) {
         await signalRService.connect();
-        ensureMultiplayerHandlersRegistered();
       }
+      ensureMultiplayerHandlersRegistered();
       await createSession(c.id);
       navigate(`/campaigns/${params.id}/lobby`);
     } catch (e: any) {
@@ -944,13 +950,13 @@ export default function CampaignView() {
             <button
               onClick={() => {
                 navigator.clipboard.writeText(inviteCode() || "");
-                showSuccessToast(t("campaignView.inviteModal.copied"));
+                showSuccessToast("Code copié dans le presse-papiers !");
                 setShowInviteModal(false);
               }}
               class="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-colors flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
               <Copy class="w-4 h-4" aria-hidden="true" />
-              {t("campaignView.inviteModal.copyCode")}
+              Copier le code
             </button>
           </div>
         </div>

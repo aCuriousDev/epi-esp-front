@@ -105,6 +105,9 @@ const HUB = {
   dmGrantGold: "DmGrantGold",
   selectDefaultTemplate: "SelectDefaultTemplate",
   voteForChoice: "VoteForChoice",
+  dmAdvanceNode: "DmAdvanceNode",
+  dmLaunchCampaignMap: "DmLaunchCampaignMap",
+  dmExitMap: "DmExitMap",
 } as const;
 
 async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
@@ -313,6 +316,35 @@ export async function selectCharacter(
   await signalRService.invoke(HUB.selectCharacter, characterId);
 }
 
+/** DM broadcasts that the map is done and all players should return to the session.
+ * Players receive CampaignMapExited and navigate to the session page. */
+export async function dmExitMap(
+  campaignId: string,
+  nodeId: string,
+): Promise<void> {
+  await signalRService.invoke(HUB.dmExitMap, campaignId, nodeId);
+}
+
+/** DM broadcasts a campaign map launch to all campaign subscribers.
+ * Players receive CampaignMapLaunched, set their sessionMapConfig and
+ * navigate to /board?fromSession=1. */
+export async function dmLaunchCampaignMap(
+  campaignId: string,
+  configJson: string,
+): Promise<void> {
+  await signalRService.invoke(HUB.dmLaunchCampaignMap, campaignId, configJson);
+}
+
+/** DM broadcasts scenario node advancement to all campaign subscribers.
+ * Players receive NodeAdvanced and navigate to nextNodeId automatically. */
+export async function dmAdvanceNode(
+  campaignId: string,
+  fromNodeId: string,
+  nextNodeId: string,
+): Promise<void> {
+  await signalRService.invoke(HUB.dmAdvanceNode, campaignId, fromNodeId, nextNodeId);
+}
+
 /** Diffuse le vote d'un joueur pour un choix sur un nœud Choices.
  * choiceIndex = -1 pour annuler. */
 export async function voteForChoice(
@@ -331,10 +363,17 @@ export async function selectDefaultTemplate(
   await signalRService.invoke(HUB.selectDefaultTemplate, templateId);
 }
 
+/** IDs réservés qui ne doivent jamais déclencher un lookup mapData.
+ *  - "default" : grille procédurale générée côté client
+ *  - "__tutorial__" et tout futur "__xxx__" : asset statique, pas de blob à envoyer */
+function isReservedMapId(mapId: string): boolean {
+  return mapId === "default" || /^__[a-z_]+__$/.test(mapId);
+}
+
 /** Lancer la partie (host uniquement). Envoie les données de la map pour les joueurs distants. */
 export async function startGame(mapId: string): Promise<void> {
   let mapData: string | null = null;
-  if (mapId && mapId !== "default") {
+  if (mapId && !isReservedMapId(mapId)) {
     const map = loadMap(mapId);
     if (map) {
       mapData = JSON.stringify(map);
@@ -348,7 +387,7 @@ export async function startGame(mapId: string): Promise<void> {
  * require the session to be in Lobby state. */
 export async function dmRestartGame(mapId: string): Promise<void> {
   let mapData: string | null = null;
-  if (mapId && mapId !== "default") {
+  if (mapId && !isReservedMapId(mapId)) {
     const map = loadMap(mapId);
     if (map) {
       mapData = JSON.stringify(map);

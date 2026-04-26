@@ -19,7 +19,7 @@ import {
   CharacterService,
   type CharacterDto,
 } from "../services/character.service";
-import { getAllMaps, loadMap as loadMapLocal } from "../services/mapStorage";
+import { fetchMine, loadMap as loadMapLocal } from "../services/mapRepository";
 import { MapService } from "../services/map.service";
 import type { GameStartedPayload } from "../types/multiplayer";
 import { safeConfirm } from "../services/ui/confirm";
@@ -71,9 +71,7 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
       // No characters available
     }
 
-    const allMaps = getAllMaps();
-    allMaps.sort((a, b) => b.updatedAt - a.updatedAt);
-    setMaps(allMaps);
+    fetchMine().then(allMaps => setMaps(allMaps));
   });
 
   // React to gameStartedPayload
@@ -417,7 +415,8 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                         <div class="flex justify-between items-center">
                           <span class="font-medium">{char.name}</span>
                           <span class="text-sm text-slate-400">
-                            {char.class} Nv.{char.level} - {char.maxHitPoints} PV
+                            {char.class} Nv.{char.level} - {char.maxHitPoints}{" "}
+                            PV
                           </span>
                         </div>
                       </button>

@@ -6,10 +6,10 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { useNavigate, useParams } from '@solidjs/router';
-import { ArrowLeft, Copy, Check, Play, Loader2, Users, UserCircle2, Zap } from 'lucide-solid';
+import { useNavigate, useParams, useSearchParams } from '@solidjs/router';
+import { ArrowLeft, Copy, Check, Play, Loader2, Users, UserCircle2, Zap, Map as MapIcon } from 'lucide-solid';
 import { sessionState, isHost } from '@/stores/session.store';
-import { PlayerRole } from '@/types/multiplayer';
+import { PlayerRole, SessionState } from '@/types/multiplayer';
 import {
   selectCharacter,
   selectDefaultTemplate,
@@ -20,6 +20,8 @@ import {
 } from '@/services/signalr/multiplayer.service';
 import { CharacterService, CharacterClass, type CharacterDto } from '@/services/character.service';
 import { CampaignService, GameSessionStatus, type GameSessionResponse } from '@/services/campaign.service';
+import { MapService, type CampaignMapRecord } from '@/services/map.service';
+import { ensureMapCached } from '@/services/mapRepository';
 import { signalRService } from '@/services/signalr/SignalRService';
 import { authStore } from '@/stores/auth.store';
 
@@ -99,9 +101,19 @@ function classEmoji(cls: CharacterClass): string {
 const CampaignLobbyPage: Component = () => {
   const params  = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  /** true quand le lobby a été ouvert via le bouton "Quick Launch" */
+  const quickLaunch = () => searchParams.quickLaunch === '1';
 
   const [characters,   setCharacters]   = createSignal<CharacterDto[]>([]);
   const [loadingChars, setLoadingChars] = createSignal(true);
+
+  // ── Quick launch — sélection de carte ────────────────────────────────────────
+  const [campaignMaps,      setCampaignMaps]      = createSignal<CampaignMapRecord[]>([]);
+  const [loadingMaps,       setLoadingMaps]       = createSignal(false);
+  /** mapId sélectionnée par le MJ pour le quick launch ('default' = grille proc.) */
+  const [quickLaunchMapId,  setQuickLaunchMapId]  = createSignal<string>('default');
 
   // active selection — either a real char id or a default template id
   const [selCharId,    setSelCharId]    = createSignal<string | null>(null);
@@ -127,8 +139,12 @@ const CampaignLobbyPage: Component = () => {
   onMount(async () => {
     if (!signalRService.isConnected) {
       await signalRService.connect();
-      ensureMultiplayerHandlersRegistered();
     }
+    // Toujours appeler, pas seulement si on vient de se connecter.
+    // Si les handlers ont été réinitialisés (leaveSession / SessionEnded),
+    // GameStarted ne serait pas traité → setGameStarted jamais appelé →
+    // createEffect jamais déclenché → bouton "Lancement…" bloqué indéfiniment.
+    ensureMultiplayerHandlersRegistered();
 
     // Vérifier si une session est déjà en cours pour cette campagne.
     // On n'affiche le bandeau que si la session a une progression réelle
@@ -137,13 +153,27 @@ const CampaignLobbyPage: Component = () => {
     // créées par CampaignSessionPage mais jamais jouées.
     try {
       const sessionsRes = await CampaignService.listSessions(params.id);
-      const running = sessionsRes.items.find(
-        s => s.status === GameSessionStatus.Active &&
-             (!!s.currentNodeId || s.entries.length > 0)
-      );
+      // Dans le lobby on cherche toute session Active, même sans progression
+      // (ex. session créée mais pas encore démarrée) pour proposer le "Rejoindre".
+      const running = sessionsRes.items.find(s => s.status === GameSessionStatus.Active);
       if (running) setActiveSession(running);
     } catch {
       // Non-critique
+    }
+
+    // ── Quick launch : charger les cartes de la campagne pour le MJ ────────────
+    if (quickLaunch() && isHost()) {
+      setLoadingMaps(true);
+      try {
+        const maps = await MapService.list(params.id);
+        setCampaignMaps(maps);
+        // Pré-sélectionner la première carte si disponible
+        if (maps.length > 0) setQuickLaunchMapId(maps[0].id);
+      } catch {
+        // Non-critique — la carte par défaut reste sélectionnée
+      } finally {
+        setLoadingMaps(false);
+      }
     }
 
     try {
@@ -170,7 +200,15 @@ const CampaignLobbyPage: Component = () => {
   createEffect(() => {
     const payload = sessionState.gameStartedPayload;
     if (payload && payload !== stalePayload) {
-      navigate(`/campaigns/${params.id}/session`);
+      if (payload.mapId === 'campaign') {
+        // Flux scénario classique → CampaignSessionPage (arbre de blocs)
+        navigate(`/campaigns/${params.id}/session`);
+      } else {
+        // Quick launch (ou lancement direct de carte) → board directement
+        // BoardGame détectera la session InProgress et appellera
+        // onMultiplayerGameStart avec le payload pour démarrer le jeu.
+        navigate('/practice/session');
+      }
     }
   });
 
@@ -203,7 +241,28 @@ const CampaignLobbyPage: Component = () => {
     if (starting()) return;
     setStarting(true);
     try {
-      await startGameHub('campaign');
+      if (quickLaunch()) {
+        // Quick launch : démarrer directement avec la carte choisie.
+        // S'assurer que la carte est en cache localStorage avant que
+        // startGame ne l'envoie dans le payload GameStarted.
+        const mapId = quickLaunchMapId();
+        if (mapId !== 'default') {
+          await ensureMapCached(mapId, params.id);
+        }
+        await startGameHub(mapId);
+      } else {
+        // Flux scénario classique (arbre de blocs)
+        await startGameHub('campaign');
+      }
+      // startGameHub réussit → le serveur va envoyer GameStarted → createEffect navigue.
+      // Timeout de sécurité : si GameStarted n'arrive pas en 8 s (handler manquant,
+      // problème réseau), on réactive le bouton pour que le DM puisse réessayer.
+      setTimeout(() => {
+        setStarting(prev => {
+          if (prev) console.warn('[CampaignLobby] GameStarted not received in time — resetting start button');
+          return false;
+        });
+      }, 8_000);
     } catch (err: any) {
       console.error('[CampaignLobby] startGame failed:', err);
       setStarting(false);
@@ -272,7 +331,9 @@ const CampaignLobbyPage: Component = () => {
           <span class="hidden sm:inline">Quitter</span>
         </button>
         <div class="text-center">
-          <p class="text-xs text-purple-400 uppercase tracking-wider font-medium">Salle d'attente</p>
+          <p class="text-xs text-purple-400 uppercase tracking-wider font-medium">
+            {quickLaunch() ? '⚡ Lancement rapide' : 'Salle d\'attente'}
+          </p>
           <h1 class="font-display text-lg text-white">{session()?.campaignName ?? 'Campagne'}</h1>
         </div>
         <button onClick={copyCode}
@@ -512,36 +573,159 @@ const CampaignLobbyPage: Component = () => {
           </section>
         </Show>
 
-        {/* Contrôles MJ */}
-        <Show when={amHost()}>
+        {/* Quick Launch — sélection de carte (MJ uniquement) */}
+        <Show when={amHost() && quickLaunch()}>
           <section class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
-            <Show when={!allPlayersReady()}>
-              <p class="text-center text-sm text-amber-400/80 mb-4">
-                ⚠️ Certains joueurs n'ont pas encore sélectionné leur personnage.
-              </p>
+            <div class="flex items-center gap-2 mb-4">
+              <MapIcon class="w-5 h-5 text-blue-400" />
+              <h2 class="font-display text-xl text-white">Choisir une carte</h2>
+            </div>
+
+            <Show when={loadingMaps()}>
+              <div class="flex items-center gap-2 text-slate-400 text-sm py-2">
+                <Loader2 class="w-4 h-4 animate-spin text-blue-400" />
+                Chargement des cartes…
+              </div>
             </Show>
-            <button
-              onClick={handleStartSession}
-              disabled={starting()}
-              class="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-lg rounded-xl transition-all shadow-lg shadow-purple-500/20"
-            >
-              <Show when={starting()} fallback={<Play class="w-5 h-5" />}>
-                <Loader2 class="w-5 h-5 animate-spin" />
-              </Show>
-              <Show when={starting()} fallback="Démarrer la session">Lancement…</Show>
-            </button>
-            <p class="text-center text-sm text-slate-500 mt-3">
-              Players will be redirected automatically.
-            </p>
+
+            <Show when={!loadingMaps()}>
+              <div class="space-y-2">
+                {/* Option : carte par défaut (grille procédurale) */}
+                <button
+                  onClick={() => setQuickLaunchMapId('default')}
+                  class={`w-full text-left rounded-xl border-2 px-4 py-3 transition-all flex items-center gap-3 ${
+                    quickLaunchMapId() === 'default'
+                      ? 'border-blue-500 bg-blue-500/15 shadow shadow-blue-500/10'
+                      : 'border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20'
+                  }`}
+                >
+                  <span class="text-lg">🗺️</span>
+                  <div>
+                    <span class={`font-medium ${quickLaunchMapId() === 'default' ? 'text-white' : 'text-slate-200'}`}>
+                      Carte par défaut
+                    </span>
+                    <p class="text-xs text-slate-500">Grille procédurale</p>
+                  </div>
+                  <Show when={quickLaunchMapId() === 'default'}>
+                    <span class="ml-auto text-blue-400 font-bold text-sm">✓</span>
+                  </Show>
+                </button>
+
+                {/* Cartes de la campagne */}
+                <For each={campaignMaps()}>
+                  {(map) => (
+                    <button
+                      onClick={() => setQuickLaunchMapId(map.id)}
+                      class={`w-full text-left rounded-xl border-2 px-4 py-3 transition-all flex items-center gap-3 ${
+                        quickLaunchMapId() === map.id
+                          ? 'border-blue-500 bg-blue-500/15 shadow shadow-blue-500/10'
+                          : 'border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20'
+                      }`}
+                    >
+                      <span class="text-lg">🏔️</span>
+                      <span class={`font-medium flex-1 ${quickLaunchMapId() === map.id ? 'text-white' : 'text-slate-200'}`}>
+                        {map.name}
+                      </span>
+                      <Show when={quickLaunchMapId() === map.id}>
+                        <span class="text-blue-400 font-bold text-sm">✓</span>
+                      </Show>
+                    </button>
+                  )}
+                </For>
+
+                <Show when={campaignMaps().length === 0}>
+                  <p class="text-slate-500 text-sm italic py-1">
+                    Aucune carte de campagne — seule la grille par défaut est disponible.
+                  </p>
+                </Show>
+              </div>
+            </Show>
           </section>
         </Show>
 
-        {/* Attente MJ */}
+        {/* Contrôles MJ */}
+        <Show when={amHost()}>
+          <section class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
+            <Show when={session()?.state === SessionState.InProgress}
+              fallback={
+                /* Session en Lobby → bouton Démarrer normal */
+                <>
+                  <Show when={!allPlayersReady()}>
+                    <p class="text-center text-sm text-amber-400/80 mb-4">
+                      ⚠️ Certains joueurs n'ont pas encore sélectionné leur personnage.
+                    </p>
+                  </Show>
+                  <button
+                    onClick={handleStartSession}
+                    disabled={starting()}
+                    class="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-lg rounded-xl transition-all shadow-lg shadow-purple-500/20"
+                  >
+                    <Show when={starting()} fallback={<Play class="w-5 h-5" />}>
+                      <Loader2 class="w-5 h-5 animate-spin" />
+                    </Show>
+                    <Show when={starting()}
+                      fallback={quickLaunch() ? 'Lancer la carte' : 'Démarrer la session'}
+                    >
+                      Lancement…
+                    </Show>
+                  </button>
+                  <p class="text-center text-sm text-slate-500 mt-3">
+                    {quickLaunch()
+                      ? 'Les joueurs seront redirigés vers la carte automatiquement.'
+                      : 'Players will be redirected automatically.'}
+                  </p>
+                </>
+              }
+            >
+              {/* Session déjà InProgress → proposer de reprendre au lieu de redémarrer */}
+              <p class="text-center text-sm text-amber-400/80 mb-4">
+                ⚡ La session est déjà en cours.
+              </p>
+              <button
+                onClick={() => navigate(`/campaigns/${params.id}/session`)}
+                class="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-lg rounded-xl transition-all shadow-lg shadow-emerald-500/20"
+              >
+                <Play class="w-5 h-5" />
+                Reprendre la session
+              </button>
+              <p class="text-center text-sm text-slate-500 mt-3">
+                La session a déjà été lancée — reprenez depuis le scénario.
+              </p>
+            </Show>
+          </section>
+        </Show>
+
+        {/* Attente MJ — ou Rejoindre si session existante et utilisateur hors session */}
         <Show when={!amHost()}>
-          <div class="text-center py-4 text-slate-400">
-            <Loader2 class="w-6 h-6 animate-spin text-purple-400 mx-auto mb-2" />
-            Waiting for the Dungeon Master to start…
-          </div>
+          <Show
+            when={activeSession() && !session()}
+            fallback={
+              <div class="text-center py-4 text-slate-400">
+                <Loader2 class="w-6 h-6 animate-spin text-purple-400 mx-auto mb-2" />
+                Waiting for the Dungeon Master to start…
+              </div>
+            }
+          >
+            {/* Session active détectée mais utilisateur pas encore dedans */}
+            <section class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 text-center">
+              <p class="text-sm text-amber-400/80 mb-4">
+                ⚡ Une session est déjà en cours pour cette campagne.
+              </p>
+              <button
+                onClick={handleJoinActiveSession}
+                disabled={joiningActive()}
+                class="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-60 text-white font-bold text-lg rounded-xl transition-all shadow-lg shadow-emerald-500/20"
+              >
+                <Show when={joiningActive()} fallback={<Play class="w-5 h-5" />}>
+                  <Loader2 class="w-5 h-5 animate-spin" />
+                </Show>
+                {joiningActive() ? 'Connexion…' : 'Rejoindre la session'}
+              </button>
+              <Show when={joinActiveError()}>
+                <p class="text-red-400 text-sm mt-2">{joinActiveError()}</p>
+              </Show>
+            </section>
+          </Show>
         </Show>
 
       </main>

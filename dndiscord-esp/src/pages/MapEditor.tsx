@@ -1,8 +1,10 @@
 import { Component, onMount, onCleanup, createSignal, For, Show, createEffect, createMemo } from "solid-js";
 import { Portal } from "solid-js/web";
-import { useParams, useSearchParams, useNavigate } from "@solidjs/router";
-import { ChevronDown, ChevronRight } from "lucide-solid";
-import { saveMap, loadMap, generateMapId, loadDungeon, saveDungeon, exportMapToFile, importMapFromJson, type SavedMapData, type SavedCellData, type SavedAssetData, type SavedLightData, type DungeonData } from "../services/mapStorage";
+import { A, useParams, useSearchParams, useNavigate } from "@solidjs/router";
+import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-solid";
+import { saveMap, loadMap, generateMapId, loadDungeon, saveDungeon, exportMapToFile, importMapFromJson, cacheMap, type SavedMapData, type SavedCellData, type SavedAssetData, type SavedLightData, type DungeonData } from "../services/mapStorage";
+import { getApiUrl } from "../services/config";
+import { AuthService } from "../services/auth.service";
 import {
 	Engine,
 	Scene,
@@ -826,6 +828,11 @@ export default function MapEditor() {
 	
 	const [mapId, setMapId] = createSignal<string | null>(null);
 	const [mapName, setMapName] = createSignal<string>("Nouvelle Map");
+	/** 'saved' = DB OK | 'local' = DB inaccessible, sauvegardé localement | 'unsaved' = en attente */
+	const [saveStatus, setSaveStatus] = createSignal<'saved' | 'local' | 'unsaved' | null>(null);
+	let _saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+	/** Timestamp de création conservé en mémoire pour éviter de le recalculer à chaque save */
+	let _mapCreatedAt: number = Date.now();
 	const [dungeonData, setDungeonData] = createSignal<DungeonData | null>(null);
 	const [selectedAsset, setSelectedAsset] = createSignal<MapAsset | null>(null);
 	const [expandedCategories, setExpandedCategories] = createSignal<Set<string>>(new Set());
@@ -1341,35 +1348,53 @@ export default function MapEditor() {
 
 		try {
 			const cellsData = gridManager.exportData();
-
 			const spawnZonesRecord: Record<string, "ally" | "enemy" | "teleport"> = {};
-			spawnZones().forEach((type, key) => {
-				spawnZonesRecord[key] = type;
-			});
-
-			const existingMap = loadMap(mapId()!);
+			spawnZones().forEach((type, key) => { spawnZonesRecord[key] = type; });
 			const lightsList = placedLights();
+
 			const mapData: SavedMapData = {
 				id: mapId()!,
 				name,
-				createdAt: existingMap?.createdAt || Date.now(),
+				createdAt: _mapCreatedAt,
 				updatedAt: Date.now(),
 				cells: cellsData,
 				spawnZones: Object.keys(spawnZonesRecord).length > 0 ? spawnZonesRecord : undefined,
-				mapType: existingMap?.mapType,
-				dungeonId: existingMap?.dungeonId,
-				roomIndex: existingMap?.roomIndex,
+				// mapType / dungeonId / roomIndex : lus depuis le cache si disponible,
+				// sinon omis (les maps DB n'en ont pas besoin)
+				...(() => {
+					const cached = loadMap(mapId()!);
+					return {
+						mapType:   cached?.mapType,
+						dungeonId: cached?.dungeonId,
+						roomIndex: cached?.roomIndex,
+					};
+				})(),
 				lights: lightsList.length > 0 ? lightsList : undefined,
 				version: 2,
 			};
 
-			saveMap(mapData);
+			// Maps legacy (ID format "map_...") : pas de DB → localStorage direct
+			const isDbMap = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(mapData.id);
+			if (!isDbMap) {
+				saveMap(mapData);
+				if (dungeonData()) {
+					const d = dungeonData()!;
+					d.updatedAt = Date.now();
+					saveDungeon(d);
+				}
+				setSaveStatus('local');
+				return true;
+			}
+
+			// Maps DB (UUID) : DB en source de vérité, localStorage en cache du résultat
+			schedulePersist(mapData);
 
 			if (dungeonData()) {
 				const d = dungeonData()!;
 				d.updatedAt = Date.now();
 				saveDungeon(d);
 			}
+
 			return true;
 		} catch (error) {
 			console.error("Error saving map:", error);
@@ -1377,20 +1402,64 @@ export default function MapEditor() {
 		}
 	};
 
+	/**
+	 * Debounced API persist (UUID maps uniquement).
+	 * 1. PUT /api/maps/mine/:id
+	 * 2. Succès → cacheMap(mapData) pour que loadMap(uuid) fonctionne ensuite
+	 * 3. Échec (réseau / API down) → saveMap(mapData) en fallback localStorage
+	 */
+	const schedulePersist = (mapData: SavedMapData) => {
+		setSaveStatus('unsaved');
+		if (_saveDebounceTimer !== null) clearTimeout(_saveDebounceTimer);
+		_saveDebounceTimer = setTimeout(async () => {
+			_saveDebounceTimer = null;
+			const id = mapData.id;
+
+			try {
+				const token = AuthService.getToken();
+				if (!token) {
+					saveMap(mapData);   // fallback localStorage si pas de token
+					setSaveStatus('local');
+					return;
+				}
+				const res = await fetch(`${getApiUrl()}/api/maps/mine/${id}`, {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+					body: JSON.stringify({ name: mapData.name, data: JSON.stringify(mapData) }),
+				});
+				if (res.ok) {
+					// DB sauvegardée → mettre à jour le cache localStorage
+					cacheMap(mapData);
+					setSaveStatus('saved');
+				} else {
+					console.warn('[MapEditor] API save failed:', res.status);
+					saveMap(mapData);   // fallback localStorage
+					setSaveStatus('local');
+				}
+			} catch {
+				saveMap(mapData);       // fallback localStorage (réseau down)
+				setSaveStatus('local');
+			}
+		}, 1500);
+	};
+
 	const saveCurrentMap = () => {
 		if (!gridManager || !mapId()) {
-			alert("Erreur: Impossible de sauvegarder la map");
+			// alert() interdit dans Discord Activity (CSP) — utiliser saveStatus
+			setSaveStatus('local');
+			console.warn('[MapEditor] saveCurrentMap: gridManager or mapId missing');
 			return;
 		}
 		const name = mapName().trim();
 		if (!name) {
-			alert("Veuillez entrer un nom pour la map");
+			// Laisser le champ en état d'erreur plutôt que d'alerter
+			setSaveStatus('unsaved');
 			return;
 		}
 		if (saveMapSilent()) {
-			alert("Map saved successfully!");
+			setSaveStatus('saved');
 		} else {
-			alert("Failed to save map");
+			setSaveStatus('local');
 		}
 	};
 
@@ -1418,17 +1487,95 @@ export default function MapEditor() {
 		exportMapToFile(mapData);
 	};
 
-	/** Lit le fichier sélectionné, importe la carte et navigue vers le nouvel ID. */
+	/** Lit le fichier sélectionné, importe la carte et recharge le plateau. */
 	const handleImportFile = async (file: File) => {
 		setImportStatus(null);
 		try {
 			const text = await file.text();
-			const imported = importMapFromJson(text);
-			setImportStatus({ type: 'ok', message: `"${imported.name}" imported!` });
-			// Naviguer vers la carte importée après un court délai pour que le feedback soit visible
-			setTimeout(() => {
-				navigate(`/map-editor/${imported.id}`);
-			}, 1200);
+
+			// Parser et valider le JSON
+			let parsed: SavedMapData;
+			try {
+				parsed = JSON.parse(text) as SavedMapData;
+			} catch {
+				throw new Error('Fichier invalide : JSON malformé.');
+			}
+			if (!parsed || !Array.isArray(parsed.cells)) {
+				throw new Error('Format invalide : champ "cells" manquant ou incorrect.');
+			}
+
+			// Créer la carte en DB pour obtenir un UUID
+			let newId: string;
+			const token = AuthService.getToken();
+			const now = Date.now();
+			try {
+				const res = token ? await fetch(`${getApiUrl()}/api/maps/mine`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+					body: JSON.stringify({ name: parsed.name ?? 'Carte importée', data: '{}' }),
+				}) : null;
+				if (res?.ok) {
+					const created = await res.json();
+					newId = created.id;
+					_mapCreatedAt = created.createdAt ? new Date(created.createdAt).getTime() : now;
+				} else {
+					// Fallback : ID legacy si l'API est inaccessible
+					newId = generateMapId();
+					_mapCreatedAt = now;
+				}
+			} catch {
+				newId = generateMapId();
+				_mapCreatedAt = now;
+			}
+
+			// Construire la map avec le nouvel ID
+			const importedMap: SavedMapData = {
+				...parsed,
+				id:        newId,
+				name:      parsed.name ?? 'Carte importée',
+				createdAt: _mapCreatedAt,
+				updatedAt: now,
+				mapType:   parsed.mapType === 'dungeon-room' ? 'classique' : (parsed.mapType ?? 'classique'),
+				dungeonId: undefined,
+				roomIndex: undefined,
+			};
+
+			// Mettre à jour l'état du composant
+			setMapId(newId);
+			setMapName(importedMap.name);
+			navigate(`/map-editor/${newId}`, { replace: true });
+
+			// Recharger le plateau avec les données importées
+			await loadMapData(importedMap);
+
+			// Sauvegarder : DB si UUID, localStorage si fallback legacy
+			const isDbMap = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newId);
+			if (isDbMap) {
+				const t = AuthService.getToken();
+				if (t) {
+					const res = await fetch(`${getApiUrl()}/api/maps/mine/${newId}`, {
+						method: 'PUT',
+						headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+						body: JSON.stringify({ name: importedMap.name, data: JSON.stringify(importedMap) }),
+					});
+					if (res.ok) {
+						cacheMap(importedMap);
+						setSaveStatus('saved');
+					} else {
+						saveMap(importedMap);
+						setSaveStatus('local');
+					}
+				} else {
+					saveMap(importedMap);
+					setSaveStatus('local');
+				}
+			} else {
+				saveMap(importedMap);
+				setSaveStatus('local');
+			}
+
+			setImportStatus({ type: 'ok', message: `"${importedMap.name}" importée !` });
+			setTimeout(() => setImportStatus(null), 3000);
 		} catch (err: any) {
 			setImportStatus({ type: 'error', message: err?.message ?? 'Erreur inconnue.' });
 			setTimeout(() => setImportStatus(null), 4000);
@@ -1440,15 +1587,39 @@ export default function MapEditor() {
 
 		const paramMapId = params.mapId;
 		if (paramMapId === "new") {
-			const newId = generateMapId();
-			setMapId(newId);
+			// Tenter de créer la map en DB pour obtenir un UUID, fallback localStorage
+			(async () => {
+				try {
+					const token = AuthService.getToken();
+					const res = token ? await fetch(`${getApiUrl()}/api/maps/mine`, {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+						body: JSON.stringify({ name: 'Nouvelle Map', data: '{}' }),
+					}) : null;
+					if (res?.ok) {
+						const created = await res.json();
+						setMapId(created.id);
+						_mapCreatedAt = created.createdAt ? new Date(created.createdAt).getTime() : Date.now();
+						setSaveStatus('saved');
+						navigate(`/map-editor/${created.id}`, { replace: true });
+					} else {
+						setMapId(generateMapId());
+						setSaveStatus('local');
+					}
+				} catch {
+					setMapId(generateMapId());
+					setSaveStatus('local');
+				}
+			})();
 			setMapName("Nouvelle Map");
 		} else if (paramMapId) {
 			setMapId(paramMapId);
 			const savedMap = loadMap(paramMapId);
 			if (savedMap) {
 				setMapName(savedMap.name);
+				_mapCreatedAt = savedMap.createdAt;
 			}
+			setSaveStatus('saved');
 		}
 
 		const dId = getDungeonId();
@@ -3925,6 +4096,18 @@ export default function MapEditor() {
 					)}
 				</Show>
 
+				{/* Indicateur de sauvegarde */}
+				<Show when={saveStatus() !== null}>
+					<p class={`text-xs text-center mb-2 ${
+						saveStatus() === 'saved'   ? 'text-green-400' :
+						saveStatus() === 'local'   ? 'text-amber-400' :
+						'text-slate-500'
+					}`}>
+						{saveStatus() === 'saved'   ? '✓ Sauvegardé' :
+						 saveStatus() === 'local'   ? '⚠ Sauvegardé localement uniquement' :
+						 '● En cours…'}
+					</p>
+				</Show>
 				<div class="flex gap-2">
 					<button
 						class="flex-1 px-4 py-2 rounded-lg bg-red-600/80 hover:bg-red-600 text-white text-sm transition"

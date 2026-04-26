@@ -417,11 +417,8 @@ export function moveUnit(targetPos: GridPosition): boolean {
     // BoardGame displays a banner; the DM clicks to actually trigger the transition.
     if (destTile.type === TileType.EXIT && unit.team === Team.PLAYER) {
       if (isSessionMapActive()) {
-        const exitType: "next" | "end" = destTile.exitType ?? "next";
-        addCombatLog(
-          `${unit.name} a atteint la sortie — en attente du MJ…`,
-          "system",
-        );
+        const exitType: 'next' | 'end' = destTile.exitType ?? 'next';
+        addCombatLog(`${unit.name} a atteint la sortie — en attente du MJ…`, 'system');
         requestSessionExit({ unitName: unit.name, exitType });
       }
     }

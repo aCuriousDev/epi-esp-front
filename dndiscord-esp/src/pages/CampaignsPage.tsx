@@ -8,6 +8,7 @@ import {
   UserPlus,
   Users,
   Crown,
+  ArrowLeft,
 } from "lucide-solid";
 import { createSignal, For, Show, onMount, createEffect } from "solid-js";
 import {
@@ -15,12 +16,16 @@ import {
   CampaignStatus,
   CampaignVisibility,
 } from "../types/campaign";
-import { CampaignService, CampaignResponse } from "../services/campaign.service";
-import CampaignCard from "../components/CampaignCard";
-import PageMeta from "../layouts/PageMeta";
-import Button from "../components/common/Button";
+import {
+  CampaignService,
+  CampaignResponse,
+  displayDungeonMasterName,
+  CampaignListResponse,
+} from "../services/campaign.service";
 import SectionHeader from "../components/common/SectionHeader";
 import { t } from "../i18n";
+import { authStore } from "../stores/auth.store";
+import { getStatusColor, getStatusLabel } from "../types/campaign";
 
 /**
  * Map backend campaign status to frontend status
@@ -178,71 +183,38 @@ export default function CampaignsPage() {
   };
 
   return (
-    <>
-      <PageMeta
-        title={t("page.campaigns.title")}
-        rightSlot={
-          <Button href="/campaigns/create" size="sm">
-            {t("common.create")}
-          </Button>
-        }
-      />
+    <div>
+      <header class="relative z-20 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-game-dark/70 backdrop-blur-md">
+        <button
+          onClick={() => navigate("/")}
+          aria-label="Retour au menu"
+          class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded-lg px-2 py-1"
+        >
+          <ArrowLeft class="w-5 h-5" aria-hidden="true" />
+          <span class="hidden sm:inline">Retour au menu</span>
+        </button>
 
-      <div class="space-y-6">
-        <p class="font-old italic text-mid text-ds-body text-center max-w-2xl mx-auto">
-          {t("page.campaigns.subtitle")}
-        </p>
+        <h1 class="font-display text-xl text-white tracking-wide">Campagnes</h1>
 
-        <div class="flex flex-wrap items-center justify-center gap-2 mb-6">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
+        <div class="flex items-center gap-2">
+          <button
             onClick={openSearchModal}
-            leadingIcon={<Search class="w-3.5 h-3.5" aria-hidden="true" />}
+            class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded-lg px-2 py-1"
           >
-            Rechercher une campagne publique
-          </Button>
+            <Search class="w-3.5 h-3.5" aria-hidden="true" />
+            <span class="hidden sm:inline">Rechercher une campagne publique</span>
+          </button>
         </div>
+      </header>
 
-        {/* Join-by-code panel */}
-        <div class="max-w-[560px] mx-auto mb-9 p-[22px] rounded-ds-lg surface-1 shadow-soft">
-          <div class="flex items-center gap-2 mb-1.5">
-            <BookOpen size={16} class="text-gold-300" aria-hidden="true" />
-            <span class="font-display text-[14px] tracking-wide text-high">
-              {t("page.campaigns.joinTitle")}
-            </span>
-          </div>
-          <p class="text-[12px] text-low leading-relaxed mb-3.5">
-            {t("page.campaigns.joinHelp")}
+      <main class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-6">
+        <div class="text-center mb-8">
+          <h2 class="font-display text-4xl sm:text-5xl tracking-wide text-white drop-shadow-[0_2px_8px_rgba(139,92,246,0.5)]">
+            Mes Campagnes
+          </h2>
+          <p class="mt-3 text-slate-300 max-w-xl mx-auto">
+            Gérez vos aventures ou rejoignez une campagne existante via un code d'invitation.
           </p>
-          <div class="flex gap-2.5">
-            <input
-              id="invite-code-input"
-              type="text"
-              value={inviteCode()}
-              onInput={(e) => setInviteCode(e.currentTarget.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleJoin(); }}
-              disabled={joining()}
-              placeholder={t("page.campaigns.placeholder.code")}
-              aria-label={t("page.campaigns.joinTitle")}
-              autocomplete="off"
-              class="flex-1 px-3.5 py-2.5 bg-ink-600 border border-ink-500 rounded-ds-sm text-high font-mono text-[14px] tracking-[0.15em] text-center placeholder:text-low focus:border-gold-400/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/40 disabled:opacity-50 transition-colors"
-            />
-            <Button
-              onClick={handleJoin}
-              disabled={joining() || !inviteCode().trim()}
-              size="md"
-              leadingIcon={<Play size={12} />}
-            >
-              {t("page.campaigns.joinCta")}
-            </Button>
-          </div>
-          <Show when={joinError()}>
-            <p class="mt-2 text-red-400 text-[12px]" role="alert" aria-live="polite">
-              {joinError()}
-            </p>
-          </Show>
         </div>
 
         <Show when={error()}>
@@ -315,7 +287,7 @@ export default function CampaignsPage() {
             <NewCampaignCard onClick={() => navigate("/campaigns/create")} />
           </div>
         </Show>
-      </div>
+      </main>
 
       {/* ── Search campaigns modal ─────────────────────────────────────── */}
       <Show when={searchModalOpen()}>
@@ -442,41 +414,67 @@ export default function CampaignsPage() {
         </div>
       </Show>
 
-      <style jsx>{`
-        .campaigns-page {
-          background: linear-gradient(
-            135deg,
-            var(--ink-700) 0%,
-            var(--ink-800) 50%,
-            var(--ink-900) 100%
-          );
-        }
+    </div>
+  );
+}
 
-        @media (prefers-reduced-motion: no-preference) {
-          .campaign-card {
-            animation: cardFadeIn 0.4s ease-out;
-          }
+/**
+ * Campaign card — minimalist, shows only backend-persisted fields.
+ */
+function CampaignCard(props: { campaign: Campaign; onClick: () => void; index?: number }) {
+  const campaign = () => props.campaign;
 
-          @keyframes cardFadeIn {
-            from {
-              opacity: 0;
-              transform: translateY(12px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
+  return (
+    <button
+      onClick={props.onClick}
+      aria-label={`Ouvrir la campagne : ${campaign().title}`}
+      class="campaign-card group relative bg-ink-700 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-xl motion-safe:hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-purple-500/10 hover:border-purple-500/40 transition-all text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+    >
+      <div class="h-28 bg-gradient-to-br from-purple-800/50 via-indigo-800/40 to-violet-800/50 relative">
+        <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.08%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-50" aria-hidden="true" />
+        <div class="absolute top-3 right-3">
+          <span
+            class={`px-2.5 py-1 text-xs font-medium rounded-lg border backdrop-blur-sm ${getStatusColor(campaign().status)}`}
+            aria-label={`Statut : ${getStatusLabel(campaign().status)}`}
+          >
+            {getStatusLabel(campaign().status)}
+          </span>
+        </div>
+        <div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-ink-700 to-transparent" aria-hidden="true" />
+      </div>
 
-          .campaign-card:nth-child(1) { animation-delay: 0ms; }
-          .campaign-card:nth-child(2) { animation-delay: 80ms; }
-          .campaign-card:nth-child(3) { animation-delay: 160ms; }
-          .campaign-card:nth-child(4) { animation-delay: 240ms; }
-          .campaign-card:nth-child(5) { animation-delay: 320ms; }
-          .campaign-card:nth-child(6) { animation-delay: 400ms; }
-        }
-      `}</style>
-    </>
+      <div class="p-5 pt-2">
+        <h3 class="font-display text-lg text-white group-hover:text-purple-300 transition-colors mb-2 line-clamp-1">
+          {campaign().title}
+        </h3>
+
+        <Show when={campaign().description}>
+          <p class="text-sm text-slate-400 line-clamp-2 mb-3 min-h-[2.5rem]">
+            {campaign().description}
+          </p>
+        </Show>
+
+        <div class="flex items-center gap-3 text-sm text-slate-300 mb-3">
+          <div class="flex items-center gap-1.5">
+            <Users class="w-4 h-4 text-slate-400" aria-hidden="true" />
+            <span aria-label={`${campaign().currentPlayers} joueurs sur ${campaign().maxPlayers}`}>
+              {campaign().currentPlayers}/{campaign().maxPlayers}
+            </span>
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-white/10 flex items-center gap-2">
+          <Crown class="w-4 h-4 text-amber-400" aria-hidden="true" />
+          <span class="text-sm text-slate-500 sr-only">Maître du jeu</span>
+          <span class="text-sm text-slate-500" aria-hidden="true">MJ</span>
+          <span class="text-sm text-white font-medium">
+            {displayDungeonMasterName(campaign(), authStore.user()?.username)}
+          </span>
+        </div>
+      </div>
+
+      <div class="absolute inset-0 bg-gradient-to-t from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" aria-hidden="true" />
+    </button>
   );
 }
 

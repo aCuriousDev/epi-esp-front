@@ -1,8 +1,7 @@
 import { Component, createSignal, For, Show } from 'solid-js';
-import { CombatNode, CombatNodeData } from './nodes/CombatNode';
+import { CombatNode, CombatNodeData, type VillainPlacement } from './nodes/CombatNode';
 import { CampaignNode } from './nodes/CampaignNode';
 import { HARDCODED_MAPS, HARDCODED_VILLAINS } from './constants/gameData';
-import type { VillainPlacement } from './nodes/CombatNode';
 
 interface CombatNodeEditorProps {
   node: CombatNode;

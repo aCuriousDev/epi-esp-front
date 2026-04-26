@@ -20,6 +20,7 @@ import {
   Sparkles,
   Swords,
   X,
+  ChevronRight,
 } from "lucide-solid";
 import { isDm, getOtherPlayers, getCurrentSession } from "../../stores/session.store";
 import DiceRequestPanel from "./DiceRequestPanel";
@@ -85,7 +86,13 @@ const ENEMY_CATALOGUE: EnemyTemplate[] = [
 
 // ═══════════════════════════════════════════════════════════════════
 
-export const DmPanel: Component = () => {
+interface DmPanelProps {
+  /** Appelé quand le MJ veut passer au prochain nœud du scénario depuis le board.
+   *  Défini uniquement en mode fromSession=1. */
+  onNextNode?: () => void;
+}
+
+export const DmPanel: Component<DmPanelProps> = (props) => {
   const [isExpanded, setIsExpanded] = createSignal(true);
   // Default to "select": clicking a unit in this mode opens the inspect
   // panel via GameCanvas.handleUnitClick (BUG-D) without staging a drag or
@@ -371,6 +378,18 @@ export const DmPanel: Component = () => {
               Click a token to inspect it without moving it. Switch to
               <span class="text-purple-200/80"> Move</span> to teleport.
             </p>
+
+            {/* Prochain nœud de scénario — visible uniquement en mode session */}
+            <Show when={props.onNextNode}>
+              <button
+                onClick={props.onNextNode}
+                class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-indigo-600/80 to-purple-600/80 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-semibold border border-indigo-400/40 shadow-lg transition-colors cursor-pointer"
+                title="Revenir à la session et passer au bloc suivant du scénario"
+              >
+                <ChevronRight class="w-3.5 h-3.5" />
+                Prochain nœud scénario
+              </button>
+            </Show>
           </Show>
 
           {/* Status flash */}

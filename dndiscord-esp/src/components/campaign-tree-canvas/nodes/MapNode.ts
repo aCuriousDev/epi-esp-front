@@ -19,6 +19,9 @@ export interface MapNodeData extends BaseNodeData {
   type: 'map';
   title?: string;
   selectedMap?: string;
+  /** Nom lisible de la carte sélectionnée — stocké dans le nœud pour éviter
+   *  un lookup localStorage côté joueur (qui n'a pas la map en local). */
+  selectedMapName?: string;
   /** Point d'apparition des joueurs (coordonnées de la grille) */
   spawnPoint?: CellCoord;
   /** Cases de sortie de la carte (chaque case porte son type : suite ou fin) */
@@ -63,8 +66,10 @@ export class MapNode extends CampaignNode {
 
   // ── Setters ──────────────────────────────────────────────────────────────
 
-  public updateMap(mapId: string): void {
-    (this.nodeData as MapNodeData).selectedMap = mapId;
+  public updateMap(mapId: string, mapName?: string): void {
+    const d = this.nodeData as MapNodeData;
+    d.selectedMap = mapId;
+    if (mapName !== undefined) d.selectedMapName = mapName;
     this.setUserData(this.nodeData);
   }
 

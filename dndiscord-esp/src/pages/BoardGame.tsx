@@ -65,7 +65,8 @@ import {
   type ExitType,
 } from "../stores/session-map.store";
 import type { GameStartedPayload } from "../types/multiplayer";
-import { saveMap, type SavedMapData } from "../services/mapStorage";
+import { cacheMap, preloadBuiltin, ensureMapCached, type SavedMapData } from "../services/mapRepository";
+import { dmExitMap } from "../services/signalr/multiplayer.service";
 import { LogOut } from "lucide-solid";
 import { PartyChatPanel } from "../components/PartyChatPanel";
 import RollHistoryPanel from "../components/dm/RollHistoryPanel";
@@ -82,7 +83,14 @@ const BoardGame: Component = () => {
   // reads this flag before scheduling the next tick so orphaned timeouts
   // that fire after an unmount are no-ops.
   let mounted = true;
-  onCleanup(() => { mounted = false; });
+  onCleanup(() => {
+    mounted = false;
+    // Nettoyer pendingSessionExit pour que la prochaine carte parte d'un état vierge.
+    // Sans ce nettoyage, si un joueur quitte le board via CampaignMapExited
+    // (navigate direct, pas via backToSession), le signal reste non-null et
+    // la notification "en attente du MJ" réapparaît immédiatement sur la carte suivante.
+    clearPendingSessionExit();
+  });
 
   const [appPhase, setAppPhase] = createSignal<AppPhase>(
     AppPhase.MODE_SELECTION,
@@ -98,17 +106,22 @@ const BoardGame: Component = () => {
   onMount(async () => {
     const qs = new URLSearchParams(location.search);
 
-    // ── Demo mode ───────────────────────────────────────────────────────────
+    // ── Demo mode (tutoriel) ────────────────────────────────────────────────
     if (qs.get("demo") === "1") {
+      // Pré-charger la carte tutoriel dans le cache mémoire avant startGame.
+      // Si le fichier statique n'existe pas encore, preloadBuiltin échoue
+      // silencieusement et on retombe sur la grille procédurale par défaut.
+      await preloadBuiltin("__tutorial__");
+      const tutorialMapId = "__tutorial__";
       setSelectedMode(GameMode.COMBAT);
-      setSelectedMapId(null);
+      setSelectedMapId(tutorialMapId);
       setAppPhase(AppPhase.IN_GAME);
 
       let attempts = 0;
       const checkEngine = () => {
         if (++attempts > 50) return;
         if (isEngineReady()) {
-          setTimeout(() => startGame(GameMode.COMBAT, null), 150);
+          setTimeout(() => startGame(GameMode.COMBAT, tutorialMapId), 150);
         } else {
           if (mounted) setTimeout(checkEngine, 100);
         }
@@ -122,36 +135,34 @@ const BoardGame: Component = () => {
       const cfg = getSessionMapConfig();
       if (cfg) {
         console.log("[BoardGame] Session map mode — mapId:", cfg.mapId);
-        // Guard 1 — leave any active SignalR session before entering the
-        // story-tree FREE_ROAM flow. The two session concepts (campaign
-        // story-tree vs combat hub) coexist at the lobby layer; inside the
-        // board they must not overlap or the hub keeps broadcasting into a
-        // scene it no longer owns.
+        // La session SignalR reste active pendant la carte — on ne la quitte
+        // PAS ici. Appeler leaveSession() broadcastait SessionEnded à tous les
+        // joueurs et les renvoyait vers "/". La session est gardée en vie le
+        // temps du board et peut être reprise quand on revient à la session.
         (async () => {
-          // Snapshot unit assignments BEFORE leaveSession() — that call invokes
-          // clearSession() which wipes gameStartedPayload and its unitAssignments.
-          // Preserving them here lets the map spawn one character per lobby player
-          // even though the SignalR session is torn down for the story-tree board.
-          // Falls back to undefined (→ solo 3-char defaults) when no lobby was used.
-          const unitAssignments =
-            sessionState.gameStartedPayload?.unitAssignments?.length
-              ? sessionState.gameStartedPayload.unitAssignments
-              : undefined;
+          // ── Nettoyage de la carte précédente ─────────────────────────────────
+          // Évite que pendingSessionExit de la carte N-1 réapparaisse sur la
+          // carte N, et que les tiles/units de l'ancienne carte restent en mémoire.
+          clearPendingSessionExit();
+          await clearEngineState();
 
-          if (sessionState.session) {
-            try {
-              await leaveSession();
-            } catch (err) {
-              console.warn("[BoardGame] leaveSession on fromSession entry failed", err);
-              clearSession();
-            }
-          }
+          // En mode session, on passe toujours un tableau pour rester sur la
+          // branche multiplayer de initializeFreeRoam. Si undefined, cette
+          // branche spawne les 3 personnages solo par défaut (Sir Roland /
+          // Elara / Theron), ce qui est incorrect quand on vient d'une session
+          // avec de vrais joueurs. Un tableau vide = aucun spawn = correct.
+          const unitAssignments: import("../types/multiplayer").UnitAssignment[] =
+            sessionState.gameStartedPayload?.unitAssignments ?? [];
+
           setFromSession(true);
           setSelectedMode(GameMode.FREE_ROAM);
           setSelectedMapId(cfg.mapId);
           setAppPhase(AppPhase.IN_GAME);
 
-          setSessionExitCallback((exitType) => backToSession(exitType));
+          // autoAdvance=true pour les sorties 'next' : CampaignSessionPage
+          // avancera automatiquement au bloc suivant (et lancera la carte si besoin).
+          // Pour 'end' on ne s'avance pas — la session se termine.
+          setSessionExitCallback((exitType) => { backToSession(exitType, exitType === 'next').catch(console.error); });
 
           let attempts = 0;
           const checkEngine = () => {
@@ -234,22 +245,26 @@ const BoardGame: Component = () => {
     setSelectedMapId(mapId);
     setAppPhase(AppPhase.IN_GAME);
 
-    let attempts = 0;
-    const checkEngine = () => {
-      if (++attempts > 50) {
-        console.error("[BoardGame] Engine failed to initialize");
-        backToModeSelection();
-        return;
-      }
-      if (isEngineReady()) {
-        setTimeout(() => {
-          startGame(selectedMode()!, mapId);
-        }, 150);
-      } else {
-        if (mounted) setTimeout(checkEngine, 100);
-      }
-    };
-    checkEngine();
+    // Assure que la map est en cache localStorage avant que l'engine l'appelle
+    // en synchrone. Pour les maps DB (UUID), on fait un fetch API si nécessaire.
+    // Pour null/"default"/legacy, ensureMapCached est un no-op immédiat (<1ms).
+    (async () => {
+      await ensureMapCached(mapId);
+      let attempts = 0;
+      const checkEngine = () => {
+        if (++attempts > 50) {
+          console.error("[BoardGame] Engine failed to initialize");
+          backToModeSelection();
+          return;
+        }
+        if (isEngineReady()) {
+          setTimeout(() => startGame(selectedMode()!, mapId), 150);
+        } else {
+          if (mounted) setTimeout(checkEngine, 100);
+        }
+      };
+      checkEngine();
+    })();
   };
 
   const selectDungeon = (dungeonId: string) => {
@@ -291,6 +306,11 @@ const BoardGame: Component = () => {
     const qs = new URLSearchParams(location.search);
     if (qs.get("demo") === "1" || qs.get("fromSession") === "1") return;
     if (!m) return; // No param → keep legacy behavior (mode picker fallback).
+    // If the first onMount already moved us away from MODE_SELECTION (session
+    // detected, recovery, etc.), don't override that phase.  Without this guard
+    // the second onMount can race and call goToMultiplayer() on top of LOBBY /
+    // IN_GAME, sending players to RoomJoinScreen even though they already joined.
+    if (appPhase() !== AppPhase.MODE_SELECTION) return;
     switch (m) {
       case "exploration":
         startMode(GameMode.FREE_ROAM);
@@ -326,14 +346,16 @@ const BoardGame: Component = () => {
       payload,
     );
 
-    // Save received map data to localStorage so loadMap() finds it
+    // Cache received map data to localStorage so loadMap(payload.mapId) finds it.
+    // cacheMap with overrideId = payload.mapId ensures the blob is stored under
+    // the DB UUID key regardless of the id embedded inside the blob itself.
     if (payload.mapData) {
       try {
         const parsedMap: SavedMapData = JSON.parse(payload.mapData);
-        saveMap(parsedMap);
+        cacheMap(parsedMap, payload.mapId !== "default" ? payload.mapId : undefined);
         console.log(
-          "[BoardGame] Saved remote map data to localStorage:",
-          parsedMap.id,
+          "[BoardGame] Cached remote map data:",
+          payload.mapId,
         );
       } catch (e) {
         console.error("[BoardGame] Failed to parse received mapData:", e);
@@ -427,19 +449,24 @@ const BoardGame: Component = () => {
     clearSession();
   };
 
-  /** Return to the campaign session page after playing a session map. */
-  const backToSession = (exitType: 'next' | 'end' = 'next') => {
+  /** Return to the campaign session page after playing a session map.
+   *  @param exitType  'next' = advance to next node, 'end' = end session
+   *  @param autoAdvance  If true, CampaignSessionPage will call followPort automatically
+   *                      (used by DmPanel "Prochain nœud" button — skips manual click)
+   */
+  const backToSession = async (exitType: 'next' | 'end' = 'next', autoAdvance = false) => {
     const cfg = getSessionMapConfig();
     clearPendingSessionExit();
     clearSessionExitCallback();
     clearSessionMapConfig();
-    clearEngineState();
+    await clearEngineState(); // doit être awaité : ghost render loop sinon
     if (cfg) {
-      // resumeNodeId lets the session page restore the current position in the tree
-      // instead of always restarting from the first node.
-      navigate(
-        `/campaigns/${cfg.campaignId}/session?mapExit=${exitType}&resumeNodeId=${encodeURIComponent(cfg.nodeId)}`,
-      );
+      const params = new URLSearchParams({
+        mapExit: exitType,
+        resumeNodeId: cfg.nodeId,
+        ...(autoAdvance ? { autoAdvance: '1' } : {}),
+      });
+      navigate(`/campaigns/${cfg.campaignId}/session?${params.toString()}`);
     } else {
       backToModeSelection();
     }
@@ -687,7 +714,15 @@ const BoardGame: Component = () => {
       </Show>
       {/* DM Panel — only visible to the Dungeon Master */}
       <Show when={sessionState.session && isDm()}>
-        <DmPanel />
+        <DmPanel onNextNode={fromSession() ? () => {
+          const cfg = getSessionMapConfig();
+          if (cfg) {
+            // Diffuser aux joueurs pour qu'ils quittent aussi le board
+            dmExitMap(cfg.campaignId, cfg.nodeId).catch(() => {});
+          }
+          // autoAdvance=true : CampaignSessionPage appellera followPort automatiquement
+          backToSession('next', true).catch(console.error);
+        } : undefined} />
         <DmPlayerInspectPanel />
       </Show>
       {/* Board-side inventory + wallet for the current player (not DM), so they
@@ -961,6 +996,14 @@ const BoardGame: Component = () => {
                         const req = pendingSessionExit();
                         if (!req) return;
                         clearPendingSessionExit();
+                        // Notifier les joueurs pour qu'ils quittent aussi le board
+                        // (même comportement que le bouton "Prochain nœud" du DmPanel).
+                        if (req.exitType === 'next') {
+                          const exitCfg = getSessionMapConfig();
+                          if (exitCfg) {
+                            dmExitMap(exitCfg.campaignId, exitCfg.nodeId).catch(() => {});
+                          }
+                        }
                         triggerSessionExit(req.exitType);
                       }}
                       class={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${

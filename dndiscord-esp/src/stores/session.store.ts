@@ -12,6 +12,7 @@ import type {
   GameStartedPayload,
 } from "../types/multiplayer";
 import { PlayerRole } from "../types/multiplayer";
+import { signalRService } from "../services/signalr/SignalRService";
 import { clearDmToolsState } from "./dmTools.store";
 import { clearDiceRequests } from "./diceRequests.store";
 
@@ -205,6 +206,24 @@ export function isHost(): boolean {
   if (!hubId || !sessionState.session) return false;
   const me = sessionState.session.players.find((p) => p.userId === hubId);
   return me?.role === PlayerRole.DungeonMaster;
+}
+
+/**
+ * True when the SignalR hub still has a live session for the current user.
+ * The session store rehydrates from sessionStorage on app load, so a stale
+ * `sessionState.session` from a past game can outlive the actual hub
+ * connection — gate any DM-only UI surface that lives outside the game shell
+ * (CharacterView, roster, etc.) with `isHost() && isInActiveSession()`.
+ *
+ * Uses the live SignalR connection state as the source of truth — session
+ * data alone (which sessionStorage rehydrates) is not enough.
+ */
+export function isInActiveSession(): boolean {
+  return (
+    !!sessionState.session &&
+    !!sessionState.hubUserId &&
+    signalRService.isConnected
+  );
 }
 
 /** Alias explicite : vérifie si l'utilisateur courant est le Dungeon Master. */
