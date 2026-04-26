@@ -53,6 +53,11 @@ import { getApiUrl } from "../config";
 import { getDiscordContextIds } from "../discord";
 import { normalizePlayer, normalizeSession } from "./multiplayer.normalizers";
 import {
+  unwrapPayload,
+  dispatchProgressionPublic,
+  dispatchGoldGrantedPublic,
+} from "./multiplayer.eventHelpers";
+import {
   addPartyChatMessage,
   clearPartyChat,
   type PartyChatMessage,
@@ -99,28 +104,6 @@ const HUB = {
   dmGrantGold: "DmGrantGold",
   selectDefaultTemplate: "SelectDefaultTemplate",
 } as const;
-
-function unwrapPayload<T>(message: T | { payload?: T }): T {
-  return ((message as { payload?: T })?.payload ?? message) as T;
-}
-
-function dispatchProgressionPublic(payload: CharacterProgressedPublicPayload): void {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(
-    new CustomEvent<CharacterProgressedPublicPayload>("dm-character-progressed-public", {
-      detail: payload,
-    }),
-  );
-}
-
-function dispatchGoldGrantedPublic(payload: GoldGrantedPublicPayload): void {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(
-    new CustomEvent<GoldGrantedPublicPayload>("dm-gold-granted-public", {
-      detail: payload,
-    }),
-  );
-}
 
 async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
   const ctx = getDiscordContextIds();

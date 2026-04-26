@@ -9,9 +9,9 @@ import { getHubUserId } from "../../stores/session.store";
 import { playLevelUpSound, playNotificationSound } from "../../game/audio/SoundIntegration";
 import type {
   CharacterProgressedPublicPayload,
-  CurrencyType,
   GoldGrantedPublicPayload,
 } from "../../types/multiplayer";
+import { coinLabel } from "../../utils/coinLabel";
 
 type ToastKind = "progress" | "gold";
 
@@ -21,20 +21,6 @@ interface ToastEntry {
   title: string;
   body: string;
   accentClass: string;
-}
-
-function coinLabel(type: CurrencyType): string {
-  switch (type) {
-    case "cp": return "pièces de cuivre";
-    case "sp": return "pièces d'argent";
-    case "ep": return "pièces d'électrum";
-    case "gp": return "pièces d'or";
-    case "pp": return "pièces de platine";
-    default: {
-      const exhaustive: never = type;
-      return exhaustive;
-    }
-  }
 }
 
 export const ProgressionToast: Component = () => {
