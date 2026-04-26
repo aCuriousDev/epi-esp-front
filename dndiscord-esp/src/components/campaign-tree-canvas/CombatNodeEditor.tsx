@@ -32,6 +32,49 @@ const CombatNodeEditor: Component<CombatNodeEditorProps> = (props) => {
   const [title, setTitle] = createSignal<string>(data.title ?? '');
   const [selectedMap, setSelectedMap] = createSignal<string>(data.selectedMap ?? '');
   const [difficulty, setDifficulty] = createSignal<'easy' | 'medium' | 'hard'>(data.difficulty ?? 'medium');
+  const [villains, setVillains] = createSignal<VillainPlacement[]>(data.villains ?? []);
+
+  const persistVillains = (next: VillainPlacement[]) => {
+    setVillains(next);
+    props.node.updateVillains(next);
+    props.handleUpdateNode(props.node);
+  };
+
+  const handleAddVillain = () => {
+    const first = HARDCODED_VILLAINS[0];
+    if (!first) return;
+    persistVillains([
+      ...villains(),
+      { characterId: first.id, position: { x: 0, y: 0 } },
+    ]);
+  };
+
+  const handleRemoveVillain = (index: number) => {
+    persistVillains(villains().filter((_, i) => i !== index));
+  };
+
+  const handleVillainChange = (
+    index: number,
+    field: "characterId" | "x" | "y",
+    value: string,
+  ) => {
+    const v = [...villains()];
+    const row = v[index];
+    if (!row) return;
+    if (field === "characterId") {
+      v[index] = { ...row, characterId: value };
+    } else {
+      const n = parseInt(value, 10);
+      v[index] = {
+        ...row,
+        position: {
+          ...row.position,
+          [field]: Number.isNaN(n) ? 0 : n,
+        },
+      };
+    }
+    persistVillains(v);
+  };
 
   const handleUpdateTitle = (newTitle: string) => {
     setTitle(newTitle);
@@ -51,40 +94,6 @@ const CombatNodeEditor: Component<CombatNodeEditorProps> = (props) => {
   };
 
   const currentMap = () => HARDCODED_MAPS.find(m => m.id === selectedMap());
-
-  const [villains, setVillains] = createSignal<VillainPlacement[]>(
-    (data as CombatNodeData).villains ?? []
-  );
-
-  const handleAddVillain = () => {
-    const newVillain: VillainPlacement = {
-      characterId: HARDCODED_VILLAINS[0]?.id ?? 'goblin',
-      position: { x: 0, y: 0 },
-    };
-    const next = [...villains(), newVillain];
-    setVillains(next);
-    props.node.updateVillains(next);
-    props.handleUpdateNode(props.node);
-  };
-
-  const handleRemoveVillain = (index: number) => {
-    const next = villains().filter((_, i) => i !== index);
-    setVillains(next);
-    props.node.updateVillains(next);
-    props.handleUpdateNode(props.node);
-  };
-
-  const handleVillainChange = (index: number, field: 'characterId' | 'x' | 'y', value: string) => {
-    const next = villains().map((v, i) => {
-      if (i !== index) return v;
-      if (field === 'characterId') return { ...v, characterId: value };
-      if (field === 'x') return { ...v, position: { ...v.position, x: Number(value) } };
-      return { ...v, position: { ...v.position, y: Number(value) } };
-    });
-    setVillains(next);
-    props.node.updateVillains(next);
-    props.handleUpdateNode(props.node);
-  };
 
   return (
     <div>

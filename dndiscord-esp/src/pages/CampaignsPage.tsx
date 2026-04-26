@@ -1,14 +1,14 @@
 import { useNavigate } from "@solidjs/router";
 import {
-  ArrowLeft,
   Plus,
-  Users,
-  Crown,
   BookOpen,
-  LogIn,
+  Play,
   Search,
   X,
   UserPlus,
+  Users,
+  Crown,
+  ArrowLeft,
 } from "lucide-solid";
 import { createSignal, For, Show, onMount, createEffect } from "solid-js";
 import {
@@ -199,19 +199,10 @@ export default function CampaignsPage() {
         <div class="flex items-center gap-2">
           <button
             onClick={openSearchModal}
-            aria-label="Rechercher une campagne publique"
-            class="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/15 text-white rounded-xl transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+            class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded-lg px-2 py-1"
           >
-            <Search class="w-4 h-4" aria-hidden="true" />
-            <span class="hidden sm:inline">Rechercher</span>
-          </button>
-          <button
-            onClick={() => navigate("/campaigns/create")}
-            aria-label="Créer une nouvelle campagne"
-            class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all shadow-lg shadow-purple-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-          >
-            <Plus class="w-4 h-4" aria-hidden="true" />
-            <span class="hidden sm:inline">Créer</span>
+            <Search class="w-3.5 h-3.5" aria-hidden="true" />
+            <span class="hidden sm:inline">Rechercher une campagne publique</span>
           </button>
         </div>
       </header>

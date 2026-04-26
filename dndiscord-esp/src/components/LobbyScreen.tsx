@@ -331,7 +331,9 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                           ? "bg-white/5 border-white/5 cursor-pointer hover:bg-white/10 hover:border-white/15 focus:outline-none focus:ring-2 focus:ring-amber-400/40"
                           : "bg-white/5 border-white/5"
                       }`}
-                      title={clickable ? "View character sheet" : undefined}
+                      title={
+                        clickable ? "Voir la fiche personnage" : undefined
+                      }
                     >
                       <div class="flex items-center gap-3">
                         <div

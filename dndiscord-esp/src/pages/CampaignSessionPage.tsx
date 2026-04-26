@@ -1,6 +1,6 @@
 import { Component, createSignal, createEffect, onMount, onCleanup, Show, For, Switch, Match } from 'solid-js';
 import { useNavigate, useParams } from '@solidjs/router';
-import { ArrowLeft, BookOpen, Map as MapIcon, ChevronRight, Loader2, Play, Package, X } from 'lucide-solid';
+import { ArrowLeft, BookOpen, Map as MapIcon, Sword, ChevronRight, Loader2, Play, Package, X } from 'lucide-solid';
 import { writeLastCampaignId } from '../hooks/useLastCampaign';
 import {
   CampaignService,
@@ -40,7 +40,8 @@ interface MapData     {
   exitCells?:  { x: number; z: number; exitType?: 'next' | 'end' }[];
   trapCells?:  { x: number; z: number }[];
 }
-type NodeData = SceneData | ChoicesData | MapData;
+interface CombatData  { id: string; type: 'combat'; title: string; }
+type NodeData = SceneData | ChoicesData | MapData | CombatData;
 
 interface TreeConn { source: { node: string; port: string }; target: { node: string; port: string }; }
 interface ParsedTree {
@@ -147,11 +148,8 @@ const CampaignSessionPage: Component = () => {
   const [votingLocked, setVotingLocked] = createSignal(false);
   const myUserId = () => authStore.user()?.id ?? '';
 
-  onMount(() => {
-    writeLastCampaignId(params.id);
-  });
-
   onMount(async () => {
+    writeLastCampaignId(params.id);
     // ── SignalR subscription for votes ──────────────────────────────────────
     try {
       if (!signalRService.isConnected) {
@@ -900,6 +898,18 @@ const CampaignSessionPage: Component = () => {
                       </div>
                     );
                   })()}
+                </Match>
+
+                {/* COMBAT */}
+                <Match when={currentNode()?.type === 'combat'}>
+                  <div>
+                    <div class="flex items-center gap-3 mb-6">
+                      <div class="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center"><Sword class="w-5 h-5 text-red-400" /></div>
+                      <div><p class="text-xs text-red-400 uppercase tracking-wider font-medium">Combat</p><h2 class="text-2xl font-display text-white">{(currentNode() as CombatData)?.title || 'Combat'}</h2></div>
+                    </div>
+                    <div class="bg-red-500/5 border border-red-500/20 rounded-2xl p-6 mb-8 text-center"><Sword class="w-12 h-12 text-red-400/40 mx-auto mb-3" /><p class="text-slate-400 italic">Gestion du combat à venir.</p></div>
+                    <div class="flex justify-end"><Show when={hasPort('output')} fallback={<EndBanner />}><button onClick={() => followPort('output')} class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-semibold rounded-xl transition-all">Continuer <ChevronRight class="w-5 h-5" /></button></Show></div>
+                  </div>
                 </Match>
 
                 {/* MAP */}
