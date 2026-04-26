@@ -17,9 +17,19 @@ function safeBack(navigate: ReturnType<typeof useNavigate>) {
 
 function useViewportWidth(): () => number {
   const [w, setW] = createSignal(typeof window !== "undefined" ? window.innerWidth : 1024);
-  const handler = () => setW(window.innerWidth);
+  let raf: number | null = null;
+  const handler = () => {
+    if (raf !== null) return;
+    raf = requestAnimationFrame(() => {
+      raf = null;
+      setW(window.innerWidth);
+    });
+  };
   onMount(() => window.addEventListener("resize", handler));
-  onCleanup(() => window.removeEventListener("resize", handler));
+  onCleanup(() => {
+    window.removeEventListener("resize", handler);
+    if (raf !== null) cancelAnimationFrame(raf);
+  });
   return w;
 }
 
