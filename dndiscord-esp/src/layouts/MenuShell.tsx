@@ -21,9 +21,11 @@ export const MenuShell: Component<RouteSectionProps> = (props) => {
         <TutorialOverlay />
         <CookieConsent />
         <div class="relative isolate min-h-[100dvh] flex flex-col bg-ink-900 text-high overflow-hidden">
-          {/* Ambient atmosphere — behind everything */}
-          <div class="pointer-events-none absolute inset-0 -z-10 vignette-radial" aria-hidden="true" />
-          <AmbientParticles count={22} />
+          {/* Atmosphere — vignette + starfield + particles, balanced intensity */}
+          <div class="atmosphere" aria-hidden="true">
+            <div class="parchment-overlay" />
+            <AmbientParticles />
+          </div>
 
           <Show when={!isPip()}>
             <TopBar />
