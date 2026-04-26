@@ -162,7 +162,7 @@ const BoardGame: Component = () => {
           // autoAdvance=true pour les sorties 'next' : CampaignSessionPage
           // avancera automatiquement au bloc suivant (et lancera la carte si besoin).
           // Pour 'end' on ne s'avance pas — la session se termine.
-          setSessionExitCallback((exitType) => backToSession(exitType, exitType === 'next'));
+          setSessionExitCallback((exitType) => { backToSession(exitType, exitType === 'next').catch(console.error); });
 
           let attempts = 0;
           const checkEngine = () => {
@@ -444,12 +444,12 @@ const BoardGame: Component = () => {
    *  @param autoAdvance  If true, CampaignSessionPage will call followPort automatically
    *                      (used by DmPanel "Prochain nœud" button — skips manual click)
    */
-  const backToSession = (exitType: 'next' | 'end' = 'next', autoAdvance = false) => {
+  const backToSession = async (exitType: 'next' | 'end' = 'next', autoAdvance = false) => {
     const cfg = getSessionMapConfig();
     clearPendingSessionExit();
     clearSessionExitCallback();
     clearSessionMapConfig();
-    clearEngineState();
+    await clearEngineState(); // doit être awaité : ghost render loop sinon
     if (cfg) {
       const params = new URLSearchParams({
         mapExit: exitType,
@@ -711,7 +711,7 @@ const BoardGame: Component = () => {
             dmExitMap(cfg.campaignId, cfg.nodeId).catch(() => {});
           }
           // autoAdvance=true : CampaignSessionPage appellera followPort automatiquement
-          backToSession('next', true);
+          backToSession('next', true).catch(console.error);
         } : undefined} />
         <DmPlayerInspectPanel />
       </Show>

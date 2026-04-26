@@ -1445,18 +1445,21 @@ export default function MapEditor() {
 
 	const saveCurrentMap = () => {
 		if (!gridManager || !mapId()) {
-			alert("Erreur: Impossible de sauvegarder la map");
+			// alert() interdit dans Discord Activity (CSP) — utiliser saveStatus
+			setSaveStatus('local');
+			console.warn('[MapEditor] saveCurrentMap: gridManager or mapId missing');
 			return;
 		}
 		const name = mapName().trim();
 		if (!name) {
-			alert("Veuillez entrer un nom pour la map");
+			// Laisser le champ en état d'erreur plutôt que d'alerter
+			setSaveStatus('unsaved');
 			return;
 		}
 		if (saveMapSilent()) {
-			alert("Map saved successfully!");
+			setSaveStatus('saved');
 		} else {
-			alert("Failed to save map");
+			setSaveStatus('local');
 		}
 	};
 

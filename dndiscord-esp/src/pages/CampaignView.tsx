@@ -228,7 +228,7 @@ export default function CampaignView() {
    *  directement le board — pas besoin d'arbre de scénario. */
   const handleLaunchSession = async () => {
     const c = campaign();
-    if (!c || !isOwner()) return;
+    if (!c || !isOwner() || launchingSession()) return;
     setLaunchError(null);
     setLaunchingSession(true);
     try {
@@ -342,7 +342,7 @@ export default function CampaignView() {
 
   const handleLaunchCampaignSession = async () => {
     const c = campaign();
-    if (!c || !isOwner()) return;
+    if (!c || !isOwner() || launchingSession()) return;
     setLaunchError(null);
     setLaunchingSession(true);
     try {

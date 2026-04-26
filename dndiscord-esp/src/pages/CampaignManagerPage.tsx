@@ -299,10 +299,18 @@ const CampaignManager: Component = () => {
     const canvas = canvasRef();
     if (!canvas || isSaving()) return;
 
+    // Refuser une sauvegarde avec un canvas vide — évite d'écraser la
+    // définition serveur si le canvas n'est pas encore initialisé.
+    const exported = canvas.exportData();
+    if (!exported) {
+      showToast('Impossible de sauvegarder : le canvas n\'est pas prêt.', 'error');
+      return;
+    }
+
     setIsSaving(true);
     try {
       const response = await CampaignService.editCampaignManager(campaign()!.id, {
-        campaignTreeDefinition: canvas.exportData() ?? '',
+        campaignTreeDefinition: exported,
       });
       const mappedCampaign = mapCampaignResponse(response);
       setCampaign(mappedCampaign);
