@@ -421,7 +421,7 @@ export default function CampaignsPage() {
 /**
  * Campaign card — minimalist, shows only backend-persisted fields.
  */
-function CampaignCard(props: { campaign: Campaign; onClick: () => void }) {
+function CampaignCard(props: { campaign: Campaign; onClick: () => void; index?: number }) {
   const campaign = () => props.campaign;
 
   return (
