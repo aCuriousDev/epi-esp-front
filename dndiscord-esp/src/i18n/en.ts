@@ -294,6 +294,24 @@ export const en = {
   "editCampaign.subtitle": "Update the main information",
   "editCampaign.info": "Information",
   "editCampaign.saving": "Saving…",
+
+  // CreateCharacter
+  "createCharacter.nameLabel": "Character name",
+  "createCharacter.namePlaceholder": "E.g. Aria Shadowblade",
+  "createCharacter.classLabel": "Class",
+  "createCharacter.classHint": "Your class determines your primary combat and magic abilities.",
+  "createCharacter.raceLabel": "Race",
+  "createCharacter.raceHint": "Choose your hero's race.",
+  "createCharacter.classSummary": "Class summary",
+  "createCharacter.stat.primary": "Primary ability",
+  "createCharacter.stat.hitDie": "Hit die",
+  "createCharacter.stat.saves": "Saving throws",
+  "createCharacter.stat.proficiencies": "Proficiencies",
+  "createCharacter.stat.casterType": "Spellcasting",
+  "createCharacter.stat.feature": "Feature",
+  "createCharacter.submit": "Create character",
+  "createCharacter.submitting": "Creating…",
+  "createCharacter.errorNameRequired": "Please enter a name for your character.",
 } as const;
 
 export type EnKey = keyof typeof en;

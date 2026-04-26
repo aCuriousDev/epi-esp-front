@@ -1,7 +1,9 @@
 import { createMemo, createSignal, Show } from "solid-js";
-import { A, useNavigate } from "@solidjs/router";
+import { useNavigate } from "@solidjs/router";
 import { CharacterService, CharacterClass, CharacterRace } from "../services/character.service";
 import { isPlayableClass } from "../types/character";
+import PageMeta from "../layouts/PageMeta";
+import { t } from "../i18n";
 
 type DnDClass = {
 	key: string;
@@ -204,7 +206,7 @@ export default function CreateCharacter() {
 
 	const handleCreate = async () => {
 		if (!name().trim()) {
-			setError("Veuillez entrer un nom pour votre personnage.");
+			setError(t("createCharacter.errorNameRequired"));
 			return;
 		}
 
@@ -239,37 +241,27 @@ export default function CreateCharacter() {
 	};
 
 	return (
-		<div class="relative min-h-full w-full overflow-y-auto bg-brand-gradient">
-			<div class="vignette absolute inset-0 pointer-events-none"></div>
+		<div class="relative min-h-full w-full overflow-y-auto">
+			<PageMeta title={t("page.createCharacter.title")} />
 			<main class="relative z-10 mx-auto min-h-full max-w-6xl p-6 sm:p-10">
-				<header class="mb-6 flex items-center justify-between">
-					<div>
-						<h2 class="font-display text-3xl sm:text-4xl text-white title-shine">
-							Créer un personnage
-						</h2>
-					</div>
-					<A href="/characters" class="settings-btn" aria-label="Retour">
-						←
-					</A>
-				</header>
 
 				<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 					{/* Colonne gauche: formulaire */}
 					<section class="lg:col-span-2 space-y-6">
 						<div class="rounded-xl bg-black/25 ring-1 ring-white/10 p-5 shadow-soft">
 							<label class="block text-sm text-slate-300 mb-2">
-								Nom du personnage
+								{t("createCharacter.nameLabel")}
 							</label>
 							<input
 								class="w-full bg-black/30 border border-white/10 rounded-md p-2"
-								placeholder="Ex: Aria Sombrelame"
+								placeholder={t("createCharacter.namePlaceholder")}
 								value={name()}
 								onInput={(e) => setName(e.currentTarget.value)}
 							/>
 						</div>
 
 						<div class="rounded-xl bg-black/25 ring-1 ring-white/10 p-5 shadow-soft">
-							<label class="block text-sm text-slate-300 mb-3">Classe</label>
+							<label class="block text-sm text-slate-300 mb-3">{t("createCharacter.classLabel")}</label>
 							<div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
 								{PLAYABLE_CLASS_LIST.map((c) => (
 									<button
@@ -289,13 +281,12 @@ export default function CreateCharacter() {
 								))}
 							</div>
 							<p class="mt-2 text-xs text-slate-400">
-								La classe détermine vos aptitudes principales en combat et en
-								magie.
+								{t("createCharacter.classHint")}
 							</p>
 						</div>
 
 						<div class="rounded-xl bg-black/25 ring-1 ring-white/10 p-5 shadow-soft">
-							<label class="block text-sm text-slate-300 mb-3">Race</label>
+							<label class="block text-sm text-slate-300 mb-3">{t("createCharacter.raceLabel")}</label>
 							<div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
 								{RACES.map((r) => (
 									<button
@@ -312,31 +303,31 @@ export default function CreateCharacter() {
 								))}
 							</div>
 							<p class="mt-2 text-xs text-slate-400">
-								Choisissez la race de votre héros.
+								{t("createCharacter.raceHint")}
 							</p>
 						</div>
 
 						<section class="rounded-xl bg-black/30 ring-1 ring-white/10 p-5 shadow-soft">
-							<h3 class="font-display text-xl mb-3">Résumé de la classe</h3>
+							<h3 class="font-display text-xl mb-3">{t("createCharacter.classSummary")}</h3>
 							{/* <p class="text-slate-200 text-sm"><span class="text-slate-100 font-medium">{klass().name}</span></p> */}
 							<div class="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 text-sm">
 								<div class="rounded-md bg-black/30 border border-white/10 p-2">
-									Caractéristique principale: {klass().primary}
+									{t("createCharacter.stat.primary")}: {klass().primary}
 								</div>
 								<div class="rounded-md bg-black/30 border border-white/10 p-2">
-									Dé de vie: {klass().hitDie}
+									{t("createCharacter.stat.hitDie")}: {klass().hitDie}
 								</div>
 								<div class="rounded-md bg-black/30 border border-white/10 p-2">
-									Jets de sauvegarde: {klass().saves}
+									{t("createCharacter.stat.saves")}: {klass().saves}
 								</div>
 								<div class="rounded-md bg-black/30 border border-white/10 p-2">
-									Maîtrises: {klass().proficiencies}
+									{t("createCharacter.stat.proficiencies")}: {klass().proficiencies}
 								</div>
 								<div class="rounded-md bg-black/30 border border-white/10 p-2">
-									Lanceur de sorts: {klass().casterType}
+									{t("createCharacter.stat.casterType")}: {klass().casterType}
 								</div>
 								<div class="rounded-md bg-black/30 border border-white/10 p-2">
-									Particularité: {klass().feature}
+									{t("createCharacter.stat.feature")}: {klass().feature}
 								</div>
 							</div>
 						</section>
@@ -355,9 +346,9 @@ export default function CreateCharacter() {
 								onClick={handleCreate}
 								disabled={isSubmitting() || !name().trim()}
 							>
-								<Show when={isSubmitting()} fallback="Créer le personnage">
+								<Show when={isSubmitting()} fallback={t("createCharacter.submit")}>
 									<div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-									Création...
+									{t("createCharacter.submitting")}
 								</Show>
 							</button>
 						</div>
