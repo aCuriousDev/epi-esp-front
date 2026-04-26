@@ -1,7 +1,7 @@
 import { Component, onMount, onCleanup, createSignal, For, Show, createEffect, createMemo } from "solid-js";
 import { Portal } from "solid-js/web";
-import { A, useParams, useSearchParams, useNavigate } from "@solidjs/router";
-import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-solid";
+import { useParams, useSearchParams, useNavigate } from "@solidjs/router";
+import { ChevronDown, ChevronRight } from "lucide-solid";
 import { saveMap, loadMap, generateMapId, loadDungeon, saveDungeon, exportMapToFile, importMapFromJson, type SavedMapData, type SavedCellData, type SavedAssetData, type SavedLightData, type DungeonData } from "../services/mapStorage";
 import {
 	Engine,
@@ -3237,11 +3237,6 @@ export default function MapEditor() {
 					{currentModeLabel().text}
 				</div>
 			</div>
-
-			{/* Back button */}
-			<A href="/map-editor" class="settings-btn" aria-label="Retour">
-				<ArrowLeft class="settings-icon h-5 w-5" />
-			</A>
 
 			{/* Dungeon room header */}
 			<Show when={dungeonData() && getRoomIndex() !== undefined}>
