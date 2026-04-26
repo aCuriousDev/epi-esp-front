@@ -6,20 +6,24 @@ import { t } from "../../i18n";
 export const CreateGroup: Component = () => {
   return (
     <section aria-labelledby="home-create-heading">
-      <h2 id="home-create-heading" class="font-display text-ds-h2 text-high tracking-wide mb-4 text-center">
-        {t("home.section.create")}
-      </h2>
-      <div class="mb-4 mx-auto h-px w-24 bg-gradient-to-r from-transparent via-gold-400/60 to-transparent" />
+      <header class="flex items-center gap-3 mb-4">
+        <h2 id="home-create-heading" class="font-display text-ds-micro tracking-[0.2em] uppercase text-gold-300">
+          {t("home.section.create")}
+        </h2>
+        <div class="flex-1 h-px bg-gradient-to-r from-gold-400/30 via-gold-400/15 to-transparent" />
+      </header>
       <div class="grid gap-3 sm:gap-4" style={{ "grid-template-columns": "repeat(auto-fit, minmax(160px, 1fr))" }}>
         <MenuCard
           href="/campaigns/create"
           title={t("home.card.createCampaign")}
+          subtitle={t("home.card.createCampaign.subtitle")}
           icon={<ScrollText size={28} aria-hidden="true" />}
           tone="ghost"
         />
         <MenuCard
           href="/map-editor"
           title={t("home.card.mapEditor")}
+          subtitle={t("home.card.mapEditor.subtitle")}
           icon={<Map size={28} aria-hidden="true" />}
           tone="ghost"
         />

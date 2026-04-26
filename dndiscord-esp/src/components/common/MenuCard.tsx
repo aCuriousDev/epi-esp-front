@@ -27,10 +27,10 @@ export const MenuCard: Component<MenuCardProps> = (props) => {
     <A
       href={props.href}
       class={
-        "group relative flex flex-col items-center justify-center gap-2 " +
+        "group relative flex flex-col items-stretch text-left " +
         "min-h-[120px] p-4 rounded-ds-lg border " +
         "transition-all duration-ds-sm ease-grimoire " +
-        "focus-ring-gold text-center " +
+        "focus-ring-gold " +
         toneClasses[tone()] + " " +
         (props.class ?? "")
       }
@@ -47,17 +47,17 @@ export const MenuCard: Component<MenuCardProps> = (props) => {
       </Show>
 
       <Show when={props.icon}>
-        <span class="text-gold-300 transition-transform duration-ds-sm group-hover:-translate-y-1 group-hover:scale-110">
+        <span class="bg-plum-700/20 border border-gold-400/15 rounded-ds-md w-10 h-10 flex items-center justify-center text-gold-300">
           {props.icon}
         </span>
       </Show>
 
-      <span class="font-display font-semibold text-ds-h3 text-high tracking-wide">
+      <span class="mt-3 font-display text-ds-h3 text-high tracking-wide">
         {props.title}
       </span>
 
       <Show when={props.subtitle}>
-        <span class="text-ds-small text-mid">{props.subtitle}</span>
+        <span class="mt-1 text-ds-micro text-gold-300/70 tracking-wide">{props.subtitle}</span>
       </Show>
     </A>
   );

@@ -1,5 +1,5 @@
 import { Component, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
-import { ChevronLeft, Settings as SettingsIcon, BookOpen } from "lucide-solid";
+import { ChevronLeft, Settings as SettingsIcon, BookOpen, Hexagon } from "lucide-solid";
 import { A, useLocation, useNavigate } from "@solidjs/router";
 import { UserMenu } from "../auth";
 import OverflowMenu from "./OverflowMenu";
@@ -43,7 +43,8 @@ export const TopBar: Component = () => {
     if (meta().hideBackButton) return false;
     return location.pathname !== "/";
   });
-  const showTitle = createMemo(() => width() >= 360);
+  const isRoot = createMemo(() => location.pathname === "/");
+  const showTitle = createMemo(() => width() >= 360 && !isRoot());
   const collapseIcons = createMemo(() => width() < 400);
 
   return (
@@ -52,16 +53,25 @@ export const TopBar: Component = () => {
       style={{ "padding-top": "max(0.5rem, env(safe-area-inset-top))" }}
     >
       <div class="mx-auto max-w-[1280px] flex items-center gap-2 px-3 sm:px-4 lg:px-6 h-12 sm:h-14">
-        <Show when={showBack()} fallback={<div class="w-10" aria-hidden="true" />}>
-          <button
-            type="button"
-            onClick={() => safeBack(navigate)}
-            aria-label={t("topbar.back")}
-            class="p-2 rounded-ds-md text-mid hover:text-high hover:bg-ink-700 transition-colors duration-ds-xs focus-ring-gold"
+        <div class="flex items-center gap-1">
+          <Show when={showBack()}>
+            <button
+              type="button"
+              onClick={() => safeBack(navigate)}
+              aria-label={t("topbar.back")}
+              class="p-2 rounded-ds-md text-mid hover:text-high hover:bg-ink-700 transition-colors duration-ds-xs focus-ring-gold"
+            >
+              <ChevronLeft size={20} aria-hidden="true" />
+            </button>
+          </Show>
+          <A
+            href="/"
+            class="flex items-center gap-2 px-2 py-1 rounded-ds-md hover:bg-ink-700 transition-colors duration-ds-xs focus-ring-gold"
           >
-            <ChevronLeft size={20} aria-hidden="true" />
-          </button>
-        </Show>
+            <Hexagon size={18} class="text-gold-300" aria-hidden="true" />
+            <span class="font-display font-semibold text-ds-body text-high tracking-wide">DnDiscord</span>
+          </A>
+        </div>
 
         <Show when={showTitle()} fallback={<div class="flex-1" />}>
           <h1 class="flex-1 text-center font-display text-ds-h3 text-high tracking-wide truncate">

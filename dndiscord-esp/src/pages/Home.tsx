@@ -1,13 +1,17 @@
-import { Component, createResource } from "solid-js";
+import { Component, Show, createResource } from "solid-js";
 import AnimatedD20 from "../components/common/AnimatedD20";
 import ResumeHero from "../components/home/ResumeHero";
+import WelcomeBanner from "../components/home/WelcomeBanner";
 import PlayGroup from "../components/home/PlayGroup";
 import CreateGroup from "../components/home/CreateGroup";
 import { CampaignService } from "../services/campaign.service";
 import { CharacterService } from "../services/character.service";
+import { useLastCampaignId } from "../hooks/useLastCampaign";
 import { t } from "../i18n";
 
 export const Home: Component = () => {
+  const lastId = useLastCampaignId();
+
   const [campaignsCount] = createResource(async () => {
     try {
       const res = await CampaignService.listCampaigns();
@@ -46,7 +50,9 @@ export const Home: Component = () => {
         <p class="text-mid text-ds-body max-w-xl">{t("home.subtitle")}</p>
       </header>
 
-      <ResumeHero />
+      <Show when={lastId()} fallback={<WelcomeBanner />}>
+        <ResumeHero />
+      </Show>
       <PlayGroup charactersCount={charactersCount()} campaignsCount={campaignsCount()} />
       <CreateGroup />
     </div>
