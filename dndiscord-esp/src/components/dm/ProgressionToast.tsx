@@ -2,16 +2,29 @@
  * ProgressionToast — Recipient and public toasts for DM-driven XP/level-up and gold grants.
  */
 
-import { Component, For, Show, createEffect, createSignal, on, onCleanup } from "solid-js";
+import { Component, For, Show, createEffect, createSignal, on, onCleanup, onMount } from "solid-js";
 import { Sparkles, Coins } from "lucide-solid";
 import { dmToolsState } from "../../stores/dmTools.store";
 import { getHubUserId } from "../../stores/session.store";
 import { playLevelUpSound, playNotificationSound } from "../../game/audio/SoundIntegration";
 import type {
   CharacterProgressedPublicPayload,
+  CurrencyType,
+  GoldGrantedPayload,
   GoldGrantedPublicPayload,
 } from "../../types/multiplayer";
 import { coinLabel } from "../../utils/coinLabel";
+
+function totalForCurrency(evt: GoldGrantedPayload): { count: number; key: CurrencyType } {
+  switch (evt.currencyType) {
+    case "cp": return { count: evt.copperPieces, key: "cp" };
+    case "sp": return { count: evt.silverPieces, key: "sp" };
+    case "ep": return { count: evt.electrumPieces, key: "ep" };
+    case "gp": return { count: evt.goldPieces, key: "gp" };
+    case "pp": return { count: evt.platinumPieces, key: "pp" };
+    default: return { count: evt.goldPieces, key: "gp" };
+  }
+}
 
 type ToastKind = "progress" | "gold";
 
@@ -83,10 +96,11 @@ export const ProgressionToast: Component = () => {
           const amount = evt.amount;
           const currency = coinLabel(evt.currencyType);
           const sign = amount > 0 ? "+" : "";
+          const total = totalForCurrency(evt);
           pushToast({
             kind: "gold",
             title: amount >= 0 ? "Bourse modifiée" : "Monnaie retirée",
-            body: `${sign}${amount} ${currency} (total ${evt.goldPieces} gp)`,
+            body: `${sign}${amount} ${currency} (total ${total.count} ${total.key})`,
             accentClass: "from-amber-950/95 to-orange-900/90 border-orange-500/30",
           });
           playNotificationSound();
@@ -118,8 +132,10 @@ export const ProgressionToast: Component = () => {
     playNotificationSound();
   };
 
-  window.addEventListener("dm-character-progressed-public", handlePublicProgression);
-  window.addEventListener("dm-gold-granted-public", handlePublicGold);
+  onMount(() => {
+    window.addEventListener("dm-character-progressed-public", handlePublicProgression);
+    window.addEventListener("dm-gold-granted-public", handlePublicGold);
+  });
 
   onCleanup(() => {
     window.removeEventListener("dm-character-progressed-public", handlePublicProgression);
