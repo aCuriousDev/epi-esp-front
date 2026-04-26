@@ -312,6 +312,28 @@ export const en = {
   "createCharacter.submit": "Create character",
   "createCharacter.submitting": "Creating…",
   "createCharacter.errorNameRequired": "Please enter a name for your character.",
+
+  // CharacterView
+  "characterView.level": "Level",
+  "characterView.levelUp": "Level up",
+  "characterView.hitPoints": "Hit points",
+  "characterView.removeHp": "Remove 1 HP",
+  "characterView.addHp": "Add 1 HP",
+  "characterView.armorClass": "Armor class",
+  "characterView.speed": "Speed",
+  "characterView.abilities": "Ability scores",
+  "characterView.tabs.traits": "Traits",
+  "characterView.tabs.inventory": "Inventory",
+  "characterView.classTraits": "Class traits",
+  "characterView.racialTraits": "Racial traits",
+  "characterView.launchCombat": "Launch into combat",
+  "characterView.backToCharacters": "Back to characters",
+  "characterView.ability.strength": "Strength",
+  "characterView.ability.dexterity": "Dexterity",
+  "characterView.ability.constitution": "Constitution",
+  "characterView.ability.intelligence": "Intelligence",
+  "characterView.ability.wisdom": "Wisdom",
+  "characterView.ability.charisma": "Charisma",
 } as const;
 
 export type EnKey = keyof typeof en;
