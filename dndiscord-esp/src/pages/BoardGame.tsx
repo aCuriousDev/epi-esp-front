@@ -857,7 +857,7 @@ const BoardGame: Component = () => {
                 EnemyHotbar self-gates on isDm + ENEMY_TURN so the DM can
                 actively play whichever enemy's turn is active when the
                 auto-AI toggle is off. */}
-            <UnitInfoCardTop />
+            <UnitInfoCardTop mode={getCurrentMode()} />
             <PlayerHotbar />
             <EnemyHotbar />
 

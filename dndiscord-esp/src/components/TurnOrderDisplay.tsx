@@ -1,9 +1,14 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, For, Show, onCleanup } from 'solid-js';
 import { Skull } from 'lucide-solid';
 import { gameState, units } from '../game';
 import { Team } from '../types';
 import { getUnitIcon } from './common/icons';
 import { getHubUserId } from '../stores/session.store';
+import {
+  pinnedUnitId,
+  setHoveredUnitId,
+  togglePinnedUnit,
+} from '../stores/unitPreview.store';
 
 /**
  * Compact turn-order strip.
@@ -19,6 +24,10 @@ import { getHubUserId } from '../stores/session.store';
  */
 export const TurnOrderDisplay: Component = () => {
   const myUserId = () => getHubUserId();
+
+  // Hover preview is transient: ensure leaving the strip wipes it even if a
+  // tile's onMouseLeave was missed (drag, fast cursor exit, etc.).
+  onCleanup(() => setHoveredUnitId(null));
 
   return (
     <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-game-darker/85 border border-white/10 shadow-lg backdrop-blur-sm">
@@ -57,9 +66,18 @@ export const TurnOrderDisplay: Component = () => {
               return 'ring-2 ring-emerald-400 ring-offset-1 ring-offset-game-darker shadow-[0_0_10px_rgba(52,211,153,0.55)] animate-[pulse_1.8s_ease-in-out_infinite]';
             };
 
+            const isPinned = () => pinnedUnitId() === unitId;
             return (
-              <div
-                class={`relative flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center transition-all ${tileBg} ${ringClass()}`}
+              <button
+                type="button"
+                onMouseEnter={() => setHoveredUnitId(unitId)}
+                onMouseLeave={() => setHoveredUnitId(null)}
+                onFocus={() => setHoveredUnitId(unitId)}
+                onBlur={() => setHoveredUnitId(null)}
+                onClick={() => togglePinnedUnit(unitId)}
+                class={`relative flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center transition-all cursor-pointer hover:scale-110 focus:outline-none ${tileBg} ${ringClass()} ${
+                  isPinned() ? 'outline outline-2 outline-amber-300/80' : ''
+                }`}
                 title={`${unit.name} (Init ${unit.stats.initiative})${
                   !unit.isAlive ? ' — vaincu·e' : isCurrent() ? ' — en cours' : ''
                 }`}
@@ -70,7 +88,7 @@ export const TurnOrderDisplay: Component = () => {
                     <Skull class="w-4 h-4 text-red-300/90 drop-shadow-[0_0_2px_rgba(0,0,0,0.9)]" />
                   </div>
                 </Show>
-              </div>
+              </button>
             );
           }}
         </For>
