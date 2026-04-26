@@ -69,6 +69,14 @@ export const en = {
   "page.practice.dungeon.subtitle": "Linked rooms · portals · progression",
   "page.practice.multiplayer.title": "Multiplayer Sandbox",
   "page.practice.multiplayer.subtitle": "2–6 players · room code · real-time sync",
+
+  // Practice flavor
+  "page.practice.exploration.flavor": "Wander the map without consequence.",
+  "page.practice.combat.flavor": "Drill your initiative and your spells.",
+  "page.practice.dungeon.flavor": "Crawl deeper, room by room.",
+  "page.practice.multiplayer.flavor": "Bring friends, no campaign required.",
+  "page.practice.sectionEyebrow": "Sandbox modes",
+  "page.practice.sectionCounter": "4 modes",
   "page.rules.title": "Rules",
   "page.profile.title": "Profile",
   "page.settings.title": "Settings",

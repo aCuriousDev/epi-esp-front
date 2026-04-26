@@ -51,6 +51,9 @@
 	--status-crit:    #F4C542;
 	--status-fumble:  #9F1239;
 
+	--grimoire-ease: cubic-bezier(0.4, 0, 0.2, 1);
+	--radius-lg: 14px;
+
 	--discord-blurple:      #5865F2;
 	--discord-blurple-dark: #4752C4;
 
@@ -140,9 +143,51 @@ body {
    MENU COMPONENTS - Brand Theme
    ======================================== */
 
-/* Container card */
+/* ============================================================
+   MENU CARD — used by Practice cards and any bespoke card need.
+   The base is the existing surface; this layer adds the
+   gold-rune-sweep hover + lift.
+   ============================================================ */
 .menu-card {
-	@apply w-full max-w-xl p-0;
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), transparent 1px),
+    linear-gradient(180deg, var(--ink-800), var(--ink-700));
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-lg, 14px);
+  padding: 24px 20px 22px;
+  transition:
+    transform 200ms var(--grimoire-ease),
+    box-shadow 200ms var(--grimoire-ease),
+    border-color 200ms var(--grimoire-ease);
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+}
+.menu-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 30%, rgba(244,197,66,0.08) 50%, transparent 70%);
+  background-size: 250% 100%;
+  background-position: 100% 0;
+  transition: background-position 600ms var(--grimoire-ease);
+  pointer-events: none;
+  border-radius: inherit;
+}
+.menu-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(244,197,66,0.45);
+  box-shadow:
+    0 14px 36px rgba(0,0,0,0.5),
+    0 0 0 1px rgba(244,197,66,0.15),
+    0 0 24px rgba(244,197,66,0.12);
+}
+.menu-card:hover::before { background-position: 0 0; }
+.menu-card:focus-visible {
+  outline: none;
+  border-color: var(--gold-300);
+  box-shadow: 0 0 0 3px rgba(244,197,66,0.25), 0 14px 36px rgba(0,0,0,0.5);
 }
 
 /* Row wrapper: left badge + right button */

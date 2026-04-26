@@ -1,6 +1,7 @@
-import { Component, Show } from "solid-js";
+import { Component } from "solid-js";
 import { Swords, Users, Sparkles } from "lucide-solid";
 import MenuCard from "../common/MenuCard";
+import SectionHeader from "../common/SectionHeader";
 import { t } from "../../i18n";
 
 interface PlayGroupProps {
@@ -15,19 +16,11 @@ const badge = (n?: number) => (n && n > 0 ? n : undefined);
 export const PlayGroup: Component<PlayGroupProps> = (props) => {
   return (
     <section aria-labelledby="home-play-heading">
-      <header class="flex items-center gap-3 mb-4">
-        <h2 id="home-play-heading" class="font-display text-ds-micro tracking-[0.2em] uppercase text-gold-300">
-          {t("home.section.play")}
-        </h2>
-        <div class="flex-1 h-px bg-gradient-to-r from-gold-400/30 via-gold-400/15 to-transparent" />
-        <Show when={props.counter}>
-          <span
-            class="font-mono text-[11px] text-low tracking-[0.1em] shrink-0"
-          >
-            {props.counter}
-          </span>
-        </Show>
-      </header>
+      <SectionHeader
+        id="home-play-heading"
+        eyebrow={t("home.section.play")}
+        counter={props.counter}
+      />
       <div class="grid gap-3 sm:gap-4" style={{ "grid-template-columns": "repeat(auto-fit, minmax(160px, 1fr))" }}>
         <MenuCard
           href="/campaigns"
