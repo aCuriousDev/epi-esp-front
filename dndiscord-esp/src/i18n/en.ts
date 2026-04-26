@@ -66,6 +66,16 @@ export const en = {
   // Game shell
   "game.exit": "Exit",
   "game.exitToCampaign": "Back to campaign",
+
+  // Campaign card
+  "campaign.card.dm": "Dungeon Master",
+  "campaign.card.dmAbbr": "DM",
+
+  // Campaigns page — inline strings
+  "page.campaigns.loadError": "Failed to load campaigns. Please try again.",
+  "page.campaigns.joinCodeRequired": "Enter an invitation code.",
+  "page.campaigns.joinError": "Invalid code or campaign not found.",
+  "page.campaigns.emptyHint": "Create one or join one with an invitation code above.",
 } as const;
 
 export type EnKey = keyof typeof en;
