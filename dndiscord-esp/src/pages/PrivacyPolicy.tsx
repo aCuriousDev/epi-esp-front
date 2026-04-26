@@ -29,25 +29,25 @@ type Section = {
   icon: () => JSX.Element;
 };
 
-// Les icônes sont des factories pour être instanciées au rendu (dans un
-// createRoot), et non au niveau module — sinon Solid logge « computations
-// created outside a `createRoot` or `render` will never be disposed ».
+// Icons are factories to be instantiated at render time (inside a
+// createRoot), not at module level — otherwise Solid logs "computations
+// created outside a `createRoot` or `render` will never be disposed".
 const SECTIONS: Section[] = [
-  { id: "tldr", title: "En bref", icon: () => <Sparkles class="w-4 h-4" /> },
-  { id: "intro", title: "Préambule", icon: () => <ShieldCheck class="w-4 h-4" /> },
-  { id: "controller", title: "Responsable", icon: () => <UserCheck class="w-4 h-4" /> },
-  { id: "definitions", title: "Définitions", icon: () => <BookOpen class="w-4 h-4" /> },
-  { id: "data", title: "Données collectées", icon: () => <Database class="w-4 h-4" /> },
-  { id: "purposes", title: "Finalités & bases légales", icon: () => <ShieldCheck class="w-4 h-4" /> },
-  { id: "recipients", title: "Destinataires", icon: () => <Users class="w-4 h-4" /> },
-  { id: "transfers", title: "Transferts hors UE", icon: () => <Globe class="w-4 h-4" /> },
-  { id: "retention", title: "Durée de conservation", icon: () => <Clock class="w-4 h-4" /> },
-  { id: "rights", title: "Vos droits", icon: () => <UserCheck class="w-4 h-4" /> },
-  { id: "cookies", title: "Stockage local / cookies", icon: () => <Cookie class="w-4 h-4" /> },
-  { id: "security", title: "Sécurité", icon: () => <Lock class="w-4 h-4" /> },
-  { id: "minors", title: "Mineurs", icon: () => <AlertTriangle class="w-4 h-4" /> },
-  { id: "changes", title: "Modifications", icon: () => <Clock class="w-4 h-4" /> },
-  { id: "contact", title: "Contact & réclamation", icon: () => <Mail class="w-4 h-4" /> },
+  { id: "tldr", title: "At a glance", icon: () => <Sparkles class="w-4 h-4" /> },
+  { id: "intro", title: "Preamble", icon: () => <ShieldCheck class="w-4 h-4" /> },
+  { id: "controller", title: "Controller", icon: () => <UserCheck class="w-4 h-4" /> },
+  { id: "definitions", title: "Definitions", icon: () => <BookOpen class="w-4 h-4" /> },
+  { id: "data", title: "Data we collect", icon: () => <Database class="w-4 h-4" /> },
+  { id: "purposes", title: "Purposes & legal bases", icon: () => <ShieldCheck class="w-4 h-4" /> },
+  { id: "recipients", title: "Recipients", icon: () => <Users class="w-4 h-4" /> },
+  { id: "transfers", title: "Transfers outside the EU", icon: () => <Globe class="w-4 h-4" /> },
+  { id: "retention", title: "Retention period", icon: () => <Clock class="w-4 h-4" /> },
+  { id: "rights", title: "Your rights", icon: () => <UserCheck class="w-4 h-4" /> },
+  { id: "cookies", title: "Local storage / cookies", icon: () => <Cookie class="w-4 h-4" /> },
+  { id: "security", title: "Security", icon: () => <Lock class="w-4 h-4" /> },
+  { id: "minors", title: "Minors", icon: () => <AlertTriangle class="w-4 h-4" /> },
+  { id: "changes", title: "Changes", icon: () => <Clock class="w-4 h-4" /> },
+  { id: "contact", title: "Contact & complaints", icon: () => <Mail class="w-4 h-4" /> },
 ];
 
 export default function PrivacyPolicy() {
@@ -74,11 +74,11 @@ export default function PrivacyPolicy() {
           class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
         >
           <ArrowLeft class="w-5 h-5" />
-          <span class="hidden sm:inline">Retour</span>
+          <span class="hidden sm:inline">Back</span>
         </button>
         <h1 class="font-display text-xl text-white tracking-wide flex items-center gap-2">
           <ShieldCheck class="w-5 h-5 text-purple-400" />
-          Politique de confidentialité
+          Privacy policy
         </h1>
         <div class="w-24" />
       </header>
@@ -87,11 +87,11 @@ export default function PrivacyPolicy() {
         {/* Table of contents */}
         <aside class="lg:sticky lg:top-24 lg:self-start">
           <nav
-            aria-label="Sommaire"
+            aria-label="Contents"
             class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-3"
           >
             <p class="text-xs uppercase tracking-wider text-slate-400 px-2 py-1">
-              Sommaire
+              Contents
             </p>
             <ul class="space-y-0.5">
               <For each={SECTIONS}>
@@ -113,76 +113,74 @@ export default function PrivacyPolicy() {
 
         {/* Content */}
         <article class="space-y-8">
-          {/* En bref — résumé utilisateur-friendly */}
+          {/* At a glance — user-friendly summary */}
           <section
             id="tldr"
             class="scroll-mt-24 rounded-2xl border border-purple-500/30 bg-purple-500/5 p-6 space-y-3"
           >
             <h2 class="font-display text-lg sm:text-xl text-white flex items-center gap-2">
               <Sparkles class="w-5 h-5 text-purple-300" />
-              En bref
+              At a glance
             </h2>
             <ul class="text-slate-200 text-sm leading-relaxed space-y-1.5 list-disc list-inside">
               <li>
-                Nous n'utilisons <strong>aucun cookie publicitaire</strong>,
-                aucun traceur tiers, aucun outil d'analyse externe.
+                We use <strong>no advertising cookies</strong>,
+                no third-party trackers, and no external analytics tools.
               </li>
               <li>
-                Vos données sont hébergées <strong>dans l'Union européenne</strong>{" "}
-                (datacenter Hostinger en Allemagne).
+                Your data is hosted <strong>within the European Union</strong>{" "}
+                (Hostinger datacenter in Germany).
               </li>
               <li>
-                Nous collectons uniquement ce qui est nécessaire pour faire
-                fonctionner le jeu : profil Discord (identifiant, pseudo,
-                avatar, email), personnages, campagnes, messages en jeu.
+                We only collect what is necessary to run the game: your Discord
+                profile (ID, username, avatar, email), characters, campaigns,
+                and in-game messages.
               </li>
               <li>
-                Vous pouvez <strong>exporter</strong> ou <strong>supprimer</strong>{" "}
-                toutes vos données en un clic depuis les paramètres du compte.
+                You can <strong>export</strong> or <strong>delete</strong>{" "}
+                all your data in one click from your account settings.
               </li>
               <li>
-                Vous avez tous les droits RGPD (accès, rectification,
-                effacement, portabilité, opposition) et pouvez saisir la CNIL.
+                You have all GDPR rights (access, rectification, erasure,
+                portability, objection) and may file a complaint with the CNIL.
               </li>
             </ul>
           </section>
 
-          <Card id="intro" title="1. Préambule" icon={<ShieldCheck class="w-5 h-5 text-purple-400" />}>
+          <Card id="intro" title="1. Preamble" icon={<ShieldCheck class="w-5 h-5 text-purple-400" />}>
             <p>
-              DnDiscord est une application de jeu de rôle (Donjons & Dragons) qui
-              s'exécute en tant qu'<strong>Activité Discord</strong> (iframe intégrée
-              dans le client Discord). Elle permet à des joueurs de créer des
-              personnages, des campagnes et de mener des parties multijoueurs en
-              temps réel.
+              DnDiscord is a role-playing game application (Dungeons & Dragons) that
+              runs as a <strong>Discord Activity</strong> (an iframe embedded
+              inside the Discord client). It allows players to create characters,
+              campaigns, and run real-time multiplayer sessions.
             </p>
             <p>
-              La présente politique décrit la manière dont nous collectons,
-              utilisons, partageons et protégeons vos données personnelles, en
-              conformité avec le{" "}
+              This policy describes how we collect, use, share, and protect your
+              personal data, in compliance with the{" "}
               <strong>
                 Règlement (UE) 2016/679 (RGPD)
               </strong>
-              , la loi française « Informatique et Libertés » modifiée, la{" "}
-              <strong>Directive ePrivacy</strong> (via les recommandations CNIL),
-              ainsi qu'avec la{" "}
+              , the French "Informatique et Libertés" law as amended, the{" "}
+              <strong>Directive ePrivacy</strong> (as implemented through CNIL
+              guidelines), as well as the{" "}
               <ExternalLink href={EXT.discordDevPolicy}>
                 Discord Developer Policy
               </ExternalLink>{" "}
-              et la{" "}
+              and the{" "}
               <ExternalLink href={EXT.discordPrivacy}>
-                Politique de confidentialité de Discord
+                Discord Privacy Policy
               </ExternalLink>
               .
             </p>
           </Card>
 
-          <Card id="controller" title="2. Responsable du traitement" icon={<UserCheck class="w-5 h-5 text-purple-400" />}>
+          <Card id="controller" title="2. Data controller" icon={<UserCheck class="w-5 h-5 text-purple-400" />}>
             <dl class="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-x-4 gap-y-2 text-sm">
-              <dt class="text-slate-400">Dénomination</dt>
+              <dt class="text-slate-400">Name</dt>
               <dd class="text-white">{ORG.name}</dd>
-              <dt class="text-slate-400">Forme juridique</dt>
+              <dt class="text-slate-400">Legal form</dt>
               <dd class="text-white">{ORG.legalForm}</dd>
-              <dt class="text-slate-400">Capital social</dt>
+              <dt class="text-slate-400">Share capital</dt>
               <dd class="text-white">{ORG.capital}</dd>
               <dt class="text-slate-400">SIREN / SIRET</dt>
               <dd class="text-white">
@@ -190,576 +188,561 @@ export default function PrivacyPolicy() {
               </dd>
               <dt class="text-slate-400">RCS</dt>
               <dd class="text-white">{ORG.rcs}</dd>
-              <dt class="text-slate-400">Code APE</dt>
+              <dt class="text-slate-400">APE code</dt>
               <dd class="text-white">{ORG.codeApe}</dd>
-              <dt class="text-slate-400">Siège social</dt>
+              <dt class="text-slate-400">Registered office</dt>
               <dd class="text-white">{ORG.address}</dd>
-              <dt class="text-slate-400">Site</dt>
+              <dt class="text-slate-400">Website</dt>
               <dd class="text-white">
                 <ExternalLink href={ORG.website}>{ORG.website}</ExternalLink>
               </dd>
-              <dt class="text-slate-400">Représentant légal</dt>
+              <dt class="text-slate-400">Legal representative</dt>
               <dd class="text-white">{ORG.legalRepresentative}</dd>
-              <dt class="text-slate-400">Contact général</dt>
+              <dt class="text-slate-400">General contact</dt>
               <dd class="text-white">
                 <a href={`mailto:${ORG.contactEmail}`} class="text-purple-300 hover:text-purple-200 underline">
                   {ORG.contactEmail}
                 </a>
               </dd>
-              <dt class="text-slate-400">Contact RGPD</dt>
+              <dt class="text-slate-400">GDPR contact</dt>
               <dd class="text-white">
                 <a href={`mailto:${ORG.privacyEmail}`} class="text-purple-300 hover:text-purple-200 underline">
                   {ORG.privacyEmail}
                 </a>
               </dd>
-              <dt class="text-slate-400">Délégué à la protection des données</dt>
+              <dt class="text-slate-400">Data protection officer</dt>
               <dd class="text-white">
                 <a href={`mailto:${ORG.dpoEmail}`} class="text-purple-300 hover:text-purple-200 underline">
                   {ORG.dpoEmail}
                 </a>
               </dd>
-              <dt class="text-slate-400">Hébergeur</dt>
+              <dt class="text-slate-400">Hosting provider</dt>
               <dd class="text-white">
                 {HOSTING.provider} — {HOSTING.serverLocation}
               </dd>
             </dl>
           </Card>
 
-          <Card id="definitions" title="3. Définitions" icon={<BookOpen class="w-5 h-5 text-purple-400" />}>
+          <Card id="definitions" title="3. Definitions" icon={<BookOpen class="w-5 h-5 text-purple-400" />}>
             <p>
-              Au sens de l'article 4 du RGPD et pour faciliter la lecture de
-              la présente politique, les termes suivants ont la
-              signification indiquée ci-dessous.
+              Within the meaning of art. 4 of the GDPR and to facilitate reading
+              of this policy, the following terms have the meanings set out below.
             </p>
             <dl class="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-x-4 gap-y-3 text-sm">
-              <dt class="text-purple-200 font-medium">Donnée à caractère personnel</dt>
+              <dt class="text-purple-200 font-medium">Personal data</dt>
               <dd class="text-slate-300">
-                Toute information se rapportant à une personne physique
-                identifiée ou identifiable (pseudonyme, identifiant, adresse
-                IP, personnage associé à un compte…).
+                Any information relating to an identified or identifiable natural
+                person (username, identifier, IP address, character linked to an
+                account, etc.).
               </dd>
-              <dt class="text-purple-200 font-medium">Traitement</dt>
+              <dt class="text-purple-200 font-medium">Processing</dt>
               <dd class="text-slate-300">
-                Toute opération effectuée sur des données personnelles :
-                collecte, stockage, modification, transmission, effacement,
-                etc.
+                Any operation performed on personal data: collection, storage,
+                modification, transmission, erasure, etc.
               </dd>
-              <dt class="text-purple-200 font-medium">Responsable de traitement</dt>
+              <dt class="text-purple-200 font-medium">Data controller</dt>
               <dd class="text-slate-300">
-                L'entité qui détermine les finalités et les moyens du
-                traitement. Pour DnDiscord, il s'agit de{" "}
+                The entity that determines the purposes and means of processing.
+                For DnDiscord, this is{" "}
                 <strong>{ORG.name}</strong>.
               </dd>
-              <dt class="text-purple-200 font-medium">Sous-traitant</dt>
+              <dt class="text-purple-200 font-medium">Processor</dt>
               <dd class="text-slate-300">
-                Personne morale qui traite des données pour le compte du
-                responsable de traitement (ex. Hostinger pour l'hébergement).
+                A legal entity that processes data on behalf of the data
+                controller (e.g. Hostinger for hosting).
               </dd>
-              <dt class="text-purple-200 font-medium">Utilisateur</dt>
+              <dt class="text-purple-200 font-medium">User</dt>
               <dd class="text-slate-300">
-                Toute personne physique utilisant le service DnDiscord,
-                authentifiée via Discord OAuth.
+                Any natural person using the DnDiscord service,
+                authenticated via Discord OAuth.
               </dd>
-              <dt class="text-purple-200 font-medium">Consentement</dt>
+              <dt class="text-purple-200 font-medium">Consent</dt>
               <dd class="text-slate-300">
-                Manifestation de volonté libre, spécifique, éclairée et
-                univoque par laquelle vous acceptez un traitement de vos
-                données (art. 4.11 RGPD).
+                A freely given, specific, informed, and unambiguous indication
+                of your agreement to the processing of your data (art. 4.11 RGPD).
               </dd>
               <dt class="text-purple-200 font-medium">DPO</dt>
               <dd class="text-slate-300">
-                Délégué à la Protection des Données : point de contact
-                dédié aux questions RGPD ({ORG.dpoEmail}).
+                Data Protection Officer: dedicated point of contact for
+                GDPR-related questions ({ORG.dpoEmail}).
               </dd>
-              <dt class="text-purple-200 font-medium">Activité Discord</dt>
+              <dt class="text-purple-200 font-medium">Discord Activity</dt>
               <dd class="text-slate-300">
-                Application web intégrée comme iframe dans le client
-                Discord via l'Embedded App SDK.
+                A web application embedded as an iframe inside the Discord
+                client via the Embedded App SDK.
               </dd>
             </dl>
           </Card>
 
-          <Card id="data" title="4. Données que nous collectons" icon={<Database class="w-5 h-5 text-purple-400" />}>
-            <h3 class="text-white font-semibold text-base mt-2">4.1 Données reçues de Discord via OAuth 2.0</h3>
+          <Card id="data" title="4. Data we collect" icon={<Database class="w-5 h-5 text-purple-400" />}>
+            <h3 class="text-white font-semibold text-base mt-2">4.1 Data received from Discord via OAuth 2.0</h3>
             <p>
-              Lorsque vous vous connectez via Discord, l'application demande votre
-              accord pour accéder aux <em>scopes</em> suivants :{" "}
+              When you sign in via Discord, the application requests your
+              authorisation to access the following <em>scopes</em>:{" "}
               <code class="px-1.5 py-0.5 bg-black/40 rounded text-xs">identify</code>,{" "}
               <code class="px-1.5 py-0.5 bg-black/40 rounded text-xs">email</code>,{" "}
               <code class="px-1.5 py-0.5 bg-black/40 rounded text-xs">guilds</code>. Discord
-              nous transmet alors :
+              then transmits to us:
             </p>
             <ul class="list-disc list-inside text-slate-300 space-y-1 text-sm">
-              <li>votre identifiant numérique Discord (« Discord ID ») ;</li>
-              <li>votre pseudonyme (username) et discriminant ;</li>
-              <li>l'adresse e-mail associée à votre compte Discord ;</li>
-              <li>le hash de votre avatar (pour afficher votre image de profil) ;</li>
+              <li>your numeric Discord identifier ("Discord ID");</li>
+              <li>your username and discriminator;</li>
+              <li>the email address associated with your Discord account;</li>
+              <li>your avatar hash (to display your profile picture);</li>
               <li>
-                la liste des serveurs (guilds) dont vous êtes membre{" "}
-                <em>pour afficher les invitations de campagnes</em> — aucune donnée
-                interne de ces serveurs n'est lue.
+                the list of servers (guilds) you are a member of{" "}
+                <em>to display campaign invitations</em> — no internal data
+                from those servers is read.
               </li>
             </ul>
 
-            <h3 class="text-white font-semibold text-base mt-5">4.2 Données que vous créez dans le service</h3>
+            <h3 class="text-white font-semibold text-base mt-5">4.2 Data you create in the service</h3>
             <ul class="list-disc list-inside text-slate-300 space-y-1 text-sm">
               <li>
-                <strong>Personnages</strong> : nom, race, classe, niveau,
-                caractéristiques (force, dextérité…), points de vie, inventaire,
-                biographie.
+                <strong>Characters</strong>: name, race, class, level,
+                ability scores (strength, dexterity, etc.), hit points,
+                inventory, biography.
               </li>
               <li>
-                <strong>Campagnes</strong> : nom, description, arbre narratif,
-                paramètres, code d'invitation, liste des membres.
+                <strong>Campaigns</strong>: name, description, narrative tree,
+                settings, invitation code, member list.
               </li>
               <li>
-                <strong>Cartes</strong> de jeu que vous dessinez dans l'éditeur.
+                <strong>Maps</strong> you draw in the editor.
               </li>
               <li>
-                <strong>Messages et dialogues</strong> en jeu : chat de
-                campagne, notes privées de maître du jeu.
+                <strong>Messages and dialogues</strong> in game: campaign chat,
+                private game master notes.
               </li>
               <li>
-                <strong>Historique de partie</strong> : snapshots d'état de
-                campagne, nœuds visités, choix narratifs.
+                <strong>Session history</strong>: campaign state snapshots,
+                visited nodes, narrative choices.
               </li>
             </ul>
 
-            <h3 class="text-white font-semibold text-base mt-5">4.3 Données techniques</h3>
+            <h3 class="text-white font-semibold text-base mt-5">4.3 Technical data</h3>
             <ul class="list-disc list-inside text-slate-300 space-y-1 text-sm">
               <li>
-                <strong>Jeton d'authentification (JWT)</strong> généré par nos
-                serveurs, signé, valable 7 jours, stocké dans le{" "}
-                <code class="px-1.5 py-0.5 bg-black/40 rounded text-xs">localStorage</code>{" "}
-                de votre navigateur.
+                <strong>Authentication token (JWT)</strong> generated by our
+                servers, signed, valid for 7 days, stored in your browser's{" "}
+                <code class="px-1.5 py-0.5 bg-black/40 rounded text-xs">localStorage</code>.
               </li>
               <li>
-                <strong>Journaux techniques</strong> (logs) : identifiant
-                utilisateur, horodatage, type d'action (création/modification/suppression),
-                erreurs applicatives. Conservés dans un outil de journalisation
-                structurée (Seq) hébergé avec l'application.
+                <strong>Technical logs</strong>: user identifier, timestamp,
+                action type (create/update/delete), application errors. Stored
+                in a structured logging tool (Seq) hosted alongside the
+                application.
               </li>
               <li>
-                Adresse IP et en-têtes HTTP standards, traités de façon
-                éphémère par notre reverse-proxy aux fins de sécurité et
-                d'anti-abus.
+                IP address and standard HTTP headers, processed ephemerally by
+                our reverse proxy for security and anti-abuse purposes.
               </li>
             </ul>
 
-            <h3 class="text-white font-semibold text-base mt-5">4.4 Données de paiement (abonnements)</h3>
+            <h3 class="text-white font-semibold text-base mt-5">4.4 Payment data (subscriptions)</h3>
             <p>
-              DnDiscord est pensé comme un service{" "}
-              <strong>freemium</strong> : un socle gratuit et, à terme, des
-              abonnements payants. <strong>Aucun paiement n'est encore
-              activé</strong> à la date de la présente politique. Lorsque
-              les abonnements seront mis en service, les données de
-              paiement (numéro de carte, cryptogramme, expiration) ne
-              transiteront <strong>jamais</strong> par nos serveurs :
-              elles seront saisies directement sur l'infrastructure d'un
-              prestataire certifié <strong>PCI-DSS</strong> (par exemple
-              Stripe). Nous ne recevrions alors que des métadonnées de
-              transaction (identifiant de paiement, horodatage, statut,
-              4 derniers chiffres de la carte, montant, devise) nécessaires
-              à la facturation et à la comptabilité.
+              DnDiscord is designed as a{" "}
+              <strong>freemium</strong> service: a free tier and, eventually,
+              paid subscriptions. <strong>No payments are yet
+              enabled</strong> as of the date of this policy. When subscriptions
+              are activated, payment data (card number, CVV, expiry) will
+              <strong> never</strong> pass through our servers: it will be
+              entered directly on the infrastructure of a{" "}
+              <strong>PCI-DSS</strong>-certified provider (e.g. Stripe). We
+              would only receive transaction metadata (payment identifier,
+              timestamp, status, last 4 digits, amount, currency) required for
+              billing and accounting.
             </p>
 
             <p class="bg-purple-500/5 border border-purple-500/20 rounded-lg p-3 text-sm text-slate-300 mt-4">
-              <strong class="text-purple-200">Nous ne collectons pas</strong> : numéros de carte bancaire, données de santé, opinions politiques/religieuses/syndicales, localisation géographique précise, empreinte biométrique. Aucun outil publicitaire ni analytique tiers (Google Analytics, Meta Pixel, etc.) n'est intégré. Aucun profilage à visée marketing n'est effectué, a fortiori sur les mineurs.
+              <strong class="text-purple-200">We do not collect</strong>: bank card numbers, health data, political/religious/trade-union opinions, precise geolocation, or biometric data. No third-party advertising or analytics tools (Google Analytics, Meta Pixel, etc.) are integrated. No marketing profiling is performed, and especially not on minors.
             </p>
           </Card>
 
-          <Card id="purposes" title="5. Finalités et bases légales" icon={<ShieldCheck class="w-5 h-5 text-purple-400" />}>
+          <Card id="purposes" title="5. Purposes and legal bases" icon={<ShieldCheck class="w-5 h-5 text-purple-400" />}>
             <div class="overflow-x-auto">
               <table class="w-full text-sm">
                 <thead>
                   <tr class="text-left border-b border-white/10 text-slate-400">
-                    <th class="py-2 pr-3 font-medium">Finalité</th>
-                    <th class="py-2 pr-3 font-medium">Base légale (art. 6 RGPD)</th>
+                    <th class="py-2 pr-3 font-medium">Purpose</th>
+                    <th class="py-2 pr-3 font-medium">Legal basis (art. 6 GDPR)</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-white/5">
                   <LegalRow
-                    purpose="Authentification via Discord, création et maintien du compte utilisateur"
-                    basis="Exécution du contrat (art. 6.1.b)"
+                    purpose="Authentication via Discord, creation and maintenance of the user account"
+                    basis="Performance of a contract (art. 6.1.b)"
                   />
                   <LegalRow
-                    purpose="Fourniture du service de jeu : sauvegarde et synchronisation des personnages, campagnes, cartes et parties"
-                    basis="Exécution du contrat (art. 6.1.b)"
+                    purpose="Provision of the game service: saving and synchronising characters, campaigns, maps, and sessions"
+                    basis="Performance of a contract (art. 6.1.b)"
                   />
                   <LegalRow
-                    purpose="Communication temps réel (multijoueur, chat, dialogues)"
-                    basis="Exécution du contrat (art. 6.1.b)"
+                    purpose="Real-time communication (multiplayer, chat, dialogues)"
+                    basis="Performance of a contract (art. 6.1.b)"
                   />
                   <LegalRow
-                    purpose="Gestion des abonnements payants, facturation et encaissement"
-                    basis="Exécution du contrat (art. 6.1.b)"
+                    purpose="Management of paid subscriptions, billing, and payment collection"
+                    basis="Performance of a contract (art. 6.1.b)"
                   />
                   <LegalRow
-                    purpose="Conservation des pièces comptables liées aux paiements (10 ans — art. L123-22 Code de commerce)"
-                    basis="Obligation légale (art. 6.1.c)"
+                    purpose="Retention of accounting records related to payments (10 years — art. L123-22 Code de commerce)"
+                    basis="Legal obligation (art. 6.1.c)"
                   />
                   <LegalRow
-                    purpose="Sécurité du service, prévention de la fraude, détection d'abus, journalisation technique"
-                    basis="Intérêt légitime (art. 6.1.f) — balance documentée favorable à l'utilisateur"
+                    purpose="Service security, fraud prevention, abuse detection, technical logging"
+                    basis="Legitimate interest (art. 6.1.f) — documented balance in favour of the user"
                   />
                   <LegalRow
-                    purpose="Réponse à vos demandes RGPD (accès, rectification, effacement…) et aux réquisitions judiciaires"
-                    basis="Obligation légale (art. 6.1.c)"
+                    purpose="Responding to your GDPR requests (access, rectification, erasure, etc.) and to judicial orders"
+                    basis="Legal obligation (art. 6.1.c)"
                   />
                   <LegalRow
-                    purpose="Amélioration du produit à partir de statistiques agrégées anonymisées"
-                    basis="Intérêt légitime (art. 6.1.f) — aucune donnée nominative"
+                    purpose="Product improvement based on anonymised aggregated statistics"
+                    basis="Legitimate interest (art. 6.1.f) — no personal data"
                   />
                   <LegalRow
-                    purpose="Envoi de notifications fonctionnelles (invitations de campagne, rappels de session) via le bot Discord"
-                    basis="Exécution du contrat (art. 6.1.b)"
+                    purpose="Sending functional notifications (campaign invitations, session reminders) via the Discord bot"
+                    basis="Performance of a contract (art. 6.1.b)"
                   />
                 </tbody>
               </table>
             </div>
           </Card>
 
-          <Card id="recipients" title="6. Destinataires des données" icon={<Users class="w-5 h-5 text-purple-400" />}>
+          <Card id="recipients" title="6. Data recipients" icon={<Users class="w-5 h-5 text-purple-400" />}>
             <p>
-              Vos données sont traitées uniquement par l'équipe DnDiscord et par les
-              <strong> sous-traitants techniques strictement nécessaires </strong>
-              au fonctionnement du service :
+              Your data is processed solely by the DnDiscord team and by the
+              <strong> strictly necessary technical processors </strong>
+              required to operate the service:
             </p>
             <ul class="list-disc list-inside text-slate-300 space-y-2 text-sm">
               <li>
-                <strong>{HOSTING.provider}</strong> — hébergeur de
-                l'infrastructure applicative (conteneurs Docker, base
-                PostgreSQL, message bus RabbitMQ). Siège social :{" "}
-                {HOSTING.address}. Les serveurs utilisés pour DnDiscord sont
-                situés dans un <strong>{HOSTING.serverLocation}</strong>.
-                Domaine de production : <code>{ORG.productionDomain}</code>.{" "}
+                <strong>{HOSTING.provider}</strong> — host of the application
+                infrastructure (Docker containers, PostgreSQL database,
+                RabbitMQ message bus). Registered office:{" "}
+                {HOSTING.address}. The servers used for DnDiscord are
+                located in a <strong>{HOSTING.serverLocation}</strong>.
+                Production domain: <code>{ORG.productionDomain}</code>.{" "}
                 <ExternalLink href={HOSTING.contactUrl}>
-                  Contacter Hostinger
+                  Contact Hostinger
                 </ExternalLink>
                 .
               </li>
               <li>
-                <strong>Discord Inc.</strong> (États-Unis) — fournisseur
-                d'authentification OAuth 2.0, plateforme Activité et hébergement
-                du client qui intègre DnDiscord. Voir la{" "}
+                <strong>Discord Inc.</strong> (United States) — OAuth 2.0
+                authentication provider, Activity platform, and host of the
+                client that embeds DnDiscord. See the{" "}
                 <ExternalLink href={EXT.discordPrivacy}>
-                  Politique de confidentialité de Discord
+                  Discord Privacy Policy
                 </ExternalLink>
                 .
               </li>
               <li>
-                <strong>Cloudflare, Inc.</strong> (États-Unis, serveurs
-                européens) — réseau de distribution de contenu (CDN) et
-                protection contre les attaques par déni de service (DDoS).
-                Traite l'adresse IP et des métadonnées de requête de manière
-                transitoire.
+                <strong>Cloudflare, Inc.</strong> (United States, European
+                servers) — content delivery network (CDN) and DDoS protection.
+                Processes IP addresses and request metadata transiently.
               </li>
               <li>
-                <strong>Prestataire de paiement (PCI-DSS)</strong> — par
-                exemple <em>Stripe Payments Europe, Ltd.</em> (Irlande, UE)
-                — traite les données de carte bancaire directement sur son
-                infrastructure, sans exposition à nos serveurs. Le prestataire
-                exact sera confirmé dans cette politique dès son
-                intégration.{/* TODO RGPD : figer le prestataire paiement. */}
+                <strong>Payment provider (PCI-DSS)</strong> — for example{" "}
+                <em>Stripe Payments Europe, Ltd.</em> (Ireland, EU)
+                — processes card data directly on its own infrastructure,
+                without exposure to our servers. The exact provider will be
+                confirmed in this policy upon integration.{/* TODO RGPD: lock in the payment provider. */}
               </li>
               <li>
-                <strong>Datalust Seq</strong> — agrégation et recherche de
-                journaux techniques structurés, déployé sur la même
-                infrastructure européenne que l'application (pas
-                d'exfiltration hors UE).
+                <strong>Datalust Seq</strong> — aggregation and search of
+                structured technical logs, deployed on the same European
+                infrastructure as the application (no data exported outside
+                the EU).
               </li>
               <li>
-                <strong>OpenTelemetry</strong> — traçage distribué des
-                requêtes pour diagnostic et performance. Les traces sont
-                agrégées dans l'infrastructure européenne de l'application.
+                <strong>OpenTelemetry</strong> — distributed request tracing
+                for diagnostics and performance. Traces are aggregated in the
+                application's European infrastructure.
               </li>
               <li>
-                <strong>Autorités publiques</strong> — uniquement sur
-                réquisition judiciaire ou administrative valablement formée
-                (autorité judiciaire, CNIL, services de police/gendarmerie).
+                <strong>Public authorities</strong> — only upon a duly formed
+                judicial or administrative order (judicial authority, CNIL,
+                police/gendarmerie services).
               </li>
             </ul>
             <p class="text-sm text-slate-400 mt-3 bg-purple-500/5 border border-purple-500/20 rounded-lg p-3">
-              <strong class="text-purple-200">Engagement explicite :</strong>{" "}
-              Studio I-XX SAS ne vend, ne loue, ni ne cède vos données à des
-              tiers à des fins commerciales, publicitaires ou de prospection.
+              <strong class="text-purple-200">Explicit commitment:</strong>{" "}
+              Studio I-XX SAS does not sell, rent, or transfer your data to
+              third parties for commercial, advertising, or prospecting purposes.
             </p>
             <p class="text-sm text-slate-400 mt-3">
-              <strong>Aucune donnée</strong> n'est vendue, louée ou partagée à
-              des fins commerciales. Les autres joueurs et le maître du jeu
-              d'une campagne voient uniquement les données que vous choisissez
-              de rendre visibles dans cette campagne (pseudonyme, personnage,
-              messages).
+              <strong>No data</strong> is sold, rented, or shared for commercial
+              purposes. Other players and the game master of a campaign see only
+              the data you choose to make visible within that campaign (username,
+              character, messages).
             </p>
           </Card>
 
-          <Card id="transfers" title="7. Transferts hors Union européenne" icon={<Globe class="w-5 h-5 text-purple-400" />}>
+          <Card id="transfers" title="7. Transfers outside the European Union" icon={<Globe class="w-5 h-5 text-purple-400" />}>
             <p>
-              <strong>Par défaut, vos données restent dans l'Espace économique
-              européen (EEE)</strong>. L'infrastructure applicative, la base
-              de données et les journaux sont hébergés chez Hostinger dans
-              un <strong>datacenter en Allemagne</strong>. Le prestataire de
-              paiement que nous intégrons est établi dans l'Union européenne
-              (Irlande pour Stripe Payments Europe Ltd.).
+              <strong>By default, your data stays within the European
+              Economic Area (EEA)</strong>. The application infrastructure,
+              database, and logs are hosted at Hostinger in a{" "}
+              <strong>datacenter in Germany</strong>. The payment provider we
+              integrate is established in the European Union (Ireland for
+              Stripe Payments Europe Ltd.).
             </p>
             <p>
-              Des transferts hors UE ont lieu <strong>uniquement</strong> vers
-              deux sous-traitants américains, de façon limitée et encadrée :
+              Transfers outside the EU occur <strong>only</strong> to two
+              US-based processors, in a limited and controlled manner:
             </p>
             <ul class="list-disc list-inside text-slate-300 space-y-1 text-sm">
               <li>
-                <strong>Discord Inc.</strong> (États-Unis) — authentification
-                OAuth et exécution de l'Activité dans le client Discord.
+                <strong>Discord Inc.</strong> (United States) — OAuth
+                authentication and execution of the Activity in the Discord
+                client.
               </li>
               <li>
-                <strong>Cloudflare, Inc.</strong> (États-Unis) — CDN et
-                protection anti-DDoS, avec <em>edge servers</em> principaux
-                en Europe.
+                <strong>Cloudflare, Inc.</strong> (United States) — CDN and
+                DDoS protection, with primary <em>edge servers</em> in Europe.
               </li>
             </ul>
             <p>
-              Ces transferts sont encadrés par l'adhésion de ces entités au{" "}
+              These transfers are governed by these entities' participation in
+              the{" "}
               <ExternalLink href={EXT.dpfUrl}>
                 EU-US Data Privacy Framework
               </ExternalLink>{" "}
-              (décision d'adéquation de la Commission européenne du 10 juillet
-              2023) et, à titre subsidiaire, par les <em>Clauses
-              Contractuelles Types</em> (CCT) adoptées par la Commission
-              européenne le 4 juin 2021, pour toute donnée qui sortirait du
-              cadre du DPF.
+              (European Commission adequacy decision of 10 July 2023) and,
+              subsidiarily, by the <em>Standard Contractual Clauses</em> (SCC)
+              adopted by the European Commission on 4 June 2021, for any data
+              falling outside the scope of the DPF.
             </p>
           </Card>
 
-          <Card id="retention" title="8. Durées de conservation" icon={<Clock class="w-5 h-5 text-purple-400" />}>
+          <Card id="retention" title="8. Retention periods" icon={<Clock class="w-5 h-5 text-purple-400" />}>
             <p class="text-sm text-slate-400">
-              Durées conformes au plan de sécurité interne de Studio I-XX SAS
-              (révision 2026-04). Les logs contenant des identifiants utilisateur
-              sont purgés ou pseudonymisés à l'échéance indiquée.
+              Periods in line with Studio I-XX SAS's internal security plan
+              (revision 2026-04). Logs containing user identifiers are purged
+              or pseudonymised at the indicated deadline.
             </p>
             <div class="overflow-x-auto">
               <table class="w-full text-sm">
                 <thead>
                   <tr class="text-left border-b border-white/10 text-slate-400">
-                    <th class="py-2 pr-3 font-medium">Donnée</th>
-                    <th class="py-2 pr-3 font-medium">Durée</th>
+                    <th class="py-2 pr-3 font-medium">Data</th>
+                    <th class="py-2 pr-3 font-medium">Duration</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-white/5">
-                  <RetentionRow label="Compte utilisateur, personnages, campagnes que vous possédez" duration="Jusqu'à suppression du compte ou inactivité de 2 ans (purge automatique)" />
-                  <RetentionRow label="Jeton d'authentification (JWT)" duration="7 jours" />
-                  <RetentionRow label="Session multijoueur (sessionStorage)" duration="Jusqu'à fermeture de l'onglet" />
-                  <RetentionRow label="Journaux de sécurité" duration="1 an" />
-                  <RetentionRow label="Journaux applicatifs (Seq)" duration="90 jours" />
-                  <RetentionRow label="Journaux d'accès HTTP" duration="90 jours" />
-                  <RetentionRow label="Journaux d'audit (opérations sensibles)" duration="2 ans" />
-                  <RetentionRow label="Journaux de debug" duration="7 jours" />
-                  <RetentionRow label="Sauvegardes base de données (quotidiennes)" duration="30 jours" />
-                  <RetentionRow label="Sauvegardes de configuration (hebdomadaires)" duration="30 jours" />
-                  <RetentionRow label="Données nécessaires à une procédure en cours" duration="Le temps strictement nécessaire, puis suppression" />
+                  <RetentionRow label="User account, characters, campaigns you own" duration="Until account deletion or 2 years of inactivity (automatic purge)" />
+                  <RetentionRow label="Authentication token (JWT)" duration="7 days" />
+                  <RetentionRow label="Multiplayer session (sessionStorage)" duration="Until tab is closed" />
+                  <RetentionRow label="Security logs" duration="1 year" />
+                  <RetentionRow label="Application logs (Seq)" duration="90 days" />
+                  <RetentionRow label="HTTP access logs" duration="90 days" />
+                  <RetentionRow label="Audit logs (sensitive operations)" duration="2 years" />
+                  <RetentionRow label="Debug logs" duration="7 days" />
+                  <RetentionRow label="Database backups (daily)" duration="30 days" />
+                  <RetentionRow label="Configuration backups (weekly)" duration="30 days" />
+                  <RetentionRow label="Data required for an ongoing legal proceeding" duration="For the strictly necessary duration, then deleted" />
                 </tbody>
               </table>
             </div>
           </Card>
 
-          <Card id="rights" title="9. Vos droits" icon={<UserCheck class="w-5 h-5 text-purple-400" />}>
-            <p>Conformément au RGPD, vous disposez des droits suivants :</p>
+          <Card id="rights" title="9. Your rights" icon={<UserCheck class="w-5 h-5 text-purple-400" />}>
+            <p>In accordance with the GDPR, you have the following rights:</p>
             <ul class="list-disc list-inside text-slate-300 space-y-1.5 text-sm">
               <li>
-                <strong>Accès</strong> à vos données (art. 15) — via le bouton
-                « Exporter mes données » dans les paramètres du compte.
+                <strong>Access</strong> to your data (art. 15) — via the
+                "Export my data" button in account settings.
               </li>
               <li>
-                <strong>Rectification</strong> (art. 16) — modifiez vos
-                personnages, campagnes, profil depuis l'application.
+                <strong>Rectification</strong> (art. 16) — edit your characters,
+                campaigns, and profile from within the application.
               </li>
               <li>
-                <strong>Effacement</strong> / droit à l'oubli (art. 17) — via le
-                bouton « Supprimer mon compte » dans les paramètres.
+                <strong>Erasure</strong> / right to be forgotten (art. 17) — via
+                the "Delete my account" button in settings.
               </li>
               <li>
-                <strong>Limitation</strong> du traitement (art. 18).
+                <strong>Restriction</strong> of processing (art. 18).
               </li>
               <li>
-                <strong>Portabilité</strong> (art. 20) — export au format JSON
-                réutilisable via le bouton « Exporter mes données ».
+                <strong>Portability</strong> (art. 20) — export in reusable JSON
+                format via the "Export my data" button.
               </li>
               <li>
-                <strong>Opposition</strong> (art. 21) à un traitement fondé sur
-                l'intérêt légitime.
+                <strong>Objection</strong> (art. 21) to processing based on
+                legitimate interest.
               </li>
               <li>
-                <strong>Retirer votre consentement</strong> à tout moment en
-                révoquant l'accès de l'application dans les paramètres Discord
-                (Paramètres utilisateur → Autorisations).
+                <strong>Withdraw your consent</strong> at any time by revoking
+                the application's access in Discord settings
+                (User Settings → Authorizations).
               </li>
               <li>
-                <strong>Définir des directives</strong> relatives au sort de
-                vos données après votre décès (loi « Informatique et Libertés »,
-                art. 85).
+                <strong>Set directives</strong> regarding the fate of your data
+                after your death (loi "Informatique et Libertés", art. 85).
               </li>
             </ul>
             <p class="text-sm text-slate-400 mt-4">
-              Pour exercer l'un de ces droits, contactez-nous à{" "}
+              To exercise any of these rights, contact us at{" "}
               <a href={`mailto:${ORG.dpoEmail}`} class="text-purple-300 underline">
                 {ORG.dpoEmail}
               </a>
-              . Nous répondons dans un délai d'un mois (prolongeable de deux mois
-              en cas de demande complexe, conformément à l'article 12 RGPD).
+              . We respond within one month (extendable by two months for complex
+              requests, in accordance with article 12 of the GDPR).
             </p>
           </Card>
 
-          <Card id="cookies" title="10. Stockage local et cookies" icon={<Cookie class="w-5 h-5 text-purple-400" />}>
+          <Card id="cookies" title="10. Local storage and cookies" icon={<Cookie class="w-5 h-5 text-purple-400" />}>
             <p>
-              DnDiscord n'utilise <strong>aucun cookie HTTP</strong> et aucun
-              traceur tiers. L'application s'appuie exclusivement sur le{" "}
+              DnDiscord uses <strong>no HTTP cookies</strong> and no third-party
+              trackers. The application relies exclusively on your browser's{" "}
               <code class="px-1.5 py-0.5 bg-black/40 rounded text-xs">localStorage</code>{" "}
-              et le{" "}
+              and{" "}
               <code class="px-1.5 py-0.5 bg-black/40 rounded text-xs">sessionStorage</code>{" "}
-              de votre navigateur pour :
+              for:
             </p>
             <ul class="list-disc list-inside text-slate-300 space-y-1 text-sm">
               <li>
-                conserver votre jeton d'authentification (exempté de consentement
-                en tant que traceur d'authentification — CNIL) ;
+                storing your authentication token (exempt from consent as an
+                authentication tracker — CNIL);
               </li>
               <li>
-                mémoriser vos préférences d'interface : qualité graphique,
-                volume audio, état du tutoriel (exemptés de consentement en tant
-                que personnalisation d'interface — CNIL) ;
+                remembering your interface preferences: graphics quality, audio
+                volume, tutorial state (exempt from consent as interface
+                personalisation — CNIL);
               </li>
               <li>
-                mettre en cache vos personnages et cartes pour accélérer leur
-                chargement (donnée fonctionnelle strictement nécessaire).
+                caching your characters and maps to speed up loading (strictly
+                necessary functional data).
               </li>
             </ul>
             <p class="text-sm text-slate-400 mt-3">
-              Vous pouvez à tout moment consulter le détail de ces éléments et
-              effacer vos préférences locales depuis le bouton ci-dessous.
+              You can view the details of these items and clear your local
+              preferences at any time using the button below.
             </p>
             <button
               onClick={() => consentStore.openPreferences()}
               class="mt-3 px-4 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-200 text-sm transition-colors"
             >
-              Gérer mon stockage local
+              Manage my local storage
             </button>
           </Card>
 
-          <Card id="security" title="11. Sécurité" icon={<Lock class="w-5 h-5 text-purple-400" />}>
+          <Card id="security" title="11. Security" icon={<Lock class="w-5 h-5 text-purple-400" />}>
             <ul class="list-disc list-inside text-slate-300 space-y-1 text-sm">
               <li>
-                Communications chiffrées en <strong>TLS 1.3</strong> de bout en
-                bout, redirection HTTP→HTTPS systématique.
+                End-to-end <strong>TLS 1.3</strong> encrypted communications,
+                with systematic HTTP→HTTPS redirection.
               </li>
               <li>
-                Chiffrement des données au repos en <strong>AES-256</strong>{" "}
-                (base PostgreSQL et sauvegardes).
+                Data encrypted at rest with <strong>AES-256</strong>{" "}
+                (PostgreSQL database and backups).
               </li>
               <li>
-                Jeton d'authentification signé (HMAC-SHA256), clé secrète
-                stockée uniquement côté serveur et injectée par configuration,
-                vérification de signature systématique à chaque requête.
+                Signed authentication token (HMAC-SHA256), secret key stored
+                server-side only and injected via configuration, with systematic
+                signature verification on every request.
               </li>
               <li>
-                Aucun mot de passe stocké : l'authentification est entièrement
-                déléguée à Discord via OAuth 2.0.
+                No passwords stored: authentication is fully delegated to
+                Discord via OAuth 2.0.
               </li>
               <li>
-                Accès à la base de données restreint par règles réseau et par
-                comptes de service distincts, connexions chiffrées imposées.
+                Database access restricted by network rules and separate service
+                accounts, with enforced encrypted connections.
               </li>
               <li>
-                Protection contre les attaques volumétriques (DDoS) et le
-                <em> rate limiting </em> applicatif via Cloudflare.
+                Protection against volumetric attacks (DDoS) and application-level
+                <em> rate limiting</em> via Cloudflare.
               </li>
               <li>
-                Content Security Policy (CSP) restreignant l'intégration en
-                <em> iframe</em> aux domaines Discord uniquement.
+                Content Security Policy (CSP) restricting{" "}
+                <em>iframe</em> embedding to Discord domains only.
               </li>
               <li>
-                Gestion des vulnérabilités : veille dépendances continue,
-                correctifs appliqués dans les meilleurs délais.
+                Vulnerability management: continuous dependency monitoring,
+                patches applied as quickly as possible.
               </li>
             </ul>
           </Card>
 
-          <Card id="minors" title="12. Mineurs" icon={<AlertTriangle class="w-5 h-5 text-purple-400" />}>
+          <Card id="minors" title="12. Minors" icon={<AlertTriangle class="w-5 h-5 text-purple-400" />}>
             <p>
-              <strong>Âge minimum d'utilisation de DnDiscord : 15 ans</strong>,
-              en application de l'article 8 du RGPD et de l'article 7-1 de la
-              loi n° 78-17 du 6 janvier 1978 (« Informatique et Libertés »).
-              En France, 15 ans est l'âge du consentement numérique autonome.
+              <strong>Minimum age to use DnDiscord: 15 years old</strong>,
+              in accordance with article 8 of the GDPR and article 7-1 of loi
+              n° 78-17 du 6 janvier 1978 ("Informatique et Libertés"). In France,
+              15 is the age of autonomous digital consent.
             </p>
             <p>
-              Pour les utilisateurs âgés de <strong>moins de 15 ans</strong>,
-              le traitement n'est licite que si le consentement est donné ou
-              autorisé par le(s) titulaire(s) de l'autorité parentale. Par
-              ailleurs, Discord applique son propre seuil (13 ans, voir les{" "}
+              For users <strong>under 15 years old</strong>, processing is only
+              lawful if consent has been given or authorised by the holder(s) of
+              parental responsibility. Additionally, Discord applies its own
+              threshold (13 years old, see the{" "}
               <ExternalLink href={EXT.discordTerms}>
-                Conditions d'utilisation de Discord
+                Discord Terms of Service
               </ExternalLink>
-              ) : DnDiscord s'appuie sur l'authentification Discord comme
-              première barrière d'âge.
+              ): DnDiscord relies on Discord authentication as the first age
+              barrier.
             </p>
             <p>
-              Les titulaires de l'autorité parentale peuvent exercer tous les
-              droits RGPD (accès, rectification, effacement, portabilité,
-              opposition) au nom du mineur en écrivant à{" "}
+              Holders of parental responsibility may exercise all GDPR rights
+              (access, rectification, erasure, portability, objection) on behalf
+              of the minor by writing to{" "}
               <a href={`mailto:${ORG.dpoEmail}`} class="text-purple-300 underline">
                 {ORG.dpoEmail}
               </a>
-              . Les informations délivrées aux mineurs sont rédigées en{" "}
-              <strong>langage simple et accessible</strong> conformément à
-              l'article 12.1 du RGPD. <strong>Aucun profilage à visée
-              marketing</strong> n'est effectué sur les utilisateurs mineurs.
+              . Information provided to minors is written in{" "}
+              <strong>plain and accessible language</strong> in accordance with
+              article 12.1 of the GDPR. <strong>No marketing profiling</strong>{" "}
+              is carried out on minor users.
             </p>
             <p>
-              Si vous pensez qu'un enfant de moins de 15 ans a utilisé le
-              service sans autorisation parentale, contactez-nous
-              immédiatement à l'adresse ci-dessus : nous procéderons à la
-              suppression sous <strong>72 heures</strong> des données
-              concernées, sauf consentement parental ultérieur.
-            </p>
-          </Card>
-
-          <Card id="changes" title="13. Modifications de la politique" icon={<Clock class="w-5 h-5 text-purple-400" />}>
-            <p>
-              Cette politique peut évoluer (nouvelle fonctionnalité, nouveau
-              sous-traitant, changement légal). La date de dernière mise à jour
-              figure en haut du document. En cas de modification substantielle
-              (nouvelle finalité, nouveau destinataire hors UE), vous serez
-              informé par une notification dans l'application avant l'entrée en
-              vigueur.
+              If you believe a child under 15 has used the service without
+              parental authorisation, contact us immediately at the above address:
+              we will delete the relevant data within <strong>72 hours</strong>,
+              unless subsequent parental consent is provided.
             </p>
           </Card>
 
-          <Card id="contact" title="14. Contact et réclamation" icon={<Mail class="w-5 h-5 text-purple-400" />}>
+          <Card id="changes" title="13. Policy changes" icon={<Clock class="w-5 h-5 text-purple-400" />}>
             <p>
-              Pour toute question relative à vos données personnelles ou pour
-              exercer vos droits RGPD, écrivez à :
+              This policy may be updated (new feature, new processor, legal
+              change). The date of last update appears at the top of the
+              document. In the event of a material change (new purpose, new
+              recipient outside the EU), you will be notified via an in-app
+              notification before it takes effect.
+            </p>
+          </Card>
+
+          <Card id="contact" title="14. Contact and complaints" icon={<Mail class="w-5 h-5 text-purple-400" />}>
+            <p>
+              For any question regarding your personal data or to exercise your
+              GDPR rights, write to:
             </p>
             <ul class="text-white space-y-1 text-sm">
               <li>
-                <span class="text-slate-400">Contact RGPD : </span>
+                <span class="text-slate-400">GDPR contact: </span>
                 <a href={`mailto:${ORG.privacyEmail}`} class="text-purple-300 underline">
                   {ORG.privacyEmail}
                 </a>
               </li>
               <li>
-                <span class="text-slate-400">Délégué à la protection des données : </span>
+                <span class="text-slate-400">Data protection officer: </span>
                 <a href={`mailto:${ORG.dpoEmail}`} class="text-purple-300 underline">
                   {ORG.dpoEmail}
                 </a>
               </li>
               <li>
-                <span class="text-slate-400">Adresse postale : </span>
+                <span class="text-slate-400">Postal address: </span>
                 {ORG.name}, {ORG.address}
               </li>
             </ul>
             <p class="text-sm mt-4">
-              Si vous estimez, après nous avoir contactés, que vos droits
-              « Informatique et Libertés » ne sont pas respectés, vous avez le
-              droit d'introduire une réclamation auprès de l'autorité de
-              contrôle française :
+              If, after contacting us, you believe your "Informatique et
+              Libertés" rights are not being respected, you have the right to
+              lodge a complaint with the French supervisory authority:
             </p>
             <div class="bg-white/5 border border-white/10 rounded-xl p-4 text-sm space-y-1">
               <p class="text-white font-semibold">{DPA.name}</p>
@@ -775,19 +758,19 @@ export default function PrivacyPolicy() {
 
           <nav class="flex flex-wrap items-center gap-x-3 gap-y-2 pt-6 text-sm text-slate-400">
             <A href="/terms" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
-              Conditions générales
+              Terms of service
             </A>
             <span class="text-slate-600">·</span>
             <A href="/legal" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
-              Mentions légales
+              Legal notice
             </A>
             <span class="text-slate-600">·</span>
             <A href="/cookies" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
-              Politique cookies
+              Cookies policy
             </A>
           </nav>
           <p class="pt-2 text-xs text-slate-500">
-            En vigueur depuis le {ORG.lastUpdated}.
+            In effect since {ORG.lastUpdated}.
           </p>
         </article>
       </main>
@@ -801,10 +784,10 @@ export default function PrivacyPolicy() {
             var(--ink-900) 100%
           );
         }
-        /* Les règles typographiques sont portées directement par les
-           classes Tailwind des Card (text-slate-300 leading-relaxed).
-           Pas besoin de :global() — de toute façon le support est
-           incomplet côté solid-styled-jsx. */
+        /* Typography rules are handled directly by the Tailwind
+           classes on Card (text-slate-300 leading-relaxed).
+           No need for :global() — support is incomplete in
+           solid-styled-jsx anyway. */
       `}</style>
     </div>
   );

@@ -1,21 +1,21 @@
 /**
- * Source unique pour toutes les données légales (RGPD, CGU, Mentions
- * légales, Cookies). Centralisé ici pour éviter toute divergence entre
- * les 4 pages. Les valeurs proviennent du retour du Project Lead
- * (Quentin BERGER, 2026-04-21) et du Notion « Legal Feasibility Study ».
+ * Single source of truth for all legal data (GDPR, ToS, Legal Notice,
+ * Cookies). Centralized here to avoid divergence between the 4 pages.
+ * Values come from the Project Lead's input (Quentin BERGER, 2026-04-21)
+ * and the Notion "Legal Feasibility Study".
  */
 
 export const LEGAL_ORG = {
   name: "Studio I-XX SAS",
-  legalForm: "Société par Actions Simplifiée (SAS)",
-  capital: "10 000 €",
+  legalForm: "Société par Actions Simplifiée (SAS — French simplified joint-stock company)",
+  capital: "€10,000",
   siren: "880 432 190",
   siret: "880 432 190 00010",
   rcs: "RCS Lyon 880 432 190",
-  codeApe: "5829C — Édition de logiciels applicatifs",
-  // TVA intracommunautaire = FR + clé (12 + 3 × (SIREN mod 97)) mod 97
-  // = FR + ((12 + 3 × 50) mod 97) = FR65. Déterministe, pas besoin de
-  // validation comptable.
+  codeApe: "5829C — Publishing of application software",
+  // Intra-EU VAT = FR + key (12 + 3 × (SIREN mod 97)) mod 97
+  // = FR + ((12 + 3 × 50) mod 97) = FR65. Deterministic, no accounting
+  // validation needed.
   tvaIntra: "FR65 880 432 190",
   address: "2 Rue du Professeur Charles Appleton, 69007 Lyon, France",
   website: "https://studio-ixx.fr",
@@ -23,34 +23,34 @@ export const LEGAL_ORG = {
   privacyEmail: "privacy@studio-ixx.fr",
   dpoEmail: "dpo@studio-ixx.fr",
   abuseEmail: "abuse@studio-ixx.fr",
-  // TODO : renseigner le nom du Président de la SAS.
-  legalRepresentative: "À compléter — Président·e de Studio I-XX SAS",
-  publicationDirector: "À compléter — Directeur·rice de la publication",
+  // TODO: fill in the name of the SAS President.
+  legalRepresentative: "To be completed — President of Studio I-XX SAS",
+  publicationDirector: "To be completed — Publication Director",
   publicationDirectorEmail: "contact@studio-ixx.fr",
-  // TODO : téléphone public si applicable.
-  phone: "Non communiqué",
+  // TODO: public phone if applicable.
+  phone: "Not disclosed",
   productionDomain: "dndiscord.cadran.app",
   serviceUrl: "https://dndiscord.cadran.app",
-  lastUpdated: "21 avril 2026",
-  applicableLaw: "française",
-  jurisdiction: "Tribunaux du ressort de Lyon",
+  lastUpdated: "April 21, 2026",
+  applicableLaw: "French",
+  jurisdiction: "Courts within the jurisdiction of Lyon",
 } as const;
 
-/** Hébergeur (obligation LCEN art. 6-III). */
+/** Hosting provider (LCEN art. 6-III obligation). */
 export const LEGAL_HOSTING = {
   provider: "Hostinger International Ltd.",
-  address: "61 Lordou Vironos Street, 6023 Larnaca, Chypre",
-  serverLocation: "Datacenter en Allemagne (Union européenne)",
+  address: "61 Lordou Vironos Street, 6023 Larnaca, Cyprus",
+  serverLocation: "Datacenter in Germany (European Union)",
   contactUrl: "https://www.hostinger.fr/contact",
 } as const;
 
 /**
- * Médiateur de la consommation (art. L611-1 Code de la consommation).
- * TODO : désigner un médiateur agréé CECMC (CMAP, Médiateur du e-commerce
- * FEVAD, etc.) et renseigner ses coordonnées exactes.
+ * Consumer mediator (French Consumer Code art. L611-1).
+ * TODO: appoint a CECMC-approved mediator (CMAP, FEVAD e-commerce
+ * Mediator, etc.) and fill in their exact contact details.
  */
 export const LEGAL_MEDIATOR = {
-  name: "À désigner — médiateur de la consommation (art. L611-1 C. conso.)",
+  name: "To be appointed — consumer mediator (French Consumer Code art. L611-1)",
   url: "https://www.economie.gouv.fr/mediation-conso",
 } as const;
 

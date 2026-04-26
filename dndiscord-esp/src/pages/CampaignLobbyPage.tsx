@@ -3,19 +3,19 @@ import {
   createEffect,
   createSignal,
   For,
+  onCleanup,
   onMount,
   Show,
 } from 'solid-js';
 import { useNavigate, useParams, useSearchParams } from '@solidjs/router';
-import { ArrowLeft, Copy, Check, Play, Loader2, Users, UserCircle2, Zap, Map as MapIcon } from 'lucide-solid';
-import { sessionState, isHost } from '@/stores/session.store';
+import { Copy, Check, Play, Loader2, Users, UserCircle2, Zap, Map as MapIcon } from 'lucide-solid';
+import { sessionState, isHost, clearSession } from '@/stores/session.store';
 import { PlayerRole, SessionState } from '@/types/multiplayer';
 import {
   selectCharacter,
   selectDefaultTemplate,
   startGame as startGameHub,
   joinCampaignSession,
-  ensureMultiplayerHandlersRegistered,
   leaveSession,
 } from '@/services/signalr/multiplayer.service';
 import { CharacterService, CharacterClass, type CharacterDto } from '@/services/character.service';
@@ -24,6 +24,8 @@ import { MapService, type CampaignMapRecord } from '@/services/map.service';
 import { ensureMapCached } from '@/services/mapRepository';
 import { signalRService } from '@/services/signalr/SignalRService';
 import { authStore } from '@/stores/auth.store';
+import { ensureMultiplayerHandlersRegistered } from '@/services/signalr/multiplayer.service';
+import { useGameShellExit } from '@/layouts/GameShell';
 
 // ── Personnages par défaut (non liés à un utilisateur) ────────────────────────
 const DEFAULT_CHARACTERS = [
@@ -121,7 +123,6 @@ const CampaignLobbyPage: Component = () => {
 
   const [copied,   setCopied]   = createSignal(false);
   const [starting, setStarting] = createSignal(false);
-  const [leaving,  setLeaving]  = createSignal(false);
 
   // Active session déjà en cours (détecté via REST au chargement)
   const [activeSession,    setActiveSession]    = createSignal<GameSessionResponse | null>(null);
@@ -196,7 +197,27 @@ const CampaignLobbyPage: Component = () => {
     }
   });
 
-  // Navigate when host starts
+  // Wire the GameShell Exit button to leave the multiplayer session before
+  // navigating away. Plain history-back would orphan the user as a "ghost"
+  // participant on the server side until the hub eventually times them out.
+  const exitApi = useGameShellExit();
+  const handleLobbyExit = async () => {
+    try {
+      await leaveSession();
+    } catch (err) {
+      console.warn('[CampaignLobby] leaveSession hub call failed, clearing local state', err);
+      clearSession();
+    }
+    navigate(`/campaigns/${params.id}`, { replace: true });
+  };
+  onMount(() => {
+    exitApi.setExitHandler(handleLobbyExit);
+    onCleanup(() => exitApi.setExitHandler(null));
+  });
+
+  // Quand le MJ lance la session → tout le monde navigue vers la page session.
+  // Guard against stalePayload: only react to a payload that arrived AFTER
+  // this component mounted (reference inequality with the snapshot above).
   createEffect(() => {
     const payload = sessionState.gameStartedPayload;
     if (payload && payload !== stalePayload) {
@@ -269,12 +290,6 @@ const CampaignLobbyPage: Component = () => {
     }
   };
 
-  const handleLeave = async () => {
-    setLeaving(true);
-    try { await leaveSession(); } catch {}
-    navigate(`/campaigns/${params.id}`);
-  };
-
   /** Rejoindre la session active détectée au chargement */
   const handleJoinActiveSession = async () => {
     setJoinActiveError(null);
@@ -318,18 +333,9 @@ const CampaignLobbyPage: Component = () => {
 
   // ── JSX ─────────────────────────────────────────────────────────────────────
   return (
-    <div style={{
-      width: '100vw', 'min-height': '100vh',
-      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1a 100%)',
-      color: '#d4d4d4', 'font-family': 'system-ui, -apple-system, sans-serif',
-    }}>
-      {/* Header */}
-      <header class="sticky top-0 z-20 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-black/40 backdrop-blur-md">
-        <button onClick={handleLeave} disabled={leaving()}
-          class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors disabled:opacity-50">
-          <ArrowLeft class="w-5 h-5" />
-          <span class="hidden sm:inline">Quitter</span>
-        </button>
+    <div class="w-full h-full overflow-y-auto" style={{ color: '#d4d4d4', 'font-family': 'system-ui, -apple-system, sans-serif' }}>
+      {/* Lobby header — room code + campaign name */}
+      <header class="sticky top-0 z-20 flex items-center justify-between pl-16 sm:pl-20 pr-16 sm:pr-20 py-4 border-b border-white/10 bg-black/40 backdrop-blur-md">
         <div class="text-center">
           <p class="text-xs text-purple-400 uppercase tracking-wider font-medium">
             {quickLaunch() ? '⚡ Lancement rapide' : 'Salle d\'attente'}

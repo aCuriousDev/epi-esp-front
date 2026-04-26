@@ -28,43 +28,43 @@ export default function TermsOfService() {
           class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
         >
           <ArrowLeft class="w-5 h-5" />
-          <span class="hidden sm:inline">Retour</span>
+          <span class="hidden sm:inline">Back</span>
         </button>
         <h1 class="font-display text-xl text-white tracking-wide flex items-center gap-2">
           <Scale class="w-5 h-5 text-purple-400" />
-          Conditions générales d'utilisation
+          Terms of service
         </h1>
         <div class="w-24" />
       </header>
 
       <main class="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 py-8 pb-20 space-y-6">
         {/* 1 */}
-        <Card title="1. Préambule et identification">
+        <Card title="1. Preamble and identification">
           <p>
-            Les présentes Conditions Générales d'Utilisation (ci-après les
-            « <strong>CGU</strong> ») régissent l'utilisation du service{" "}
-            <strong>DnDiscord</strong>, plateforme web de jeu de rôle sur
-            table virtuelle (VTT) intégrée en tant qu'Activité Discord,
-            éditée par :
+            These Terms of Service (hereinafter the{" "}
+            <strong>"Terms"</strong>) govern the use of the{" "}
+            <strong>DnDiscord</strong> service, a web-based virtual tabletop
+            (VTT) role-playing platform integrated as a Discord Activity,
+            published by:
           </p>
           <dl class="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-x-4 gap-y-1 text-sm bg-white/5 border border-white/10 rounded-xl p-4">
-            <dt class="text-slate-400">Éditeur</dt>
+            <dt class="text-slate-400">Publisher</dt>
             <dd class="text-white">{ORG.name} — {ORG.legalForm}</dd>
-            <dt class="text-slate-400">Capital social</dt>
+            <dt class="text-slate-400">Share capital</dt>
             <dd class="text-white">{ORG.capital}</dd>
             <dt class="text-slate-400">SIREN / SIRET</dt>
             <dd class="text-white">{ORG.siren} / {ORG.siret}</dd>
             <dt class="text-slate-400">RCS</dt>
             <dd class="text-white">{ORG.rcs}</dd>
-            <dt class="text-slate-400">Code APE</dt>
+            <dt class="text-slate-400">APE code</dt>
             <dd class="text-white">{ORG.codeApe}</dd>
-            <dt class="text-slate-400">Siège social</dt>
+            <dt class="text-slate-400">Registered office</dt>
             <dd class="text-white">{ORG.address}</dd>
-            <dt class="text-slate-400">Site</dt>
+            <dt class="text-slate-400">Website</dt>
             <dd class="text-white">
               <ExternalLink href={ORG.website}>{ORG.website}</ExternalLink>
             </dd>
-            <dt class="text-slate-400">Contact général</dt>
+            <dt class="text-slate-400">General contact</dt>
             <dd class="text-white">
               <a
                 href={`mailto:${ORG.contactEmail}`}
@@ -75,278 +75,269 @@ export default function TermsOfService() {
             </dd>
           </dl>
           <p>
-            Conformément à l'article 6-III de la loi n° 2004-575 du 21 juin
-            2004 pour la confiance dans l'économie numérique (« LCEN »),
-            l'hébergeur du service est{" "}
-            <strong>{HOSTING.provider}</strong>, {HOSTING.address}. Les
-            serveurs utilisés pour DnDiscord sont situés dans un{" "}
+            In accordance with art. 6-III de la loi n° 2004-575 du 21 juin
+            2004 (LCEN), the hosting provider for the service is{" "}
+            <strong>{HOSTING.provider}</strong>, {HOSTING.address}. The
+            servers used for DnDiscord are located in a{" "}
             <strong>{HOSTING.serverLocation}</strong>.
           </p>
           <p>
-            L'utilisation de DnDiscord est également soumise aux{" "}
+            Use of DnDiscord is also subject to the{" "}
             <ExternalLink href={EXT.discordTerms}>
-              Conditions d'utilisation de Discord
+              Discord Terms of Service
             </ExternalLink>{" "}
-            et aux{" "}
+            and the{" "}
             <ExternalLink href="https://discord.com/guidelines">
-              Règles de la communauté Discord
+              Discord Community Guidelines
             </ExternalLink>
-            , aux{" "}
+            , the{" "}
             <ExternalLink href="https://support-dev.discord.com/hc/en-us/articles/8562894815383-Discord-Developer-Terms-of-Service">
               Discord Developer Terms of Service
             </ExternalLink>{" "}
-            et à la{" "}
+            and the{" "}
             <ExternalLink href={EXT.discordDevPolicy}>
               Discord Developer Policy
             </ExternalLink>
-            . En cas de contradiction irréductible, les règles propres à la
-            plateforme Discord prévalent pour tout ce qui relève de ladite
-            plateforme.
+            . In the event of an irreconcilable conflict, Discord's own
+            platform rules take precedence for anything falling within that
+            platform's scope.
           </p>
         </Card>
 
         {/* 2 */}
-        <Card title="2. Définitions">
+        <Card title="2. Definitions">
           <ul class="list-disc list-inside space-y-1 text-sm">
             <li>
-              <strong>Service</strong> : la plateforme DnDiscord (Activité
-              Discord, API, interfaces web, bot associé).
+              <strong>Service</strong>: the DnDiscord platform (Discord
+              Activity, API, web interfaces, associated bot).
             </li>
             <li>
-              <strong>Utilisateur</strong> : toute personne accédant au
-              Service, à titre gratuit ou dans le cadre d'un abonnement.
+              <strong>User</strong>: any person accessing the Service,
+              whether on the free tier or under a paid subscription.
             </li>
             <li>
-              <strong>Compte</strong> : espace personnel ouvert à
-              l'Utilisateur via l'authentification Discord OAuth 2.0.
+              <strong>Account</strong>: personal space opened for the User
+              via Discord OAuth 2.0 authentication.
             </li>
             <li>
-              <strong>MJ (Maître du jeu)</strong> : Utilisateur créant et
-              animant une campagne.
+              <strong>GM (Game Master)</strong>: a User who creates and runs
+              a Campaign.
             </li>
             <li>
-              <strong>Campagne</strong> : espace de jeu regroupant un MJ et
-              des joueurs autour d'un scénario.
+              <strong>Campaign</strong>: a game space bringing together a GM
+              and players around a scenario.
             </li>
             <li>
-              <strong>Contenu Utilisateur</strong> : toute donnée créée ou
-              transmise par l'Utilisateur (personnages, cartes, dialogues,
-              messages de chat).
+              <strong>User Content</strong>: any data created or transmitted
+              by the User (characters, maps, dialogues, chat messages).
             </li>
             <li>
-              <strong>Éditeur</strong> : Studio I-XX SAS, responsable du
-              Service.
+              <strong>Publisher</strong>: Studio I-XX SAS, responsible for
+              the Service.
             </li>
           </ul>
         </Card>
 
         {/* 3 */}
-        <Card title="3. Objet et champ d'application">
+        <Card title="3. Purpose and scope">
           <p>
-            Les CGU définissent les conditions dans lesquelles l'Éditeur met
-            le Service à disposition des Utilisateurs et leurs droits et
-            obligations respectifs. Elles s'appliquent à toute utilisation
-            du Service, qu'il s'agisse de l'offre gratuite ou d'un
-            abonnement payant.
+            These Terms define the conditions under which the Publisher
+            makes the Service available to Users, as well as their
+            respective rights and obligations. They apply to any use of the
+            Service, whether on the free tier or under a paid subscription.
           </p>
         </Card>
 
         {/* 4 */}
-        <Card title="4. Acceptation et modification des CGU">
+        <Card title="4. Acceptance and modification of the Terms">
           <p>
-            L'accès au Service vaut acceptation pleine et entière des
-            présentes CGU. L'Éditeur se réserve le droit de les modifier à
-            tout moment, notamment pour se conformer à l'évolution
-            réglementaire ou intégrer de nouvelles fonctionnalités. Les
-            modifications substantielles sont notifiées dans l'application
-            au moins <strong>15 jours</strong> avant leur entrée en vigueur.
-            La poursuite de l'utilisation après cette date vaut acceptation
-            des nouvelles CGU. À défaut, l'Utilisateur peut résilier son
-            compte dans les conditions de l'article 14.
+            Accessing the Service constitutes full and unreserved acceptance
+            of these Terms. The Publisher reserves the right to modify them
+            at any time, in particular to comply with regulatory changes or
+            to incorporate new features. Material changes are notified
+            within the application at least <strong>15 days</strong> before
+            they take effect. Continued use after that date constitutes
+            acceptance of the updated Terms. Otherwise, the User may
+            terminate their Account under the conditions set out in
+            Section 14.
           </p>
           <p>
-            <strong>Langue faisant foi</strong> — Les présentes CGU sont
-            rédigées en français. Toute traduction proposée à titre
-            informatif ne saurait primer sur la version française, qui
-            constitue la seule version contractuellement opposable.
+            <strong>Authoritative language</strong> — These Terms of Service
+            are drafted in English (translation of the original French
+            version). The French version remains the legally binding
+            reference; any divergence is interpreted in light of the French
+            original.
           </p>
         </Card>
 
         {/* 5 */}
-        <Card title="5. Conditions d'accès au service">
+        <Card title="5. Conditions of access to the service">
           <ul class="list-disc list-inside space-y-1 text-sm">
             <li>
-              <strong>Âge minimum : 15 ans</strong>, conformément à
-              l'article 8 du RGPD et à l'article 7-1 de la loi Informatique
-              et Libertés (âge du consentement numérique en France). En
-              dessous de 15 ans, l'accès n'est licite qu'avec le
-              consentement du ou des titulaires de l'autorité parentale.
+              <strong>Minimum age: 15 years old</strong>, in accordance with
+              art. 8 du RGPD and art. 7-1 de la loi Informatique et
+              Libertés (digital age of consent in France). Users under 15
+              may only access the Service with the consent of their parent
+              or legal guardian.
             </li>
             <li>
-              Discord applique par ailleurs un seuil de 13 ans qui constitue
-              une première barrière d'âge.
+              Discord independently enforces a minimum age of 13, which
+              constitutes a first age barrier.
             </li>
             <li>
-              <strong>Capacité juridique</strong> : l'Utilisateur déclare
-              avoir la capacité juridique pour contracter ou, à défaut,
-              avoir obtenu l'autorisation du représentant légal.
+              <strong>Legal capacity</strong>: the User declares having the
+              legal capacity to enter into a contract or, failing that,
+              having obtained the authorization of their legal
+              representative.
             </li>
             <li>
-              <strong>Compte Discord</strong> valide requis.
-              L'authentification est exclusivement déléguée à Discord via
-              OAuth 2.0 ; l'Éditeur ne gère ni mot de passe, ni e-mail de
-              contact autre que celui fourni par Discord.
+              A valid <strong>Discord Account</strong> is required.
+              Authentication is delegated exclusively to Discord via OAuth
+              2.0; the Publisher neither manages passwords nor any contact
+              email other than the one provided by Discord.
             </li>
             <li>
-              <strong>Sincérité et exactitude</strong> : l'Utilisateur
-              s'engage à fournir des informations exactes et à les tenir à
-              jour.
+              <strong>Accuracy</strong>: the User undertakes to provide
+              accurate information and to keep it up to date.
             </li>
             <li>
-              Le Service est fourni <em>« en l'état »</em>. L'Éditeur met en
-              œuvre les moyens raisonnables pour assurer sa disponibilité
-              mais ne garantit pas une disponibilité ininterrompue.
+              The Service is provided <em>"as is"</em>. The Publisher
+              implements reasonable measures to ensure availability but does
+              not guarantee uninterrupted uptime.
             </li>
           </ul>
         </Card>
 
         {/* 6 */}
-        <Card title="6. Description du service et évolutions">
+        <Card title="6. Service description and evolution">
           <p>
-            DnDiscord met à disposition de ses Utilisateurs :
+            DnDiscord provides its Users with:
           </p>
           <ul class="list-disc list-inside space-y-1 text-sm">
-            <li>un plateau de jeu 3D (rendu BabylonJS, vue isométrique) ;</li>
-            <li>un module de création et gestion de personnages ;</li>
-            <li>un module de gestion de campagnes par un MJ ;</li>
+            <li>a 3D game board (BabylonJS rendering, isometric view);</li>
+            <li>a character creation and management module;</li>
+            <li>a campaign management module for the GM;</li>
             <li>
-              une synchronisation multijoueur temps réel via WebSockets
-              (SignalR) ;
+              real-time multiplayer synchronization via WebSockets
+              (SignalR);
             </li>
             <li>
-              un chat intégré (bulles de dialogue au-dessus des personnages,
-              style visuel distinct pour le MJ) ;
+              an integrated chat (speech bubbles above characters, distinct
+              visual style for the GM);
             </li>
-            <li>l'authentification via OAuth Discord.</li>
+            <li>Discord OAuth authentication.</li>
           </ul>
           <p>
-            L'Éditeur se réserve le droit de faire évoluer, modifier ou
-            supprimer tout ou partie des fonctionnalités, notamment dans un
-            objectif d'amélioration technique, d'élargissement
-            fonctionnel ou de conformité réglementaire.
+            The Publisher reserves the right to evolve, modify or remove
+            any feature, in particular for technical improvement, functional
+            expansion or regulatory compliance purposes.
           </p>
         </Card>
 
         {/* 7 */}
-        <Card title="7. Abonnements, tarifs, paiement et rétractation">
+        <Card title="7. Subscriptions, pricing, payment and right of withdrawal">
           <p>
-            Le Service est proposé selon un modèle <strong>freemium</strong>{" "}
-            : certaines fonctionnalités de base sont accessibles
-            gratuitement, d'autres sont réservées aux abonnements payants.
-            Les paliers, fonctionnalités incluses et prix sont présentés
-            dans l'interface de l'application au moment de la souscription.
-            {/* TODO RGPD : renseigner ici les paliers d'abonnement définitifs. */}
+            The Service is offered on a <strong>freemium</strong> model:
+            certain basic features are available for free, while others are
+            reserved for paid subscribers. Tiers, included features and
+            prices are displayed within the application at the time of
+            subscription.
+            {/* TODO: list final subscription tiers here. */}
           </p>
           <p>
-            <strong>Paiement</strong> : les abonnements sont prélevés par un
-            prestataire de paiement certifié PCI-DSS (ex. Stripe Payments
-            Europe Ltd.). Les données de carte bancaire ne transitent pas
-            par les serveurs de l'Éditeur.
+            <strong>Payment</strong>: subscriptions are billed through a
+            PCI-DSS-certified payment provider (e.g. Stripe Payments Europe
+            Ltd.). Card data does not pass through the Publisher's servers.
           </p>
           <p>
-            <strong>Droit de rétractation (art. L221-18 Code de la
-            consommation)</strong> — L'Utilisateur consommateur dispose d'un
-            délai de <strong>14 jours</strong> à compter de la souscription
-            pour exercer son droit de rétractation, sans motif.
-            Conformément à l'article L221-28 13°, le droit de rétractation
-            ne s'applique pas au contenu numérique fourni sur un support
-            immatériel dont l'exécution a commencé <strong>avec l'accord
-            préalable exprès</strong> de l'Utilisateur et son renoncement
-            exprès à ce droit — cette renonciation est recueillie
-            explicitement au moment de l'activation des fonctionnalités
-            payantes.
+            <strong>Right of withdrawal (art. L221-18 Code de la
+            consommation)</strong> — Consumer Users have{" "}
+            <strong>14 days</strong> from subscription to exercise their
+            right of withdrawal, without giving any reason. In accordance
+            with art. L221-28 13°, the right of withdrawal does not apply
+            to digital content delivered on an intangible medium whose
+            execution has begun <strong>with the User's prior express
+            consent</strong> and their express waiver of that right — this
+            waiver is collected explicitly at the moment the paid features
+            are activated.
           </p>
           <p>
-            <strong>Reconduction tacite (art. L215-1 et L215-2 C. conso.)</strong>{" "}
-            — Les abonnements souscrits par un consommateur sont reconduits
-            tacitement. L'Éditeur informe l'Utilisateur, au plus tôt trois
-            mois et au plus tard un mois avant l'échéance, de la faculté
-            de ne pas reconduire le contrat. L'Utilisateur peut résilier
-            librement et à tout moment après reconduction, sans pénalité.
+            <strong>Tacit renewal (art. L215-1 et L215-2 C. conso.)</strong>{" "}
+            — Consumer subscriptions renew automatically. The Publisher
+            notifies the User no earlier than three months and no later
+            than one month before the renewal date of their right not to
+            renew. The User may cancel freely and at any time after renewal,
+            without penalty.
           </p>
           <p>
-            <strong>Résiliation et remboursement</strong> — L'Utilisateur
-            peut résilier son abonnement à tout moment depuis les
-            paramètres de son compte. L'accès aux fonctionnalités payantes
-            est maintenu jusqu'au terme de la période déjà réglée ; aucun
-            remboursement au prorata n'est dû, sauf en cas de défaillance
-            substantielle du Service imputable à l'Éditeur.
+            <strong>Cancellation and refunds</strong> — The User may cancel
+            their subscription at any time from their account settings.
+            Access to paid features is maintained until the end of the
+            already-paid period; no pro-rata refund is owed, except in the
+            event of a material failure of the Service attributable to the
+            Publisher.
           </p>
         </Card>
 
         {/* 8 */}
-        <Card title="8. Propriété intellectuelle">
+        <Card title="8. Intellectual property">
           <p>
-            <strong>Droits de l'Éditeur</strong> — Le Service, son code
-            source, son design, ses interfaces, ses modèles 3D, ses assets
-            originaux, ses bases de données et ses marques (notamment{" "}
-            <em>Studio I-XX</em> et <em>DnDiscord</em>) sont la propriété
-            exclusive de l'Éditeur ou de ses ayants droit et sont protégés
-            par le Code de la propriété intellectuelle et les conventions
-            internationales. Toute reproduction, représentation,
-            adaptation ou modification, totale ou partielle, est interdite
-            sans autorisation écrite préalable.
+            <strong>Publisher's rights</strong> — The Service, its source
+            code, design, interfaces, 3D models, original assets, databases
+            and trademarks (including <em>Studio I-XX</em> and{" "}
+            <em>DnDiscord</em>) are the exclusive property of the Publisher
+            or its rights holders and are protected by intellectual property
+            law and international conventions. Any reproduction,
+            representation, adaptation or modification, in whole or in part,
+            is prohibited without prior written authorization.
           </p>
           <p>
-            <strong>Contenus Utilisateur</strong> — L'Utilisateur conserve
-            l'intégralité de ses droits sur les contenus qu'il crée
-            (personnages, campagnes, cartes, textes, dialogues). Il accorde
-            à l'Éditeur, pour la durée de son utilisation du Service et aux
-            seules fins de fonctionnement et d'affichage du Service, une
-            licence <strong>non exclusive</strong>, mondiale, à titre
-            gratuit, limitée au strict nécessaire pour héberger, afficher,
-            sauvegarder et synchroniser ces contenus entre les joueurs
-            d'une même campagne.
+            <strong>User Content</strong> — The User retains full ownership
+            of the content they create (characters, campaigns, maps, texts,
+            dialogues). For the duration of their use of the Service and
+            solely for the purpose of operating and displaying the Service,
+            the User grants the Publisher a <strong>non-exclusive</strong>,
+            worldwide, royalty-free licence, limited strictly to what is
+            necessary to host, display, save and synchronize that content
+            among players within the same Campaign.
           </p>
           <p>
-            <strong>Règles du jeu (SRD 5.2)</strong> — Les règles de jeu
-            employées par DnDiscord sont compatibles avec le{" "}
-            <em>System Reference Document 5.2</em> publié par{" "}
-            <strong>Wizards of the Coast LLC</strong> sous la licence{" "}
+            <strong>Game rules (SRD 5.2)</strong> — The game rules used by
+            DnDiscord are compatible with the{" "}
+            <em>System Reference Document 5.2</em> published by{" "}
+            <strong>Wizards of the Coast LLC</strong> under the{" "}
             <ExternalLink href="https://creativecommons.org/licenses/by/4.0/">
               Creative Commons Attribution 4.0 International (CC BY 4.0)
-            </ExternalLink>
-            . Conformément à cette licence, la mention d'attribution
-            suivante est inscrite dans les crédits du Service :{" "}
+            </ExternalLink>{" "}
+            licence. In accordance with that licence, the following
+            attribution notice appears in the Service credits:{" "}
             <em>
-              « Portions of the materials used are property of Wizards of
-              the Coast. ©Wizards of the Coast LLC. »
+              "Portions of the materials used are property of Wizards of
+              the Coast. ©Wizards of the Coast LLC."
             </em>{" "}
-            DnDiscord n'est pas affilié, sponsorisé ou approuvé par Wizards
-            of the Coast LLC ou Hasbro.
+            DnDiscord is not affiliated with, sponsored by or endorsed by
+            Wizards of the Coast LLC or Hasbro.
           </p>
           <p>
-            <strong>Marques tierces</strong> — Les marques{" "}
-            <em>Discord</em>, <em>BabylonJS</em> et toutes les autres
-            marques citées demeurent la propriété de leurs détenteurs
-            respectifs.
+            <strong>Third-party trademarks</strong> — The trademarks{" "}
+            <em>Discord</em>, <em>BabylonJS</em> and all other trademarks
+            cited remain the property of their respective owners.
           </p>
         </Card>
 
         {/* 9 */}
-        <Card title="9. Données personnelles">
+        <Card title="9. Personal data">
           <p>
-            Le traitement de vos données personnelles est décrit en détail
-            dans notre{" "}
+            The processing of your personal data is described in detail in
+            our{" "}
             <A href="/privacy" class="text-purple-300 underline hover:text-purple-200">
-              Politique de confidentialité
+              Privacy policy
             </A>
-            , qui précise notamment les finalités, les bases légales, les
-            destinataires, les durées de conservation et vos droits (accès,
-            rectification, effacement, portabilité, opposition,
-            limitation). L'Éditeur a désigné un{" "}
-            <strong>délégué à la protection des données</strong> (DPO)
-            joignable à{" "}
+            , which sets out in particular the purposes, legal bases,
+            recipients, retention periods and your rights (access,
+            rectification, erasure, portability, objection, restriction).
+            The Publisher has appointed a{" "}
+            <strong>Data Protection Officer</strong> (DPO) reachable at{" "}
             <a
               href={`mailto:${ORG.dpoEmail}`}
               class="text-purple-300 underline"
@@ -356,90 +347,89 @@ export default function TermsOfService() {
             .
           </p>
           <p>
-            L'infrastructure applicative est hébergée{" "}
-            <strong>dans l'Union européenne</strong> (datacenter Hostinger
-            en Allemagne). Aucun transfert hors UE n'est effectué au titre
-            de l'hébergement.
+            The application infrastructure is hosted{" "}
+            <strong>within the European Union</strong> (Hostinger datacenter
+            in Germany). No transfer outside the EU takes place in respect
+            of hosting.
           </p>
         </Card>
 
         {/* 10 */}
-        <Card title="10. Cookies et stockage local">
+        <Card title="10. Cookies and local storage">
           <p>
-            DnDiscord n'utilise aucun cookie HTTP et aucun traceur tiers.
-            L'usage du stockage local du navigateur et ses modalités de
-            gestion sont détaillés dans notre{" "}
+            DnDiscord does not use any HTTP cookies or any third-party
+            trackers. The use of browser local storage and the associated
+            management options are detailed in our{" "}
             <A href="/cookies" class="text-purple-300 underline hover:text-purple-200">
-              Politique cookies
+              Cookies policy
             </A>
             .
           </p>
         </Card>
 
         {/* 11 */}
-        <Card title="11. Règles de conduite et contenus interdits">
+        <Card title="11. Code of conduct and prohibited content">
           <p>
-            L'Utilisateur s'engage à respecter les autres Utilisateurs et à
-            ne publier aucun contenu illicite ou contraire aux bonnes
-            mœurs. Sont notamment interdits :
+            The User undertakes to respect other Users and not to post any
+            unlawful content or content contrary to public morals. The
+            following are in particular prohibited:
           </p>
           <ul class="list-disc list-inside space-y-1 text-sm">
             <li>
-              le harcèlement, les insultes, menaces, contenus
-              discriminatoires ou appelant à la haine ;
+              harassment, insults, threats, discriminatory content or
+              content inciting hatred;
             </li>
             <li>
-              les contenus à caractère pédopornographique, pornographique
-              adressé à un mineur, incitant à la violence ou au terrorisme ;
+              child sexual abuse material, pornographic content directed at
+              a minor, content inciting violence or terrorism;
             </li>
             <li>
-              la contrefaçon, l'usurpation d'identité, la diffusion sans
-              droit de contenus protégés ;
+              counterfeiting, identity theft, unauthorized distribution of
+              protected content;
             </li>
             <li>
-              la promotion de jeux d'argent, de substances illicites, la
-              diffusion de données personnelles d'autrui ;
+              promotion of gambling or illegal substances, distribution of
+              third-party personal data;
             </li>
             <li>
-              toute tentative d'accès non autorisé, de scraping massif ou
-              de déni de service.
+              any unauthorized access attempt, mass scraping or
+              denial-of-service attack.
             </li>
           </ul>
           <p>
-            Une vigilance renforcée s'applique aux espaces où des mineurs
-            sont susceptibles d'interagir.
+            Heightened vigilance applies in areas where minors may
+            interact.
           </p>
           <p>
-            <strong>Signalement (Digital Services Act — Règlement UE
-            2022/2065)</strong> — Tout Utilisateur peut signaler un contenu
-            qu'il estime illicite via l'adresse{" "}
+            <strong>Reporting (Digital Services Act — Règlement UE
+            2022/2065)</strong> — Any User may report content they consider
+            unlawful by writing to{" "}
             <a
               href={`mailto:${ORG.abuseEmail}`}
               class="text-purple-300 underline"
             >
               {ORG.abuseEmail}
             </a>
-            . Le signalement doit décrire précisément le contenu visé, sa
-            localisation dans le Service et les motifs justifiant son
-            caractère illicite. L'Éditeur accuse réception dans les
-            meilleurs délais et traite le signalement de façon diligente,
-            non arbitraire et objective.
+            . The report must precisely describe the content in question,
+            its location within the Service, and the reasons justifying its
+            unlawful nature. The Publisher acknowledges receipt as promptly
+            as possible and handles reports in a diligent, non-arbitrary
+            and objective manner.
           </p>
           <p>
-            Pour les contenus pénalement répréhensibles, un signalement
-            peut également être effectué sur la plateforme officielle{" "}
+            For criminally reprehensible content, a report may also be
+            filed via the official platform{" "}
             <ExternalLink href={EXT.pharosUrl}>
               PHAROS ({EXT.pharosUrl.replace(/^https?:\/\//, "")})
             </ExternalLink>
             .
           </p>
           <p>
-            <strong>Sanctions graduées</strong> — En cas de manquement,
-            l'Éditeur peut, selon la gravité : avertir l'Utilisateur,
-            retirer le contenu litigieux, suspendre temporairement l'accès
-            au Service, ou résilier définitivement le compte. L'Utilisateur
-            est informé de toute mesure et peut exercer un recours en
-            écrivant à{" "}
+            <strong>Graduated sanctions</strong> — In the event of a
+            breach, the Publisher may, depending on severity: warn the
+            User, remove the disputed content, temporarily suspend access
+            to the Service, or permanently terminate the Account. The User
+            is notified of any measure taken and may appeal by writing to{" "}
             <a
               href={`mailto:${ORG.contactEmail}`}
               class="text-purple-300 underline"
@@ -451,60 +441,59 @@ export default function TermsOfService() {
         </Card>
 
         {/* 12 */}
-        <Card title="12. Responsabilité">
+        <Card title="12. Liability">
           <p>
-            <strong>Obligation de moyens</strong> — L'Éditeur est soumis à
-            une obligation de moyens dans la fourniture du Service. Il met
-            en œuvre les diligences raisonnables pour assurer son bon
-            fonctionnement, sa sécurité et sa disponibilité.
+            <strong>Best-efforts obligation</strong> — The Publisher is
+            subject to a best-efforts obligation in the provision of the
+            Service. It implements reasonable diligence to ensure proper
+            operation, security and availability.
           </p>
           <p>
-            <strong>Disponibilité</strong> — Le Service peut être
-            temporairement indisponible pour des raisons de maintenance
-            planifiée, d'incident technique, de défaillance de prestataires
-            tiers (Hostinger, Discord, Cloudflare…) ou pour des raisons
-            indépendantes de la volonté de l'Éditeur. L'Éditeur n'est pas
-            responsable des indisponibilités provenant de ces tiers.
+            <strong>Availability</strong> — The Service may be temporarily
+            unavailable due to scheduled maintenance, a technical incident,
+            failure of third-party providers (Hostinger, Discord,
+            Cloudflare…) or for reasons beyond the Publisher's control. The
+            Publisher is not liable for unavailability caused by such third
+            parties.
           </p>
           <p>
-            <strong>Limitation de responsabilité</strong> — Dans les
-            limites autorisées par les articles 1231-1 et suivants du Code
-            civil, la responsabilité de l'Éditeur ne saurait être engagée
-            pour les dommages indirects (perte de données, manque à
-            gagner, atteinte à la réputation, dommage moral indirect). Les
-            présentes limitations ne s'appliquent pas en cas de faute
-            lourde, dolosive ou de dommage corporel, conformément au droit
-            impératif français.
+            <strong>Limitation of liability</strong> — To the extent
+            permitted by art. 1231-1 et suivants du Code civil, the
+            Publisher shall not be liable for indirect damages (loss of
+            data, loss of profit, reputational harm, indirect moral
+            damages). These limitations do not apply in cases of gross
+            negligence, wilful misconduct or personal injury, in accordance
+            with mandatory French law.
           </p>
           <p>
-            <strong>Force majeure</strong> — L'Éditeur ne peut être tenu
-            responsable de l'inexécution de ses obligations lorsque celle-ci
-            résulte d'un cas de force majeure au sens de l'article 1218 du
-            Code civil.
+            <strong>Force majeure</strong> — The Publisher cannot be held
+            liable for non-performance of its obligations where such
+            non-performance results from a force majeure event within the
+            meaning of art. 1218 du Code civil.
           </p>
         </Card>
 
         {/* 13 */}
-        <Card title="13. Garanties légales">
+        <Card title="13. Statutory warranties">
           <p>
-            Pour les Utilisateurs consommateurs ayant souscrit à un
-            abonnement payant, les garanties légales s'appliquent :
+            For consumer Users who have subscribed to a paid plan, the
+            following statutory warranties apply:
           </p>
           <ul class="list-disc list-inside space-y-1 text-sm">
             <li>
-              <strong>Garantie légale de conformité</strong> (art. L224-25-12
-              et suivants du Code de la consommation pour les services
-              numériques) : le Service doit correspondre à la description
-              donnée et être exempt de défauts.
+              <strong>Statutory warranty of conformity</strong> (art.
+              L224-25-12 et suivants du Code de la consommation for digital
+              services): the Service must match its description and be free
+              from defects.
             </li>
             <li>
-              <strong>Garantie des vices cachés</strong> (art. 1641 et
-              suivants du Code civil) pour les défauts non apparents
-              rendant le Service impropre à son usage.
+              <strong>Warranty against hidden defects</strong> (art. 1641
+              et suivants du Code civil) for latent defects rendering the
+              Service unfit for its intended use.
             </li>
           </ul>
           <p>
-            Les demandes au titre de ces garanties peuvent être adressées à{" "}
+            Claims under these warranties may be sent to{" "}
             <a
               href={`mailto:${ORG.contactEmail}`}
               class="text-purple-300 underline"
@@ -516,137 +505,134 @@ export default function TermsOfService() {
         </Card>
 
         {/* 14 */}
-        <Card title="14. Durée, suspension et résiliation du compte">
+        <Card title="14. Duration, suspension and account termination">
           <p>
-            Les CGU s'appliquent pour toute la durée d'utilisation du
+            These Terms apply for the entire duration of use of the
             Service.
           </p>
           <p>
-            <strong>À l'initiative de l'Utilisateur</strong> — L'Utilisateur
-            peut résilier son compte à tout moment depuis les paramètres
-            « Confidentialité & données ». Cette action entraîne la
-            suppression définitive de son compte, de ses personnages, de
-            ses campagnes possédées et contenus associés, ainsi qu'une
-            proposition d'export préalable de ses données (RGPD art. 20).
+            <strong>At the User's initiative</strong> — The User may
+            terminate their Account at any time from the "Privacy &amp; data"
+            settings. This action results in the permanent deletion of their
+            Account, characters, owned Campaigns and associated content,
+            along with a prior data-export offer (RGPD art. 20).
           </p>
           <p>
-            <strong>À l'initiative de l'Éditeur</strong> — L'Éditeur peut
-            suspendre ou résilier l'accès d'un Utilisateur en cas de
-            manquement grave ou répété aux présentes CGU ou à la loi,
-            moyennant notification préalable sauf urgence (sécurité du
-            Service, contenus manifestement illicites). L'Utilisateur peut
-            contester la décision en répondant à la notification.
+            <strong>At the Publisher's initiative</strong> — The Publisher
+            may suspend or terminate a User's access in the event of a
+            serious or repeated breach of these Terms or of applicable law,
+            subject to prior notice except in urgent cases (Service
+            security, manifestly unlawful content). The User may challenge
+            the decision by responding to the notice.
           </p>
         </Card>
 
         {/* 15 */}
-        <Card title="15. Dépendances à des plateformes tierces">
+        <Card title="15. Dependencies on third-party platforms">
           <ul class="list-disc list-inside space-y-1 text-sm">
             <li>
-              <strong>Discord</strong> — Plateforme d'intégration,
-              authentification OAuth et diffusion du client. L'usage du
-              Service implique le respect des Conditions d'utilisation et
-              des Règles communautaires de Discord. L'Éditeur n'a aucun
-              contrôle sur la disponibilité ou les évolutions de Discord.
+              <strong>Discord</strong> — Integration platform, OAuth
+              authentication and client distribution. Use of the Service
+              implies compliance with Discord's Terms of Service and
+              Community Guidelines. The Publisher has no control over
+              Discord's availability or future changes.
             </li>
             <li>
               <strong>{HOSTING.provider}</strong> (Hostinger) —
-              Fournisseur d'hébergement. SLA et engagements de continuité
-              dépendent des conditions contractuelles de Hostinger,
-              accessibles depuis{" "}
+              Hosting provider. SLA and continuity commitments depend on
+              Hostinger's contractual terms, accessible from{" "}
               <ExternalLink href={HOSTING.contactUrl}>
-                leur site
+                their website
               </ExternalLink>
               .
             </li>
             <li>
-              <strong>Cloudflare, Inc.</strong> — CDN et protection
-              anti-DDoS.
+              <strong>Cloudflare, Inc.</strong> — CDN and anti-DDoS
+              protection.
             </li>
             <li>
-              <strong>Wizards of the Coast LLC</strong> — Titulaire des
-              droits sur le SRD 5.2 utilisé sous licence CC BY 4.0.
+              <strong>Wizards of the Coast LLC</strong> — Rights holder for
+              the SRD 5.2 used under the CC BY 4.0 licence.
             </li>
           </ul>
         </Card>
 
         {/* 16 */}
-        <Card title="16. Dispositions diverses">
+        <Card title="16. Miscellaneous provisions">
           <ul class="list-disc list-inside space-y-1 text-sm">
             <li>
-              <strong>Nullité partielle</strong> — Si l'une des stipulations
-              des CGU est déclarée nulle ou inopposable, les autres
-              stipulations demeurent pleinement en vigueur.
+              <strong>Partial invalidity</strong> — If any provision of
+              these Terms is declared null and void or unenforceable, the
+              remaining provisions remain in full force and effect.
             </li>
             <li>
-              <strong>Non-renonciation</strong> — Le fait pour l'Éditeur de
-              ne pas se prévaloir d'un manquement ne vaut pas renonciation à
-              s'en prévaloir ultérieurement.
+              <strong>No waiver</strong> — The Publisher's failure to
+              enforce any breach does not constitute a waiver of its right
+              to enforce it subsequently.
             </li>
             <li>
-              <strong>Cession</strong> — L'Éditeur peut librement céder les
-              présentes CGU à tout tiers qui lui succéderait dans
-              l'exploitation du Service, sous réserve d'en informer les
-              Utilisateurs.
+              <strong>Assignment</strong> — The Publisher may freely assign
+              these Terms to any third party succeeding it in the operation
+              of the Service, subject to notifying Users.
             </li>
             <li>
-              <strong>Intégralité</strong> — Les présentes CGU, ensemble
-              avec la Politique de confidentialité, la Politique cookies et
-              les Mentions légales, constituent l'intégralité de l'accord
-              entre l'Utilisateur et l'Éditeur.
+              <strong>Entire agreement</strong> — These Terms, together with
+              the Privacy policy, the Cookies policy and the Legal notice,
+              constitute the entire agreement between the User and the
+              Publisher.
             </li>
           </ul>
         </Card>
 
         {/* 17 */}
-        <Card title="17. Droit applicable, médiation et juridiction">
+        <Card title="17. Applicable law, mediation and jurisdiction">
           <p>
-            Les présentes CGU sont soumises à la loi {ORG.applicableLaw}.
+            These Terms are governed by {ORG.applicableLaw} law.
           </p>
           <p>
-            <strong>Médiation de la consommation</strong> (art. L611-1 et
-            suivants du Code de la consommation) — En cas de litige qui
-            n'aurait pu être résolu par une réclamation préalable auprès de
-            l'Éditeur, le consommateur peut recourir gratuitement au
-            médiateur de la consommation suivant :{" "}
+            <strong>Consumer mediation</strong> (art. L611-1 et suivants du
+            Code de la consommation) — In the event of a dispute that could
+            not be resolved through a prior complaint to the Publisher, the
+            consumer may have free recourse to the following consumer
+            mediator:{" "}
             <strong>{MEDIATOR.name}</strong> —{" "}
             <ExternalLink href={MEDIATOR.url}>{MEDIATOR.url}</ExternalLink>
-            .{/* TODO : désigner un médiateur agréé CECMC et mettre à jour ici. */}
+            .{/* TODO: appoint a CECMC-approved mediator and update here. */}
           </p>
           <p>
-            Pour les litiges transfrontaliers au sein de l'Union
-            européenne, la plateforme{" "}
+            For cross-border disputes within the European Union, the
+            European Commission's{" "}
             <ExternalLink href={EXT.odrUrl}>
-              de règlement en ligne des litiges (RLL)
+              Online Dispute Resolution (ODR) platform
             </ExternalLink>{" "}
-            de la Commission européenne est également disponible.
+            is also available.
           </p>
           <p>
-            <strong>Juridiction compétente</strong> — À défaut de
-            résolution amiable : pour les relations entre professionnels,
-            les {ORG.jurisdiction.toLowerCase()} sont seuls compétents ;
-            pour les consommateurs, le tribunal compétent est celui du lieu
-            de domicile du consommateur ou du lieu d'exécution du contrat,
-            conformément à l'article R631-3 du Code de la consommation et
-            aux règles d'ordre public protégeant les consommateurs.
+            <strong>Competent court</strong> — Failing amicable resolution:
+            for business-to-business disputes, the{" "}
+            {ORG.jurisdiction.toLowerCase()} have exclusive jurisdiction;
+            for consumers, the competent court is that of the consumer's
+            place of domicile or the place of performance of the contract,
+            in accordance with art. R631-3 du Code de la consommation and
+            mandatory consumer-protection rules.
           </p>
         </Card>
 
         <nav class="flex flex-wrap items-center gap-x-3 gap-y-2 pt-6 text-sm text-slate-400">
           <A href="/privacy" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
-            Politique de confidentialité
+            Privacy policy
           </A>
           <span class="text-slate-600">·</span>
           <A href="/legal" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
-            Mentions légales
+            Legal notice
           </A>
           <span class="text-slate-600">·</span>
           <A href="/cookies" class="text-purple-300 hover:text-purple-200 underline underline-offset-2">
-            Politique cookies
+            Cookies policy
           </A>
         </nav>
         <p class="pt-2 text-xs text-slate-500">
-          En vigueur depuis le {ORG.lastUpdated}.
+          In effect since {ORG.lastUpdated}.
         </p>
       </main>
 
