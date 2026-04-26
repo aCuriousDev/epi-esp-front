@@ -327,6 +327,11 @@ export const en = {
   "createCampaign.chars": "characters",
   "createCampaign.submit": "Create campaign",
   "createCampaign.submitting": "Creating…",
+  // CreateCampaign — P5d polish
+  "page.createCampaign.basicInfo": "Basic information",
+  "page.createCampaign.charCounter": "{n}/{max}",
+  "page.createCampaign.minPlayers": "MIN",
+  "page.createCampaign.maxPlayers": "MAX",
 
   // EditCampaign
   "editCampaign.subtitle": "Update the main information",
