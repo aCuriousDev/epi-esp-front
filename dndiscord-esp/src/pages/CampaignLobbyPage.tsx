@@ -3,20 +3,23 @@ import {
   createEffect,
   createSignal,
   For,
+  onCleanup,
   onMount,
   Show,
 } from 'solid-js';
 import { useNavigate, useParams } from '@solidjs/router';
 import { Copy, Check, Play, Loader2, Users } from 'lucide-solid';
-import { sessionState, isHost } from '@/stores/session.store';
+import { sessionState, isHost, clearSession } from '@/stores/session.store';
 import { PlayerRole } from '@/types/multiplayer';
 import {
   selectCharacter,
   startGame as startGameHub,
+  leaveSession,
 } from '@/services/signalr/multiplayer.service';
 import { CharacterService, type CharacterDto } from '@/services/character.service';
 import { signalRService } from '@/services/signalr/SignalRService';
 import { ensureMultiplayerHandlersRegistered } from '@/services/signalr/multiplayer.service';
+import { useGameShellExit } from '@/layouts/GameShell';
 
 const CampaignLobbyPage: Component = () => {
   const params = useParams();
@@ -50,6 +53,24 @@ const CampaignLobbyPage: Component = () => {
     } catch (e) {
       console.warn('[CampaignLobby] Failed to load characters:', e);
     }
+  });
+
+  // Wire the GameShell Exit button to leave the multiplayer session before
+  // navigating away. Plain history-back would orphan the user as a "ghost"
+  // participant on the server side until the hub eventually times them out.
+  const exitApi = useGameShellExit();
+  const handleLobbyExit = async () => {
+    try {
+      await leaveSession();
+    } catch (err) {
+      console.warn('[CampaignLobby] leaveSession hub call failed, clearing local state', err);
+      clearSession();
+    }
+    navigate(`/campaigns/${params.id}`, { replace: true });
+  };
+  onMount(() => {
+    exitApi.setExitHandler(handleLobbyExit);
+    onCleanup(() => exitApi.setExitHandler(null));
   });
 
   // Quand le MJ lance la session → tout le monde navigue vers la page session.
@@ -93,9 +114,9 @@ const CampaignLobbyPage: Component = () => {
   };
 
   return (
-    <div class="w-full min-h-full" style={{ color: '#d4d4d4', 'font-family': 'system-ui, -apple-system, sans-serif' }}>
+    <div class="w-full h-full overflow-y-auto" style={{ color: '#d4d4d4', 'font-family': 'system-ui, -apple-system, sans-serif' }}>
       {/* Lobby header — room code + campaign name */}
-      <header class="sticky top-0 z-20 flex items-center justify-between pl-16 sm:pl-20 pr-6 py-4 border-b border-white/10 bg-black/40 backdrop-blur-md">
+      <header class="sticky top-0 z-20 flex items-center justify-between pl-16 sm:pl-20 pr-16 sm:pr-20 py-4 border-b border-white/10 bg-black/40 backdrop-blur-md">
         <div class="text-center">
           <p class="text-xs text-purple-400 uppercase tracking-wider font-medium">Waiting room</p>
           <h1 class="font-display text-lg text-white">
