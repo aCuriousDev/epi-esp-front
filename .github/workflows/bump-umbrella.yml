@@ -1,0 +1,89 @@
+name: Bump umbrella submodule
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bump-umbrella
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    if: ${{ vars.UMBRELLA_BUMP_ENABLED != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.UMBRELLA_PUSH_KEY }}
+
+      - name: Trust github.com host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -t ed25519,rsa github.com >> ~/.ssh/known_hosts
+
+      - name: Clone umbrella
+        run: git clone --depth=1 git@github.com:aCuriousDev/dnDiscord-umbrella.git umbrella
+
+      - name: Determine submodule path
+        id: submod
+        run: |
+          case "${{ github.repository }}" in
+            aCuriousDev/epi-esp-back)    echo "path=back"    >> "$GITHUB_OUTPUT" ;;
+            aCuriousDev/epi-esp-front)   echo "path=front"   >> "$GITHUB_OUTPUT" ;;
+            aCuriousDev/epi-esp-landing) echo "path=landing" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::unmapped repo ${{ github.repository }}"; exit 1 ;;
+          esac
+
+      - name: Bump pointer and push
+        working-directory: umbrella
+        env:
+          SUBMOD: ${{ steps.submod.outputs.path }}
+          NEW_SHA: ${{ github.sha }}
+        run: |
+          git config user.name  "Quentin Berger"
+          git config user.email "quentinmarius@gmail.com"
+
+          git update-index --cacheinfo "160000,${NEW_SHA},${SUBMOD}"
+
+          if git diff --cached --exit-code; then
+            echo "Submodule ${SUBMOD} already at ${NEW_SHA}. Nothing to bump."
+            exit 0
+          fi
+
+          SHORT="${NEW_SHA:0:7}"
+          git commit -m "chore(${SUBMOD}): bump to ${SHORT}"
+
+          for attempt in 1 2 3; do
+            if git push origin main; then
+              echo "pushed on attempt ${attempt}"
+              exit 0
+            fi
+            echo "push attempt ${attempt} failed, refreshing"
+            git fetch origin main
+            git reset --mixed origin/main
+            git update-index --cacheinfo "160000,${NEW_SHA},${SUBMOD}"
+            if git diff --cached --exit-code; then
+              echo "Race resolved cleanly: submodule already at ${NEW_SHA} on origin."
+              exit 0
+            fi
+            git commit -m "chore(${SUBMOD}): bump to ${SHORT}"
+            sleep $((attempt * 5))
+          done
+          echo "::error::failed to push after 3 attempts"
+          exit 1
+
+      - name: Summary
+        if: success()
+        env:
+          SUBMOD: ${{ steps.submod.outputs.path }}
+          NEW_SHA: ${{ github.sha }}
+        run: |
+          echo "Bumped umbrella submodule '${SUBMOD}' to ${NEW_SHA:0:7}" >> "$GITHUB_STEP_SUMMARY"
