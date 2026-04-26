@@ -1,7 +1,9 @@
-import { Component } from "solid-js";
+import { Component, createSignal, Show } from "solid-js";
 import { ChevronRight } from "lucide-solid";
 import { CharacterDto } from "../services/character.service";
 import { getClassHex } from "../utils/classColor";
+import { GetCharacterProfilPic } from "../utils/characterProfilPic";
+import { CharacterClass } from "../types/character";
 import { t } from "../i18n";
 
 interface CharacterCardProps {
@@ -13,6 +15,9 @@ const CharacterCard: Component<CharacterCardProps> = (props) => {
   const c = () => props.character;
   const initial = () => (c().name?.charAt(0) || "?").toUpperCase();
   const color = () => getClassHex(c().class);
+  const portraitUrl = () =>
+    GetCharacterProfilPic.getCharacterProfilPicOrDefault(c().class as CharacterClass);
+  const [imgFailed, setImgFailed] = createSignal(false);
 
   return (
     <button
@@ -22,7 +27,7 @@ const CharacterCard: Component<CharacterCardProps> = (props) => {
     >
       <div class="grid items-center gap-[18px]" style={{ "grid-template-columns": "88px 1fr auto" }}>
         <div
-          class="w-[88px] h-[88px] rounded-ds-md flex items-center justify-center font-display font-bold text-[32px] shrink-0"
+          class="w-[88px] h-[88px] rounded-ds-md flex items-center justify-center font-display font-bold text-[32px] shrink-0 overflow-hidden relative"
           style={{
             background: `linear-gradient(135deg, ${color()} 0%, rgba(0,0,0,0.5) 120%)`,
             border: "1px solid rgba(244,197,66,0.3)",
@@ -31,7 +36,14 @@ const CharacterCard: Component<CharacterCardProps> = (props) => {
           }}
           aria-hidden="true"
         >
-          {initial()}
+          <Show when={!imgFailed()} fallback={<>{initial()}</>}>
+            <img
+              src={portraitUrl()}
+              alt=""
+              class="w-full h-full object-cover"
+              onError={() => setImgFailed(true)}
+            />
+          </Show>
         </div>
 
         <div class="min-w-0">
