@@ -7,6 +7,7 @@ import {
   Show,
 } from "solid-js";
 import { ArrowLeft, Copy, Check } from "lucide-solid";
+import { useNavigate } from "@solidjs/router";
 import { sessionState, isHost, clearSession } from "../stores/session.store";
 import { PlayerRole, type PlayerInfo } from "../types/multiplayer";
 import {
@@ -37,6 +38,7 @@ const TEMPLATE_LABELS: Record<string, string> = {
 };
 
 export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
+  const navigate = useNavigate();
   const [characters, setCharacters] = createSignal<CharacterDto[]>([]);
   const [selectedCharId, setSelectedCharId] = createSignal<string | null>(null);
   type DefaultTemplate = "warrior" | "mage" | "archer";
@@ -77,9 +79,21 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
   // React to gameStartedPayload
   createEffect(() => {
     const payload = sessionState.gameStartedPayload;
-    if (payload) {
-      props.onGameStart(payload);
+    if (!payload) return;
+
+    if (payload.mapId === 'campaign') {
+      // Le MJ a lancé une session avec arbre de scénario.
+      // LobbyScreen ne doit PAS appeler onGameStart (qui chargerait 'campaign'
+      // comme une vraie mapId → loadMap('campaign') = null → carte par défaut).
+      // On redirige vers CampaignSessionPage qui gère le runner de scénario.
+      const campaignId = session()?.campaignId;
+      if (campaignId) {
+        navigate(`/campaigns/${campaignId}/session`);
+        return;
+      }
     }
+
+    props.onGameStart(payload);
   });
 
   // Fetch character details for every player who has selected a real
