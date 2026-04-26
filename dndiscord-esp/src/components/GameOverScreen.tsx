@@ -52,9 +52,9 @@ export const GameOverScreen: Component = () => {
             fallback={
               <div class="flex flex-col items-center gap-2 py-3 text-gray-300">
                 <Hourglass class="w-6 h-6 text-game-gold animate-pulse" />
-                <p class="text-sm">En attente du MJ…</p>
+                <p class="text-sm">Waiting for the DM…</p>
                 <p class="text-xs text-gray-500 max-w-xs">
-                  Le Maître du Jeu choisira la suite de la partie.
+                  The Dungeon Master will decide what comes next.
                 </p>
               </div>
             }
@@ -84,7 +84,7 @@ export const GameOverScreen: Component = () => {
                 startGame();
               }}
             >
-              Play Again
+              Continue
             </button>
           </Show>
         </div>
