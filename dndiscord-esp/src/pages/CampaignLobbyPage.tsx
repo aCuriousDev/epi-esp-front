@@ -11,12 +11,12 @@ import { ArrowLeft, Copy, Check, Play, Loader2, Users, UserCircle2, Zap } from '
 import { sessionState, isHost } from '@/stores/session.store';
 import { PlayerRole } from '@/types/multiplayer';
 import {
-  leaveSession,
   selectCharacter,
   selectDefaultTemplate,
   startGame as startGameHub,
   joinCampaignSession,
   ensureMultiplayerHandlersRegistered,
+  leaveSession,
 } from '@/services/signalr/multiplayer.service';
 import { CharacterService, CharacterClass, type CharacterDto } from '@/services/character.service';
 import { CampaignService, GameSessionStatus, type GameSessionResponse } from '@/services/campaign.service';
@@ -352,11 +352,11 @@ const CampaignLobbyPage: Component = () => {
           <div class="flex items-center gap-2 mb-4">
             <Users class="w-5 h-5 text-purple-400" />
             <h2 class="font-display text-xl text-white">
-              Joueurs ({players().length}/{session()?.maxPlayers ?? '?'})
+              Players ({players().length}/{session()?.maxPlayers ?? '?'})
             </h2>
           </div>
           <Show when={players().length === 0}>
-            <p class="text-slate-500 italic text-sm">En attente de joueurs…</p>
+            <p class="text-slate-500 italic text-sm">Waiting for players…</p>
           </Show>
           <div class="space-y-2">
             <For each={players()}>
@@ -544,7 +544,7 @@ const CampaignLobbyPage: Component = () => {
               <Show when={starting()} fallback="Démarrer la session">Lancement…</Show>
             </button>
             <p class="text-center text-sm text-slate-500 mt-3">
-              Les joueurs seront redirigés automatiquement.
+              Players will be redirected automatically.
             </p>
           </section>
         </Show>
@@ -553,7 +553,7 @@ const CampaignLobbyPage: Component = () => {
         <Show when={!amHost()}>
           <div class="text-center py-4 text-slate-400">
             <Loader2 class="w-6 h-6 animate-spin text-purple-400 mx-auto mb-2" />
-            En attente du lancement par le Maître du Jeu…
+            Waiting for the Dungeon Master to start…
           </div>
         </Show>
 

@@ -27,7 +27,7 @@ export const DungeonCreationWizard: Component<DungeonCreationWizardProps> = (pro
 			return;
 		}
 		if (roomCount() < 2 || roomCount() > 20) {
-			alert("Le nombre de salles doit être entre 2 et 20");
+			alert("The number of rooms must be between 2 and 20");
 			return;
 		}
 
@@ -67,7 +67,7 @@ export const DungeonCreationWizard: Component<DungeonCreationWizardProps> = (pro
 			navigate(`/map-editor/${roomIds[0]}?dungeon=${dungeonId}&room=0`);
 		} catch (error) {
 			console.error("Error creating dungeon:", error);
-			alert("Erreur lors de la création du donjon");
+			alert("Error creating dungeon");
 			setIsCreating(false);
 		}
 	};
@@ -76,16 +76,16 @@ export const DungeonCreationWizard: Component<DungeonCreationWizardProps> = (pro
 		<div class="relative min-h-full w-full overflow-hidden bg-brand-gradient">
 			<div class="vignette absolute inset-0 pointer-events-none"></div>
 
-			<button onClick={props.onBack} class="settings-btn" aria-label="Retour">
-				<ArrowLeft class="settings-icon h-5 w-5" />
+			<button onClick={props.onBack} class="in-game-back-btn" aria-label="Back">
+				<ArrowLeft class="in-game-back-icon h-5 w-5" />
 			</button>
 
 			<div class="flex flex-col items-center justify-center min-h-screen p-8">
 				<div class="w-full max-w-lg">
 					<div class="mb-8 text-center">
-						<h1 class="text-4xl font-display text-white mb-2">Créer un Donjon</h1>
+						<h1 class="text-4xl font-display text-white mb-2">Create a Dungeon</h1>
 						<p class="text-slate-300">
-							Un donjon est une série de salles reliées par des portails de téléportation
+							A dungeon is a series of rooms connected by teleportation portals
 						</p>
 					</div>
 
@@ -120,12 +120,12 @@ export const DungeonCreationWizard: Component<DungeonCreationWizardProps> = (pro
 						</div>
 
 						<div class="bg-purple-900/20 rounded-lg p-4 border border-purple-500/20">
-							<h3 class="text-purple-300 font-medium text-sm mb-2">Comment ça marche</h3>
+							<h3 class="text-purple-300 font-medium text-sm mb-2">How it works</h3>
 							<ul class="text-xs text-slate-400 space-y-1.5">
-								<li>1. Vous allez créer {roomCount()} salles une par une dans l'éditeur</li>
-								<li>2. Sur chaque salle (sauf la dernière), placez des cellules de <span class="text-purple-400">téléportation</span> (violet)</li>
-								<li>3. Les cellules de téléportation mènent à la salle suivante</li>
-								<li>4. Sur la dernière salle, tuer tous les ennemis ou atteindre un portail fait gagner le donjon</li>
+								<li>1. You will create {roomCount()} rooms one by one in the editor</li>
+								<li>2. On each room (except the last), place <span class="text-purple-400">teleportation</span> cells (purple)</li>
+								<li>3. Teleportation cells lead to the next room</li>
+								<li>4. In the last room, kill all enemies or reach a portal to win the dungeon</li>
 							</ul>
 						</div>
 
@@ -134,8 +134,8 @@ export const DungeonCreationWizard: Component<DungeonCreationWizardProps> = (pro
 							disabled={isCreating()}
 							class="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-800 hover:from-purple-500 hover:to-purple-700 text-white font-medium rounded-xl transition shadow-lg disabled:opacity-50"
 						>
-							<Show when={!isCreating()} fallback="Création en cours...">
-								Créer le donjon et commencer l'édition
+							<Show when={!isCreating()} fallback="Creating...">
+								Create dungeon and start editing
 							</Show>
 						</button>
 					</div>

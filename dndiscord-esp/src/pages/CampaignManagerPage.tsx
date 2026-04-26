@@ -5,7 +5,7 @@ import { CombatNode } from '../components/campaign-tree-canvas/nodes/CombatNode'
 import { ChoicesNode } from '../components/campaign-tree-canvas/nodes/ChoicesNode';
 import { MapNode } from '../components/campaign-tree-canvas/nodes/MapNode';
 import { Component, createSignal, createEffect, Show, For, onMount, onCleanup } from 'solid-js';
-import { ArrowLeft, Book, CheckCircle, Edit, GripHorizontal, Loader2, Map as MapIcon, Save, Sword, XCircle } from 'lucide-solid';
+import { Book, CheckCircle, Edit, GripHorizontal, Loader2, Map as MapIcon, Save, Sword, XCircle } from 'lucide-solid';
 import { CampaignService, mapCampaignResponse } from '@/services/campaign.service';
 import { Campaign } from '@/types/campaign';
 import { getApiUrl } from '@/services/config';
@@ -17,26 +17,30 @@ import SceneNodeEditor from '@/components/campaign-tree-canvas/SceneNodeEditor';
 import CombatNodeEditor from '@/components/campaign-tree-canvas/CombatNodeEditor';
 import MapNodeEditor from '@/components/campaign-tree-canvas/MapNodeEditor';
 import ExportImportModal from '@/components/campaign-tree-canvas/modals/ExportImportModal';
+import PageMeta from '../layouts/PageMeta';
+import { t } from '../i18n';
 
 const CampaignManager: Component = () => {
   const params = useParams();
   const navigate = useNavigate();
 
+  // NOTE: bloc labels (Scène, Choix, Combat, Carte) are used as node-type
+  // display names throughout the deep canvas editor — flagged for Task 25.
   const blocs = [
     {
-      label: 'Scène', icon: <Book class="w-5 h-5" />, blockName: 'scene',
+      label: t('campaignManager.block.scene'), icon: <Book class="w-5 h-5" />, blockName: 'scene',
       bgColor: '#1c1333', borderColor: '#7c3aed', accentColor: '#a78bfa',
     },
     {
-      label: 'Choix', icon: <GripHorizontal class="w-5 h-5" />, blockName: 'choices',
+      label: t('campaignManager.block.choices'), icon: <GripHorizontal class="w-5 h-5" />, blockName: 'choices',
       bgColor: '#0a2a24', borderColor: '#059669', accentColor: '#34d399',
     },
     {
-      label: 'Combat', icon: <Sword class="w-5 h-5" />, blockName: 'combat',
+      label: t('campaignManager.block.combat'), icon: <Sword class="w-5 h-5" />, blockName: 'combat',
       bgColor: '#2a0909', borderColor: '#dc2626', accentColor: '#f87171',
     },
     {
-      label: 'Carte', icon: <MapIcon class="w-5 h-5" />, blockName: 'map',
+      label: t('campaignManager.block.map'), icon: <MapIcon class="w-5 h-5" />, blockName: 'map',
       bgColor: '#0a1830', borderColor: '#1d4ed8', accentColor: '#60a5fa',
     },
   ];
@@ -216,22 +220,22 @@ const CampaignManager: Component = () => {
       if (type === 'scene') {
         newNode = canvas.addNode({
           type: 'scene', x: baseX, y: baseY,
-          data: { title: 'Nouvelle scène', text: '' },
+          data: { title: 'New scene', text: '' },
         });
       } else if (type === 'choices') {
         newNode = canvas.addNode({
           type: 'choices', x: baseX, y: baseY,
-          data: { title: 'Nouveau choix', text: '', choices: ['Choix 1', 'Choix 2'] },
+          data: { title: 'New choice', text: '', choices: ['Choice 1', 'Choice 2'] },
         });
       } else if (type === 'combat') {
         newNode = canvas.addNode({
           type: 'combat', x: baseX, y: baseY,
-          data: { title: 'Nouveau combat', difficulty: 'medium', villains: [] },
+          data: { title: 'New combat', difficulty: 'medium', villains: [] },
         });
       } else if (type === 'map') {
         newNode = canvas.addNode({
           type: 'map', x: baseX, y: baseY,
-          data: { title: 'Nouvelle carte' },
+          data: { title: 'New map' },
         });
       }
 
@@ -244,8 +248,8 @@ const CampaignManager: Component = () => {
   };
 
   // ─── Update node (callback from editors) ─────────────────────────────────
-  // Les éditeurs appellent directement les méthodes du node — ce callback
-  // est un hook optionnel pour des actions supplémentaires si besoin.
+  // Editors call node methods directly — this callback is an optional hook
+  // for additional actions if needed.
   const handleUpdateNode = (_node?: CampaignNode) => {};
 
   // ─── Build session tree format ────────────────────────────────────────────
@@ -309,10 +313,10 @@ const CampaignManager: Component = () => {
         localStorage.setItem(`dnd-campaign-tree-${params.id}`, JSON.stringify(treeData));
       }
 
-      showToast('Campagne sauvegardée avec succès', 'success');
+      showToast(t('campaignManager.toast.saved'), 'success');
     } catch (err: any) {
       console.error('Failed to save campaign:', err);
-      showToast('Erreur lors de la sauvegarde', 'error');
+      showToast(t('campaignManager.toast.saveError'), 'error');
     } finally {
       setIsSaving(false);
     }
@@ -320,28 +324,20 @@ const CampaignManager: Component = () => {
 
   // ─── JSX ──────────────────────────────────────────────────────────────────
   return (
-    <div class="bg-brand-gradient w-screen h-screen flex flex-col text-[var(--text-mid,#d4d4d4)]" style={{
+    <div class="w-screen h-screen flex flex-col text-[var(--text-mid,#d4d4d4)]" style={{
       'font-family': 'system-ui, -apple-system, sans-serif',
     }}>
-      {/* Header */}
-      <header class="relative z-20 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-game-dark/70 backdrop-blur-md">
-        <button
-          onClick={() => navigate(`/campaigns/${campaign()?.id}`)}
-          class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
-        >
-          <ArrowLeft class="w-5 h-5" />
-          <span class="hidden sm:inline">Retour au menu</span>
-        </button>
+      <PageMeta title={t('page.campaignManager.title')} />
 
-        <h1 class="font-display text-xl text-white tracking-wide">Campagnes</h1>
-
+      {/* Toolbar */}
+      <div class="relative z-20 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-game-dark/70 backdrop-blur-md">
         <div class="flex flex-row gap-2">
           <button
             onClick={() => setModalOpen(true)}
             class="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-xl transition-all shadow-lg shadow-gray-500/20"
           >
             <Edit class="w-4 h-4" />
-            <span class="hidden sm:inline">Export / Import</span>
+            <span class="hidden sm:inline">{t('campaignManager.toolbar.exportImport')}</span>
           </button>
           <button
             onClick={() => handleSaveCampaign()}
@@ -352,11 +348,11 @@ const CampaignManager: Component = () => {
               <Loader2 class="w-4 h-4 animate-spin" />
             </Show>
             <span class="hidden sm:inline">
-              <Show when={isSaving()} fallback="Sauvegarder">Sauvegarde...</Show>
+              <Show when={isSaving()} fallback={t('campaignManager.toolbar.save')}>{t('campaignManager.toolbar.saving')}</Show>
             </span>
           </button>
         </div>
-      </header>
+      </div>
 
       {/* Main content */}
       <div style={{
@@ -375,7 +371,7 @@ const CampaignManager: Component = () => {
         }}>
           <Show when={selectedNode()}>
             <h2 style={{ 'margin-top': 0, 'font-size': '1.25rem', 'margin-bottom': '1.5rem' }}>
-              Détails du nœud
+              {t('campaignManager.sidebar.nodeDetails')}
             </h2>
 
             <Show when={nodeType() === 'choices'}>
@@ -396,7 +392,7 @@ const CampaignManager: Component = () => {
           </Show>
 
           <Show when={!selectedNode()}>
-            <h3 class="font-display text-xl text-white tracking-wide mb-4">Blocs disponibles</h3>
+            <h3 class="font-display text-xl text-white tracking-wide mb-4">{t('campaignManager.sidebar.availableBlocks')}</h3>
             <div style={{ display: 'flex', 'flex-direction': 'column', gap: '0.75rem' }}>
               <For each={blocs}>
                 {(item) => (
@@ -422,7 +418,7 @@ const CampaignManager: Component = () => {
                     onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(1.18)')}
                     onMouseLeave={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
                   >
-                    {/* Icône colorée */}
+                    {/* Coloured icon */}
                     <span style={{
                       display: 'flex',
                       'align-items': 'center',
@@ -482,7 +478,7 @@ const CampaignManager: Component = () => {
             <CheckCircle class="w-4 h-4 shrink-0" />
           </Show>
           <span>{toast()!.message}</span>
-          <button onClick={() => setToast(null)} class="ml-1 text-white/60 hover:text-white transition-colors" aria-label="Fermer">✕</button>
+          <button onClick={() => setToast(null)} class="ml-1 text-white/60 hover:text-white transition-colors" aria-label={t('common.close')}>✕</button>
         </div>
       </Show>
     </div>

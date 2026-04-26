@@ -1,7 +1,9 @@
 import { createMemo, createSignal, Show } from "solid-js";
-import { A, useNavigate } from "@solidjs/router";
+import { useNavigate } from "@solidjs/router";
 import { CharacterService, CharacterClass, CharacterRace } from "../services/character.service";
 import { isPlayableClass } from "../types/character";
+import PageMeta from "../layouts/PageMeta";
+import { t } from "../i18n";
 
 type DnDClass = {
 	key: string;
@@ -17,137 +19,137 @@ type DnDClass = {
 const CLASSES: DnDClass[] = [
 	{
 		key: "barbarian",
-		name: "Barbare",
-		primary: "Force",
+		name: "Barbarian",
+		primary: "Strength",
 		hitDie: "d12",
-		saves: "Force, Constitution",
+		saves: "Strength, Constitution",
 		proficiencies:
-			"Armes simples & martiales, boucliers, armures légères et moyennes",
-		casterType: "Aucun",
-		feature: "Rage: bonus de dégâts, résistances",
+			"Simple & martial weapons, shields, light and medium armor",
+		casterType: "None",
+		feature: "Rage: damage bonus, resistances",
 	},
 	{
 		key: "bard",
-		name: "Barde",
-		primary: "Charisme",
+		name: "Bard",
+		primary: "Charisma",
 		hitDie: "d8",
-		saves: "Dextérité, Charisme",
-		proficiencies: "Armes simples, armures légères, instruments",
-		casterType: "Lanceur de sorts complet",
-		feature: "Inspiration bardique: buffs aux alliés",
+		saves: "Dexterity, Charisma",
+		proficiencies: "Simple weapons, light armor, instruments",
+		casterType: "Full caster",
+		feature: "Bardic Inspiration: ally buffs",
 	},
 	{
 		key: "cleric",
-		name: "Clerc",
-		primary: "Sagesse",
+		name: "Cleric",
+		primary: "Wisdom",
 		hitDie: "d8",
-		saves: "Sagesse, Charisme",
-		proficiencies: "Armes simples, armures légères à lourdes, boucliers",
-		casterType: "Lanceur de sorts complet (divin)",
-		feature: "Préparation quotidienne des sorts",
+		saves: "Wisdom, Charisma",
+		proficiencies: "Simple weapons, light to heavy armor, shields",
+		casterType: "Full caster (divine)",
+		feature: "Daily spell preparation",
 	},
 	{
 		key: "druid",
-		name: "Druide",
-		primary: "Sagesse",
+		name: "Druid",
+		primary: "Wisdom",
 		hitDie: "d8",
-		saves: "Intelligence, Sagesse",
+		saves: "Intelligence, Wisdom",
 		proficiencies:
-			"Armes simples, armures légères et moyennes (non métalliques), boucliers",
-		casterType: "Lanceur de sorts complet (divin)",
-		feature: "Forme sauvage (Wild Shape)",
+			"Simple weapons, light and medium armor (non-metallic), shields",
+		casterType: "Full caster (divine)",
+		feature: "Wild Shape",
 	},
 	{
 		key: "fighter",
-		name: "Guerrier",
-		primary: "Force ou Dextérité",
+		name: "Fighter",
+		primary: "Strength or Dexterity",
 		hitDie: "d10",
-		saves: "Force, Constitution",
-		proficiencies: "Armes simples & martiales, toutes armures, boucliers",
-		casterType: "Aucun",
-		feature: "Style de combat, attaques multiples",
+		saves: "Strength, Constitution",
+		proficiencies: "Simple & martial weapons, all armor, shields",
+		casterType: "None",
+		feature: "Fighting style, extra attacks",
 	},
 	{
 		key: "monk",
-		name: "Moine",
-		primary: "Dextérité & Sagesse",
+		name: "Monk",
+		primary: "Dexterity & Wisdom",
 		hitDie: "d8",
-		saves: "Force, Dextérité",
-		proficiencies: "Armes simples, épées courtes, pas d’armure",
-		casterType: "Aucun",
-		feature: "Ki, défense sans armure",
+		saves: "Strength, Dexterity",
+		proficiencies: "Simple weapons, shortswords, no armor",
+		casterType: "None",
+		feature: "Ki, Unarmored Defense",
 	},
 	{
 		key: "paladin",
 		name: "Paladin",
-		primary: "Force & Charisme",
+		primary: "Strength & Charisma",
 		hitDie: "d10",
-		saves: "Sagesse, Charisme",
+		saves: "Wisdom, Charisma",
 		proficiencies:
-			"Armes simples & martiales, armures légères à lourdes, boucliers",
-		casterType: "Lanceur de sorts partiel (divin)",
-		feature: "Imposition des mains, auras, serments",
+			"Simple & martial weapons, light to heavy armor, shields",
+		casterType: "Half caster (divine)",
+		feature: "Lay on Hands, auras, oaths",
 	},
 	{
 		key: "ranger",
-		name: "Rôdeur",
-		primary: "Dextérité & Sagesse",
+		name: "Ranger",
+		primary: "Dexterity & Wisdom",
 		hitDie: "d10",
-		saves: "Force, Dextérité",
+		saves: "Strength, Dexterity",
 		proficiencies:
-			"Armes simples & martiales, armures légères et moyennes, boucliers",
-		casterType: "Lanceur de sorts partiel (nature)",
-		feature: "Ennemi juré, terrain favori, soutien",
+			"Simple & martial weapons, light and medium armor, shields",
+		casterType: "Half caster (nature)",
+		feature: "Favored Enemy, Natural Explorer, support",
 	},
 	{
 		key: "rogue",
-		name: "Voleur",
-		primary: "Dextérité",
+		name: "Rogue",
+		primary: "Dexterity",
 		hitDie: "d8",
-		saves: "Dextérité, Intelligence",
-		proficiencies: "Armes simples, armures légères",
-		casterType: "Aucun",
-		feature: "Attaque sournoise, expertise, esquive",
+		saves: "Dexterity, Intelligence",
+		proficiencies: "Simple weapons, light armor",
+		casterType: "None",
+		feature: "Sneak Attack, Expertise, Evasion",
 	},
 	{
 		key: "sorcerer",
-		name: "Ensorceleur",
-		primary: "Charisme",
+		name: "Sorcerer",
+		primary: "Charisma",
 		hitDie: "d6",
-		saves: "Constitution, Charisme",
-		proficiencies: "Armes simples",
-		casterType: "Lanceur de sorts complet (inné)",
-		feature: "Métamagie (modifier les sorts)",
+		saves: "Constitution, Charisma",
+		proficiencies: "Simple weapons",
+		casterType: "Full caster (innate)",
+		feature: "Metamagic (modify spells)",
 	},
 	{
 		key: "warlock",
-		name: "Sorcier",
-		primary: "Charisme",
+		name: "Warlock",
+		primary: "Charisma",
 		hitDie: "d8",
-		saves: "Sagesse, Charisme",
-		proficiencies: "Armes simples",
-		casterType: "Lanceur de sorts complet (pactes)",
-		feature: "Pacte magique, recharges fréquentes",
+		saves: "Wisdom, Charisma",
+		proficiencies: "Simple weapons",
+		casterType: "Full caster (pact)",
+		feature: "Magical Pact, frequent recharges",
 	},
 	{
 		key: "wizard",
-		name: "Magicien",
+		name: "Wizard",
 		primary: "Intelligence",
 		hitDie: "d6",
-		saves: "Intelligence, Sagesse",
-		proficiencies: "Armes simples",
-		casterType: "Lanceur de sorts complet (érudit)",
-		feature: "Livre de sorts, large préparation",
+		saves: "Intelligence, Wisdom",
+		proficiencies: "Simple weapons",
+		casterType: "Full caster (scholar)",
+		feature: "Spellbook, broad preparation",
 	},
 ];
 
 const RACES = [
-	"Humain",
-	"Elfe",
-	"Nain",
-	"Halfelin",
-	"Demi-orc",
-	"Tieffelin",
+	"Human",
+	"Elf",
+	"Dwarf",
+	"Halfling",
+	"Half-Orc",
+	"Tiefling",
 	"Gnome",
 ];
 
@@ -175,19 +177,19 @@ const PLAYABLE_CLASS_LIST = CLASSES.filter((c) =>
 
 // Map frontend race names to backend CharacterRace enum
 const raceNameToEnum: Record<string, CharacterRace> = {
-	"Humain": CharacterRace.Humain,
-	"Elfe": CharacterRace.Elfe,
-	"Nain": CharacterRace.Nain,
-	"Halfelin": CharacterRace.Halfelin,
-	"Demi-orc": CharacterRace.DemiOrc,
-	"Tieffelin": CharacterRace.Tieffelin,
+	"Human": CharacterRace.Humain,
+	"Elf": CharacterRace.Elfe,
+	"Dwarf": CharacterRace.Nain,
+	"Halfling": CharacterRace.Halfelin,
+	"Half-Orc": CharacterRace.DemiOrc,
+	"Tiefling": CharacterRace.Tieffelin,
 	"Gnome": CharacterRace.Gnome,
 };
 
 export default function CreateCharacter() {
 	const navigate = useNavigate();
 	const [selectedClass, setSelectedClass] = createSignal<string>("fighter");
-	const [selectedRace, setSelectedRace] = createSignal<string>("Humain");
+	const [selectedRace, setSelectedRace] = createSignal<string>("Human");
 	const [name, setName] = createSignal<string>("");
 	const [isSubmitting, setIsSubmitting] = createSignal(false);
 	const [error, setError] = createSignal<string | null>(null);
@@ -204,7 +206,7 @@ export default function CreateCharacter() {
 
 	const handleCreate = async () => {
 		if (!name().trim()) {
-			setError("Veuillez entrer un nom pour votre personnage.");
+			setError(t("createCharacter.errorNameRequired"));
 			return;
 		}
 
@@ -233,43 +235,33 @@ export default function CreateCharacter() {
 			navigate("/characters");
 		} catch (err: any) {
 			console.error("Failed to create character:", err);
-			setError(err.response?.data?.message || "Impossible de créer le personnage. Veuillez réessayer.");
+			setError(err.response?.data?.message || "Failed to create character. Please try again.");
 			setIsSubmitting(false);
 		}
 	};
 
 	return (
-		<div class="relative min-h-full w-full overflow-y-auto bg-brand-gradient">
-			<div class="vignette absolute inset-0 pointer-events-none"></div>
+		<div class="relative min-h-full w-full overflow-y-auto">
+			<PageMeta title={t("page.createCharacter.title")} />
 			<main class="relative z-10 mx-auto min-h-full max-w-6xl p-6 sm:p-10">
-				<header class="mb-6 flex items-center justify-between">
-					<div>
-						<h2 class="font-display text-3xl sm:text-4xl text-white title-shine">
-							Créer un personnage
-						</h2>
-					</div>
-					<A href="/characters" class="settings-btn" aria-label="Retour">
-						←
-					</A>
-				</header>
 
 				<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 					{/* Colonne gauche: formulaire */}
 					<section class="lg:col-span-2 space-y-6">
 						<div class="rounded-xl bg-black/25 ring-1 ring-white/10 p-5 shadow-soft">
 							<label class="block text-sm text-slate-300 mb-2">
-								Nom du personnage
+								{t("createCharacter.nameLabel")}
 							</label>
 							<input
 								class="w-full bg-black/30 border border-white/10 rounded-md p-2"
-								placeholder="Ex: Aria Sombrelame"
+								placeholder={t("createCharacter.namePlaceholder")}
 								value={name()}
 								onInput={(e) => setName(e.currentTarget.value)}
 							/>
 						</div>
 
 						<div class="rounded-xl bg-black/25 ring-1 ring-white/10 p-5 shadow-soft">
-							<label class="block text-sm text-slate-300 mb-3">Classe</label>
+							<label class="block text-sm text-slate-300 mb-3">{t("createCharacter.classLabel")}</label>
 							<div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
 								{PLAYABLE_CLASS_LIST.map((c) => (
 									<button
@@ -289,13 +281,12 @@ export default function CreateCharacter() {
 								))}
 							</div>
 							<p class="mt-2 text-xs text-slate-400">
-								La classe détermine vos aptitudes principales en combat et en
-								magie.
+								{t("createCharacter.classHint")}
 							</p>
 						</div>
 
 						<div class="rounded-xl bg-black/25 ring-1 ring-white/10 p-5 shadow-soft">
-							<label class="block text-sm text-slate-300 mb-3">Race</label>
+							<label class="block text-sm text-slate-300 mb-3">{t("createCharacter.raceLabel")}</label>
 							<div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
 								{RACES.map((r) => (
 									<button
@@ -312,31 +303,31 @@ export default function CreateCharacter() {
 								))}
 							</div>
 							<p class="mt-2 text-xs text-slate-400">
-								Choisissez la race de votre héros.
+								{t("createCharacter.raceHint")}
 							</p>
 						</div>
 
 						<section class="rounded-xl bg-black/30 ring-1 ring-white/10 p-5 shadow-soft">
-							<h3 class="font-display text-xl mb-3">Résumé de la classe</h3>
+							<h3 class="font-display text-xl mb-3">{t("createCharacter.classSummary")}</h3>
 							{/* <p class="text-slate-200 text-sm"><span class="text-slate-100 font-medium">{klass().name}</span></p> */}
 							<div class="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 text-sm">
 								<div class="rounded-md bg-black/30 border border-white/10 p-2">
-									Caractéristique principale: {klass().primary}
+									{t("createCharacter.stat.primary")}: {klass().primary}
 								</div>
 								<div class="rounded-md bg-black/30 border border-white/10 p-2">
-									Dé de vie: {klass().hitDie}
+									{t("createCharacter.stat.hitDie")}: {klass().hitDie}
 								</div>
 								<div class="rounded-md bg-black/30 border border-white/10 p-2">
-									Jets de sauvegarde: {klass().saves}
+									{t("createCharacter.stat.saves")}: {klass().saves}
 								</div>
 								<div class="rounded-md bg-black/30 border border-white/10 p-2">
-									Maîtrises: {klass().proficiencies}
+									{t("createCharacter.stat.proficiencies")}: {klass().proficiencies}
 								</div>
 								<div class="rounded-md bg-black/30 border border-white/10 p-2">
-									Lanceur de sorts: {klass().casterType}
+									{t("createCharacter.stat.casterType")}: {klass().casterType}
 								</div>
 								<div class="rounded-md bg-black/30 border border-white/10 p-2">
-									Particularité: {klass().feature}
+									{t("createCharacter.stat.feature")}: {klass().feature}
 								</div>
 							</div>
 						</section>
@@ -355,9 +346,9 @@ export default function CreateCharacter() {
 								onClick={handleCreate}
 								disabled={isSubmitting() || !name().trim()}
 							>
-								<Show when={isSubmitting()} fallback="Créer le personnage">
+								<Show when={isSubmitting()} fallback={t("createCharacter.submit")}>
 									<div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-									Création...
+									{t("createCharacter.submitting")}
 								</Show>
 							</button>
 						</div>
@@ -374,7 +365,7 @@ export default function CreateCharacter() {
 									<img
 										class="w-20 h-20 object-contain mx-auto"
 										src={`/assets/classes/${prevClass()}.png`}
-										alt="Classe précédente"
+										alt="Previous class"
 									/>
 								</div>
 							)}

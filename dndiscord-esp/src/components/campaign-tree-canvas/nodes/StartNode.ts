@@ -32,7 +32,7 @@ export class StartNode extends CampaignNode {
 
   override createVisualElements(): void {
     const label = new draw2d.shape.basic.Label({
-      text: '▶ Début',
+      text: '▶ Start',
       fontSize: 16,
       fontColor: '#88ff88',
       color: '#88ff88',

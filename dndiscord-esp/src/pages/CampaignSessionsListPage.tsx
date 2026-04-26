@@ -1,11 +1,13 @@
 import { Component, createSignal, For, onMount, Show } from 'solid-js';
 import { useNavigate, useParams } from '@solidjs/router';
-import { ArrowLeft, BookOpen, ChevronRight, Clock, Loader2 } from 'lucide-solid';
+import { BookOpen, ChevronRight, Clock, Loader2 } from 'lucide-solid';
 import {
   CampaignService,
   type GameSessionResponse,
   GameSessionStatus,
 } from '@/services/campaign.service';
+import PageMeta from '../layouts/PageMeta';
+import { t } from '../i18n';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -22,7 +24,7 @@ function formatDuration(startedAt: string, endedAt?: string): string {
 }
 
 function formatDate(s: string): string {
-  return new Date(s).toLocaleDateString('fr-FR', {
+  return new Date(s).toLocaleDateString('en-US', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -31,17 +33,17 @@ function formatDate(s: string): string {
   });
 }
 
-const STATUS_CFG: Record<GameSessionStatus, { label: string; cls: string }> = {
+const STATUS_CFG: Record<GameSessionStatus, { labelKey: string; cls: string }> = {
   [GameSessionStatus.Active]: {
-    label: 'En cours',
+    labelKey: 'sessionsList.status.active',
     cls: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30',
   },
   [GameSessionStatus.Completed]: {
-    label: 'Terminée',
+    labelKey: 'sessionsList.status.completed',
     cls: 'text-purple-400 bg-purple-500/15 border-purple-500/30',
   },
   [GameSessionStatus.Abandoned]: {
-    label: 'Abandonnée',
+    labelKey: 'sessionsList.status.abandoned',
     cls: 'text-slate-400 bg-slate-500/15 border-slate-500/30',
   },
 };
@@ -68,7 +70,7 @@ const CampaignSessionsListPage: Component = () => {
       setSessions(list.items);
     } catch (e) {
       console.error('[SessionsList] Failed to load sessions:', e);
-      setError('Impossible de charger les sessions.');
+      setError(t('sessionsList.loadError'));
     } finally {
       setLoading(false);
     }
@@ -79,35 +81,18 @@ const CampaignSessionsListPage: Component = () => {
       style={{
         width: '100vw',
         'min-height': '100vh',
-        background: 'linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f0f1a 100%)',
         color: '#d4d4d4',
         'font-family': 'system-ui,sans-serif',
       }}
     >
-      {/* Header */}
-      <header class="sticky top-0 z-20 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-black/40 backdrop-blur-md">
-        <button
-          onClick={() => navigate(`/campaigns/${params.id}`)}
-          class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
-        >
-          <ArrowLeft class="w-5 h-5" />
-          <span class="hidden sm:inline">Retour</span>
-        </button>
-        <div class="text-center">
-          <p class="text-xs text-purple-400 uppercase tracking-wider font-medium">
-            Historique des sessions
-          </p>
-          <h1 class="font-display text-lg text-white">{campaignName()}</h1>
-        </div>
-        <div class="w-24" />
-      </header>
+      <PageMeta title={t('page.sessionsList.title')} />
 
       <main class="max-w-3xl mx-auto px-4 py-10">
         {/* Loading */}
         <Show when={loading()}>
           <div class="flex flex-col items-center gap-4 py-24 text-slate-400">
             <Loader2 class="w-10 h-10 animate-spin text-purple-400" />
-            <p>Chargement des sessions…</p>
+            <p>{t('sessionsList.loading')}</p>
           </div>
         </Show>
 
@@ -119,7 +104,7 @@ const CampaignSessionsListPage: Component = () => {
               onClick={() => navigate(`/campaigns/${params.id}`)}
               class="px-6 py-3 bg-white/10 hover:bg-white/15 border border-white/20 text-white rounded-xl transition-all"
             >
-              Retour
+              {t('topbar.back')}
             </button>
           </div>
         </Show>
@@ -130,9 +115,9 @@ const CampaignSessionsListPage: Component = () => {
           <Show when={sessions().length === 0}>
             <div class="flex flex-col items-center gap-4 py-24 text-slate-500">
               <BookOpen class="w-14 h-14 opacity-25" />
-              <p class="text-lg">Aucune session jouée pour cette campagne.</p>
+              <p class="text-lg">{t('sessionsList.empty')}</p>
               <p class="text-sm text-slate-600">
-                Lancez une session depuis la page de la campagne.
+                {t('sessionsList.emptyHint')}
               </p>
             </div>
           </Show>
@@ -166,7 +151,7 @@ const CampaignSessionsListPage: Component = () => {
                             <span
                               class={`text-xs px-2 py-0.5 rounded-full border font-medium ${cfg.cls}`}
                             >
-                              {cfg.label}
+                              {t(cfg.labelKey as any)}
                             </span>
                             <span class="text-xs text-slate-500">
                               {formatDate(session.startedAt)}
@@ -181,8 +166,8 @@ const CampaignSessionsListPage: Component = () => {
                               <BookOpen class="w-3.5 h-3.5" />
                               {session.entries.length}{' '}
                               {session.entries.length === 1
-                                ? 'bloc visité'
-                                : 'blocs visités'}
+                                ? t('sessionsList.blocVisited.one')
+                                : t('sessionsList.blocVisited.other')}
                             </span>
                           </div>
                         </div>

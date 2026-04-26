@@ -70,13 +70,13 @@ interface EnemyTemplate {
 }
 
 const ENEMY_CATALOGUE: EnemyTemplate[] = [
-  { id: "skeleton_warrior", name: "Squelette", icon: "💀", unitType: UnitType.ENEMY_SKELETON,
+  { id: "skeleton_warrior", name: "Skeleton", icon: "💀", unitType: UnitType.ENEMY_SKELETON,
     abilities: SKELETON_WARRIOR_ABILITIES,
     stats: { maxHealth: 60, currentHealth: 60, maxActionPoints: 5, currentActionPoints: 5, movementRange: 3, attackRange: 1, attackDamage: 12, defense: 5, initiative: 10 } },
-  { id: "skeleton_rogue", name: "Squelette Arc", icon: "🏹", unitType: UnitType.ENEMY_SKELETON_ROGUE,
+  { id: "skeleton_rogue", name: "Skeleton Archer", icon: "🏹", unitType: UnitType.ENEMY_SKELETON_ROGUE,
     abilities: SKELETON_ROGUE_ABILITIES,
     stats: { maxHealth: 50, currentHealth: 50, maxActionPoints: 5, currentActionPoints: 5, movementRange: 2, attackRange: 4, attackDamage: 10, defense: 3, initiative: 14 } },
-  { id: "skeleton_mage", name: "Nécromancien", icon: "🔮", unitType: UnitType.ENEMY_MAGE,
+  { id: "skeleton_mage", name: "Necromancer", icon: "🔮", unitType: UnitType.ENEMY_MAGE,
     abilities: SKELETON_MAGE_ABILITIES,
     stats: { maxHealth: 70, currentHealth: 70, maxActionPoints: 6, currentActionPoints: 6, movementRange: 2, attackRange: 5, attackDamage: 16, defense: 5, initiative: 12 } },
   { id: "skeleton_minion", name: "Minion", icon: "🦴", unitType: UnitType.ENEMY_SKELETON_MINION,
@@ -159,7 +159,7 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
       addUnit(unit);
       setTiles(posToKey(pos), "occupiedBy", uid);
       updatePathfinder();
-      addCombatLog(`[MJ] ${tpl.name} invoqué (${pos.x},${pos.z})`, "system");
+      addCombatLog(`[DM] ${tpl.name} spawned (${pos.x},${pos.z})`, "system");
       addSpawnedEnemy({ name: tpl.name, x: pos.x, z: pos.z });
 
       const session = getCurrentSession();
@@ -170,7 +170,7 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
         }).catch((err: any) => console.warn("[DM] spawn broadcast failed:", err));
       }
 
-      flash(`${tpl.icon} ${tpl.name} invoqué`);
+      flash(`${tpl.icon} ${tpl.name} spawned`);
     };
 
     window.addEventListener("dm-tile-click", handler);
@@ -221,7 +221,7 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
       setMapsLoaded(true);
     } catch (e) {
       console.warn("[DmPanel] failed to load campaign maps", e);
-      flash("Impossible de charger les cartes");
+      flash("Failed to load maps");
     } finally {
       setMapsLoading(false);
     }
@@ -232,10 +232,10 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
     setSwitchingMapId(mapId);
     try {
       await dmSwitchMap(mapId);
-      flash("🗺️ Changement de carte en cours…");
+      flash("🗺️ Switching map…");
     } catch (e) {
       console.warn("[DmPanel] dmSwitchMap failed", e);
-      flash("Échec : impossible de changer de carte");
+      flash("Failed to switch map");
     } finally {
       setSwitchingMapId(null);
     }
@@ -249,7 +249,7 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
     if (!session?.campaignId) return;
     const localList = getAllMaps();
     if (localList.length === 0) {
-      flash("Aucune carte locale à importer");
+      flash("No local maps to import");
       return;
     }
 
@@ -271,10 +271,10 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
       const refreshed = await MapService.list(session.campaignId);
       setCampaignMaps(refreshed);
       setMapsLoaded(true);
-      flash(imported > 0 ? `${imported} carte(s) importée(s)` : "Rien à importer (déjà présent)");
+      flash(imported > 0 ? `${imported} map(s) imported` : "Nothing to import (already present)");
     } catch (e) {
       console.warn("[DmPanel] importLocalMaps failed", e);
-      flash("Échec de l'import");
+      flash("Import failed");
     } finally {
       setMapsLoading(false);
     }
@@ -291,7 +291,7 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
         <button class="w-full flex items-center justify-between group cursor-pointer" onClick={() => setIsExpanded((v) => !v)}>
           <div class="flex items-center gap-2">
             <Crown class="w-4 h-4 text-purple-300" />
-            <span class="text-xs font-semibold text-purple-200 tracking-wide">Maître du Jeu</span>
+            <span class="text-xs font-semibold text-purple-200 tracking-wide">Dungeon Master</span>
           </div>
           <Show when={isExpanded()} fallback={<ChevronDown class="w-3.5 h-3.5 text-purple-400/60" />}>
             <ChevronUp class="w-3.5 h-3.5 text-purple-400/60" />
@@ -308,17 +308,17 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
               onClick={async () => {
                 try {
                   await dmStartCombat();
-                  flash("⚔️ Combat déclenché");
+                  flash("⚔️ Combat started");
                 } catch (err) {
                   console.warn("[DmPanel] dmStartCombat failed", err);
-                  flash("Échec : impossible de lancer le combat");
+                  flash("Failed to start combat");
                 }
               }}
               class="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-red-600/80 to-rose-600/80 hover:from-red-500 hover:to-rose-500 text-white text-xs font-semibold border border-red-400/40 shadow-lg transition-colors cursor-pointer"
-              title="Démarrer la phase de combat — tous les clients flippent immédiatement"
+              title="Start combat phase — all clients switch immediately"
             >
               <Swords class="w-3.5 h-3.5" />
-              Démarrer combat
+              Start combat
             </button>
           </Show>
 
@@ -327,16 +327,16 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
               onClick={async () => {
                 try {
                   await dmEndCombat();
-                  flash("🕊️ Combat interrompu");
+                  flash("🕊️ Combat interrupted");
                 } catch (err) {
                   console.warn("[DmPanel] dmEndCombat failed", err);
-                  flash("Échec : impossible d'arrêter le combat");
+                  flash("Failed to stop combat");
                 }
               }}
               class="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-semibold border border-white/20 shadow-lg transition-colors cursor-pointer"
-              title="Interrompre le combat — session revient en exploration libre"
+              title="Stop combat — session returns to free exploration"
             >
-              Arrêter combat
+              Stop combat
             </button>
           </Show>
 
@@ -345,9 +345,9 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
               the DM drives enemies manually via EnemyHotbar during ENEMY_TURN. */}
           <label class="mt-2 flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border border-purple-500/20 bg-purple-500/5 text-[11px] text-purple-100 cursor-pointer">
             <span class="flex items-center gap-1.5">
-              <span class="font-semibold">IA auto</span>
+              <span class="font-semibold">AI auto</span>
               <span class="text-[9px] text-purple-300/60">
-                {dmToolsState.aiAutoPlay ? "activée" : "manuelle"}
+                {dmToolsState.aiAutoPlay ? "on" : "manual"}
               </span>
             </span>
             <input
@@ -362,21 +362,21 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
               selects/inspects without drag-staging; clicking a tile is a
               no-op. Déplacer explicitly enables the click-to-teleport UX. */}
           <div class="flex gap-0.5 mt-2">
-            <DmTab active={activeTab() === "select"} onClick={() => switchTab("select")} label="Sélection" />
-            <DmTab active={activeTab() === "move"} onClick={() => switchTab("move")} label="Déplacer" />
-            <DmTab active={activeTab() === "spawn"} onClick={() => switchTab("spawn")} label="Invoquer" />
-            <DmTab active={activeTab() === "roll"} onClick={() => switchTab("roll")} label="Dés" />
-            <DmTab active={activeTab() === "dice-request"} onClick={() => switchTab("dice-request")} label="Jet D20" />
+            <DmTab active={activeTab() === "select"} onClick={() => switchTab("select")} label="Select" />
+            <DmTab active={activeTab() === "move"} onClick={() => switchTab("move")} label="Move" />
+            <DmTab active={activeTab() === "spawn"} onClick={() => switchTab("spawn")} label="Spawn" />
+            <DmTab active={activeTab() === "roll"} onClick={() => switchTab("roll")} label="Dice" />
+            <DmTab active={activeTab() === "dice-request"} onClick={() => switchTab("dice-request")} label="D20 roll" />
             <Show when={getCurrentSession()?.campaignId}>
-              <DmTab active={activeTab() === "maps"} onClick={() => { switchTab("maps"); void loadMapsIfNeeded(); }} label="Cartes" />
+              <DmTab active={activeTab() === "maps"} onClick={() => { switchTab("maps"); void loadMapsIfNeeded(); }} label="Maps" />
             </Show>
           </div>
 
           {/* ── SELECT TAB ── */}
           <Show when={activeTab() === "select"}>
             <p class="text-[10px] text-purple-300/50 text-center py-3">
-              Cliquez un jeton pour l'inspecter sans le déplacer. Passez en
-              <span class="text-purple-200/80"> Déplacer</span> pour téléporter.
+              Click a token to inspect it without moving it. Switch to
+              <span class="text-purple-200/80"> Move</span> to teleport.
             </p>
 
             {/* Prochain nœud de scénario — visible uniquement en mode session */}
@@ -402,7 +402,7 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
             <div class="mt-2 space-y-1.5">
               <Show when={selectedUnit()} fallback={
                 <p class="text-[10px] text-purple-300/50 text-center py-2">
-                  Cliquez sur un personnage sur la carte pour le sélectionner, puis cliquez sur une case pour le déplacer.
+                  Click a character on the map to select it, then click a tile to move it.
                 </p>
               }>
                 {(unit) => (
@@ -417,7 +417,7 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
                 )}
               </Show>
               <p class="text-[10px] text-purple-300/50 text-center">
-                {selectedUnit() ? "Cliquez n'importe où sur la carte" : "Mode déplacement actif"}
+                {selectedUnit() ? "Click anywhere on the map" : "Move mode active"}
               </p>
             </div>
           </Show>
@@ -442,7 +442,7 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
                 </For>
               </div>
               <Show when={dmSpawnTemplate()}>
-                <p class="text-[10px] text-purple-300/50 text-center">Cliquez sur la carte pour placer · re-cliquez le monstre pour annuler</p>
+                <p class="text-[10px] text-purple-300/50 text-center">Click on the map to place · click the monster again to cancel</p>
               </Show>
             </div>
           </Show>
@@ -490,11 +490,11 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
           <Show when={activeTab() === "maps"}>
             <div class="mt-2 space-y-1.5">
               <Show when={mapsLoading()}>
-                <p class="text-[10px] text-purple-300/50 text-center py-2">Chargement…</p>
+                <p class="text-[10px] text-purple-300/50 text-center py-2">Loading…</p>
               </Show>
               <Show when={!mapsLoading() && mapsLoaded() && campaignMaps().length === 0}>
                 <p class="text-[10px] text-purple-300/50 text-center py-2">
-                  Aucune carte enregistrée pour cette campagne. Ouvrez l'éditeur pour en créer et enregistrez-les côté serveur.
+                  No maps saved for this campaign. Open the editor to create some and save them server-side.
                 </p>
               </Show>
               <Show when={campaignMaps().length > 0}>
@@ -510,7 +510,7 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
                         >
                           <span class="text-xs text-white/90 truncate">{m.name}</span>
                           <span class="text-[10px] text-purple-300/60">
-                            {isSwitching() ? "…" : "Charger"}
+                            {isSwitching() ? "…" : "Load"}
                           </span>
                         </button>
                       );
@@ -523,15 +523,15 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
                   onClick={() => { setMapsLoaded(false); void loadMapsIfNeeded(); }}
                   class="text-[10px] text-purple-300/60 hover:text-purple-200 underline underline-offset-2"
                 >
-                  Rafraîchir
+                  Refresh
                 </button>
                 <button
                   onClick={handleImportLocalMaps}
                   disabled={mapsLoading()}
                   class="text-[10px] text-amber-300/70 hover:text-amber-200 underline underline-offset-2 disabled:opacity-50"
-                  title="Pousser les cartes enregistrées dans l'éditeur vers cette campagne"
+                  title="Push locally saved editor maps to this campaign"
                 >
-                  Importer mes cartes locales
+                  Import my local maps
                 </button>
               </div>
             </div>

@@ -32,42 +32,42 @@ const CATEGORIES: StorageCategory[] = [
     key: "essential",
     title: "Essentiels",
     description:
-      "Nécessaires au fonctionnement du service (authentification, session multijoueur, contenu que vous créez). Ils ne peuvent pas être désactivés.",
+      "Required for the service to work (authentication, multiplayer session, content you create). They cannot be disabled.",
     essential: true,
     items: [
       {
         name: "token (JWT)",
         purpose:
-          "Maintient votre session Discord connectée. Durée : 7 jours.",
+          "Keeps your Discord session connected. Duration: 7 days.",
       },
       {
         name: "dndiscord_session / dndiscord_game_started",
         purpose:
-          "Mémorise la partie multijoueur en cours. Effacé à la fermeture de l'onglet.",
+          "Stores the current multiplayer game. Cleared when the tab is closed.",
       },
       {
         name: "dndiscord_characters / dndiscord_maps_* / dndiscord_dungeons_*",
         purpose:
-          "Cache local des personnages et cartes que vous créez pour accélérer le chargement.",
+          "Local cache of characters and maps you create to speed up loading.",
       },
     ],
   },
   {
     key: "preferences",
-    title: "Préférences",
+    title: "Preferences",
     description:
-      "Mémorisent vos réglages d'interface (graphismes, son, tutoriel). Au sens CNIL ils sont exemptés de consentement, mais vous pouvez les effacer à tout moment.",
+      "Store your interface settings (graphics, sound, tutorial). They are exempt from consent under GDPR, but you can clear them at any time.",
     essential: false,
     items: [
       {
         name: "dnd-graphics-settings",
         purpose:
-          "Qualité 3D, résolution d'ombres, effets visuels, mise à l'échelle.",
+          "3D quality, shadow resolution, visual effects, scaling.",
       },
-      { name: "dnd-sound-settings", purpose: "Volume et état musique / effets." },
+      { name: "dnd-sound-settings", purpose: "Volume and music/effects state." },
       {
         name: "dndiscord_tutorial_completed",
-        purpose: "Mémorise que vous avez vu le tutoriel d'onboarding.",
+        purpose: "Stores that you have seen the onboarding tutorial.",
       },
     ],
   },
@@ -117,15 +117,15 @@ function ConsentBanner() {
           <div class="flex-1 min-w-0">
             <h2 class="font-display text-lg text-white mb-1 flex items-center gap-2">
               <Cookie class="w-5 h-5 text-purple-300 sm:hidden" />
-              Stockage local & confidentialité
+              Local storage & privacy
             </h2>
             <p
               id="cookie-consent-desc"
               class="text-slate-300/90 text-sm leading-relaxed"
             >
               DnDiscord utilise uniquement le <strong>stockage local</strong> de
-              votre navigateur pour vous authentifier via Discord et mémoriser
-              vos préférences de jeu. Aucun traceur publicitaire ni outil
+              your browser to authenticate via Discord and store
+              your game preferences. No advertising tracker or analytics tool
               d'analyse tiers.{" "}
               <A
                 href="/privacy"
@@ -138,10 +138,10 @@ function ConsentBanner() {
 
             <Show when={consentStore.storageUnavailable()}>
               <p class="mt-3 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-                ⚠ Le stockage local de votre navigateur est indisponible
-                (navigation privée Safari ou quota d'iframe restreint). Votre
-                acquittement ne sera pas mémorisé et la bannière pourra
-                réapparaître à chaque visite.
+                ⚠ Your browser's local storage is unavailable
+                (private Safari browsing or restricted iframe quota). Your
+                acknowledgement will not be stored and the banner may
+                reappear on each visit.
               </p>
             </Show>
 
@@ -157,7 +157,7 @@ function ConsentBanner() {
                 class="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-sm transition-colors flex items-center justify-center gap-2"
               >
                 <Sliders class="w-4 h-4" />
-                Paramétrer
+                Settings
               </button>
             </div>
           </div>
@@ -186,7 +186,7 @@ function PreferencesModal() {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Paramétrage du stockage local"
+        aria-label="Local storage settings"
         class="relative w-full max-w-2xl bg-game-dark border border-white/10 rounded-2xl shadow-2xl max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
@@ -194,7 +194,7 @@ function PreferencesModal() {
         <div class="flex items-center justify-between gap-3 px-5 sm:px-6 py-4 border-b border-white/10">
           <h2 class="font-display text-lg sm:text-xl text-white flex items-center gap-2">
             <Shield class="w-5 h-5 text-purple-400" />
-            Stockage local — détails
+            Local storage — details
           </h2>
           <button
             ref={closeBtn}
@@ -209,10 +209,10 @@ function PreferencesModal() {
         {/* Body */}
         <div class="overflow-y-auto px-5 sm:px-6 py-5 space-y-5 text-sm">
           <p class="text-slate-300/90 leading-relaxed">
-            Voici la liste complète des éléments que DnDiscord enregistre dans
-            le stockage local de votre navigateur. Tous relèvent de catégories
-            que la CNIL considère comme exemptées de consentement. Vous pouvez
-            néanmoins vider les <strong>préférences</strong> à tout moment.
+            Here is the complete list of items that DnDiscord stores in
+            your browser's local storage. All fall under categories
+            that the GDPR considers exempt from consent. You can
+            nevertheless clear the <strong>preferences</strong> at any time.
           </p>
 
           <For each={CATEGORIES}>
@@ -261,7 +261,7 @@ function PreferencesModal() {
               <li>
                 Aucun outil d'analyse tiers (Google Analytics, Meta Pixel, etc.).
               </li>
-              <li>Aucune revente de données à des partenaires commerciaux.</li>
+              <li>No resale of data to commercial partners.</li>
             </ul>
           </section>
         </div>
@@ -272,7 +272,7 @@ function PreferencesModal() {
             onClick={handleClearPreferences}
             class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-sm transition-colors"
           >
-            Effacer mes préférences locales
+            Clear my local preferences
           </button>
           <button
             onClick={() => consentStore.acknowledge()}

@@ -194,7 +194,7 @@ describe("mapCampaignResponse", () => {
     expect(result.players![0].username).toBe("Alyssa");
   });
 
-  it("falls back to 'Joueur #{short}' when nickname is missing and userId is a GUID", () => {
+  it("falls back to 'Player #{short}' when nickname is missing and userId is a GUID", () => {
     const detail = makeCampaignDetail({
       members: [
         {
@@ -207,7 +207,7 @@ describe("mapCampaignResponse", () => {
       ],
     });
     const result = mapCampaignResponse(detail);
-    expect(result.players![0].username).toBe("Joueur #111111");
+    expect(result.players![0].username).toBe("Player #111111");
   });
 
   it("keeps raw userId when nickname is missing and userId is not GUID-shaped", () => {
@@ -240,7 +240,7 @@ describe("displayDungeonMasterName", () => {
   it("substitutes the current user's handle when they are the DM and no API name is set", () => {
     // Core BUG-P case: the API doesn't (yet) carry a DM display name, but
     // the current user is known to be the DM via `isDungeonMaster` — no need
-    // to show the generic "Maître du Jeu" label when the auth store already
+    // to show the generic "Dungeon Master" label when the auth store already
     // has the concrete handle.
     expect(
       displayDungeonMasterName(
@@ -250,22 +250,22 @@ describe("displayDungeonMasterName", () => {
     ).toBe("quentest123");
   });
 
-  it("falls back to 'Maître du Jeu' when the viewer is not the DM and no name is provided", () => {
+  it("falls back to 'Dungeon Master' when the viewer is not the DM and no name is provided", () => {
     expect(
       displayDungeonMasterName(
         { isDungeonMaster: false },
         "someoneElse",
       ),
-    ).toBe("Maître du Jeu");
+    ).toBe("Dungeon Master");
   });
 
   it("falls back when the viewer is the DM but the auth store has no username yet", () => {
     expect(
       displayDungeonMasterName({ isDungeonMaster: true }, null),
-    ).toBe("Maître du Jeu");
+    ).toBe("Dungeon Master");
     expect(
       displayDungeonMasterName({ isDungeonMaster: true }, undefined),
-    ).toBe("Maître du Jeu");
+    ).toBe("Dungeon Master");
   });
 
   it("prefers the explicit dungeonMasterName even when the viewer is the DM", () => {

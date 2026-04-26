@@ -3,16 +3,21 @@ import { Heart, Shield, Swords } from "lucide-solid";
 import { gameState } from "../../game/stores/GameStateStore";
 import { units } from "../../game/stores/UnitsStore";
 import { Team } from "../../types";
+import { previewedUnitId } from "../../stores/unitPreview.store";
 
 /**
  * Floating compact info card for whatever unit the viewer currently has
  * selected — renders top-center above the canvas so it doesn't clash with
  * the bottom-center hotbar. Works for both enemies and allies; the portrait
  * border colour + label shift based on team.
+ *
+ * Resolution: turn-timeline preview (hover/click) wins over the canvas
+ * selection so the player can scrub the initiative line without losing
+ * their selected unit.
  */
 export const UnitInfoCard: Component = () => {
   const selectedUnit = () => {
-    const id = gameState.selectedUnit;
+    const id = previewedUnitId() ?? gameState.selectedUnit;
     return id ? (units[id] ?? null) : null;
   };
 
@@ -32,7 +37,7 @@ export const UnitInfoCard: Component = () => {
           isEnemy()
             ? "from-red-500 to-rose-400"
             : "from-emerald-500 to-teal-400";
-        const label = () => (isEnemy() ? "Ennemi" : "Allié");
+        const label = () => (isEnemy() ? "Enemy" : "Ally");
         const labelColour = () =>
           isEnemy() ? "text-red-300" : "text-emerald-300";
 

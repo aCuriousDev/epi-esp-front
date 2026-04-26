@@ -28,7 +28,7 @@ export const HotbarSpells: Component<HotbarSpellsProps> = (props) => {
       <Show when={abilities().length === 0}>
         <div class="flex items-center gap-1.5 px-3 py-2 text-[10px] text-slate-400 italic">
           <Swords class="w-3 h-3 opacity-50" />
-          Aucune capacité
+          No abilities
         </div>
       </Show>
       <For each={abilities()}>
@@ -50,7 +50,7 @@ export const HotbarSpells: Component<HotbarSpellsProps> = (props) => {
                   ? "border-slate-700/60 bg-slate-900/50 opacity-50 cursor-not-allowed"
                   : "border-amber-500/40 bg-amber-900/20 hover:bg-amber-500/20 hover:border-amber-400 cursor-pointer"
               }`}
-              title={`${ability.name}\n${ability.description}\nCoût: ${ability.apCost} PA · Portée: ${ability.range}`}
+              title={`${ability.name}\n${ability.description}\nCost: ${ability.apCost} AP · Range: ${ability.range}`}
             >
               <Zap
                 class={`w-4 h-4 ${

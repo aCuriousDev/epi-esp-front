@@ -58,8 +58,8 @@ describe("applyTurnEnded", () => {
 
   it.each([
     ["Victory", "🏆 Victoire !"],
-    ["Defeat", "💀 Défaite…"],
-    ["Fled", "🚪 Combat interrompu."],
+    ["Defeat", "💀 Defeat…"],
+    ["Fled", "🚪 Combat interrupted."],
   ] as const)("surfaces outcome text for %s", (outcome, expected) => {
     const result = applyTurnEnded({ ...base, nextUnitId: "b", outcome });
     expect(result?.outcomeText).toBe(expected);

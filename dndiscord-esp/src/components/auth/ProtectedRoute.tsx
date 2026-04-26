@@ -28,7 +28,7 @@ export default function ProtectedRoute(props: ProtectedRouteProps) {
         <div class="min-h-screen flex items-center justify-center bg-brand-gradient">
           <div class="flex flex-col items-center gap-4">
             <div class="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin" />
-            <p class="text-white text-lg">Vérification de l'authentification...</p>
+            <p class="text-white text-lg">Checking authentication...</p>
           </div>
         </div>
       </Show>

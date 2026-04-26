@@ -357,7 +357,7 @@ export function Dice3D(props: Dice3DProps) {
 							: "0 0 18px rgba(239,68,68,0.9), 0 0 34px rgba(239,68,68,0.5)",
 					}}
 				>
-					{flash() === "crit-success" ? "Critique !" : "Échec critique"}
+					{flash() === "crit-success" ? "Critical!" : "Critical fail"}
 				</div>
 			</Show>
 
