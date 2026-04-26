@@ -1,7 +1,8 @@
 import { Component, createSignal, For, Show } from 'solid-js';
-import { CombatNode, CombatNodeData, VillainPlacement } from './nodes/CombatNode';
+import { CombatNode, CombatNodeData } from './nodes/CombatNode';
 import { CampaignNode } from './nodes/CampaignNode';
 import { HARDCODED_MAPS, HARDCODED_VILLAINS } from './constants/gameData';
+import type { VillainPlacement } from './nodes/CombatNode';
 
 interface CombatNodeEditorProps {
   node: CombatNode;
@@ -34,6 +35,48 @@ const CombatNodeEditor: Component<CombatNodeEditorProps> = (props) => {
   const [difficulty, setDifficulty] = createSignal<'easy' | 'medium' | 'hard'>(data.difficulty ?? 'medium');
   const [villains, setVillains] = createSignal<VillainPlacement[]>(data.villains ?? []);
 
+  const persistVillains = (next: VillainPlacement[]) => {
+    setVillains(next);
+    props.node.updateVillains(next);
+    props.handleUpdateNode(props.node);
+  };
+
+  const handleAddVillain = () => {
+    const first = HARDCODED_VILLAINS[0];
+    if (!first) return;
+    persistVillains([
+      ...villains(),
+      { characterId: first.id, position: { x: 0, y: 0 } },
+    ]);
+  };
+
+  const handleRemoveVillain = (index: number) => {
+    persistVillains(villains().filter((_, i) => i !== index));
+  };
+
+  const handleVillainChange = (
+    index: number,
+    field: "characterId" | "x" | "y",
+    value: string,
+  ) => {
+    const v = [...villains()];
+    const row = v[index];
+    if (!row) return;
+    if (field === "characterId") {
+      v[index] = { ...row, characterId: value };
+    } else {
+      const n = parseInt(value, 10);
+      v[index] = {
+        ...row,
+        position: {
+          ...row.position,
+          [field]: Number.isNaN(n) ? 0 : n,
+        },
+      };
+    }
+    persistVillains(v);
+  };
+
   const handleUpdateTitle = (newTitle: string) => {
     setTitle(newTitle);
     props.node.updateTitle(newTitle);
@@ -49,34 +92,6 @@ const CombatNodeEditor: Component<CombatNodeEditorProps> = (props) => {
     setDifficulty(diff);
     props.node.updateDifficulty(diff);
     props.handleUpdateNode(props.node);
-  };
-
-  const handleAddVillain = () => {
-    const newVillains: VillainPlacement[] = [
-      ...villains(),
-      { characterId: HARDCODED_VILLAINS[0].id, position: { x: 0, y: 0 } },
-    ];
-    setVillains(newVillains);
-    props.node.updateVillains(newVillains);
-    props.handleUpdateNode(props.node);
-  };
-
-  const handleRemoveVillain = (index: number) => {
-    const newVillains = villains().filter((_, i) => i !== index);
-    setVillains(newVillains);
-    props.node.updateVillains(newVillains);
-    props.handleUpdateNode(props.node);
-  };
-
-  const handleVillainChange = (index: number, field: 'characterId' | 'x' | 'y', value: string) => {
-    const updated = villains().map((v, i) => {
-      if (i !== index) return v;
-      if (field === 'characterId') return { ...v, characterId: value };
-      if (field === 'x') return { ...v, position: { ...v.position, x: parseInt(value) || 0 } };
-      return { ...v, position: { ...v.position, y: parseInt(value) || 0 } };
-    });
-    setVillains(updated);
-    props.node.updateVillains(updated);
   };
 
   const currentMap = () => HARDCODED_MAPS.find(m => m.id === selectedMap());

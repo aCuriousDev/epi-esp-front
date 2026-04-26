@@ -327,15 +327,32 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     });
   };
 
-  // Zoom vers la position de la souris
+  /**
+   * Wheel handler — two behaviours:
+   *
+   *   Ctrl + scroll  (or trackpad pinch)  → zoom in / out.
+   *   Two-finger scroll on touchpad       → pan the canvas (no modifier needed).
+   *
+   * We always call preventDefault() so the browser never attempts to scroll
+   * the page while the user is working inside the canvas.
+   */
   const handleWheelZoom = (event: WheelEvent) => {
-    if (!canvas || !event.ctrlKey) return;
+    if (!canvas) return;
     event.preventDefault();
-    const delta = event.deltaY * 0.001;
-    const newZoom = Math.min(Math.max(currentZoom() + delta, 0.3), 3);
-    const pos = canvas.fromDocumentToCanvasCoordinate(event.clientX, event.clientY);
-    setCurrentZoom(newZoom);
-    canvas.setZoom(newZoom);
+
+    if (event.ctrlKey) {
+      // ── Zoom ────────────────────────────────────────────────────────────
+      const delta = event.deltaY * 0.001;
+      const newZoom = Math.min(Math.max(currentZoom() + delta, 0.3), 3);
+      setCurrentZoom(newZoom);
+      canvas.setZoom(newZoom);
+    } else if (canvasRef) {
+      // ── Pan (two-finger scroll / trackpad) ──────────────────────────────
+      // draw2d reads scrollLeft/scrollTop on the canvas element to compute
+      // its visible viewport offset (same mechanism used by gotoFigure).
+      canvasRef.scrollLeft += event.deltaX;
+      canvasRef.scrollTop  += event.deltaY;
+    }
   };
 
   /**

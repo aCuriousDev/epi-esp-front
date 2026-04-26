@@ -38,6 +38,8 @@ export interface Tile {
   movementCost: number;
   occupiedBy: string | null; // Unit ID
   effects: TileEffect[];
+  /** Set for TileType.EXIT cells — defines what happens when a player steps on it. */
+  exitType?: 'next' | 'end';
 }
 
 export interface TileEffect {
