@@ -270,6 +270,10 @@ const BoardGame: Component = () => {
 
   onMount(() => {
     const m = params.mode?.toLowerCase();
+    // Tutorial demo mode (and session-map mode) manage their own boot path
+    // in the main onMount above; don't override them by forcing MAP_SELECTION.
+    const qs = new URLSearchParams(location.search);
+    if (qs.get("demo") === "1" || qs.get("fromSession") === "1") return;
     if (!m) return; // No param → keep legacy behavior (mode picker fallback).
     switch (m) {
       case "exploration":
@@ -286,6 +290,7 @@ const BoardGame: Component = () => {
         break;
       default:
         // Unknown mode → keep mode picker as fallback.
+        startMode(GameMode.FREE_ROAM);
         break;
     }
   });
