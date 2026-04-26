@@ -7,11 +7,10 @@ import {
   Show,
 } from 'solid-js';
 import { useNavigate, useParams } from '@solidjs/router';
-import { ArrowLeft, Copy, Check, Play, Loader2, Users } from 'lucide-solid';
+import { Copy, Check, Play, Loader2, Users } from 'lucide-solid';
 import { sessionState, isHost } from '@/stores/session.store';
 import { PlayerRole } from '@/types/multiplayer';
 import {
-  leaveSession,
   selectCharacter,
   startGame as startGameHub,
 } from '@/services/signalr/multiplayer.service';
@@ -27,7 +26,6 @@ const CampaignLobbyPage: Component = () => {
   const [selectedCharId, setSelectedCharId] = createSignal<string | null>(null);
   const [copied, setCopied] = createSignal(false);
   const [starting, setStarting] = createSignal(false);
-  const [leaving, setLeaving] = createSignal(false);
 
   const session = () => sessionState.session;
   const amHost = () => isHost();
@@ -94,49 +92,22 @@ const CampaignLobbyPage: Component = () => {
     }
   };
 
-  const handleLeave = async () => {
-    setLeaving(true);
-    try {
-      await leaveSession();
-    } catch (e) {
-      console.warn('[CampaignLobby] leaveSession failed (navigating anyway):', e);
-    }
-    navigate(`/campaigns/${params.id}`);
-  };
-
   return (
-    <div
-      style={{
-        width: '100vw',
-        'min-height': '100vh',
-        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1a 100%)',
-        color: '#d4d4d4',
-        'font-family': 'system-ui, -apple-system, sans-serif',
-      }}
-    >
-      {/* Header */}
+    <div class="w-full min-h-full" style={{ color: '#d4d4d4', 'font-family': 'system-ui, -apple-system, sans-serif' }}>
+      {/* Lobby header — room code + campaign name */}
       <header class="sticky top-0 z-20 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-black/40 backdrop-blur-md">
-        <button
-          onClick={handleLeave}
-          disabled={leaving()}
-          class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors disabled:opacity-50"
-        >
-          <ArrowLeft class="w-5 h-5" />
-          <span class="hidden sm:inline">Quitter</span>
-        </button>
-
         <div class="text-center">
-          <p class="text-xs text-purple-400 uppercase tracking-wider font-medium">Salle d'attente</p>
+          <p class="text-xs text-purple-400 uppercase tracking-wider font-medium">Waiting room</p>
           <h1 class="font-display text-lg text-white">
-            {session()?.campaignName ?? 'Campagne'}
+            {session()?.campaignName ?? 'Campaign'}
           </h1>
         </div>
 
-        {/* Code de salle */}
+        {/* Room code */}
         <button
           onClick={copyCode}
           class="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm text-slate-300 transition-all"
-          title="Copier le code"
+          title="Copy code"
         >
           <span class="font-mono tracking-widest text-white font-bold">
             {session()?.joinCode ?? session()?.sessionId?.slice(0, 8) ?? '...'}
