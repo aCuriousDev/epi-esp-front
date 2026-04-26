@@ -782,7 +782,7 @@ const BoardGame: Component = () => {
     >
       <div class="w-full h-screen-dynamic flex flex-col bg-game-darker overflow-hidden pb-safe-bottom">
         {/* Header */}
-        <header class="h-14 shrink-0 bg-gradient-to-r from-brandStart/90 to-brandEnd/90 backdrop-blur-sm border-b border-white/10 flex items-center justify-between pl-16 sm:pl-20 pr-3 sm:pr-4 pt-safe-top">
+        <header class="h-14 shrink-0 bg-gradient-to-r from-brandStart/90 to-brandEnd/90 backdrop-blur-sm border-b border-white/10 flex items-center justify-between pl-16 sm:pl-20 pr-16 sm:pr-20 pt-safe-top">
           <div class="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => setSettingsOpen(true)}
