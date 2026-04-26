@@ -84,10 +84,6 @@ const CampaignSessionPage: Component = () => {
   const [currentNodeId, setCurrentNodeId]   = createSignal<string | undefined>();
   const [history, setHistory]               = createSignal<string[]>([]);
 
-  onMount(() => {
-    writeLastCampaignId(params.id);
-  });
-
   onMount(async () => {
     try {
       setLoading(true);
@@ -114,6 +110,10 @@ const CampaignSessionPage: Component = () => {
         setError('The scenario has no starting point. Connect a block to the start node in the Campaign Manager.');
         return;
       }
+
+      // Only mark this campaign as "last played" once we know it actually loads
+      // — otherwise an erroring session would poison the home page ResumeHero.
+      writeLastCampaignId(params.id);
 
       try {
         const session = await CampaignService.createSession(params.id);

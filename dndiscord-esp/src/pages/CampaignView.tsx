@@ -183,7 +183,10 @@ export default function CampaignView() {
         ensureMultiplayerHandlersRegistered();
       }
       await createSession(c.id);
-      navigate(`/campaigns/${c.id}/session`);
+      // Quick Launch always lands in the multiplayer lobby (no scenario tree
+      // needed). The story-tree runner is reached via handleLaunchCampaignSession
+      // — routing both buttons to /session was the post-rework regression.
+      navigate(`/campaigns/${c.id}/lobby`);
     } catch (e: any) {
       setLaunchError(e?.message ?? "Failed to create session.");
     } finally {
