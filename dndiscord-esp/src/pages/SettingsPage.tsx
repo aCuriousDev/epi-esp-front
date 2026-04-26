@@ -531,16 +531,16 @@ export default function SettingsPage() {
                   class="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50 cursor-pointer"
                 >
                   <option value="fr" class="bg-game-dark">
-                    FR — Français
+                    FR — French
                   </option>
                   <option value="en" class="bg-game-dark">
                     EN — English
                   </option>
                   <option value="es" class="bg-game-dark">
-                    ES — Español
+                    ES — Spanish
                   </option>
                   <option value="de" class="bg-game-dark">
-                    DE — Deutsch
+                    DE — German
                   </option>
                 </select>
               </div>

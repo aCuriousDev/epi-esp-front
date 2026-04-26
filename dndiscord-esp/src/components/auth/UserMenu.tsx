@@ -140,7 +140,7 @@ export default function UserMenu(props: UserMenuProps) {
                 "
               >
                 <LogOut class="w-4 h-4" />
-                <span>{isLoggingOut() ? "Déconnexion..." : "Se déconnecter"}</span>
+                <span>{isLoggingOut() ? "Logging out..." : "Log out"}</span>
               </button>
             </div>
           </div>

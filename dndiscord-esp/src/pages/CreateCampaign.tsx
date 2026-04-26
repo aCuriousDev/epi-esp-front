@@ -58,7 +58,7 @@ export default function CreateCampaign() {
       console.error("Failed to create campaign:", err);
       setError(
         err.response?.data?.message
-          ?? "Impossible de créer la campagne. Veuillez réessayer.",
+          ?? "Failed to create campaign. Please try again.",
       );
       setIsSubmitting(false);
     }

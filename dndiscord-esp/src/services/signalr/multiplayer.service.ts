@@ -456,7 +456,7 @@ export function registerMultiplayerHandlers(): void {
       const me = authStore.user()?.id;
       if (me && String(userId) === String(me)) {
         clearSession();
-        setSessionError("Vous avez été exclu de la session.");
+        setSessionError("You have been removed from the session.");
       }
     }
   });
@@ -624,7 +624,7 @@ export function registerMultiplayerHandlers(): void {
     clearUnits();
     clearTiles();
     resetGameState();
-    setSessionError("La session a été terminée.");
+    setSessionError("The session has ended.");
     try {
       if (typeof window !== "undefined" && window.location && window.location.pathname !== "/") {
         window.location.assign("/");

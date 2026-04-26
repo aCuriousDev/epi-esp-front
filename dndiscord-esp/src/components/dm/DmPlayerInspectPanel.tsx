@@ -50,21 +50,21 @@ import { Team } from "../../types";
 import type { Item, ItemCategory, InventoryEntry, InventoryChangedEvent } from "../../types/inventory";
 
 const CATEGORY_FILTERS: Array<{ value: "all" | ItemCategory; label: string }> = [
-  { value: "all", label: "Tous" },
-  { value: "Consumable", label: "Conso" },
-  { value: "Weapon", label: "Armes" },
-  { value: "Armor", label: "Armures" },
-  { value: "Tool", label: "Outils" },
-  { value: "Magic", label: "Magie" },
-  { value: "Treasure", label: "Trésors" },
+  { value: "all", label: "All" },
+  { value: "Consumable", label: "Consm." },
+  { value: "Weapon", label: "Weapons" },
+  { value: "Armor", label: "Armor" },
+  { value: "Tool", label: "Tools" },
+  { value: "Magic", label: "Magic" },
+  { value: "Treasure", label: "Treasure" },
 ];
 
 const COIN_TYPES = [
-  { value: "cp", label: "Pièces de cuivre" },
-  { value: "sp", label: "Pièces d'argent" },
-  { value: "ep", label: "Pièces d'électrum" },
-  { value: "gp", label: "Pièces d'or" },
-  { value: "pp", label: "Pièces de platine" },
+  { value: "cp", label: "Copper pieces" },
+  { value: "sp", label: "Silver pieces" },
+  { value: "ep", label: "Electrum pieces" },
+  { value: "gp", label: "Gold pieces" },
+  { value: "pp", label: "Platinum pieces" },
 ] as const;
 
 type CoinType = (typeof COIN_TYPES)[number]["value"];
@@ -364,7 +364,7 @@ export default function DmPlayerInspectPanel() {
                   }`}
                   onClick={() => setView("inventory")}
                 >
-                  Inventaire
+                  Inventory
                   <Show when={totalItems() > 0}>
                     <span class="ml-1 text-[8px] text-purple-300/50">({totalItems()})</span>
                   </Show>
@@ -376,7 +376,7 @@ export default function DmPlayerInspectPanel() {
                   onClick={() => setView("give")}
                 >
                   <Sparkles class="w-3 h-3 inline mr-0.5" />
-                  Donner
+                  Give
                 </button>
               </Show>
             </div>
@@ -387,7 +387,7 @@ export default function DmPlayerInspectPanel() {
                 {/* HP bar + DM heal/damage tool */}
                 <div class="space-y-0.5">
                   <div class="flex items-center justify-between text-[10px]">
-                    <span class="flex items-center gap-1 text-red-300"><Heart class="w-3 h-3" /> PV</span>
+                    <span class="flex items-center gap-1 text-red-300"><Heart class="w-3 h-3" /> HP</span>
                     <span class="text-white/80 font-mono">{s().currentHealth}/{s().maxHealth}</span>
                   </div>
                   <div class="h-1.5 rounded-full bg-white/10 overflow-hidden">
@@ -395,7 +395,7 @@ export default function DmPlayerInspectPanel() {
                   </div>
                   <Show when={isDm()}>
                     <div class="flex items-center justify-between gap-1 mt-1 text-[10px]">
-                      <span class="text-purple-300/60">MJ :</span>
+                      <span class="text-purple-300/60">DM:</span>
                       <div class="flex items-center gap-0.5">
                         <HpAdjustBtn unitId={u().id} delta={-10} label="-10" tone="red" />
                         <HpAdjustBtn unitId={u().id} delta={-1} label="-1" tone="red" />
@@ -410,7 +410,7 @@ export default function DmPlayerInspectPanel() {
                 {/* AP bar */}
                 <div class="space-y-0.5">
                   <div class="flex items-center justify-between text-[10px]">
-                    <span class="flex items-center gap-1 text-amber-300"><Zap class="w-3 h-3" /> PA</span>
+                    <span class="flex items-center gap-1 text-amber-300"><Zap class="w-3 h-3" /> AP</span>
                     <span class="text-white/80 font-mono">{s().currentActionPoints}/{s().maxActionPoints}</span>
                   </div>
                   <div class="h-1.5 rounded-full bg-white/10 overflow-hidden">
@@ -420,29 +420,29 @@ export default function DmPlayerInspectPanel() {
 
                 {/* Stat grid */}
                 <div class="grid grid-cols-2 gap-1 mt-1">
-                  <StatRow icon={<Swords class="w-3 h-3 text-orange-300" />} label="Attaque" value={s().attackDamage} />
-                  <StatRow icon={<Shield class="w-3 h-3 text-sky-300" />} label="Défense" value={s().defense} />
-                  <StatRow icon={<Footprints class="w-3 h-3 text-emerald-300" />} label="Déplacement" value={s().movementRange} />
-                  <StatRow icon={<Swords class="w-3 h-3 text-purple-300" />} label="Portée" value={s().attackRange} />
+                  <StatRow icon={<Swords class="w-3 h-3 text-orange-300" />} label="Attack" value={s().attackDamage} />
+                  <StatRow icon={<Shield class="w-3 h-3 text-sky-300" />} label="Defense" value={s().defense} />
+                  <StatRow icon={<Footprints class="w-3 h-3 text-emerald-300" />} label="Movement" value={s().movementRange} />
+                  <StatRow icon={<Swords class="w-3 h-3 text-purple-300" />} label="Range" value={s().attackRange} />
                 </div>
 
                 <Show when={u().team === Team.PLAYER && currentCharId()}>
                   <div class="mt-2 space-y-1.5 rounded-lg border border-purple-500/20 bg-purple-500/5 p-2">
                     <div class="flex items-center justify-between text-[10px]">
                       <span class="text-purple-200/80 flex items-center gap-1"><TrendingUp class="w-3 h-3" /> Progression</span>
-                      <span class="text-white/80">Niv. {character()?.level ?? "?"}</span>
+                      <span class="text-white/80">Lv. {character()?.level ?? "?"}</span>
                     </div>
                     <Show when={character()}>
                       <div class="grid grid-cols-3 gap-1 text-[9px]">
-                        <StatMini label="FOR" value={character()!.abilities.strength} />
+                        <StatMini label="STR" value={character()!.abilities.strength} />
                         <StatMini label="DEX" value={character()!.abilities.dexterity} />
                         <StatMini label="CON" value={character()!.abilities.constitution} />
                         <StatMini label="INT" value={character()!.abilities.intelligence} />
-                        <StatMini label="SAG" value={character()!.abilities.wisdom} />
+                        <StatMini label="WIS" value={character()!.abilities.wisdom} />
                         <StatMini label="CHA" value={character()!.abilities.charisma} />
                       </div>
                       <div class="text-[9px] text-purple-200/70 text-center">
-                        XP stockée: <span class="font-mono text-white/85">{character()!.experiencePoints ?? 0}</span>
+                        Stored XP: <span class="font-mono text-white/85">{character()!.experiencePoints ?? 0}</span>
                       </div>
                     </Show>
                     <div class="flex items-center gap-1">
@@ -491,7 +491,7 @@ export default function DmPlayerInspectPanel() {
                         onClick={handleGrantGold}
                       >
                         <Coins class="w-3 h-3" />
-                        Donner
+                        Give
                       </button>
                     </div>
                   </div>
@@ -515,7 +515,7 @@ export default function DmPlayerInspectPanel() {
                 <Show when={!loadingInv() && inventory().length === 0}>
                   <div class="text-center py-4">
                     <Package class="w-6 h-6 text-purple-400/20 mx-auto mb-1" />
-                    <p class="text-[10px] text-purple-300/40">Inventaire vide</p>
+                    <p class="text-[10px] text-purple-300/40">Empty inventory</p>
                   </div>
                 </Show>
                 <Show when={!loadingInv() && inventory().length > 0}>
@@ -554,10 +554,10 @@ export default function DmPlayerInspectPanel() {
                          reached us yet (timing / reconnect). */}
                   <p class="text-[9px] text-amber-300/60 text-center py-2">
                     {!playerInfo()
-                      ? "Impossible d'associer cette unité à un joueur de la session"
+                      ? "Cannot link this unit to a session player"
                       : playerInfo()!.selectedDefaultTemplate
-                        ? "Départ rapide : les objets ne peuvent être donnés qu'à un personnage persisté. Le joueur doit créer un personnage pour recevoir des objets."
-                        : "Chargement du personnage… (si persiste, le joueur doit resélectionner son personnage dans le lobby)"}
+                        ? "Quick start: items can only be given to a persisted character. The player must create a character to receive items."
+                        : "Loading character… (if it persists, the player must re-select their character in the lobby)"}
                   </p>
                 </Show>
                 <Show when={currentCharId()}>
@@ -568,7 +568,7 @@ export default function DmPlayerInspectPanel() {
                       type="text"
                       value={catalogSearch()}
                       onInput={(e) => setCatalogSearch(e.currentTarget.value)}
-                      placeholder="Rechercher…"
+                      placeholder="Search…"
                       class="dm-input w-full pl-7"
                     />
                   </div>
@@ -603,7 +603,7 @@ export default function DmPlayerInspectPanel() {
                   {/* Catalog grid */}
                   <div class="dm-catalog-grid max-h-36 overflow-y-auto pr-0.5">
                     <Show when={filteredCatalog().length > 0} fallback={
-                      <p class="text-[9px] text-purple-300/40 text-center py-3">Aucun objet trouvé</p>
+                      <p class="text-[9px] text-purple-300/40 text-center py-3">No items found</p>
                     }>
                       <div class="grid grid-cols-2 gap-1">
                         <For each={filteredCatalog()}>{(item) => {
@@ -625,7 +625,7 @@ export default function DmPlayerInspectPanel() {
                               <Show when={justGiven()}>
                                 <div class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-emerald-900/70 backdrop-blur-sm rounded-lg">
                                   <Check class="w-4 h-4 text-emerald-300" />
-                                  <span class="text-emerald-200 text-[8px] font-bold mt-0.5">Offert !</span>
+                                  <span class="text-emerald-200 text-[8px] font-bold mt-0.5">Given!</span>
                                 </div>
                               </Show>
 
@@ -695,7 +695,7 @@ function HpAdjustBtn(props: { unitId: string; delta: number; label: string; tone
     <button
       onClick={apply}
       class={`px-1.5 py-0.5 rounded border text-[9px] font-mono cursor-pointer transition-colors ${toneClass()}`}
-      title={props.delta > 0 ? `Soigner ${props.delta}` : `Infliger ${Math.abs(props.delta)} dégâts`}
+      title={props.delta > 0 ? `Heal ${props.delta}` : `Deal ${Math.abs(props.delta)} damage`}
     >
       {props.label}
     </button>

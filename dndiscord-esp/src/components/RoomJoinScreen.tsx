@@ -80,7 +80,7 @@ export const RoomJoinScreen: Component<RoomJoinScreenProps> = (props) => {
       <button
         onClick={props.onBack}
         class="settings-btn !fixed !top-4 !left-4 !right-auto"
-        aria-label="Retour"
+        aria-label="Back"
       >
         <ArrowLeft class="w-5 h-5 text-white" />
       </button>
@@ -89,7 +89,7 @@ export const RoomJoinScreen: Component<RoomJoinScreenProps> = (props) => {
         <Show when={recovering()}>
           <div class="flex flex-col items-center gap-4 text-white">
             <Loader2 class="w-10 h-10 animate-spin text-blue-400" />
-            <p class="text-lg text-slate-200">Reconnexion à la session...</p>
+            <p class="text-lg text-slate-200">Reconnecting to session...</p>
           </div>
         </Show>
 

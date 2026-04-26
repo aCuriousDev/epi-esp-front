@@ -270,10 +270,10 @@ export function checkGameOver(): void {
       const isLastRoom = gameState.dungeon.currentRoomIndex === gameState.dungeon.totalRooms - 1;
       if (isLastRoom) {
         setGameState('phase', GamePhase.GAME_OVER);
-        addCombatLog('Victoire ! Le donjon est terminé ! Tous les ennemis de la dernière salle sont vaincus !', 'system');
+        addCombatLog('Victory! The dungeon is complete! All enemies in the last room are defeated!', 'system');
         playVictorySound();
       } else {
-        addCombatLog('Tous les ennemis de cette salle sont vaincus ! Avancez vers le portail de téléportation.', 'system');
+        addCombatLog('All enemies in this room defeated! Move towards the teleportation portal.', 'system');
       }
     } else {
       setGameState('phase', GamePhase.GAME_OVER);

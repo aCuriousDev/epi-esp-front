@@ -117,13 +117,13 @@ export default function SessionInviteListener() {
 
       const res = await joinSession(i.sessionId);
       if (!res.success) {
-        setError(res.message ?? "Impossible de rejoindre la session.");
+        setError(res.message ?? "Failed to join session.");
         return;
       }
       setInvite(null);
       navigate("/board");
     } catch (err: any) {
-      setError(err?.message ?? "Impossible de rejoindre la session.");
+      setError(err?.message ?? "Failed to join session.");
     } finally {
       setJoining(false);
     }
@@ -140,13 +140,13 @@ export default function SessionInviteListener() {
           onClick={(e) => e.stopPropagation()}
         >
           <h3 class="text-xl font-display text-white mb-3">
-            Session de jeu démarrée
+            Game session started
           </h3>
           <p class="text-slate-300 mb-4">
             <span class="text-purple-300 font-semibold">
-              {invite()?.startedByUserName || "Un joueur"}
+              {invite()?.startedByUserName || "A player"}
             </span>{" "}
-            a démarré une session de jeu. Souhaitez-vous la rejoindre ?
+            started a game session. Do you want to join?
           </p>
 
           <Show when={error()}>

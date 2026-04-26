@@ -71,7 +71,7 @@ const SceneNodeEditor: Component<SceneNodeEditorProps> = (props : SceneNodeEdito
                     onInput={(e) => handleUpdateTitle(e.currentTarget.value)}
                     onKeyDown={(e) => e.stopPropagation()}
                     onBlur={()=>props.handleUpdateNode(props.node)}
-                    placeholder="Décrivez la scène..."
+                    placeholder="Describe the scene..."
                     style={{
                         width: '100%',
                         'min-height': '120px',
@@ -93,14 +93,14 @@ const SceneNodeEditor: Component<SceneNodeEditorProps> = (props : SceneNodeEdito
                     'font-weight': '500',
                     'font-size': '0.9rem'
                 }}>
-                    📖 Texte narratif :
+                    📖 Narrative text:
                 </label>
                 <textarea
                     value={text()}
                     onInput={(e) => handleUpdateText(e.currentTarget.value)}
                     onKeyDown={(e) => e.stopPropagation()}
                     onBlur={()=>props.handleUpdateNode(props.node)}
-                    placeholder="Décrivez la scène..."
+                    placeholder="Describe the scene..."
                     style={{
                         width: '100%',
                         'min-height': '120px',

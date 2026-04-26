@@ -266,7 +266,7 @@ export default function TutorialOverlay() {
                 </div>
                 <div class="min-w-0">
                   <p class="text-[10px] uppercase tracking-widest text-purple-300/80 font-semibold">
-                    Étape {tutorialState.stepIndex + 1} /{" "}
+                    Step {tutorialState.stepIndex + 1} /{" "}
                     {TUTORIAL_STEPS.length}
                   </p>
                   <h3 class="font-display text-base sm:text-lg text-white leading-tight mt-0.5">

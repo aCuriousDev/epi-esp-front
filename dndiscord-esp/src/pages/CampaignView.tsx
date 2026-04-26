@@ -132,7 +132,7 @@ export default function CampaignView() {
       });
     } catch (err: any) {
       console.error("Failed to load campaign:", err);
-      setError("Impossible de charger la campagne.");
+      setError("Failed to load campaign.");
     } finally {
       setLoading(false);
     }
@@ -140,7 +140,7 @@ export default function CampaignView() {
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString("fr-FR", {
+    return date.toLocaleDateString("en-US", {
       weekday: "long",
       day: "numeric",
       month: "long",
@@ -150,7 +150,7 @@ export default function CampaignView() {
 
   const formatDateTime = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString("fr-FR", {
+    return date.toLocaleDateString("en-US", {
       weekday: "short",
       day: "numeric",
       month: "short",
@@ -185,7 +185,7 @@ export default function CampaignView() {
       await createSession(c.id);
       navigate("/board");
     } catch (e: any) {
-      setLaunchError(e?.message ?? "Impossible de créer la session.");
+      setLaunchError(e?.message ?? "Failed to create session.");
     } finally {
       setLaunchingSession(false);
     }
@@ -203,7 +203,7 @@ export default function CampaignView() {
       }
       const res = await joinSession(invite.sessionId);
       if (!res.success) {
-        setInviteError(res.message ?? "Impossible de rejoindre la session.");
+        setInviteError(res.message ?? "Failed to join session.");
         return;
       }
       setSessionInvite(null);
@@ -218,7 +218,7 @@ export default function CampaignView() {
         navigate("/board");
       }
     } catch (e: any) {
-      setInviteError(e?.message ?? "Impossible de rejoindre la session.");
+      setInviteError(e?.message ?? "Failed to join session.");
     } finally {
       setJoiningInvite(false);
     }
@@ -239,7 +239,7 @@ export default function CampaignView() {
       setCampaign({ ...c, status: newStatus });
     } catch (err) {
       console.error("Failed to update campaign status:", err);
-      setError("Impossible de modifier le statut de la campagne.");
+      setError("Failed to update campaign status.");
     }
   };
 
@@ -264,7 +264,7 @@ export default function CampaignView() {
       await createSession(c.id);
       navigate(`/campaigns/${params.id}/lobby`);
     } catch (e: any) {
-      setLaunchError(e?.message ?? 'Impossible de créer la session.');
+      setLaunchError(e?.message ?? 'Failed to create session.');
     } finally {
       setLaunchingSession(false);
     }
@@ -280,7 +280,7 @@ export default function CampaignView() {
 
     if (
       !safeConfirm(
-        `Êtes-vous sûr de vouloir supprimer "${c.title}" ? Cette action est irréversible.`,
+        `Are you sure you want to delete "${c.title}"? This action is irreversible.`,
       )
     ) {
       return;
@@ -291,7 +291,7 @@ export default function CampaignView() {
       navigate("/campaigns");
     } catch (err) {
       console.error("Failed to delete campaign:", err);
-      setError("Impossible de supprimer la campagne.");
+      setError("Failed to delete campaign.");
     }
   };
 
@@ -307,7 +307,7 @@ export default function CampaignView() {
       setShowInviteModal(true);
     } catch (err) {
       console.error("Failed to generate invite code:", err);
-      setError("Impossible de générer le code d'invitation.");
+      setError("Failed to generate invitation code.");
     }
   };
 
@@ -317,7 +317,7 @@ export default function CampaignView() {
 
     if (
       !safeConfirm(
-        "Êtes-vous sûr de vouloir retirer ce joueur de la campagne ?",
+        "Are you sure you want to remove this player from the campaign?",
       )
     ) {
       return;
@@ -331,7 +331,7 @@ export default function CampaignView() {
       setCampaign(mappedCampaign);
     } catch (err) {
       console.error("Failed to remove member:", err);
-      setError("Impossible de retirer le membre.");
+      setError("Failed to remove member.");
     }
   };
 
@@ -368,7 +368,7 @@ export default function CampaignView() {
                   <div class="absolute top-4 right-4">
                     <span
                       class={`px-3 py-1.5 text-sm rounded-xl border ${getStatusColor(camp().status)}`}
-                      aria-label={`Statut : ${getStatusLabel(camp().status)}`}
+                      aria-label={`Status: ${getStatusLabel(camp().status)}`}
                     >
                       {getStatusLabel(camp().status)}
                     </span>

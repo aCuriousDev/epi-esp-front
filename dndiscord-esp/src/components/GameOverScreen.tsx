@@ -76,7 +76,7 @@ export const GameOverScreen: Component = () => {
                     await dmRestartGame(mapId);
                   } catch (err) {
                     console.error("[GameOverScreen] dmRestartGame failed — game not restarted:", err);
-                    alert("Impossible de relancer la partie — la session est peut-être terminée. Essayez de rafraîchir.");
+                    alert("Failed to restart the game — the session may have ended. Try refreshing.");
                   }
                   return;
                 }

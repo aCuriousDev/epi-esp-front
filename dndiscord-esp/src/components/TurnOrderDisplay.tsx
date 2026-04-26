@@ -79,7 +79,7 @@ export const TurnOrderDisplay: Component = () => {
                   isPinned() ? 'outline outline-2 outline-amber-300/80' : ''
                 }`}
                 title={`${unit.name} (Init ${unit.stats.initiative})${
-                  !unit.isAlive ? ' — vaincu·e' : isCurrent() ? ' — en cours' : ''
+                  !unit.isAlive ? ' — defeated' : isCurrent() ? ' — active' : ''
                 }`}
               >
                 {getUnitIcon(unit.type, { class: 'w-4 h-4 text-white' })}

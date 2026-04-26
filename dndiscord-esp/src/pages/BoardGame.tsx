@@ -697,7 +697,7 @@ const BoardGame: Component = () => {
 
       <Show when={sessionState.session && sessionState.session.campaignId}>
         <div class="panel-game">
-          <h4 class="font-fantasy text-game-gold text-sm mb-3">Jets de dés</h4>
+          <h4 class="font-fantasy text-game-gold text-sm mb-3">Dice rolls</h4>
           <RollHistoryPanel />
         </div>
       </Show>
@@ -786,15 +786,15 @@ const BoardGame: Component = () => {
             <button
               onClick={() => fromSession() ? backToSession() : returnToMenu()}
               class="flex items-center justify-center w-9 h-9 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 transition-colors"
-              aria-label={fromSession() ? "Retour à la session" : "Retour au menu"}
+              aria-label={fromSession() ? "Back to session" : "Back to menu"}
             >
               <ArrowLeft class="w-4 h-4 text-white" />
             </button>
             <button
               onClick={() => setSettingsOpen(true)}
               class="flex items-center justify-center w-9 h-9 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 transition-colors"
-              aria-label="Paramètres"
-              title="Paramètres rapides"
+              aria-label="Settings"
+              title="Quick settings"
             >
               <SettingsIcon class="w-4 h-4 text-white" />
             </button>
@@ -810,7 +810,7 @@ const BoardGame: Component = () => {
                 class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-purple-500/40 bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 text-sm transition-colors"
               >
                 <ArrowLeft class="w-3.5 h-3.5" />
-                <span class="hidden sm:inline">Retour à la session</span>
+                <span class="hidden sm:inline">Back to session</span>
               </button>
             </Show>
             {/* Quitter — any MP participant (BUG-I). Drawer Quitter is DM-only. */}
@@ -963,7 +963,7 @@ const BoardGame: Component = () => {
                   class="px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold bg-game-gold text-game-darker hover:bg-amber-400 transition shadow-lg whitespace-nowrap"
                   onClick={() => startCombatFromPreparation()}
                 >
-                  Prêt
+                  Ready
                 </button>
                 <Show when={isSessionHost()}>
                   <button
@@ -971,9 +971,9 @@ const BoardGame: Component = () => {
                     onClick={() =>
                       randomizePreparationPlacement(gameState.mapId ?? null)
                     }
-                    title="Place aléatoirement joueurs et ennemis sur les zones de spawn"
+                    title="Randomly place players and enemies on spawn zones"
                   >
-                    Placement aléatoire
+                    Random placement
                   </button>
                 </Show>
               </Show>
@@ -983,8 +983,8 @@ const BoardGame: Component = () => {
             <Show when={gameState.phase === GamePhase.COMBAT_PREPARATION}>
               <div class="absolute top-14 sm:top-16 left-1/2 -translate-x-1/2 z-10 panel-game w-[min(90%,40rem)] text-center">
                 <p class="text-xs sm:text-sm text-gray-300">
-                  Placez vos personnages sur les cases alliées (bleues), puis
-                  cliquez sur <strong class="text-game-gold">Prêt</strong> pour
+                  Place your characters on the allied tiles (blue), then
+                  click <strong class="text-game-gold">Ready</strong> to
                   lancer le combat.
                 </p>
               </div>
@@ -1040,14 +1040,14 @@ const BoardGame: Component = () => {
                       <Hand class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
                       <span>
                         <span class="text-gray-300 font-medium">Tap</span> —
-                        sélectionner / déplacer / attaquer
+                        select / move / attack
                       </span>
                     </li>
                     <li class="flex items-start gap-2">
                       <MoveIcon class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
                       <span>
                         <span class="text-gray-300 font-medium">Drag</span> —
-                        orbiter / panner la caméra
+                        orbit / pan the camera
                       </span>
                     </li>
                     <li class="flex items-start gap-2">
@@ -1062,15 +1062,15 @@ const BoardGame: Component = () => {
                     <li class="flex items-start gap-2">
                       <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
                       <span>
-                        <span class="text-gray-300 font-medium">Clic</span> —
-                        sélectionner / déplacer / attaquer
+                        <span class="text-gray-300 font-medium">Click</span> —
+                        select / move / attack
                       </span>
                     </li>
                     <li class="flex items-start gap-2">
                       <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
                       <span>
                         <span class="text-gray-300 font-medium">Clic droit + drag</span> —
-                        orbiter la caméra
+                        orbit camera
                       </span>
                     </li>
                     <li class="flex items-start gap-2">
@@ -1136,7 +1136,7 @@ const BoardGame: Component = () => {
                 <button
                   class="w-9 h-9 flex items-center justify-center rounded-full border border-white/20 bg-game-dark/85 backdrop-blur text-white shadow-lg hover:bg-game-dark transition-colors focus-ring-gold"
                   onClick={() => setHelpOpen((v) => !v)}
-                  title={helpOpen() ? "Fermer l'aide" : "Aide & contrôles"}
+                  title={helpOpen() ? "Close help" : "Help & controls"}
                   aria-label={helpOpen() ? "Fermer l'aide" : "Ouvrir l'aide"}
                   aria-expanded={helpOpen()}
                 >
@@ -1145,7 +1145,7 @@ const BoardGame: Component = () => {
                 <button
                   class="btn-game text-xs sm:text-sm py-1.5 px-3 flex items-center gap-2"
                   onClick={() => resetCamera()}
-                  title="Réinitialiser la caméra"
+                  title="Reset camera"
                 >
                   <RotateCcw class="w-3.5 h-3.5" />
                   <span>Reset View</span>
@@ -1164,7 +1164,7 @@ const BoardGame: Component = () => {
               <Show when={canEndPlayerTurn() && isDm()}>
                 <Show when={endTurnPending()}>
                   <div class="px-3 py-1.5 rounded-lg bg-amber-600/90 text-white text-xs font-medium shadow-lg border border-white/10 animate-pulse">
-                    Aucun AP dépensé — reclique pour confirmer
+                    No AP spent — click again to confirm
                   </div>
                 </Show>
                 <button

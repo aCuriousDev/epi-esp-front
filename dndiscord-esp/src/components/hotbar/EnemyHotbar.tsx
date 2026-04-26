@@ -70,14 +70,14 @@ export const EnemyHotbar: Component = () => {
                 </div>
                 <div class="min-w-[110px]">
                   <div class="text-[10px] uppercase tracking-widest font-bold text-red-300/80">
-                    MJ joue
+                    DM plays
                   </div>
                   <div class="text-xs text-red-100 font-semibold tracking-wide truncate max-w-[140px]">
                     {e().name}
                   </div>
                   <div class="mt-1 flex items-center gap-1.5">
                     <span class="text-[9px] font-bold text-red-300/80 uppercase tracking-wider w-4">
-                      PV
+                      HP
                     </span>
                     <div class="relative flex-1 h-2 rounded-full bg-black/40 border border-white/10 overflow-hidden">
                       <div
@@ -91,7 +91,7 @@ export const EnemyHotbar: Component = () => {
                   </div>
                   <div class="mt-1 flex items-center gap-1.5">
                     <span class="text-[9px] font-bold text-sky-300/80 uppercase tracking-wider w-4">
-                      PA
+                      AP
                     </span>
                     <div class="flex items-center gap-0.5">
                       <For each={apPipIndices()}>
@@ -122,7 +122,7 @@ export const EnemyHotbar: Component = () => {
             <Show when={abilities().length === 0}>
               <div class="flex items-center gap-1.5 px-3 py-2 text-[10px] text-slate-400 italic">
                 <Zap class="w-3 h-3 opacity-50" />
-                Aucune capacité
+                No abilities
               </div>
             </Show>
             <For each={abilities()}>
@@ -146,7 +146,7 @@ export const EnemyHotbar: Component = () => {
                         ? "border-slate-700/60 bg-slate-900/50 opacity-50 cursor-not-allowed"
                         : "border-red-500/40 bg-red-900/20 hover:bg-red-500/20 hover:border-red-400 cursor-pointer"
                     }`}
-                    title={`${ability.name}\n${ability.description}\nCoût: ${ability.apCost} PA · Portée: ${ability.range}`}
+                    title={`${ability.name}\n${ability.description}\nCost: ${ability.apCost} AP · Range: ${ability.range}`}
                   >
                     <Zap
                       class={`w-4 h-4 ${

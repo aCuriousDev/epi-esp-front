@@ -88,7 +88,7 @@ export const HotbarConsumables: Component<HotbarConsumablesProps> = (props) => {
       <Show when={consumables().length === 0}>
         <div class="flex items-center gap-1.5 px-3 py-2 text-[10px] text-slate-400 italic">
           <Beaker class="w-3 h-3 opacity-50" />
-          Pas de potion
+          No potions
         </div>
       </Show>
       <For each={consumables()}>

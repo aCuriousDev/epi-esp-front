@@ -4,11 +4,11 @@ import type { CurrencyType } from "../../types/multiplayer";
 
 describe("coinLabel", () => {
   const cases: Array<[CurrencyType, string]> = [
-    ["cp", "pièces de cuivre"],
-    ["sp", "pièces d'argent"],
-    ["ep", "pièces d'électrum"],
-    ["gp", "pièces d'or"],
-    ["pp", "pièces de platine"],
+    ["cp", "copper pieces"],
+    ["sp", "silver pieces"],
+    ["ep", "electrum pieces"],
+    ["gp", "gold pieces"],
+    ["pp", "platinum pieces"],
   ];
 
   it.each(cases)('"%s" → "%s"', (type, expected) => {

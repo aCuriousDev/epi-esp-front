@@ -72,7 +72,7 @@ export default function EditCampaign() {
       console.error("Failed to update campaign:", err);
       setError(
         err.response?.data?.message ||
-          "Impossible de modifier la campagne. Veuillez réessayer.",
+          "Failed to update campaign. Please try again.",
       );
       setIsSubmitting(false);
     }

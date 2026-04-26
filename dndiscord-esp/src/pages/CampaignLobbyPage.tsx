@@ -125,12 +125,12 @@ const CampaignLobbyPage: Component = () => {
           <div class="flex items-center gap-2 mb-4">
             <Users class="w-5 h-5 text-purple-400" />
             <h2 class="font-display text-xl text-white">
-              Joueurs ({players().length}/{session()?.maxPlayers ?? '?'})
+              Players ({players().length}/{session()?.maxPlayers ?? '?'})
             </h2>
           </div>
 
           <Show when={players().length === 0}>
-            <p class="text-slate-500 italic text-sm">En attente de joueurs…</p>
+            <p class="text-slate-500 italic text-sm">Waiting for players…</p>
           </Show>
 
           <div class="space-y-2">
@@ -146,12 +146,12 @@ const CampaignLobbyPage: Component = () => {
                     <span class="text-white font-medium">{player.userName}</span>
                     <Show when={player.role === PlayerRole.DungeonMaster}>
                       <span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                        MJ
+                        DM
                       </span>
                     </Show>
                   </div>
                   <span class="text-sm text-slate-400">
-                    {player.selectedCharacterName ?? player.selectedCharacterId ?? 'Aucun personnage'}
+                    {player.selectedCharacterName ?? player.selectedCharacterId ?? 'No character'}
                   </span>
                 </div>
               )}
@@ -161,7 +161,7 @@ const CampaignLobbyPage: Component = () => {
 
         {/* Sélection du personnage */}
         <section class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
-          <h2 class="font-display text-xl text-white mb-4">Votre personnage</h2>
+          <h2 class="font-display text-xl text-white mb-4">Your character</h2>
           <div class="space-y-2">
             <button
               onClick={() => handleCharacterSelect(null)}
@@ -171,11 +171,11 @@ const CampaignLobbyPage: Component = () => {
                   : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
               }`}
             >
-              Guerrier par défaut
+              Default warrior
             </button>
             <Show when={characters().length === 0}>
               <p class="text-slate-500 text-sm italic px-1">
-                Aucun personnage créé — le guerrier par défaut sera utilisé.
+                No character created — the default warrior will be used.
               </p>
             </Show>
             <For each={characters()}>
@@ -191,7 +191,7 @@ const CampaignLobbyPage: Component = () => {
                   <div class="flex justify-between items-center">
                     <span class="font-medium">{char.name}</span>
                     <span class="text-sm text-slate-400">
-                      {char.class} Nv.{char.level} — {char.maxHitPoints} PV
+                      {char.class} Lv.{char.level} — {char.maxHitPoints} HP
                     </span>
                   </div>
                 </button>
@@ -211,12 +211,12 @@ const CampaignLobbyPage: Component = () => {
               <Show when={starting()} fallback={<Play class="w-5 h-5" />}>
                 <Loader2 class="w-5 h-5 animate-spin" />
               </Show>
-              <Show when={starting()} fallback="Démarrer la session">
-                Lancement…
+              <Show when={starting()} fallback="Start session">
+                Launching…
               </Show>
             </button>
             <p class="text-center text-sm text-slate-500 mt-3">
-              Les joueurs seront redirigés automatiquement.
+              Players will be redirected automatically.
             </p>
           </section>
         </Show>
@@ -225,7 +225,7 @@ const CampaignLobbyPage: Component = () => {
         <Show when={!amHost()}>
           <div class="text-center py-4 text-slate-400">
             <Loader2 class="w-6 h-6 animate-spin text-purple-400 mx-auto mb-2" />
-            En attente du lancement par le Maître du Jeu…
+            Waiting for the Dungeon Master to start…
           </div>
         </Show>
 

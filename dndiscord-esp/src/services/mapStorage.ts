@@ -309,7 +309,7 @@ export function importMapFromJson(jsonString: string): SavedMapData {
 	try {
 		parsed = JSON.parse(jsonString);
 	} catch {
-		throw new Error('Fichier invalide : JSON malformé.');
+		throw new Error('Invalid file: malformed JSON.');
 	}
 
 	if (!parsed || !Array.isArray(parsed.cells)) {
@@ -320,7 +320,7 @@ export function importMapFromJson(jsonString: string): SavedMapData {
 		...parsed,
 		// Nouvel ID pour éviter tout écrasement de carte existante
 		id:        generateMapId(),
-		name:      parsed.name ?? 'Carte importée',
+		name:      parsed.name ?? 'Imported map',
 		createdAt: Date.now(),
 		updatedAt: Date.now(),
 		// La carte importée devient standalone (pas liée à un donjon)

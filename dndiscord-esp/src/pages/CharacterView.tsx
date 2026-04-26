@@ -91,7 +91,7 @@ export default function CharacterView() {
       setCharacter(updatedChar);
     } catch (err) {
       console.error("Failed to update hit points:", err);
-      setError("Impossible de mettre à jour les points de vie.");
+      setError("Failed to update hit points.");
     }
   };
 
@@ -402,7 +402,7 @@ export default function CharacterView() {
                     </div>
                     <div class="flex items-start gap-2">
                       <span class="text-purple-400">•</span>
-                      <span>Ruse (Désengagement, Repli, Se cacher)</span>
+                      <span>Cunning Action (Disengage, Dash, Hide)</span>
                     </div>
                     <div class="flex items-start gap-2">
                       <span class="text-purple-400">•</span>
@@ -423,11 +423,11 @@ export default function CharacterView() {
                     </div>
                     <div class="flex items-start gap-2">
                       <span class="text-amber-400">•</span>
-                      <span>Sens aiguisés (Perception)</span>
+                      <span>Keen Senses (Perception)</span>
                     </div>
                     <div class="flex items-start gap-2">
                       <span class="text-amber-400">•</span>
-                      <span>Ascendance féerique (résistance charme)</span>
+                      <span>Fey Ancestry (charm resistance)</span>
                     </div>
                   </div>
                 </div>

@@ -127,7 +127,7 @@ export function registerGameSyncHandlers(): void {
     setGameState("pathPreview", []);
     setGameState("highlightedTiles", []);
 
-    addCombatLog(`[MJ] ${unitData.name} déplacé en (${dest.x}, ${dest.z})`, "system");
+    addCombatLog(`[DM] ${unitData.name} moved to (${dest.x}, ${dest.z})`, "system");
   });
 
   // DM spawned a new enemy unit — materialise it on all clients
@@ -167,7 +167,7 @@ export function registerGameSyncHandlers(): void {
     setTiles(tileKey, "occupiedBy", unit.id);
     updatePathfinder();
 
-    addCombatLog(`[MJ] ${unit.name} apparaît en (${pos.x}, ${pos.z}) !`, "system");
+    addCombatLog(`[DM] ${unit.name} appears at (${pos.x}, ${pos.z})!`, "system");
     addSpawnedEnemy({ name: unit.name, x: pos.x, z: pos.z });
   });
 
@@ -194,7 +194,7 @@ export function registerGameSyncHandlers(): void {
         currentTurn: authoritative.currentTurn,
         highlightedTiles: authoritative.highlightedTiles,
       });
-      addCombatLog("⚔️ Combat lancé — initiative roulée côté serveur.", "system");
+      addCombatLog("⚔️ Combat started — initiative rolled server-side.", "system");
       return;
     }
 
@@ -210,7 +210,7 @@ export function registerGameSyncHandlers(): void {
       phase: next.phase,
       highlightedTiles: next.highlightedTiles,
     });
-    addCombatLog("[MJ] Combat imminent — placez vos unités.", "system");
+    addCombatLog("[DM] Combat imminent — place your units.", "system");
   });
 
   // A unit used an ability (attack or spell). Every client — including the
@@ -247,7 +247,7 @@ export function registerGameSyncHandlers(): void {
       const target = units[effect.targetId];
       if (!target) continue;
       if ((effect.type ?? "").toLowerCase() === "damage") {
-        addCombatLog(`${target.name} subit ${effect.value} dégâts.`, "damage");
+        addCombatLog(`${target.name} takes ${effect.value} damage.`, "damage");
       }
       if (wasAliveBefore[effect.targetId] && !target.isAlive) {
         addCombatLog(`${target.name} est vaincu·e !`, "system");
@@ -292,9 +292,9 @@ export function registerGameSyncHandlers(): void {
 
     const name = unit.name;
     if (payload.delta < 0) {
-      addCombatLog(`[MJ] ${name} subit ${Math.abs(payload.delta)} dégâts.`, "damage");
+      addCombatLog(`[DM] ${name} takes ${Math.abs(payload.delta)} damage.`, "damage");
     } else if (payload.delta > 0) {
-      addCombatLog(`[MJ] ${name} soigné·e de ${payload.delta} PV.`, "system");
+      addCombatLog(`[DM] ${name} healed for ${payload.delta} HP.`, "system");
     }
     if (payload.wasAlive && !payload.isAlive) {
       addCombatLog(`${name} est vaincu·e !`, "system");
@@ -302,7 +302,7 @@ export function registerGameSyncHandlers(): void {
       playDeathSound();
       playCameraShake(0.15, 300);
     } else if (revived) {
-      addCombatLog(`[MJ] ${name} ressuscité·e.`, "system");
+      addCombatLog(`[DM] ${name} revived.`, "system");
       playReviveEffect(payload.unitId);
     }
   });
@@ -319,7 +319,7 @@ export function registerGameSyncHandlers(): void {
       highlightedTiles: [],
     });
     setGameState("turnPhase", "SELECT_UNIT" as any);
-    addCombatLog("[MJ] Combat terminé — retour en exploration.", "system");
+    addCombatLog("[DM] Combat ended — returning to exploration.", "system");
   });
 
   // DM switched the session to a different map. SignalR's `on(...)` registers
