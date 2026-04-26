@@ -16,7 +16,7 @@ interface BaseProps {
 
 type ButtonAsButton = BaseProps &
   Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, "children" | "class"> & {
-    href?: undefined;
+    href?: never;
   };
 
 type ButtonAsLink = BaseProps & {
