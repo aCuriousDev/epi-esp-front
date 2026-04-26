@@ -31,8 +31,8 @@ export const DungeonSelectionForGame: Component<DungeonSelectionForGameProps> = 
 
 	return (
 		<div class="w-full h-screen flex items-center justify-center bg-game-darker relative">
-			<button onClick={props.onBack} class="settings-btn" aria-label="Retour">
-				<ArrowLeft class="settings-icon h-5 w-5" />
+			<button onClick={props.onBack} class="in-game-back-btn" aria-label="Back">
+				<ArrowLeft class="in-game-back-icon h-5 w-5" />
 			</button>
 
 			<div class="max-w-4xl w-full px-4 sm:px-8">

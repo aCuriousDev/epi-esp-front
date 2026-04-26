@@ -76,8 +76,8 @@ export const DungeonCreationWizard: Component<DungeonCreationWizardProps> = (pro
 		<div class="relative min-h-full w-full overflow-hidden bg-brand-gradient">
 			<div class="vignette absolute inset-0 pointer-events-none"></div>
 
-			<button onClick={props.onBack} class="settings-btn" aria-label="Retour">
-				<ArrowLeft class="settings-icon h-5 w-5" />
+			<button onClick={props.onBack} class="in-game-back-btn" aria-label="Back">
+				<ArrowLeft class="in-game-back-icon h-5 w-5" />
 			</button>
 
 			<div class="flex flex-col items-center justify-center min-h-screen p-8">

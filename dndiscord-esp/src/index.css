@@ -357,9 +357,10 @@ body {
 }
 
 /* ========================================
-   SETTINGS BUTTON
+   IN-GAME BACK CHROME
+   In-game back chrome only — do NOT reuse on top-level menu pages (use TopBar instead).
    ======================================== */
-.settings-btn {
+.in-game-back-btn {
 	@apply fixed top-4 right-4 inline-grid place-items-center w-11 h-11 rounded-xl border border-transparent text-slate-200 shadow-soft focus:outline-none;
 	background: linear-gradient(180deg, rgba(8, 12, 20, 0.9), rgba(5, 8, 14, 0.9))
 			padding-box,
@@ -375,13 +376,13 @@ body {
 	z-index: 50;
 }
 
-.settings-btn:hover {
+.in-game-back-btn:hover {
 	transform: translateY(-1px);
 	filter: brightness(1.05);
 	box-shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
 }
 
-.settings-icon {
+.in-game-back-icon {
 	@apply text-white;
 }
 

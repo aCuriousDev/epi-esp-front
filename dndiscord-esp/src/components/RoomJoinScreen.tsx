@@ -79,7 +79,7 @@ export const RoomJoinScreen: Component<RoomJoinScreenProps> = (props) => {
 
       <button
         onClick={props.onBack}
-        class="settings-btn !fixed !top-4 !left-4 !right-auto"
+        class="in-game-back-btn !fixed !top-4 !left-4 !right-auto"
         aria-label="Back"
       >
         <ArrowLeft class="w-5 h-5 text-white" />
