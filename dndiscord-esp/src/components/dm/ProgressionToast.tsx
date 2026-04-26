@@ -1,5 +1,5 @@
 /**
- * ProgressionToast — Recipient-only toasts for DM-driven XP/level-up and gold grants.
+ * ProgressionToast — Recipient and public toasts for DM-driven XP/level-up and gold grants.
  */
 
 import { Component, For, Show, createEffect, createSignal, on, onCleanup } from "solid-js";
@@ -7,6 +7,11 @@ import { Sparkles, Coins } from "lucide-solid";
 import { dmToolsState } from "../../stores/dmTools.store";
 import { getHubUserId } from "../../stores/session.store";
 import { playLevelUpSound, playNotificationSound } from "../../game/audio/SoundIntegration";
+import type {
+  CharacterProgressedPublicPayload,
+  CurrencyType,
+  GoldGrantedPublicPayload,
+} from "../../types/multiplayer";
 
 type ToastKind = "progress" | "gold";
 
@@ -18,13 +23,17 @@ interface ToastEntry {
   accentClass: string;
 }
 
-function coinLabel(type: string | undefined): string {
-  switch ((type ?? "gp").toLowerCase()) {
+function coinLabel(type: CurrencyType): string {
+  switch (type) {
     case "cp": return "pièces de cuivre";
     case "sp": return "pièces d'argent";
     case "ep": return "pièces d'électrum";
+    case "gp": return "pièces d'or";
     case "pp": return "pièces de platine";
-    default: return "pièces d'or";
+    default: {
+      const exhaustive: never = type;
+      return exhaustive;
+    }
   }
 }
 
@@ -85,13 +94,13 @@ export const ProgressionToast: Component = () => {
         for (let i = prevLen; i < len; i++) {
           const evt = dmToolsState.goldGranted[i];
           if (!evt || evt.targetUserId.toLowerCase() !== myId.toLowerCase()) continue;
-          const amount = evt.amount ?? evt.goldDelta;
+          const amount = evt.amount;
           const currency = coinLabel(evt.currencyType);
           const sign = amount > 0 ? "+" : "";
           pushToast({
             kind: "gold",
             title: amount >= 0 ? "Bourse modifiée" : "Monnaie retirée",
-            body: `${sign}${amount} ${currency} (total PO ${evt.goldPieces})`,
+            body: `${sign}${amount} ${currency} (total ${evt.goldPieces} gp)`,
             accentClass: "from-amber-950/95 to-orange-900/90 border-orange-500/30",
           });
           playNotificationSound();
@@ -100,7 +109,35 @@ export const ProgressionToast: Component = () => {
     ),
   );
 
+  const handlePublicProgression = (event: Event) => {
+    const evt = (event as CustomEvent<CharacterProgressedPublicPayload>).detail;
+    pushToast({
+      kind: "progress",
+      title: "Progression",
+      body: `${evt.targetCharacterName} atteint le niveau ${evt.newLevel} (+${evt.levelUps})`,
+      accentClass: "from-indigo-950/95 to-violet-900/90 border-violet-500/30",
+    });
+    playNotificationSound();
+  };
+
+  const handlePublicGold = (event: Event) => {
+    const evt = (event as CustomEvent<GoldGrantedPublicPayload>).detail;
+    const sign = evt.amount > 0 ? "+" : "";
+    pushToast({
+      kind: "gold",
+      title: evt.amount >= 0 ? "Monnaie reçue" : "Monnaie retirée",
+      body: `${evt.targetCharacterName} : ${sign}${evt.amount} ${coinLabel(evt.currencyType)}`,
+      accentClass: "from-amber-950/95 to-orange-900/90 border-orange-500/30",
+    });
+    playNotificationSound();
+  };
+
+  window.addEventListener("dm-character-progressed-public", handlePublicProgression);
+  window.addEventListener("dm-gold-granted-public", handlePublicGold);
+
   onCleanup(() => {
+    window.removeEventListener("dm-character-progressed-public", handlePublicProgression);
+    window.removeEventListener("dm-gold-granted-public", handlePublicGold);
     pendingTimers.forEach((t) => window.clearTimeout(t));
     pendingTimers.clear();
   });

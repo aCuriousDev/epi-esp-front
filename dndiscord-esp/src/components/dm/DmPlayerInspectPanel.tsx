@@ -301,8 +301,9 @@ export default function DmPlayerInspectPanel() {
 
   const handleGrantGold = async () => {
     const player = playerInfo();
+    const charId = currentCharId();
     const amount = Math.floor(goldAmount());
-    if (!player || amount === 0 || updatingProgression()) return;
+    if (!player || !charId || amount === 0 || updatingProgression()) return;
     setUpdatingProgression(true);
     try {
       await dmGrantGold({
@@ -310,6 +311,7 @@ export default function DmPlayerInspectPanel() {
         amount,
         currencyType: goldType(),
       });
+      await loadCharacter(charId);
     } catch (e) {
       console.error("[DM Inspect] Grant gold failed:", e);
     } finally {

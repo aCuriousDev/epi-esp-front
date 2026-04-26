@@ -265,8 +265,10 @@ export interface DmForceLevelUpPayload {
 export interface DmGrantGoldPayload {
   targetUserId: string;
   amount: number;
-  currencyType: "cp" | "sp" | "ep" | "gp" | "pp";
+  currencyType: CurrencyType;
 }
+
+export type CurrencyType = "cp" | "sp" | "ep" | "gp" | "pp";
 
 export interface CharacterProgressedPayload {
   targetUserId: string;
@@ -296,8 +298,7 @@ export interface GoldGrantedPayload {
   targetUserName: string;
   characterId: string;
   amount: number;
-  currencyType: "cp" | "sp" | "ep" | "gp" | "pp";
-  goldDelta: number;
+  currencyType: CurrencyType;
   copperPieces: number;
   silverPieces: number;
   electrumPieces: number;
@@ -305,4 +306,18 @@ export interface GoldGrantedPayload {
   platinumPieces: number;
   totalInCopper: number;
   timestamp: string;
+}
+
+export interface GoldGrantedPublicPayload {
+  targetUserId: string;
+  targetCharacterName: string;
+  currencyType: CurrencyType;
+  amount: number;
+}
+
+export interface CharacterProgressedPublicPayload {
+  targetUserId: string;
+  targetCharacterName: string;
+  newLevel: number;
+  levelUps: number;
 }

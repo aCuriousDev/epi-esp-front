@@ -22,7 +22,9 @@ import {
   type DmForceLevelUpPayload,
   type DmGrantGoldPayload,
   type CharacterProgressedPayload,
+  type CharacterProgressedPublicPayload,
   type GoldGrantedPayload,
+  type GoldGrantedPublicPayload,
 } from "../../types/multiplayer";
 import {
   setSession,
@@ -49,6 +51,7 @@ import { AuthService } from "../auth.service";
 import { loadMap } from "../mapStorage";
 import { getApiUrl } from "../config";
 import { getDiscordContextIds } from "../discord";
+import { normalizePlayer, normalizeSession } from "./multiplayer.normalizers";
 import {
   addPartyChatMessage,
   clearPartyChat,
@@ -96,6 +99,28 @@ const HUB = {
   dmGrantGold: "DmGrantGold",
   selectDefaultTemplate: "SelectDefaultTemplate",
 } as const;
+
+function unwrapPayload<T>(message: T | { payload?: T }): T {
+  return ((message as { payload?: T })?.payload ?? message) as T;
+}
+
+function dispatchProgressionPublic(payload: CharacterProgressedPublicPayload): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<CharacterProgressedPublicPayload>("dm-character-progressed-public", {
+      detail: payload,
+    }),
+  );
+}
+
+function dispatchGoldGrantedPublic(payload: GoldGrantedPublicPayload): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<GoldGrantedPublicPayload>("dm-gold-granted-public", {
+      detail: payload,
+    }),
+  );
+}
 
 async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
   const ctx = getDiscordContextIds();
@@ -417,8 +442,6 @@ export async function dmGrantGold(payload: DmGrantGoldPayload): Promise<void> {
 
 // --- Enregistrement des handlers d'événements ---
 
-import { normalizePlayer, normalizeSession } from "./multiplayer.normalizers";
-
 /**
  * Enregistre tous les handlers SignalR pour la session et le jeu.
  * À appeler après connect().
@@ -558,15 +581,52 @@ export function registerMultiplayerHandlers(): void {
     addGrantedItem(payload);
   });
 
-  signalRService.on("CharacterProgressed", (msg: any) => {
-    const payload: CharacterProgressedPayload = msg?.payload ?? msg;
-    addCharacterProgressed(payload);
-  });
+  const handleProgressedDmAck = (msg: any) => {
+    const payload = unwrapPayload<CharacterProgressedPayload>(msg);
+    console.info("[DM] Character progression acknowledged", {
+      targetUserId: payload.targetUserId,
+      targetUserName: payload.targetUserName,
+      newLevel: payload.newLevel,
+      levelUps: payload.levelUps,
+    });
+  };
 
-  signalRService.on("GoldGranted", (msg: any) => {
-    const payload: GoldGrantedPayload = msg?.payload ?? msg;
+  const handleProgressedTarget = (msg: any) => {
+    const payload = unwrapPayload<CharacterProgressedPayload>(msg);
+    addCharacterProgressed(payload);
+  };
+
+  const handleProgressedPublic = (msg: any) => {
+    const payload = unwrapPayload<CharacterProgressedPublicPayload>(msg);
+    dispatchProgressionPublic(payload);
+  };
+
+  const handleGoldGrantedDmAck = (msg: any) => {
+    const payload = unwrapPayload<GoldGrantedPayload>(msg);
+    console.info("[DM] Gold grant acknowledged", {
+      targetUserId: payload.targetUserId,
+      targetUserName: payload.targetUserName,
+      amount: payload.amount,
+      currencyType: payload.currencyType,
+    });
+  };
+
+  const handleGoldGrantedTarget = (msg: any) => {
+    const payload = unwrapPayload<GoldGrantedPayload>(msg);
     addGoldGranted(payload);
-  });
+  };
+
+  const handleGoldGrantedPublic = (msg: any) => {
+    const payload = unwrapPayload<GoldGrantedPublicPayload>(msg);
+    dispatchGoldGrantedPublic(payload);
+  };
+
+  signalRService.on("CharacterProgressedDmAck", handleProgressedDmAck);
+  signalRService.on("CharacterProgressed", handleProgressedTarget);
+  signalRService.on("CharacterProgressedPublic", handleProgressedPublic);
+  signalRService.on("GoldGrantedDmAck", handleGoldGrantedDmAck);
+  signalRService.on("GoldGranted", handleGoldGrantedTarget);
+  signalRService.on("GoldGrantedPublic", handleGoldGrantedPublic);
 
   // SessionEnded — DM left / host closed the session / back dropped it.
   // Tear the whole board state down so the remaining players don't stay
