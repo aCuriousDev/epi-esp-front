@@ -183,7 +183,7 @@ export default function CampaignView() {
         ensureMultiplayerHandlersRegistered();
       }
       await createSession(c.id);
-      navigate("/board");
+      navigate(`/campaigns/${c.id}/session`);
     } catch (e: any) {
       setLaunchError(e?.message ?? "Failed to create session.");
     } finally {
@@ -215,7 +215,7 @@ export default function CampaignView() {
       if (invite.campaignId && hasScenario(campaign()?.campaignTreeDefinition)) {
         navigate(`/campaigns/${invite.campaignId}/lobby`);
       } else {
-        navigate("/board");
+        navigate(invite.campaignId ? `/campaigns/${invite.campaignId}/session` : "/practice");
       }
     } catch (e: any) {
       setInviteError(e?.message ?? "Failed to join session.");

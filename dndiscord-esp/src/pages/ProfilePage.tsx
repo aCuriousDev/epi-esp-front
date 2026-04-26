@@ -167,7 +167,7 @@ export default function ProfilePage() {
                 icon={<Dices class="w-6 h-6 text-blue-300" />}
                 title={t("page.profile.action.startGame")}
                 description={t("page.profile.action.startGame.desc")}
-                onClick={() => navigate("/board")}
+                onClick={() => navigate("/practice")}
               />
               <QuickActionCard
                 icon={<ScrollText class="w-6 h-6 text-amber-300" />}

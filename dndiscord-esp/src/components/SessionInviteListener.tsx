@@ -121,7 +121,7 @@ export default function SessionInviteListener() {
         return;
       }
       setInvite(null);
-      navigate("/board");
+      navigate(i.campaignId ? `/campaigns/${i.campaignId}/session` : "/practice");
     } catch (err: any) {
       setError(err?.message ?? "Failed to join session.");
     } finally {

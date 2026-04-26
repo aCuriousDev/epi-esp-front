@@ -438,7 +438,7 @@ export default function CharacterView() {
               <div class="mt-6 flex flex-col sm:flex-row gap-4">
                 <button
                   class="flex-1 py-3 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold hover:from-purple-500 hover:to-indigo-500 transition-all shadow-lg hover:shadow-purple-500/25"
-                  onClick={() => navigate("/board")}
+                  onClick={() => navigate("/practice")}
                 >
                   <Swords class="w-4 h-4 inline-block mr-1.5" />
                   {t("characterView.launchCombat")}
