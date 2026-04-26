@@ -521,6 +521,23 @@ body {
   }
 }
 
+@keyframes dnd-mote-rise {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: var(--mote-opacity, 0.35);
+  }
+  90% {
+    opacity: var(--mote-opacity, 0.35);
+  }
+  100% {
+    transform: translateY(-110vh) translateX(20px);
+    opacity: 0;
+  }
+}
+
 /* ========================================
    REDUCED MOTION
    ======================================== */

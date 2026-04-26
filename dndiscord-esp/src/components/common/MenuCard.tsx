@@ -8,13 +8,16 @@ interface MenuCardProps {
   subtitle?: string;
   badge?: string | number;
   tone?: "primary" | "ghost";
+  class?: string;
 }
 
 const toneClasses = {
   primary:
-    "bg-ink-800 hover:bg-ink-700 border-white/10 hover:border-plum-500 shadow-soft hover:shadow-lift",
+    "bg-gradient-to-br from-ink-800 via-ink-800 to-ink-700/80 hover:from-ink-700 hover:to-ink-600 " +
+    "border-white/10 hover:border-plum-500 shadow-soft hover:shadow-lift hover:shadow-glow",
   ghost:
-    "bg-transparent hover:bg-ink-800 border-dashed border-white/15 hover:border-plum-300",
+    "bg-gradient-to-br from-transparent to-ink-900/40 hover:from-ink-800 hover:to-ink-800 " +
+    "border-dashed border-white/15 hover:border-plum-300 hover:shadow-soft",
 };
 
 export const MenuCard: Component<MenuCardProps> = (props) => {
@@ -28,7 +31,8 @@ export const MenuCard: Component<MenuCardProps> = (props) => {
         "min-h-[120px] p-4 rounded-ds-lg border " +
         "transition-all duration-ds-sm ease-grimoire " +
         "focus-ring-gold text-center " +
-        toneClasses[tone()]
+        toneClasses[tone()] + " " +
+        (props.class ?? "")
       }
     >
       <Show when={props.badge !== undefined && props.badge !== ""}>
@@ -43,7 +47,7 @@ export const MenuCard: Component<MenuCardProps> = (props) => {
       </Show>
 
       <Show when={props.icon}>
-        <span class="text-gold-300 transition-transform duration-ds-sm group-hover:-translate-y-0.5">
+        <span class="text-gold-300 transition-transform duration-ds-sm group-hover:-translate-y-1 group-hover:scale-110">
           {props.icon}
         </span>
       </Show>

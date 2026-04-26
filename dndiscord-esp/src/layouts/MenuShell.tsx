@@ -8,6 +8,7 @@ import CookieConsent from "../components/CookieConsent";
 import SessionInviteListener from "../components/SessionInviteListener";
 import TutorialOverlay from "../components/TutorialOverlay";
 import { useDiscordLayoutMode } from "../hooks/useDiscordLayoutMode";
+import AmbientParticles from "../components/common/AmbientParticles";
 
 export const MenuShell: Component<RouteSectionProps> = (props) => {
   const layout = useDiscordLayoutMode();
@@ -19,7 +20,11 @@ export const MenuShell: Component<RouteSectionProps> = (props) => {
         <SessionInviteListener />
         <TutorialOverlay />
         <CookieConsent />
-        <div class="min-h-[100dvh] flex flex-col bg-ink-900 text-high">
+        <div class="relative isolate min-h-[100dvh] flex flex-col bg-ink-900 text-high overflow-hidden">
+          {/* Ambient atmosphere — behind everything */}
+          <div class="pointer-events-none absolute inset-0 -z-10 vignette-radial" aria-hidden="true" />
+          <AmbientParticles count={22} />
+
           <Show when={!isPip()}>
             <TopBar />
           </Show>

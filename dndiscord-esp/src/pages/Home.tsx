@@ -29,7 +29,19 @@ export const Home: Component = () => {
   return (
     <div class="space-y-8">
       <header class="flex flex-col items-center text-center gap-3 pt-2">
-        <AnimatedD20 size={72} />
+        <div class="relative inline-flex items-center justify-center">
+          <div
+            class="absolute inset-0 rounded-full pointer-events-none"
+            aria-hidden="true"
+            style={{
+              background:
+                "radial-gradient(circle, rgba(244,197,66,0.25) 0%, rgba(75,30,78,0.15) 45%, transparent 70%)",
+              filter: "blur(20px)",
+              transform: "scale(1.5)",
+            }}
+          />
+          <AnimatedD20 size={140} />
+        </div>
         <h1 class="font-display text-ds-h1 text-high tracking-wide">DnDiscord</h1>
         <p class="text-mid text-ds-body max-w-xl">{t("home.subtitle")}</p>
       </header>

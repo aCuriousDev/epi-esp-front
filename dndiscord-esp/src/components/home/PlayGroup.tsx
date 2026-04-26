@@ -14,9 +14,10 @@ const badge = (n?: number) => (n && n > 0 ? n : undefined);
 export const PlayGroup: Component<PlayGroupProps> = (props) => {
   return (
     <section aria-labelledby="home-play-heading">
-      <h2 id="home-play-heading" class="font-display text-ds-h2 text-high tracking-wide mb-3">
+      <h2 id="home-play-heading" class="font-display text-ds-h2 text-high tracking-wide mb-4 text-center">
         {t("home.section.play")}
       </h2>
+      <div class="mb-4 mx-auto h-px w-24 bg-gradient-to-r from-transparent via-gold-400/60 to-transparent" />
       <div class="grid gap-3 sm:gap-4" style={{ "grid-template-columns": "repeat(auto-fit, minmax(160px, 1fr))" }}>
         <MenuCard
           href="/campaigns"

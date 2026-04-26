@@ -6,9 +6,10 @@ import { t } from "../../i18n";
 export const CreateGroup: Component = () => {
   return (
     <section aria-labelledby="home-create-heading">
-      <h2 id="home-create-heading" class="font-display text-ds-h2 text-high tracking-wide mb-3">
+      <h2 id="home-create-heading" class="font-display text-ds-h2 text-high tracking-wide mb-4 text-center">
         {t("home.section.create")}
       </h2>
+      <div class="mb-4 mx-auto h-px w-24 bg-gradient-to-r from-transparent via-gold-400/60 to-transparent" />
       <div class="grid gap-3 sm:gap-4" style={{ "grid-template-columns": "repeat(auto-fit, minmax(160px, 1fr))" }}>
         <MenuCard
           href="/campaigns/create"
