@@ -1,6 +1,5 @@
-import { A, useNavigate } from "@solidjs/router";
+import { useNavigate } from "@solidjs/router";
 import {
-  ArrowLeft,
   Crown,
   Users,
   Globe,
@@ -9,6 +8,8 @@ import {
   BookOpen,
 } from "lucide-solid";
 import { createSignal, Show } from "solid-js";
+import PageMeta from "../layouts/PageMeta";
+import { t } from "../i18n";
 import { CampaignVisibility } from "../types/campaign";
 import {
   CampaignService,
@@ -64,35 +65,19 @@ export default function CreateCampaign() {
   };
 
   return (
-    <div class="create-campaign-page min-h-screen w-full bg-brand-gradient">
-      <div class="absolute inset-0 overflow-hidden pointer-events-none">
-        <div class="absolute top-1/4 -left-32 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
-        <div
-          class="absolute bottom-1/4 -right-32 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl animate-pulse"
-          style="animation-delay: 1s"
-        />
-      </div>
+    <div class="create-campaign-page min-h-screen w-full">
+      <PageMeta title={t("page.createCampaign.title")} />
 
-      <div class="vignette absolute inset-0" />
-
-      <A
-        href="/campaigns"
-        class="settings-btn !left-4 !right-auto"
-        aria-label="Retour"
-      >
-        <ArrowLeft class="settings-icon h-5 w-5" />
-      </A>
-
-      <main class="relative z-10 max-w-2xl mx-auto p-6 pt-20">
+      <main class="relative z-10 max-w-2xl mx-auto p-6 pt-4">
         <div class="text-center mb-8">
           <div class="mx-auto mb-4 w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg">
             <Crown class="w-8 h-8 text-white" />
           </div>
           <h1 class="title-shine title-gradient font-display text-3xl sm:text-4xl tracking-wide bg-clip-text text-transparent">
-            Nouvelle Campagne
+            {t("page.createCampaign.title")}
           </h1>
           <p class="mt-2 text-slate-300/80">
-            Créez votre aventure et invitez vos joueurs.
+            {t("createCampaign.subtitle")}
           </p>
         </div>
 
@@ -110,50 +95,50 @@ export default function CreateCampaign() {
             <div class="text-center pb-4 border-b border-white/10">
               <h2 class="text-xl font-semibold text-white flex items-center justify-center gap-2">
                 <BookOpen class="w-5 h-5 text-purple-400" />
-                Informations de base
+                {t("createCampaign.basicInfo")}
               </h2>
             </div>
 
             {/* Title */}
             <div class="space-y-2">
               <label class="block text-sm font-medium text-slate-300">
-                Nom de la campagne *
+                {t("createCampaign.nameLabel")}
               </label>
               <input
                 type="text"
                 value={title()}
                 onInput={(e) => setTitle(e.currentTarget.value)}
-                placeholder="Ex: La Malédiction de Strahd"
+                placeholder={t("createCampaign.namePlaceholder")}
                 class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all"
                 maxLength={100}
               />
               <p class="text-xs text-slate-500">
-                {title().length}/100 caractères
+                {title().length}/100 {t("createCampaign.chars")}
               </p>
             </div>
 
             {/* Description */}
             <div class="space-y-2">
               <label class="block text-sm font-medium text-slate-300">
-                Description
+                {t("createCampaign.descriptionLabel")}
               </label>
               <textarea
                 value={description()}
                 onInput={(e) => setDescription(e.currentTarget.value)}
-                placeholder="Décrivez votre campagne, son ambiance, son histoire..."
+                placeholder={t("createCampaign.descriptionPlaceholder")}
                 rows={4}
                 class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all resize-none"
                 maxLength={500}
               />
               <p class="text-xs text-slate-500">
-                {description().length}/500 caractères
+                {description().length}/500 {t("createCampaign.chars")}
               </p>
             </div>
 
             {/* Image URL (optional) */}
             <div class="space-y-2">
               <label class="block text-sm font-medium text-slate-300">
-                Illustration (URL, optionnelle)
+                {t("createCampaign.imageUrlLabel")}
               </label>
               <input
                 type="url"
@@ -167,26 +152,26 @@ export default function CreateCampaign() {
             {/* Visibility */}
             <div class="space-y-3">
               <label class="block text-sm font-medium text-slate-300">
-                Visibilité
+                {t("createCampaign.visibilityLabel")}
               </label>
               <div class="grid grid-cols-3 gap-2">
                 <VisibilityOption
                   selected={visibility() === CampaignVisibility.Private}
                   onClick={() => setVisibility(CampaignVisibility.Private)}
                   icon={<Lock class="w-5 h-5" />}
-                  label="Privée"
+                  label={t("createCampaign.visibility.private")}
                 />
                 <VisibilityOption
                   selected={visibility() === CampaignVisibility.InviteOnly}
                   onClick={() => setVisibility(CampaignVisibility.InviteOnly)}
                   icon={<Mail class="w-5 h-5" />}
-                  label="Invitation"
+                  label={t("createCampaign.visibility.invite")}
                 />
                 <VisibilityOption
                   selected={visibility() === CampaignVisibility.Public}
                   onClick={() => setVisibility(CampaignVisibility.Public)}
                   icon={<Globe class="w-5 h-5" />}
-                  label="Publique"
+                  label={t("createCampaign.visibility.public")}
                 />
               </div>
             </div>
@@ -195,7 +180,7 @@ export default function CreateCampaign() {
             <div class="space-y-3">
               <label class="block text-sm font-medium text-slate-300">
                 <Users class="w-4 h-4 inline mr-2" />
-                Nombre de joueurs maximum
+                {t("createCampaign.maxPlayersLabel")}
               </label>
               <div class="flex items-center gap-4">
                 <input
@@ -224,47 +209,18 @@ export default function CreateCampaign() {
                 fallback={
                   <>
                     <Crown class="w-5 h-5" />
-                    Créer la campagne
+                    {t("createCampaign.submit")}
                   </>
                 }
               >
                 <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Création...
+                {t("createCampaign.submitting")}
               </Show>
             </button>
           </div>
         </form>
       </main>
 
-      <style jsx>{`
-        .create-campaign-page {
-          background: linear-gradient(
-            135deg,
-            var(--ink-700) 0%,
-            var(--ink-800) 50%,
-            var(--ink-900) 100%
-          );
-        }
-
-        .campaign-form {
-          animation: cardSlideUp 0.5s ease-out;
-        }
-
-        @keyframes cardSlideUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-
-        input[type="range"]::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          width: 20px;
-          height: 20px;
-          background: var(--plum-500);
-          border-radius: 50%;
-          cursor: pointer;
-          box-shadow: 0 2px 6px rgba(139, 92, 246, 0.4);
-        }
-      `}</style>
     </div>
   );
 }

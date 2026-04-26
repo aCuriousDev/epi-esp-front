@@ -272,6 +272,23 @@ export const en = {
   "campaignView.relativeTime.daysAgo": "{n} days ago",
   "campaignView.relativeTime.monthAgo": "1 month ago",
   "campaignView.relativeTime.monthsAgo": "{n} months ago",
+
+  // CreateCampaign
+  "createCampaign.subtitle": "Create your adventure and invite your players.",
+  "createCampaign.basicInfo": "Basic information",
+  "createCampaign.nameLabel": "Campaign name *",
+  "createCampaign.namePlaceholder": "E.g. Curse of Strahd",
+  "createCampaign.descriptionLabel": "Description",
+  "createCampaign.descriptionPlaceholder": "Describe your campaign, its atmosphere, its story…",
+  "createCampaign.imageUrlLabel": "Cover image (URL, optional)",
+  "createCampaign.visibilityLabel": "Visibility",
+  "createCampaign.visibility.private": "Private",
+  "createCampaign.visibility.invite": "Invite only",
+  "createCampaign.visibility.public": "Public",
+  "createCampaign.maxPlayersLabel": "Maximum number of players",
+  "createCampaign.chars": "characters",
+  "createCampaign.submit": "Create campaign",
+  "createCampaign.submitting": "Creating…",
 } as const;
 
 export type EnKey = keyof typeof en;
