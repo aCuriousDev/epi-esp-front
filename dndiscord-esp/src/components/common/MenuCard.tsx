@@ -9,6 +9,7 @@ interface MenuCardProps {
   badge?: string | number;
   tone?: "primary" | "ghost";
   class?: string;
+  "data-tutorial"?: string;
 }
 
 export const MenuCard: Component<MenuCardProps> = (props) => {
@@ -17,6 +18,7 @@ export const MenuCard: Component<MenuCardProps> = (props) => {
   return (
     <A
       href={props.href}
+      data-tutorial={props["data-tutorial"]}
       class={
         "menu-card " +
         (tone() === "ghost" ? "menu-card-ghost " : "") +

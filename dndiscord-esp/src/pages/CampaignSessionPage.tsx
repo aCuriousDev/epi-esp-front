@@ -148,6 +148,7 @@ const CampaignSessionPage: Component = () => {
   const [votingLocked, setVotingLocked] = createSignal(false);
   const myUserId = () => authStore.user()?.id ?? '';
 
+
   onMount(async () => {
     writeLastCampaignId(params.id);
     // ── SignalR subscription for votes ──────────────────────────────────────
