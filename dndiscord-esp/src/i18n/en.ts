@@ -313,6 +313,19 @@ export const en = {
   "createCharacter.submitting": "Creating…",
   "createCharacter.errorNameRequired": "Please enter a name for your character.",
 
+  // CampaignManagerPage
+  "campaignManager.toolbar.exportImport": "Export / Import",
+  "campaignManager.toolbar.save": "Save",
+  "campaignManager.toolbar.saving": "Saving…",
+  "campaignManager.sidebar.nodeDetails": "Node details",
+  "campaignManager.sidebar.availableBlocks": "Available blocks",
+  "campaignManager.block.scene": "Scene",
+  "campaignManager.block.choices": "Choices",
+  "campaignManager.block.combat": "Combat",
+  "campaignManager.block.map": "Map",
+  "campaignManager.toast.saved": "Campaign saved successfully",
+  "campaignManager.toast.saveError": "Failed to save campaign",
+
   // CharacterView
   "characterView.level": "Level",
   "characterView.levelUp": "Level up",
