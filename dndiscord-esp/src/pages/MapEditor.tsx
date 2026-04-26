@@ -3292,7 +3292,7 @@ export default function MapEditor() {
 			</Show>
 
 			{/* Main menu (infos + assets) */}
-			<div class="absolute top-4 left-4 z-20 bg-black/60 backdrop-blur-sm rounded-xl p-4 border border-white/10 shadow-lg max-w-xs max-h-[90vh] overflow-y-auto">
+			<div class="absolute top-4 left-16 sm:left-20 z-20 bg-black/60 backdrop-blur-sm rounded-xl p-4 border border-white/10 shadow-lg max-w-xs max-h-[90vh] overflow-y-auto">
 				<h2 class="text-white font-display text-xl mb-4">Map Editor</h2>
 
 				{/* Map Name Input */}

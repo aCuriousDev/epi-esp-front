@@ -159,7 +159,7 @@ const CampaignSessionPage: Component = () => {
       trapCells:  node.trapCells,
     });
 
-    navigate('/board?fromSession=1');
+    navigate("/practice/exploration?fromSession=1");
   };
 
   const followPort = async (port: string, choiceText?: string) => {

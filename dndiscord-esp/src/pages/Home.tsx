@@ -1,4 +1,4 @@
-import { Component, Show, createResource, createMemo } from "solid-js";
+import { Component, Show, createResource, createEffect, createSignal, onMount } from "solid-js";
 import AnimatedD20 from "../components/common/AnimatedD20";
 import ResumeHero from "../components/home/ResumeHero";
 import WelcomeBanner from "../components/home/WelcomeBanner";
@@ -7,11 +7,29 @@ import CreateGroup from "../components/home/CreateGroup";
 import StatsStrip from "../components/home/StatsStrip";
 import { CampaignService } from "../services/campaign.service";
 import { CharacterService } from "../services/character.service";
-import { useLastCampaignId } from "../hooks/useLastCampaign";
+import { readLastCampaignId, clearLastCampaignId } from "../hooks/useLastCampaign";
 import { t } from "../i18n";
 
 export const Home: Component = () => {
-  const lastId = useLastCampaignId();
+  const [lastId, setLastId] = createSignal<string | null>(null);
+  onMount(() => setLastId(readLastCampaignId()));
+
+  const [campaign] = createResource(lastId, async (id) => {
+    if (!id) return null;
+    try {
+      return await CampaignService.getCampaign(id);
+    } catch {
+      return null;
+    }
+  });
+
+  // If we had an id but campaign is gone (deleted), clear stale ref and update signal.
+  createEffect(() => {
+    if (lastId() && !campaign.loading && campaign() === null) {
+      clearLastCampaignId();
+      setLastId(null);
+    }
+  });
 
   const [campaignsCount] = createResource(async () => {
     try {
@@ -31,16 +49,14 @@ export const Home: Component = () => {
     }
   });
 
-  const totalItems = createMemo(
-    () => (campaignsCount() ?? 0) + (charactersCount() ?? 0)
-  );
+  const totalItems = () => (campaignsCount() ?? 0) + (charactersCount() ?? 0);
 
-  const counterLabel = createMemo(() => {
+  const counterLabel = () => {
     const n = totalItems();
     return n > 0 ? `${n} ITEMS` : undefined;
-  });
+  };
 
-  const hasData = createMemo(() => totalItems() > 0);
+  const hasData = () => totalItems() > 0;
 
   return (
     <div class="max-w-[1080px] mx-auto space-y-5">
@@ -69,8 +85,8 @@ export const Home: Component = () => {
         </p>
       </header>
 
-      <Show when={lastId()} fallback={<WelcomeBanner />}>
-        <ResumeHero />
+      <Show when={campaign()} fallback={<WelcomeBanner />}>
+        {(c) => <ResumeHero campaign={c()} />}
       </Show>
 
       <PlayGroup
