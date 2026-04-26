@@ -75,7 +75,7 @@ const CLASSES: DnDClass[] = [
 		primary: "Dexterity & Wisdom",
 		hitDie: "d8",
 		saves: "Strength, Dexterity",
-		proficiencies: "Armes simples, épées courtes, pas d’armure",
+		proficiencies: "Simple weapons, shortswords, no armor",
 		casterType: "None",
 		feature: "Ki, Unarmored Defense",
 	},
