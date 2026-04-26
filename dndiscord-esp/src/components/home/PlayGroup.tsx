@@ -28,6 +28,7 @@ export const PlayGroup: Component<PlayGroupProps> = (props) => {
           subtitle={t("home.card.campaigns.subtitle")}
           icon={<Users size={28} aria-hidden="true" />}
           badge={badge(props.campaignsCount)}
+          data-tutorial="nav-campaigns"
         />
         <MenuCard
           href="/characters"
@@ -35,6 +36,7 @@ export const PlayGroup: Component<PlayGroupProps> = (props) => {
           subtitle={t("home.card.characters.subtitle")}
           icon={<Swords size={28} aria-hidden="true" />}
           badge={badge(props.charactersCount)}
+          data-tutorial="nav-characters"
         />
         <MenuCard
           href="/practice"

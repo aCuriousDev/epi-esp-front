@@ -58,8 +58,11 @@ export default function TutorialOverlay() {
   const [targetRect, setTargetRect] = createSignal<DOMRect | null>(null);
   const [cardStyle, setCardStyle] = createSignal<Record<string, string>>({});
   const [pulseKey, setPulseKey] = createSignal(0);
-  let rafId: number | null = null;
   let cardRef: HTMLDivElement | undefined;
+  let resizeObserver: ResizeObserver | null = null;
+  let scrollListenerActive = false;
+  let resizeListenerActive = false;
+  let updateRaf: number | null = null;
 
   onMount(() => {
     if (!authStore.isAuthenticated()) return;
@@ -71,6 +74,86 @@ export default function TutorialOverlay() {
   const step = () => TUTORIAL_STEPS[tutorialState.stepIndex];
   const isLast = () => tutorialState.stepIndex >= TUTORIAL_STEPS.length - 1;
   const isFirst = () => tutorialState.stepIndex <= 0;
+
+  const updateLayout = () => {
+    const t = step()?.target;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    if (!t) {
+      setTargetRect(null);
+      setCardStyle(computeCardStyle(null, vw, vh));
+      return;
+    }
+
+    const el = document.querySelector(
+      `[data-tutorial="${t}"]`,
+    ) as HTMLElement | null;
+
+    if (!el) {
+      setTargetRect(null);
+      setCardStyle(computeCardStyle(null, vw, vh));
+      return;
+    }
+
+    const r = el.getBoundingClientRect();
+    setTargetRect(r);
+    setCardStyle(computeCardStyle(r, vw, vh));
+  };
+
+  const scheduleUpdate = () => {
+    if (!tutorialState.active) return;
+    if (updateRaf) return;
+    updateRaf = requestAnimationFrame(() => {
+      updateRaf = null;
+      updateLayout();
+    });
+  };
+
+  const cleanupObservers = () => {
+    if (resizeObserver) {
+      resizeObserver.disconnect();
+      resizeObserver = null;
+    }
+    if (scrollListenerActive) {
+      window.removeEventListener("scroll", scheduleUpdate, true);
+      scrollListenerActive = false;
+    }
+    if (resizeListenerActive) {
+      window.removeEventListener("resize", scheduleUpdate);
+      resizeListenerActive = false;
+    }
+    if (updateRaf) {
+      cancelAnimationFrame(updateRaf);
+      updateRaf = null;
+    }
+  };
+
+  const setupObserversForCurrentStep = () => {
+    cleanupObservers();
+    if (!tutorialState.active) return;
+
+    scheduleUpdate();
+
+    window.addEventListener("scroll", scheduleUpdate, true);
+    scrollListenerActive = true;
+
+    window.addEventListener("resize", scheduleUpdate);
+    resizeListenerActive = true;
+
+    const t = step()?.target;
+    if (!t) return;
+
+    const el = document.querySelector(
+      `[data-tutorial="${t}"]`,
+    ) as HTMLElement | null;
+    if (!el) return;
+
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => scheduleUpdate());
+      resizeObserver.observe(el);
+    }
+  };
 
   createEffect(() => {
     if (!tutorialState.active) return;
@@ -99,79 +182,20 @@ export default function TutorialOverlay() {
     void idx;
   });
 
-  // Track target rect (no scroll every frame)
+  // Track target rect: update on step change + scroll/resize/target resize
   createEffect(() => {
-    if (!tutorialState.active) {
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = null;
+    const active = tutorialState.active;
+    const idx = tutorialState.stepIndex;
+    const target = step()?.target;
+    void idx;
+    void target;
+
+    if (!active) {
+      cleanupObservers();
       return;
     }
 
-    const target = step()?.target;
-
-    const tick = () => {
-      if (!tutorialState.active) return;
-      const t = step()?.target;
-      if (!t) {
-        setTargetRect(null);
-        setCardStyle(
-          computeCardStyle(null, window.innerWidth, window.innerHeight),
-        );
-      } else {
-        const el = document.querySelector(
-          `[data-tutorial="${t}"]`,
-        ) as HTMLElement | null;
-        if (el) {
-          setTargetRect(el.getBoundingClientRect());
-          setCardStyle(
-            computeCardStyle(
-              el.getBoundingClientRect(),
-              window.innerWidth,
-              window.innerHeight,
-            ),
-          );
-        } else {
-          setTargetRect(null);
-          setCardStyle(
-            computeCardStyle(null, window.innerWidth, window.innerHeight),
-          );
-        }
-      }
-      rafId = requestAnimationFrame(tick);
-    };
-
-    if (rafId) cancelAnimationFrame(rafId);
-    rafId = requestAnimationFrame(tick);
-
-    const onResize = () => {
-      const t = step()?.target;
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      if (!t) {
-        setTargetRect(null);
-        setCardStyle(computeCardStyle(null, vw, vh));
-        return;
-      }
-      const el = document.querySelector(
-        `[data-tutorial="${t}"]`,
-      ) as HTMLElement | null;
-      if (el) {
-        const r = el.getBoundingClientRect();
-        setTargetRect(r);
-        setCardStyle(computeCardStyle(r, vw, vh));
-      } else {
-        setTargetRect(null);
-        setCardStyle(computeCardStyle(null, vw, vh));
-      }
-    };
-    window.addEventListener("resize", onResize);
-    onCleanup(() => {
-      window.removeEventListener("resize", onResize);
-      if (rafId) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
-      }
-    });
+    setupObserversForCurrentStep();
   });
 
   // Replay enter animation on step change
@@ -186,8 +210,7 @@ export default function TutorialOverlay() {
   });
 
   onCleanup(() => {
-    if (rafId) cancelAnimationFrame(rafId);
-    rafId = null;
+    cleanupObservers();
   });
 
   const goNext = () => {
@@ -206,7 +229,7 @@ export default function TutorialOverlay() {
   return (
     <Show when={tutorialState.active}>
       <div class="fixed inset-0 z-[100] pointer-events-none">
-        {/* Dim + spotlight — pointer-events-none pour laisser cliquer la cible */}
+        {/* Dim + spotlight — pointer-events-none so the target stays clickable */}
         <div class="absolute inset-0 pointer-events-none">
           <Show
             when={targetRect()}
@@ -277,8 +300,8 @@ export default function TutorialOverlay() {
               <button
                 type="button"
                 class="flex-shrink-0 p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all hover:scale-105 active:scale-95"
-                onClick={() => stopTutorial(false)}
-                aria-label="Fermer le tutoriel"
+                onClick={() => stopTutorial(true)}
+                aria-label="Close tutorial"
               >
                 <X class="w-4 h-4" />
               </button>
@@ -311,23 +334,23 @@ export default function TutorialOverlay() {
                 onClick={goPrev}
               >
                 <ChevronLeft class="w-4 h-4" />
-                Retour
+                Back
               </button>
 
               <div class="flex items-center gap-2">
                 <button
                   type="button"
                   class="px-3 py-2 rounded-xl text-sm text-slate-400 hover:text-white border border-transparent hover:border-white/10 transition"
-                  onClick={() => stopTutorial(false)}
+                  onClick={() => stopTutorial(true)}
                 >
-                  Plus tard
+                  Skip
                 </button>
                 <button
                   type="button"
                   class="group inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 shadow-lg shadow-purple-900/40 transition-all hover:scale-[1.02] active:scale-[0.98] hover:shadow-purple-500/25"
                   onClick={goNext}
                 >
-                  {step()?.cta ?? (isLast() ? "Terminer" : "Suivant")}
+                  {step()?.cta ?? (isLast() ? "Finish" : "Next")}
                   <ChevronRight class="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
                 </button>
               </div>
