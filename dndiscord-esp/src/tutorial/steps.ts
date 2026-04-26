@@ -28,8 +28,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     id: "campaigns",
-    route: "/",
-    target: "nav-campaigns",
+    route: "/campaigns",
+    target: "campaigns-panel",
     title: "Campaigns",
     body: "A campaign is your adventure. Create one as DM or join one with an invite code. Once inside, the DM can launch a session and invite the whole party.",
   },
