@@ -425,19 +425,56 @@ The Discord SDK initialization times out gracefully after 5 seconds when running
 
 ```sh
 cd dndiscord-esp
-npm run test             # vitest run (all test suites)
+npm run test             # vitest run (all test suites, single pass)
+npm run test:watch       # interactive watch mode
 ```
 
-- **Vitest 3.x** — not 4.x. The rolldown native binding in vitest 4.x was broken on Windows at the time of adoption and is pinned.
-- **Pure TS logic only** — no SolidJS component tests, no BabylonJS rendering tests.
-- Test files are colocated with source:
-  - `src/game/__tests__/` — TurnManager, Pathfinder, GridUtils, CollisionUtils, DamageCalc
-  - `src/utils/__tests__/` — utility helpers
-  - `src/services/__tests__/` — campaign mappers, map.service
-  - `src/services/signalr/__tests__/` — `applyTurnEnded`, `mapServerPhase`, `combatStarted`, normalizers
-  - `src/hooks/__tests__/` — `useLastCampaign`
-  - `src/stores/__tests__/` — store helpers
-  - `src/components/map-editor/__tests__/` — rotation helpers
+### Test strategy
+
+The front-end deliberately does **not** test SolidJS components or the BabylonJS render loop. Both have prohibitive setup costs in vitest (a SolidJS reactive root requires a real DOM; BabylonJS needs WebGL + a canvas), and component bugs surface fast in manual play. Instead the strategy is:
+
+```
+                    ┌──────────────────────────┐
+                    │   Pure logic tests       │   ← vitest, fast, deterministic
+                    │   (game rules, mappers,  │     no SolidJS, no DOM, no canvas
+                    │    SignalR normalizers)  │
+                    ├──────────────────────────┤
+                    │   Manual smoke pass      │   ← visual UI, 3D engine, animations
+                    │   on every PR before     │     drag-drop, combat, restarts,
+                    │   merge to dev           │     map switches
+                    └──────────────────────────┘
+```
+
+The pure-logic suite covers everything that can be expressed as `(input) → (output)` without touching reactive state or rendering. Anything reactive or visual is verified by hand.
+
+- **Vitest 3.x** — pinned. Vitest 4.x ships with a rolldown-based native binding that was broken on Windows at adoption time. 3.x is stable across Linux + Windows + macOS dev.
+
+### Coverage map
+
+| Layer | Test file | What it pins |
+|---|---|---|
+| **Game rules** | `src/game/__tests__/TurnManager.test.ts` | turn-order generation, advance, skip-dead, restart edge cases |
+| | `src/game/__tests__/GridUtils.test.ts` | tile coords ↔ world position, neighbour iteration |
+| | `src/game/__tests__/CollisionUtils.test.ts` | unit-vs-tile occupancy, collision exclusions |
+| | `src/game/__tests__/DamageCalc.test.ts` | ability damage formulas, modifiers |
+| | `src/game/__tests__/AbilityDefinitions.test.ts` | ability registry shape and metadata |
+| | `src/game/__tests__/CharacterToUnit.test.ts` | character → board unit conversion |
+| | `src/game/__tests__/Placement.test.ts` | spawn-area placement constraints |
+| | `src/game/__tests__/ResolveAllySpawns.test.ts` | ally spawn resolution rules |
+| | `src/game/__tests__/SessionSpawnCluster.test.ts` | session-scoped spawn clustering |
+| **Pathfinding** | `src/utils/__tests__/pathfinding.test.ts` | A* shortest path, blocked cells, range constraints |
+| **Service mappers** | `src/services/__tests__/campaign.mappers.test.ts` | API shape → frontend `Campaign` type, role + status mapping |
+| | `src/services/__tests__/map.service.test.ts` | UUID-vs-localStorage-key guard for `dmSwitchMap` |
+| **SignalR contract** | `src/services/signalr/__tests__/multiplayer.normalizers.test.ts` | role/status/state/player/session normalization (camelCase ↔ PascalCase) |
+| | `src/services/signalr/__tests__/multiplayer.eventHelpers.test.ts` | event helper functions (idempotency, delivery) |
+| | `src/services/signalr/__tests__/turnEndedLogic.test.ts` | turn cursor advance, HP/AP delta application |
+| | `src/services/signalr/__tests__/serverPhase.test.ts` | server phase enum → client phase enum |
+| | `src/services/signalr/__tests__/combatStarted.test.ts` | initiative order parsing, unit reconciliation |
+| | `src/services/signalr/__tests__/mapSwitched.test.ts` | `MapSwitched` handler reconciles scene state |
+| **Hooks** | `src/hooks/__tests__/useLastCampaign.test.ts` | last-campaign localStorage round-trip |
+| **Stores** | `src/stores/__tests__/session.store.test.ts` | session-store clear/replace semantics (the `setStore({})` trap) |
+| **Utils** | `src/utils/__tests__/coinLabel.test.ts` | currency display formatting |
+| **Map editor** | `src/components/map-editor/__tests__/AssetPaletteFilter.test.ts` | asset-palette filter logic |
 
 ### The SolidJS import trap
 
@@ -453,6 +490,13 @@ Vitest runs outside the browser's reactive context. Any file that has a **top-le
 | `src/services/signalr/applyState.ts` | `gameSync.ts` |
 
 When adding new testable logic in a file that imports a store at the top level, extract the pure function first before writing the test.
+
+### What is NOT covered (intentional)
+
+- **SolidJS components** — verified by manual play in the browser.
+- **BabylonJS rendering** — engine bugs surface visually within seconds.
+- **REST calls themselves** — axios is trusted; the **shapes** it returns are normalized in `*.mappers.ts` / `*.normalizers.ts`, and those normalizations *are* tested.
+- **End-to-end Discord Activity flow** — exercised manually on every PR via `npm run dev:tunnel` against the live backend.
 
 ---
 
@@ -488,28 +532,41 @@ The CI step (`Validate nginx.conf` in `ci.yml`) mounts the file the same way and
 
 ## CI/CD
 
-### GitHub Actions (`.github/workflows/ci.yml`)
+### CI — `.github/workflows/ci.yml`
 
-Runs on every push and pull request to `main` and `dev`.
+Triggered on every push and pull request to `main` and `dev`. The pipeline is sequential; any failure blocks the merge.
 
 ```
-Install → Typecheck → Test → Build → Validate nginx.conf → Production image smoke test
+┌──────────┐  ┌───────────┐  ┌──────┐  ┌───────┐  ┌───────────────┐  ┌────────────────────┐  ┌──────────┐
+│ Install  │→ │ Typecheck │→ │ Test │→ │ Build │→ │ Validate      │→ │ Production image   │→ │ Required │
+│ (no lock │  │  tsc -b   │  │ vitest│  │ vite  │  │ nginx.conf    │  │ smoke test         │  │ status   │
+│ npm i)   │  │           │  │ run   │  │ build │  │ nginx -t      │  │ (curl :8080 x5)    │  │ check    │
+└──────────┘  └───────────┘  └──────┘  └───────┘  └───────────────┘  └────────────────────┘  └──────────┘
 ```
 
-1. **Install** — deletes `package-lock.json` then runs `npm install`. The committed lockfile is generated on Windows and lacks the Linux rollup binaries; CI reinstalls fresh and caches `~/.npm` keyed on `package.json` content hash to avoid redundant network round-trips.
-2. **Typecheck** — `tsc -b`
-3. **Test** — `vitest run`
-4. **Build** — `vite build`
-5. **Validate nginx.conf** — `docker run nginx:alpine nginx -t` (catches syntax errors including unquoted regex quantifiers before they reach Dokploy)
-6. **Production image smoke test** — builds the Dockerfile, starts the container on port 8080, polls `http://localhost:8080/` five times, fails if the container never responds. Catches Dockerfile typos, missing `COPY` targets, and multi-stage build regressions.
+1. **Install** — deletes `package-lock.json` then runs `npm install`. The committed lockfile is generated on Windows and lacks the Linux rollup binaries; CI reinstalls fresh. `~/.npm` is cached keyed on `package.json` content hash to avoid redundant network round-trips between runs.
+2. **Typecheck** — `tsc -b` against the project references graph. Catches type errors that Vite would silently let through.
+3. **Test** — `vitest run` (single pass, all suites). See the [Testing](#testing) section for what is and is not covered.
+4. **Build** — `vite build`. Produces the production bundle in `dist/`.
+5. **Validate nginx.conf** — runs `nginx -t` against the actual `nginx.conf` inside an `nginx:alpine` container. Catches the unquoted-regex class of syntax error before it crash-loops the production container (see [Production / nginx](#production--nginx)).
+6. **Production image smoke test** — builds the production `Dockerfile`, runs the resulting container on port 8080, polls `http://localhost:8080/` five times. Fails if the container never responds. Catches Dockerfile typos, missing `COPY` targets, broken multi-stage builds, and regressions where the SPA fallback breaks for the root path.
 
-### Deployment
+A required status check (`build`) must pass before any PR can merge into `main` or `dev` — enforced by branch protection rulesets.
 
-Dokploy auto-deploys on push to the configured branch via the GitHub App integration. No manual deploy step.
+### CD — Dokploy
+
+Push to a branch configured in Dokploy (typically `main`) triggers an auto-deploy via the GitHub App webhook. Dokploy:
+
+1. Pulls the commit
+2. Builds the production `Dockerfile` (Node 20 build stage → nginx:alpine runtime stage)
+3. Sets runtime env vars from the Dokploy UI vault (in particular `VITE_API_URL` is baked at build time)
+4. Rolls out the new container behind the production reverse proxy
+
+No manual deploy step. Production URL: [dndiscord.cadran.app](https://dndiscord.cadran.app/).
 
 ### Cross-platform lockfile
 
-`package-lock.json` generated on Windows includes only `@rollup/rollup-win32-x64-msvc` and no Linux binary. The lockfile is committed anyway for local Windows dev consistency, but CI and Docker both discard it:
+`package-lock.json` generated on Windows includes only `@rollup/rollup-win32-x64-msvc` and no Linux binary. The lockfile is committed anyway for local Windows dev consistency, but CI and the Dockerfile both discard it:
 
 - **CI**: `rm -f package-lock.json && npm install`
 - **Dockerfile**: copies only `package.json`, not `package-lock.json`
