@@ -154,9 +154,13 @@ const CampaignLobbyPage: Component = () => {
     // créées par CampaignSessionPage mais jamais jouées.
     try {
       const sessionsRes = await CampaignService.listSessions(params.id);
-      // Dans le lobby on cherche toute session Active, même sans progression
-      // (ex. session créée mais pas encore démarrée) pour proposer le "Rejoindre".
-      const running = sessionsRes.items.find(s => s.status === GameSessionStatus.Active);
+      // On cherche les sessions actives avec progression réelle.
+      // Le lancement rapide utilise désormais createRoom (pas de session DB),
+      // donc les sessions sans progression sont des sessions fantômes à ignorer.
+      const running = sessionsRes.items.find(
+        s => s.status === GameSessionStatus.Active &&
+             (!!s.currentNodeId || s.entries.length > 0)
+      );
       if (running) setActiveSession(running);
     } catch {
       // Non-critique

@@ -119,6 +119,14 @@ export function setHubUserId(userId: string): void {
   }
 }
 
+/** Effacer le payload GameStarted (ex. avant une nouvelle session).
+ *  Sans ce nettoyage, LobbyScreen déclenche onMultiplayerGameStart
+ *  immédiatement avec le payload de la session précédente. */
+export function clearGameStarted(): void {
+  clearPersistedGameStarted();
+  setSessionState("gameStartedPayload", null);
+}
+
 /** Stocker le payload GameStarted reçu du serveur. */
 export function setGameStarted(payload: GameStartedPayload): void {
   setSessionState("gameStartedPayload", payload);
