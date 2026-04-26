@@ -43,9 +43,9 @@ export const Home: Component = () => {
   const hasData = createMemo(() => totalItems() > 0);
 
   return (
-    <div class="max-w-[1080px] mx-auto space-y-8">
+    <div class="max-w-[1080px] mx-auto space-y-5">
       {/* Hero block */}
-      <header class="flex flex-col items-center text-center gap-3 pt-2 mb-8">
+      <header class="flex flex-col items-center text-center gap-2 pt-2 mb-4">
         <div class="relative inline-flex items-center justify-center">
           <div
             class="absolute inset-0 rounded-full pointer-events-none"
@@ -58,13 +58,13 @@ export const Home: Component = () => {
             }}
           />
           <span class="dnd-d20-float relative">
-            <AnimatedD20 size={140} />
+            <AnimatedD20 size={96} />
           </span>
         </div>
-        <h1 class="title-shine font-display font-bold text-[44px] tracking-[0.06em] mb-1">
+        <h1 class="title-shine font-display font-bold text-[36px] tracking-[0.06em] mb-1">
           DnDiscord
         </h1>
-        <p class="font-old italic text-[16px] text-mid max-w-[520px] mx-auto">
+        <p class="font-old italic text-[15px] text-mid max-w-[520px] mx-auto leading-snug">
           {t("home.subtitle")}
         </p>
       </header>
@@ -82,10 +82,12 @@ export const Home: Component = () => {
       <CreateGroup />
 
       <Show when={hasData()}>
-        <StatsStrip
-          characters={charactersCount() ?? 0}
-          campaigns={campaignsCount() ?? 0}
-        />
+        <div class="mt-2">
+          <StatsStrip
+            characters={charactersCount() ?? 0}
+            campaigns={campaignsCount() ?? 0}
+          />
+        </div>
       </Show>
     </div>
   );

@@ -11,15 +11,6 @@ interface MenuCardProps {
   class?: string;
 }
 
-const toneClasses = {
-  primary:
-    "bg-gradient-to-br from-ink-800 via-ink-800 to-ink-700/80 hover:from-ink-700 hover:to-ink-600 " +
-    "border-white/10 hover:border-plum-500 shadow-soft hover:shadow-lift hover:shadow-glow",
-  ghost:
-    "bg-gradient-to-br from-transparent to-ink-900/40 hover:from-ink-800 hover:to-ink-800 " +
-    "border-dashed border-white/15 hover:border-plum-300 hover:shadow-soft",
-};
-
 export const MenuCard: Component<MenuCardProps> = (props) => {
   const tone = () => props.tone ?? "primary";
 
@@ -27,11 +18,9 @@ export const MenuCard: Component<MenuCardProps> = (props) => {
     <A
       href={props.href}
       class={
-        "group relative flex flex-col items-stretch text-left " +
-        "min-h-[120px] p-4 rounded-ds-lg border " +
-        "transition-all duration-ds-sm ease-grimoire " +
-        "focus-ring-gold " +
-        toneClasses[tone()] + " " +
+        "menu-card " +
+        (tone() === "ghost" ? "menu-card-ghost " : "") +
+        "!min-h-[120px] !p-4 flex flex-col items-stretch text-left focus-ring-gold " +
         (props.class ?? "")
       }
     >

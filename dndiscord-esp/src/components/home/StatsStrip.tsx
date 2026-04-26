@@ -9,30 +9,28 @@ interface StatCellProps {
 
 const StatCell: Component<StatCellProps> = (props) => (
   <div
-    class="flex flex-col items-center justify-center py-4 px-3 gap-1
+    class="flex items-baseline justify-center py-2 px-4 gap-2
            border-r border-gold-200/5 last:border-r-0"
     style={{ background: "var(--ink-800, #1a1c2a)" }}
   >
-    <div class="flex items-baseline gap-0.5">
-      <span
-        class="font-display font-bold text-[26px] text-white leading-none"
-      >
-        {props.value}
-      </span>
-      {props.unit && (
-        <span
-          class="text-low leading-none"
-          style={{
-            "font-family": "'JetBrains Mono', monospace",
-            "font-size": "12px",
-          }}
-        >
-          {props.unit}
-        </span>
-      )}
-    </div>
     <span
-      class="uppercase text-low"
+      class="font-display font-bold text-[18px] text-white leading-none"
+    >
+      {props.value}
+    </span>
+    {props.unit && (
+      <span
+        class="text-low leading-none"
+        style={{
+          "font-family": "'JetBrains Mono', monospace",
+          "font-size": "11px",
+        }}
+      >
+        {props.unit}
+      </span>
+    )}
+    <span
+      class="uppercase text-low leading-none"
       style={{
         "font-family": "'JetBrains Mono', monospace",
         "font-size": "10px",
