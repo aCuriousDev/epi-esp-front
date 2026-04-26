@@ -425,8 +425,8 @@ The Discord SDK initialization times out gracefully after 5 seconds when running
 
 ```sh
 cd dndiscord-esp
-npm run test             # vitest run (all test suites, single pass)
-npm run test:watch       # interactive watch mode
+npm run test             # vitest run (all suites, single pass)
+npx vitest               # interactive watch mode
 ```
 
 ### Test strategy
