@@ -1,5 +1,5 @@
 import { useNavigate } from "@solidjs/router";
-import { Plus, BookOpen, LogIn } from "lucide-solid";
+import { Plus, BookOpen, Play } from "lucide-solid";
 import { createSignal, For, Show, onMount } from "solid-js";
 import {
   Campaign,
@@ -13,6 +13,7 @@ import {
 import CampaignCard from "../components/CampaignCard";
 import PageMeta from "../layouts/PageMeta";
 import Button from "../components/common/Button";
+import SectionHeader from "../components/common/SectionHeader";
 import { t } from "../i18n";
 
 /**
@@ -114,23 +115,22 @@ export default function CampaignsPage() {
       />
 
       <div class="space-y-6">
-        <p class="text-mid text-ds-body text-center max-w-xl mx-auto">
+        <p class="font-old italic text-mid text-ds-body text-center max-w-2xl mx-auto">
           {t("page.campaigns.subtitle")}
         </p>
 
-        {/* Join-by-code panel — the only way a non-creator enters a campaign */}
-        <div class="mx-auto max-w-xl bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-5">
-          <label
-            id="invite-code-label"
-            for="invite-code-input"
-            class="block text-sm text-slate-300 mb-1 font-medium"
-          >
-            {t("page.campaigns.joinTitle")}
-          </label>
-          <p id="invite-code-hint" class="text-xs text-slate-500 mb-3">
+        {/* Join-by-code panel */}
+        <div class="max-w-[560px] mx-auto mb-9 p-[22px] rounded-ds-lg surface-1 shadow-soft">
+          <div class="flex items-center gap-2 mb-1.5">
+            <BookOpen size={16} class="text-gold-300" aria-hidden="true" />
+            <span class="font-display text-[14px] tracking-wide text-high">
+              {t("page.campaigns.joinTitle")}
+            </span>
+          </div>
+          <p class="text-[12px] text-low leading-relaxed mb-3.5">
             {t("page.campaigns.joinHelp")}
           </p>
-          <div class="flex flex-col sm:flex-row gap-2">
+          <div class="flex gap-2.5">
             <input
               id="invite-code-input"
               type="text"
@@ -138,24 +138,22 @@ export default function CampaignsPage() {
               onInput={(e) => setInviteCode(e.currentTarget.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleJoin(); }}
               disabled={joining()}
-              placeholder="XXXX-XXXX"
-              aria-labelledby="invite-code-label"
-              aria-describedby="invite-code-hint"
+              placeholder={t("page.campaigns.placeholder.code")}
               aria-label={t("page.campaigns.joinTitle")}
               autocomplete="off"
-              class="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white font-mono tracking-wider placeholder:text-slate-500 focus:border-purple-400/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900 disabled:opacity-50 transition-colors"
+              class="flex-1 px-3.5 py-2.5 bg-ink-600 border border-ink-500 rounded-ds-sm text-high font-mono text-[14px] tracking-[0.15em] text-center placeholder:text-low focus:border-gold-400/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/40 disabled:opacity-50 transition-colors"
             />
-            <button
+            <Button
               onClick={handleJoin}
               disabled={joining() || !inviteCode().trim()}
-              class="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              size="md"
+              leadingIcon={<Play size={12} />}
             >
-              <LogIn class="w-4 h-4" aria-hidden="true" />
-              {joining() ? "…" : t("page.campaigns.joinCta")}
-            </button>
+              {t("page.campaigns.joinCta")}
+            </Button>
           </div>
           <Show when={joinError()}>
-            <p class="mt-2 text-red-400 text-sm" role="alert" aria-live="polite">
+            <p class="mt-2 text-red-400 text-[12px]" role="alert" aria-live="polite">
               {joinError()}
             </p>
           </Show>
@@ -206,12 +204,17 @@ export default function CampaignsPage() {
             </Show>
           }
         >
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <SectionHeader
+            eyebrow={t("page.campaigns.yourCampaignsEyebrow")}
+            counter={`${campaigns().length} ${t("page.campaigns.totalCounter")}`.toUpperCase()}
+          />
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <For each={campaigns()}>
-              {(campaign) => (
+              {(campaign, i) => (
                 <CampaignCard
                   campaign={campaign}
                   onClick={() => navigate(`/campaigns/${campaign.id}`)}
+                  index={i()}
                 />
               )}
             </For>

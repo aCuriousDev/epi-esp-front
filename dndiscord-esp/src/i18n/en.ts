@@ -102,6 +102,14 @@ export const en = {
   "campaign.card.dmAbbr": "DM",
 
   // Campaigns page — inline strings
+  "page.campaigns.yourCampaignsEyebrow": "Your campaigns",
+  "page.campaigns.totalCounter": "total",
+  "page.campaigns.statusActive": "Active",
+  "page.campaigns.statusPreparation": "In preparation",
+  "page.campaigns.statusPaused": "Paused",
+  "page.campaigns.statusCompleted": "Completed",
+  "page.campaigns.statusArchived": "Archived",
+  "page.campaigns.placeholder.code": "XXXX-XXXX",
   "page.campaigns.loadError": "Failed to load campaigns. Please try again.",
   "page.campaigns.joinCodeRequired": "Enter an invitation code.",
   "page.campaigns.joinError": "Invalid code or campaign not found.",
