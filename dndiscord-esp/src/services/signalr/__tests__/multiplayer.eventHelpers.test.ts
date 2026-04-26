@@ -81,6 +81,14 @@ describe("unwrapPayload", () => {
     const msg = { targetUserId: "u3" } as any;
     expect(unwrapPayload(msg)).toBe(msg);
   });
+
+  it("returns null without throwing when message is null", () => {
+    expect(unwrapPayload<unknown>(null as any)).toBeNull();
+  });
+
+  it("returns undefined without throwing when message is undefined", () => {
+    expect(unwrapPayload<unknown>(undefined as any)).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------

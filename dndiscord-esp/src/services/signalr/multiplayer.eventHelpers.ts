@@ -9,6 +9,10 @@ import type {
 } from "../../types/multiplayer";
 
 export function unwrapPayload<T>(message: T | { payload?: T }): T {
+  if (message == null) {
+    console.warn("[unwrapPayload] received null/undefined message");
+    return message as T;
+  }
   return ((message as { payload?: T })?.payload ?? message) as T;
 }
 

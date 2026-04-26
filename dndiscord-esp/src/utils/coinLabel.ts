@@ -12,8 +12,8 @@ export function coinLabel(type: CurrencyType): string {
     case "gp": return "pièces d'or";
     case "pp": return "pièces de platine";
     default: {
-      const exhaustive: never = type;
-      return exhaustive;
+      console.warn("[coinLabel] unknown currency:", type);
+      return String(type);
     }
   }
 }
