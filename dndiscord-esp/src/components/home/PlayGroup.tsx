@@ -1,4 +1,4 @@
-import { Component } from "solid-js";
+import { Component, Show } from "solid-js";
 import { Swords, Users, Sparkles } from "lucide-solid";
 import MenuCard from "../common/MenuCard";
 import { t } from "../../i18n";
@@ -6,6 +6,7 @@ import { t } from "../../i18n";
 interface PlayGroupProps {
   charactersCount?: number;
   campaignsCount?: number;
+  counter?: string;
 }
 
 // Avoid showing a "0" pill when there are no items (MenuCard renders any defined badge).
@@ -19,6 +20,13 @@ export const PlayGroup: Component<PlayGroupProps> = (props) => {
           {t("home.section.play")}
         </h2>
         <div class="flex-1 h-px bg-gradient-to-r from-gold-400/30 via-gold-400/15 to-transparent" />
+        <Show when={props.counter}>
+          <span
+            class="font-mono text-[11px] text-low tracking-[0.1em] shrink-0"
+          >
+            {props.counter}
+          </span>
+        </Show>
       </header>
       <div class="grid gap-3 sm:gap-4" style={{ "grid-template-columns": "repeat(auto-fit, minmax(160px, 1fr))" }}>
         <MenuCard

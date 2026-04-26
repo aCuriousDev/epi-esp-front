@@ -40,6 +40,12 @@ export const en = {
   "home.stats.characters": "Characters",
   "home.stats.campaigns": "Campaigns",
   "home.stats.sessions": "Sessions",
+  "home.stats.hours": "Hours",
+  "home.stats.unit.hours": "h",
+  "home.resume.eyebrow": "▶ Continue",
+  "home.resume.flavor.fallback": "Pick up where you left off.",
+  "home.resume.lastPlayed": "Last played {when}",
+  "home.resume.details": "Details",
 
   // Page titles
   "page.characters.title": "Characters",
