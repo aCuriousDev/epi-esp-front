@@ -292,8 +292,11 @@ export async function kickPlayer(targetUserId: string): Promise<KickResult> {
   return result;
 }
 
-/** Sync hubUserId from SignalR service to session store. */
-function syncHubUserId(): void {
+/** Sync hubUserId from SignalR service to session store.
+ *  Exportée pour que BoardGame.onMultiplayerGameStart puisse
+ *  garantir que hubUserId est à jour avant le démarrage du jeu
+ *  (nécessaire pour canControlUnit() dans GameCanvas). */
+export function syncHubUserId(): void {
   if (signalRService.hubUserId) {
     setHubUserId(signalRService.hubUserId);
   }

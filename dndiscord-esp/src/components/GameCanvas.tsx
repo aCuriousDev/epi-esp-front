@@ -380,9 +380,26 @@ export const GameCanvas: Component = () => {
           for (const id of freshIds) {
             if (engineInstance !== engine) break;
             const u = units[id];
-            if (u && !engine.hasUnit(id)) {
+            if (!u) continue;
+
+            if (!engine.hasUnit(id)) {
+              // Unité manquante — la créer
               await engine.createUnit(u);
               prevPositions.set(id, { x: u.position.x, z: u.position.z });
+            } else {
+              // Unité existante — réconcilier sa position si elle a changé
+              // pendant le traitement précédent (isProcessingUnits = true).
+              // Sans cette branche, tout applyUnitMove reçu pendant le
+              // chargement d'un modèle 3D est définitivement perdu et le mesh
+              // reste à l'ancienne position.
+              const prevPos = prevPositions.get(id);
+              if (
+                prevPos &&
+                (prevPos.x !== u.position.x || prevPos.z !== u.position.z)
+              ) {
+                engine.updateUnit(u);
+                prevPositions.set(id, { x: u.position.x, z: u.position.z });
+              }
             }
           }
           if (engineInstance === engine) {

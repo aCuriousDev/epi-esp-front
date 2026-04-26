@@ -51,7 +51,7 @@ import { t } from "../i18n";
 import { GamePhase, AppPhase, GameMode } from "../types";
 import { sessionState, clearSession, getPersistedSession } from "../stores/session.store";
 import { isDm } from "../stores/session.store";
-import { leaveSession, dmRestartGame as dmRestartGameHub, tryRecoverSession } from "../services/signalr/multiplayer.service";
+import { leaveSession, dmRestartGame as dmRestartGameHub, tryRecoverSession, syncHubUserId } from "../services/signalr/multiplayer.service";
 import { isInSession } from "../stores/session.store";
 import {
   getSessionMapConfig,
@@ -340,6 +340,12 @@ const BoardGame: Component = () => {
   const onMultiplayerGameStart = (payload: GameStartedPayload) => {
     if (lastInitPayload === payload) return;
     lastInitPayload = payload;
+
+    // S'assurer que hubUserId est synchronisé AVANT d'initialiser les unités.
+    // canControlUnit() dans GameCanvas retourne false si hubUserId est null,
+    // empêchant le joueur de bouger son unité. Peut arriver si le joueur est
+    // arrivé via un chemin qui n'a pas appelé syncHubUserId() (ex: rejoin rapide).
+    syncHubUserId();
 
     console.log(
       "[BoardGame] ========== MULTIPLAYER GAME STARTED ==========",
