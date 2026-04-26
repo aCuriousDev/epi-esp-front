@@ -289,6 +289,11 @@ export const en = {
   "createCampaign.chars": "characters",
   "createCampaign.submit": "Create campaign",
   "createCampaign.submitting": "Creating…",
+
+  // EditCampaign
+  "editCampaign.subtitle": "Update the main information",
+  "editCampaign.info": "Information",
+  "editCampaign.saving": "Saving…",
 } as const;
 
 export type EnKey = keyof typeof en;
