@@ -354,6 +354,17 @@ export const en = {
   "campaignManager.toast.saved": "Campaign saved successfully",
   "campaignManager.toast.saveError": "Failed to save campaign",
 
+  // BoardGame HUD
+  "boardgame.drawer.info": "Information",
+  "boardgame.drawer.log": "Log",
+  "boardgame.drawer.close": "Close",
+  "boardgame.drawer.closeInfo": "Close info",
+  "boardgame.drawer.closeLog": "Close log",
+  "boardgame.hud.closeHelp": "Close help",
+  "boardgame.hud.endTurn": "End turn",
+  "boardgame.hud.confirm": "Confirm",
+  "boardgame.phase.preparation": "Preparation Phase",
+
   // CharacterView
   "characterView.level": "Level",
   "characterView.levelUp": "Level up",

@@ -47,6 +47,7 @@ import {
   selectUnit,
 } from "../game";
 import { getHubUserId } from "../stores/session.store";
+import { t } from "../i18n";
 import { GamePhase, AppPhase, GameMode } from "../types";
 import { sessionState, clearSession, getPersistedSession } from "../stores/session.store";
 import { isDm } from "../stores/session.store";
@@ -654,7 +655,7 @@ const BoardGame: Component = () => {
             }}
           >
             <LogOut class="w-4 h-4" />
-            Quitter la session
+            Leave session
           </button>
         </div>
       </Show>
@@ -816,10 +817,10 @@ const BoardGame: Component = () => {
                   } catch (_) {}
                   returnToMenu();
                 }}
-                title="Quitter la session"
+                title="Leave session"
               >
                 <LogOut class="w-3.5 h-3.5" />
-                <span class="hidden sm:inline">Quitter</span>
+                <span class="hidden sm:inline">Leave</span>
               </button>
             </Show>
             {/* Restart: solo-only or DM-only (non-host can't blow up MP for everyone). */}
@@ -829,7 +830,7 @@ const BoardGame: Component = () => {
                 onClick={() => restartGame()}
               >
                 <RotateCcw class="w-3.5 h-3.5" />
-                <span class="hidden sm:inline">Recommencer</span>
+                <span class="hidden sm:inline">Restart</span>
               </button>
             </Show>
           </div>
@@ -917,7 +918,7 @@ const BoardGame: Component = () => {
               <Show when={gameState.dungeon}>
                 <div class="px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold bg-purple-600/80 text-white whitespace-nowrap flex items-center gap-1.5">
                   {getPhaseIcon("dungeon")}
-                  Salle {(gameState.dungeon?.currentRoomIndex ?? 0) + 1}/
+                  Room {(gameState.dungeon?.currentRoomIndex ?? 0) + 1}/
                   {gameState.dungeon?.totalRooms}
                 </div>
               </Show>
@@ -978,7 +979,7 @@ const BoardGame: Component = () => {
                 <p class="text-xs sm:text-sm text-gray-300">
                   Place your characters on the allied tiles (blue), then
                   click <strong class="text-game-gold">Ready</strong> to
-                  lancer le combat.
+                  start combat.
                 </p>
               </div>
             </Show>
@@ -995,7 +996,7 @@ const BoardGame: Component = () => {
                   aria-expanded={leftDrawerOpen()}
                   aria-controls="left-drawer"
                 >
-                  {leftDrawerOpen() ? "Fermer infos" : "Infos"}
+                  {leftDrawerOpen() ? t("boardgame.drawer.closeInfo") : "Infos"}
                 </button>
               </Show>
               <Show when={isInSession() && !isDm()}>
@@ -1009,7 +1010,7 @@ const BoardGame: Component = () => {
                 aria-expanded={rightDrawerOpen()}
                 aria-controls="right-drawer"
               >
-                {rightDrawerOpen() ? "Fermer journal" : "Journal"}
+                {rightDrawerOpen() ? t("boardgame.drawer.closeLog") : t("boardgame.drawer.log")}
               </button>
             </div>
 
@@ -1023,7 +1024,7 @@ const BoardGame: Component = () => {
                   <button
                     class="absolute top-2 right-2 text-slate-400 hover:text-white"
                     onClick={() => setHelpOpen(false)}
-                    aria-label="Fermer l'aide"
+                    aria-label={t("boardgame.hud.closeHelp")}
                   >
                     <X class="w-3.5 h-3.5" />
                   </button>
@@ -1062,14 +1063,14 @@ const BoardGame: Component = () => {
                     <li class="flex items-start gap-2">
                       <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
                       <span>
-                        <span class="text-gray-300 font-medium">Clic droit + drag</span> —
+                        <span class="text-gray-300 font-medium">Right-click + drag</span> —
                         orbit camera
                       </span>
                     </li>
                     <li class="flex items-start gap-2">
                       <MousePointer class="w-4 h-4 flex-shrink-0 mt-0.5 text-game-gold" />
                       <span>
-                        <span class="text-gray-300 font-medium">Molette</span> —
+                        <span class="text-gray-300 font-medium">Scroll wheel</span> —
                         zoom
                       </span>
                     </li>
@@ -1130,7 +1131,7 @@ const BoardGame: Component = () => {
                   class="w-9 h-9 flex items-center justify-center rounded-full border border-white/20 bg-game-dark/85 backdrop-blur text-white shadow-lg hover:bg-game-dark transition-colors focus-ring-gold"
                   onClick={() => setHelpOpen((v) => !v)}
                   title={helpOpen() ? "Close help" : "Help & controls"}
-                  aria-label={helpOpen() ? "Fermer l'aide" : "Ouvrir l'aide"}
+                  aria-label={helpOpen() ? t("boardgame.hud.closeHelp") : "Open help"}
                   aria-expanded={helpOpen()}
                 >
                   <HelpCircle class="w-4 h-4" />
@@ -1170,7 +1171,7 @@ const BoardGame: Component = () => {
                   title="Terminer le tour"
                 >
                   <Flag class="w-4 h-4" />
-                  <span>{endTurnPending() ? "Confirmer" : "Fin du tour"}</span>
+                  <span>{endTurnPending() ? t("boardgame.hud.confirm") : t("boardgame.hud.endTurn")}</span>
                 </button>
               </Show>
 
@@ -1181,10 +1182,10 @@ const BoardGame: Component = () => {
                 <button
                   class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-lg transition-colors focus-ring-gold bg-red-600/90 hover:bg-red-500 text-white border border-red-400/40"
                   onClick={() => endUnitTurn()}
-                  title="MJ : passer le tour de cet ennemi"
+                  title="DM: skip this enemy's turn"
                 >
                   <Flag class="w-4 h-4" />
-                  <span>Passer tour ennemi</span>
+                  <span>Skip enemy turn</span>
                 </button>
               </Show>
             </div>
@@ -1203,13 +1204,13 @@ const BoardGame: Component = () => {
             >
               <div class="flex items-center justify-between">
                 <h3 class="font-fantasy text-game-gold text-sm">
-                  Informations
+                  {t("boardgame.drawer.info")}
                 </h3>
                 <button
                   class="text-xs px-2 py-1 rounded border border-white/20 text-gray-300"
                   onClick={closeDrawers}
                 >
-                  Fermer
+                  {t("boardgame.drawer.close")}
                 </button>
               </div>
               {renderLeftPanelContent()}
@@ -1222,12 +1223,12 @@ const BoardGame: Component = () => {
               }`}
             >
               <div class="flex items-center justify-between">
-                <h3 class="font-fantasy text-game-gold text-sm">Journal</h3>
+                <h3 class="font-fantasy text-game-gold text-sm">{t("boardgame.drawer.log")}</h3>
                 <button
                   class="text-xs px-2 py-1 rounded border border-white/20 text-gray-300"
                   onClick={closeDrawers}
                 >
-                  Fermer
+                  {t("boardgame.drawer.close")}
                 </button>
               </div>
               {renderRightPanelContent()}
@@ -1253,7 +1254,7 @@ function getPhaseText(phase: GamePhase): string {
     case GamePhase.SETUP:
       return "Setting up...";
     case GamePhase.COMBAT_PREPARATION:
-      return "Phase de pr\u00e9paration";
+      return "Preparation Phase";
     case GamePhase.PLAYER_TURN:
       return "Your Turn";
     case GamePhase.ENEMY_TURN:

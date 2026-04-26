@@ -1332,7 +1332,7 @@ export default function MapEditor() {
 		if (saveMapSilent()) {
 			alert("Map saved successfully!");
 		} else {
-			alert("Erreur lors de la sauvegarde de la map");
+			alert("Failed to save map");
 		}
 	};
 
@@ -3217,13 +3217,13 @@ export default function MapEditor() {
 	// delete/edit/zone/collision/light "take over" the scene and should win
 	// over "Placement" even when an asset is still selected.
 	const currentModeLabel = () => {
-		if (deleteMode()) return { text: "Mode Suppression", color: "bg-red-600/80 text-white" };
+		if (deleteMode()) return { text: "Delete mode", color: "bg-red-600/80 text-white" };
 		if (editMode()) return { text: "Edit Mode", color: "bg-blue-600/80 text-white" };
-		if (zoneSelectionMode()) return { text: "Mode Zone", color: "bg-purple-600/80 text-white" };
-		if (collisionPreviewMode()) return { text: "Mode Collision", color: "bg-yellow-500/80 text-game-darker" };
+		if (zoneSelectionMode()) return { text: "Zone mode", color: "bg-purple-600/80 text-white" };
+		if (collisionPreviewMode()) return { text: "Collision mode", color: "bg-yellow-500/80 text-game-darker" };
 		if (lightMode()) return { text: "Light Mode", color: "bg-orange-500/90 text-game-darker" };
 		if (selectedAsset() || editingAsset()) return { text: "Placement", color: "bg-emerald-600/80 text-white" };
-		return { text: "Consultation", color: "bg-slate-700/80 text-white" };
+		return { text: "View", color: "bg-slate-700/80 text-white" };
 	};
 
 	return (
@@ -3619,11 +3619,11 @@ export default function MapEditor() {
 							}
 						}}
 					>
-						{deleteMode() ? "✕ Mode Suppression Actif" : "✕ Mode Suppression"}
+						{deleteMode() ? "✕ Delete mode active" : "✕ Delete mode"}
 					</button>
 					{deleteMode() && (
 						<p class="mt-2 text-xs text-slate-400">
-							Cliquez sur un objet pour le supprimer
+							Click an object to delete it
 						</p>
 					)}
 				</div>
@@ -3695,12 +3695,12 @@ export default function MapEditor() {
 							}
 						}}
 					>
-						{collisionPreviewMode() ? "Mode Collision Actif" : "Mode Collision"}
+						{collisionPreviewMode() ? "Collision mode active" : "Collision mode"}
 					</button>
 					{collisionPreviewMode() && (
 						<div class="mt-2 text-xs text-slate-400 space-y-1">
-							<p>Affiche les collisions de toutes les cellules</p>
-							<p><span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" /> Vert = Zone walkable (marchable)</p>
+							<p>Shows collisions for all cells</p>
+							<p><span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" /> Green = Walkable zone</p>
 							<p><span class="inline-block w-2 h-2 rounded-full bg-yellow-500 mr-1" /> Yellow = Difficult terrain (high cost)</p>
 							<p><span class="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" /> Red = Blocked zone (not walkable)</p>
 						</div>
