@@ -30,6 +30,7 @@ import TermsOfService from "./pages/TermsOfService";
 import MentionsLegales from "./pages/MentionsLegales";
 import CookiesPolicy from "./pages/CookiesPolicy";
 import PracticeModeSelectPage from "./pages/PracticeModeSelectPage";
+import TutorialOverlay from "./components/TutorialOverlay";
 
 // Auth
 import { AuthCallback } from "./components/auth";
@@ -64,7 +65,12 @@ async function initDiscord() {
 }
 
 function RouterRoot(props: RouteSectionProps) {
-  return <>{props.children}</>;
+  return (
+    <>
+      <TutorialOverlay />
+      {props.children}
+    </>
+  );
 }
 
 function BoardRedirect() {

@@ -21,6 +21,7 @@ build/
 .cursor/
 .cursorrules
 CLAUDE.md
+.claude/
 *.swp
 *.swo
 *~

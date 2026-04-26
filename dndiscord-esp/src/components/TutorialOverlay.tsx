@@ -61,6 +61,7 @@ export default function TutorialOverlay() {
   let cardRef: HTMLDivElement | undefined;
   let resizeObserver: ResizeObserver | null = null;
   let scrollListenerActive = false;
+  let resizeListenerActive = false;
   let updateRaf: number | null = null;
 
   onMount(() => {
@@ -118,6 +119,10 @@ export default function TutorialOverlay() {
       window.removeEventListener("scroll", scheduleUpdate, true);
       scrollListenerActive = false;
     }
+    if (resizeListenerActive) {
+      window.removeEventListener("resize", scheduleUpdate);
+      resizeListenerActive = false;
+    }
     if (updateRaf) {
       cancelAnimationFrame(updateRaf);
       updateRaf = null;
@@ -132,6 +137,9 @@ export default function TutorialOverlay() {
 
     window.addEventListener("scroll", scheduleUpdate, true);
     scrollListenerActive = true;
+
+    window.addEventListener("resize", scheduleUpdate);
+    resizeListenerActive = true;
 
     const t = step()?.target;
     if (!t) return;
@@ -188,12 +196,6 @@ export default function TutorialOverlay() {
     }
 
     setupObserversForCurrentStep();
-
-    const onResize = () => scheduleUpdate();
-    window.addEventListener("resize", onResize);
-    onCleanup(() => {
-      window.removeEventListener("resize", onResize);
-    });
   });
 
   // Replay enter animation on step change
@@ -227,7 +229,7 @@ export default function TutorialOverlay() {
   return (
     <Show when={tutorialState.active}>
       <div class="fixed inset-0 z-[100] pointer-events-none">
-        {/* Dim + spotlight — pointer-events-none pour laisser cliquer la cible */}
+        {/* Dim + spotlight — pointer-events-none so the target stays clickable */}
         <div class="absolute inset-0 pointer-events-none">
           <Show
             when={targetRect()}
@@ -298,8 +300,8 @@ export default function TutorialOverlay() {
               <button
                 type="button"
                 class="flex-shrink-0 p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all hover:scale-105 active:scale-95"
-                onClick={() => stopTutorial(false)}
-                aria-label="Fermer le tutoriel"
+                onClick={() => stopTutorial(true)}
+                aria-label="Close tutorial"
               >
                 <X class="w-4 h-4" />
               </button>
@@ -332,7 +334,7 @@ export default function TutorialOverlay() {
                 onClick={goPrev}
               >
                 <ChevronLeft class="w-4 h-4" />
-                Retour
+                Back
               </button>
 
               <div class="flex items-center gap-2">
@@ -341,14 +343,14 @@ export default function TutorialOverlay() {
                   class="px-3 py-2 rounded-xl text-sm text-slate-400 hover:text-white border border-transparent hover:border-white/10 transition"
                   onClick={() => stopTutorial(false)}
                 >
-                  Plus tard
+                  Skip
                 </button>
                 <button
                   type="button"
                   class="group inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 shadow-lg shadow-purple-900/40 transition-all hover:scale-[1.02] active:scale-[0.98] hover:shadow-purple-500/25"
                   onClick={goNext}
                 >
-                  {step()?.cta ?? (isLast() ? "Terminer" : "Suivant")}
+                  {step()?.cta ?? (isLast() ? "Finish" : "Next")}
                   <ChevronRight class="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
                 </button>
               </div>

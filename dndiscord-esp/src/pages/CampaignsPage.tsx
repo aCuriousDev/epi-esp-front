@@ -290,20 +290,22 @@ export default function CampaignsPage() {
             </Show>
           }
         >
-          <SectionHeader
-            eyebrow={t("page.campaigns.yourCampaignsEyebrow")}
-            counter={`${campaigns().length} ${t("page.campaigns.totalCounter")}`.toUpperCase()}
-          />
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <For each={campaigns()}>
-              {(campaign, i) => (
-                <CampaignCard
-                  campaign={campaign}
-                  onClick={() => navigate(`/campaigns/${campaign.id}`)}
-                  index={i()}
-                />
-              )}
-            </For>
+          <div data-tutorial="campaigns-panel">
+            <SectionHeader
+              eyebrow={t("page.campaigns.yourCampaignsEyebrow")}
+              counter={`${campaigns().length} ${t("page.campaigns.totalCounter")}`.toUpperCase()}
+            />
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <For each={campaigns()}>
+                {(campaign, i) => (
+                  <CampaignCard
+                    campaign={campaign}
+                    onClick={() => navigate(`/campaigns/${campaign.id}`)}
+                    index={i()}
+                  />
+                )}
+              </For>
+            </div>
           </div>
         </Show>
 

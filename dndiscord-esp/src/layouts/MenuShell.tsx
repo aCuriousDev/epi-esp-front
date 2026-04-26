@@ -6,7 +6,6 @@ import { PageMetaProvider } from "./PageMeta";
 import TopBar from "../components/common/TopBar";
 import CookieConsent from "../components/CookieConsent";
 import SessionInviteListener from "../components/SessionInviteListener";
-import TutorialOverlay from "../components/TutorialOverlay";
 import { useDiscordLayoutMode } from "../hooks/useDiscordLayoutMode";
 import AmbientParticles from "../components/common/AmbientParticles";
 
@@ -18,7 +17,6 @@ export const MenuShell: Component<RouteSectionProps> = (props) => {
     <ProtectedRoute fallbackPath="/login">
       <PageMetaProvider>
         <SessionInviteListener />
-        <TutorialOverlay />
         <CookieConsent />
         <div class="relative isolate min-h-[100dvh] flex flex-col bg-ink-900 text-high overflow-hidden">
           {/* Atmosphere — vignette + starfield + particles, balanced intensity */}
