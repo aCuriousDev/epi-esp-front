@@ -3,11 +3,13 @@ import type { Unit } from "../../types";
 
 interface PlayerPortraitProps {
   unit: Unit | null;
+  onClick?: () => void;
 }
 
 /**
  * Left cluster of the hotbar — compact identity + vitals.
  * Shows the local player's unit name initials, an HP bar, and AP pips.
+ * Clicking opens the player's own character sheet (read-only).
  */
 export const PlayerPortrait: Component<PlayerPortraitProps> = (props) => {
   const initials = () => {
@@ -38,11 +40,17 @@ export const PlayerPortrait: Component<PlayerPortraitProps> = (props) => {
     <Show when={props.unit}>
       {(u) => (
         <div class="flex items-center gap-3 pl-2 pr-3 py-2 rounded-xl bg-gradient-to-br from-indigo-950/90 to-purple-950/90 border border-indigo-500/30 shadow-lg backdrop-blur-sm">
-          <div class="relative w-14 h-14 rounded-lg bg-gradient-to-br from-amber-500/30 to-orange-700/40 border-2 border-amber-400/60 flex items-center justify-center shadow-inner">
+          <button
+            type="button"
+            onClick={props.onClick}
+            disabled={!props.onClick}
+            title={props.onClick ? "Voir ma fiche" : undefined}
+            class="relative w-14 h-14 rounded-lg bg-gradient-to-br from-amber-500/30 to-orange-700/40 border-2 border-amber-400/60 flex items-center justify-center shadow-inner transition-all enabled:hover:border-amber-300 enabled:hover:shadow-[0_0_12px_rgba(251,191,36,0.45)] enabled:cursor-pointer disabled:cursor-default"
+          >
             <span class="font-display text-2xl text-amber-100 drop-shadow">
               {initials()}
             </span>
-          </div>
+          </button>
           <div class="min-w-[110px]">
             <div class="text-xs text-amber-200 font-semibold tracking-wide truncate max-w-[140px]">
               {u().name}

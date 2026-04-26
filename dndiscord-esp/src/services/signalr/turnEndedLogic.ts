@@ -49,8 +49,8 @@ export function applyTurnEnded(input: TurnEndedInput): TurnEndedOutput | null {
 
   let outcomeText: string | null = null;
   if (input.outcome === "Victory") outcomeText = "🏆 Victoire !";
-  else if (input.outcome === "Defeat") outcomeText = "💀 Défaite…";
-  else if (input.outcome === "Fled") outcomeText = "🚪 Combat interrompu.";
+  else if (input.outcome === "Defeat") outcomeText = "💀 Defeat…";
+  else if (input.outcome === "Fled") outcomeText = "🚪 Combat interrupted.";
 
   return {
     currentUnitIndex: nextIdx >= 0 ? nextIdx : input.currentUnitIndex,

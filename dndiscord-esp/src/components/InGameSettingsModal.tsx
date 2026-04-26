@@ -36,7 +36,7 @@ import type {
 const PRESETS: { id: QualityPreset; label: string }[] = [
   { id: 'low', label: 'Bas' },
   { id: 'medium', label: 'Moyen' },
-  { id: 'high', label: 'Élevé' },
+  { id: 'high', label: 'High' },
   { id: 'ultra', label: 'Ultra' },
 ];
 
@@ -62,7 +62,7 @@ export const InGameSettingsModal: Component<{ onClose: () => void }> = (props) =
       >
         <div class="flex items-center justify-between px-5 py-3 border-b border-white/10 bg-gradient-to-r from-brandStart/70 to-brandEnd/70">
           <h2 class="font-display text-white text-base tracking-wide">
-            Paramètres rapides
+            Quick settings
           </h2>
           <button
             class="text-white/80 hover:text-white p-1 rounded"
@@ -112,7 +112,7 @@ export const InGameSettingsModal: Component<{ onClose: () => void }> = (props) =
           <section>
             <h3 class="text-sm font-semibold text-pink-300 mb-2 flex items-center gap-2">
               <Gauge class="w-4 h-4" />
-              Qualité graphique
+              Graphics quality
             </h3>
             <div class="grid grid-cols-4 gap-1 bg-black/40 rounded-lg p-1">
               <For each={PRESETS}>
@@ -190,23 +190,23 @@ export const InGameSettingsModal: Component<{ onClose: () => void }> = (props) =
               onClick={resetGraphicsDefaults}
               class="flex-1 px-3 py-2 text-sm rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200"
             >
-              Réinitialiser
+              Reset
             </button>
             <a
               href="/settings"
               target="_blank"
               rel="noopener noreferrer"
               class="flex-1 px-3 py-2 text-sm rounded-lg bg-pink-600/20 hover:bg-pink-600/30 border border-pink-500/40 text-pink-200 flex items-center justify-center gap-2"
-              title="Ouvre la page complète dans un nouvel onglet pour ne pas interrompre la partie"
+              title="Opens the full settings page in a new tab without interrupting the game"
             >
-              Tous les paramètres
+              All settings
               <ExternalLink class="w-3.5 h-3.5" />
             </a>
           </div>
 
           <Show when={graphicsSettings.preset() === 'custom'}>
             <p class="text-xs text-slate-400 text-center italic">
-              Réglages personnalisés actifs
+              Custom settings active
             </p>
           </Show>
         </div>

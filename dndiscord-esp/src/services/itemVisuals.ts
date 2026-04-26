@@ -76,7 +76,7 @@ export const CATEGORY_STYLE: Record<ItemCategory, CategoryStyle> = {
     badge: "bg-fuchsia-500/20 text-fuchsia-200 border-fuchsia-400/30",
   },
   Treasure: {
-    label: "Trésor",
+    label: "Treasure",
     gradient: "from-yellow-500/30 via-amber-400/20 to-orange-500/30",
     ring: "ring-yellow-400/30",
     glow: "shadow-yellow-500/20",

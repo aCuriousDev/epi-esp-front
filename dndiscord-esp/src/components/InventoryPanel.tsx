@@ -44,13 +44,13 @@ interface RevealItem {
 }
 
 const CATEGORY_FILTERS: Array<{ value: "all" | ItemCategory; label: string }> = [
-  { value: "all", label: "Tous" },
-  { value: "Consumable", label: "Consommables" },
-  { value: "Weapon", label: "Armes" },
-  { value: "Armor", label: "Armures" },
-  { value: "Tool", label: "Outils" },
-  { value: "Magic", label: "Magie" },
-  { value: "Treasure", label: "Trésors" },
+  { value: "all", label: "All" },
+  { value: "Consumable", label: "Consumables" },
+  { value: "Weapon", label: "Weapons" },
+  { value: "Armor", label: "Armor" },
+  { value: "Tool", label: "Tools" },
+  { value: "Magic", label: "Magic" },
+  { value: "Treasure", label: "Treasure" },
 ];
 
 /**
@@ -109,7 +109,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
       setEntries(data);
     } catch (err) {
       console.error("Failed to load inventory", err);
-      setError("Impossible de charger l'inventaire.");
+      setError("Failed to load inventory.");
     } finally {
       setLoading(false);
     }
@@ -124,7 +124,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
       // Surface the failure so the MJ sees why the "Don du MJ" catalog is
       // empty — without this the UI was indistinguishable from a backend
       // that simply has zero items seeded.
-      setError("Impossible de charger le catalogue.");
+      setError("Failed to load catalog.");
     }
   };
 
@@ -152,7 +152,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
       }, 260);
     } catch (err) {
       console.error("Failed to remove entry", err);
-      setError("Impossible de jeter l'objet.");
+      setError("Failed to drop item.");
       setRemovingId(null);
     }
   };
@@ -169,7 +169,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
       // Success: InventoryChanged + InventoryItemUsed will update the UI via SignalR.
     } catch (err) {
       console.error("Failed to use entry", err);
-      setError("Impossible d'utiliser cet objet.");
+      setError("Failed to use item.");
     } finally {
       setUsingId(null);
     }
@@ -179,7 +179,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
     if (isGiving()) return;
     const campaignId = currentCampaignId();
     if (!campaignId) {
-      setError("Vous devez être dans une session pour donner un objet.");
+      setError("You must be in a session to give an item.");
       return;
     }
     setIsGiving(true);
@@ -198,7 +198,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
       }, 1200);
     } catch (err) {
       console.error("Failed to give item", err);
-      setError("Impossible d'ajouter l'objet.");
+      setError("Failed to give item.");
       setGivenItemId(null);
       setIsGiving(false);
     }
@@ -327,7 +327,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
               <Package class="w-6 h-6 text-amber-300" />
             </div>
             <h2 class="font-display text-2xl text-white leading-tight">
-              Inventaire
+              Inventory
             </h2>
           </div>
 
@@ -384,8 +384,8 @@ export default function InventoryPanel(props: InventoryPanelProps) {
                 </div>
                 <p class="text-slate-400 text-sm">
                   {entries().length === 0
-                    ? "L'inventaire est vide. Demandez au MJ de vous offrir un objet !"
-                    : "Aucun objet dans cette catégorie."}
+                    ? "Inventory is empty. Ask the DM to give you an item!"
+                    : "No items in this category."}
                 </p>
               </div>
             }
@@ -428,7 +428,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
                           <button
                             onClick={() => handleDrop(entry)}
                             class="w-6 h-6 rounded-full bg-red-500/20 hover:bg-red-500/40 border border-red-500/30 flex items-center justify-center transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
-                            title="Jeter"
+                            title="Drop"
                           >
                             <Trash2 class="w-3 h-3 text-red-400" />
                           </button>
@@ -458,7 +458,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
                           class="mt-2 py-1 w-full rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/30 text-[10px] font-semibold text-emerald-200 flex items-center justify-center gap-1 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <Beaker class="w-3 h-3" />
-                          {usingId() === entry.id ? "…" : "Utiliser"}
+                          {usingId() === entry.id ? "…" : "Use"}
                         </button>
                       </Show>
                     </div>
@@ -488,10 +488,10 @@ export default function InventoryPanel(props: InventoryPanelProps) {
                 </div>
                 <div>
                   <h3 class="font-display text-xl text-white">
-                    Catalogue du MJ
+                    DM Catalog
                   </h3>
                   <p class="text-xs text-slate-400">
-                    Choisissez un objet à offrir au joueur
+                    Choose an item to give to the player
                   </p>
                 </div>
               </div>
@@ -511,7 +511,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
                   type="text"
                   value={catalogSearch()}
                   onInput={(e) => setCatalogSearch(e.currentTarget.value)}
-                  placeholder="Rechercher un objet…"
+                  placeholder="Search an item…"
                   class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:border-purple-400/50 focus:bg-white/10 transition-colors"
                 />
               </div>
@@ -539,7 +539,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
                 when={filteredCatalog().length > 0}
                 fallback={
                   <div class="py-12 text-center text-slate-400 text-sm">
-                    Aucun objet ne correspond à votre recherche.
+                    No items match your search.
                   </div>
                 }
               >
@@ -563,7 +563,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
                                 <Check class="w-6 h-6 text-emerald-300" />
                               </div>
                               <span class="text-emerald-200 text-sm font-bold">
-                                Offert !
+                                Given!
                               </span>
                             </div>
                           </Show>
@@ -589,7 +589,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
                             class="mt-2 py-1 w-full rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-center text-[10px] font-semibold text-white flex items-center justify-center gap-1 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <Plus class="w-3 h-3" />
-                            Offrir
+                            Give
                           </button>
                         </div>
                       );
@@ -646,11 +646,11 @@ export default function InventoryPanel(props: InventoryPanelProps) {
                     "0 0 80px rgba(251,191,36,0.4), 0 0 160px rgba(168,85,247,0.3)",
                 }}
               >
-                {/* "Objet reçu !" banner */}
+                {/* "Item received !" banner */}
                 <div class="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/15 border border-white/30 backdrop-blur">
                   <Sparkles class="w-4 h-4 text-yellow-300 animate-pulse" />
                   <span class="text-white font-bold text-xs uppercase tracking-widest">
-                    Objet reçu
+                    Item received
                   </span>
                   <Sparkles class="w-4 h-4 text-yellow-300 animate-pulse" />
                 </div>

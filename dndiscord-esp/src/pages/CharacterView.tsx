@@ -1,4 +1,4 @@
-import { A, useParams, useNavigate } from "@solidjs/router";
+import { useParams, useNavigate } from "@solidjs/router";
 import {
   ArrowLeft,
   Heart,
@@ -31,6 +31,8 @@ import { safeConfirm } from "../services/ui/confirm";
 import InventoryPanel from "../components/InventoryPanel";
 import WalletPanel from "../components/WalletPanel";
 import { isHost } from "../stores/session.store";
+import PageMeta from "../layouts/PageMeta";
+import { t } from "../i18n";
 
 /**
  * Map API character response to frontend Character type
@@ -89,7 +91,7 @@ export default function CharacterView() {
       setCharacter(updatedChar);
     } catch (err) {
       console.error("Failed to update hit points:", err);
-      setError("Impossible de mettre à jour les points de vie.");
+      setError("Failed to update hit points.");
     }
   };
 
@@ -137,27 +139,18 @@ export default function CharacterView() {
     const char = character();
     if (!char) return [];
     return [
-      { name: "Force", abbr: "FOR", value: char.abilities.strength },
-      { name: "Dextérité", abbr: "DEX", value: char.abilities.dexterity },
-      { name: "Constitution", abbr: "CON", value: char.abilities.constitution },
-      { name: "Intelligence", abbr: "INT", value: char.abilities.intelligence },
-      { name: "Sagesse", abbr: "SAG", value: char.abilities.wisdom },
-      { name: "Charisme", abbr: "CHA", value: char.abilities.charisma },
+      { name: t("characterView.ability.strength"), abbr: "STR", value: char.abilities.strength },
+      { name: t("characterView.ability.dexterity"), abbr: "DEX", value: char.abilities.dexterity },
+      { name: t("characterView.ability.constitution"), abbr: "CON", value: char.abilities.constitution },
+      { name: t("characterView.ability.intelligence"), abbr: "INT", value: char.abilities.intelligence },
+      { name: t("characterView.ability.wisdom"), abbr: "WIS", value: char.abilities.wisdom },
+      { name: t("characterView.ability.charisma"), abbr: "CHA", value: char.abilities.charisma },
     ];
   };
 
   return (
-    <div class="relative min-h-screen w-full overflow-y-auto bg-brand-gradient">
-      <div class="vignette absolute inset-0 pointer-events-none" />
-
-      {/* Back button */}
-      <A
-        href="/characters"
-        class="settings-btn !left-4 !right-auto"
-        aria-label="Retour"
-      >
-        <ArrowLeft class="settings-icon h-5 w-5" />
-      </A>
+    <div class="relative min-h-screen w-full overflow-y-auto">
+      <PageMeta title={t("page.characters.title")} />
 
       <Show
         when={!loading()}
@@ -169,7 +162,7 @@ export default function CharacterView() {
       >
         <Show when={character()}>
           {(char) => (
-            <main class="relative z-10 max-w-4xl mx-auto p-6 pt-20 pb-12">
+            <main class="relative z-10 max-w-4xl mx-auto p-6 pt-6 pb-12">
               {/* Character Header Card */}
               <div class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
                 {/* Banner with class color gradient */}
@@ -210,7 +203,7 @@ export default function CharacterView() {
                         </span>
                         {" • "}
                         <span class="text-slate-400">
-                          Niveau {char().level}
+                          {t("characterView.level")} {char().level}
                         </span>
                       </p>
                       <Show when={char().campaign}>
@@ -227,7 +220,7 @@ export default function CharacterView() {
                         <button
                           onClick={handleLevelUp}
                           class="px-3 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-600 border border-amber-400/20 hover:from-amber-400 hover:to-yellow-500 transition-colors flex items-center gap-2"
-                          title="Monter de niveau"
+                          title={t("characterView.levelUp")}
                         >
                           <TrendingUp class="w-4 h-4 text-white" />
                           <span class="text-white text-sm font-semibold">
@@ -248,7 +241,7 @@ export default function CharacterView() {
                         <div class="flex items-center gap-2">
                           <Heart class="w-4 h-4" />
                           <span class="text-xs uppercase tracking-wider">
-                            Points de vie
+                            {t("characterView.hitPoints")}
                           </span>
                         </div>
                         <Show when={isHost()}>
@@ -256,14 +249,14 @@ export default function CharacterView() {
                             <button
                               onClick={() => handleHitPointsChange(-1)}
                               class="w-6 h-6 rounded bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 flex items-center justify-center transition-colors"
-                              title="Retirer 1 PV"
+                              title={t("characterView.removeHp")}
                             >
                               <Minus class="w-3 h-3 text-red-400" />
                             </button>
                             <button
                               onClick={() => handleHitPointsChange(1)}
                               class="w-6 h-6 rounded bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 flex items-center justify-center transition-colors"
-                              title="Ajouter 1 PV"
+                              title={t("characterView.addHp")}
                             >
                               <Plus class="w-3 h-3 text-green-400" />
                             </button>
@@ -289,7 +282,7 @@ export default function CharacterView() {
                       <div class="flex items-center gap-2 text-blue-400 mb-2">
                         <Shield class="w-4 h-4" />
                         <span class="text-xs uppercase tracking-wider">
-                          Classe d'armure
+                          {t("characterView.armorClass")}
                         </span>
                       </div>
                       <div class="text-2xl font-bold text-white">
@@ -316,7 +309,7 @@ export default function CharacterView() {
                       <div class="flex items-center gap-2 text-green-400 mb-2">
                         <Footprints class="w-4 h-4" />
                         <span class="text-xs uppercase tracking-wider">
-                          Vitesse
+                          {t("characterView.speed")}
                         </span>
                       </div>
                       <div class="text-2xl font-bold text-white">
@@ -331,7 +324,7 @@ export default function CharacterView() {
               {/* Ability Scores Section */}
               <div class="mt-6 bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-xl">
                 <h2 class="font-display text-xl text-white mb-4">
-                  Caractéristiques
+                  {t("characterView.abilities")}
                 </h2>
                 <div class="grid grid-cols-3 sm:grid-cols-6 gap-3">
                   <For each={abilities()}>
@@ -372,7 +365,7 @@ export default function CharacterView() {
                   }`}
                 >
                   <Icon icon="game-icons:crossed-swords" width="1.2em" height="1.2em" />
-                  Traits
+                  {t("characterView.tabs.traits")}
                 </button>
                 <button
                   onClick={() => setActiveTab("inventory")}
@@ -383,7 +376,7 @@ export default function CharacterView() {
                   }`}
                 >
                   <Icon icon="game-icons:knapsack" width="1.2em" height="1.2em" />
-                  Inventaire
+                  {t("characterView.tabs.inventory")}
                 </button>
               </div>
 
@@ -400,7 +393,7 @@ export default function CharacterView() {
                 {/* Class Features Placeholder */}
                 <div class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-xl">
                   <h2 class="font-display text-lg text-white mb-3">
-                    Traits de classe
+                    {t("characterView.classTraits")}
                   </h2>
                   <div class="space-y-2 text-sm text-slate-300">
                     <div class="flex items-start gap-2">
@@ -409,7 +402,7 @@ export default function CharacterView() {
                     </div>
                     <div class="flex items-start gap-2">
                       <span class="text-purple-400">•</span>
-                      <span>Ruse (Désengagement, Repli, Se cacher)</span>
+                      <span>Cunning Action (Disengage, Dash, Hide)</span>
                     </div>
                     <div class="flex items-start gap-2">
                       <span class="text-purple-400">•</span>
@@ -421,7 +414,7 @@ export default function CharacterView() {
                 {/* Race Features Placeholder */}
                 <div class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-xl">
                   <h2 class="font-display text-lg text-white mb-3">
-                    Traits raciaux
+                    {t("characterView.racialTraits")}
                   </h2>
                   <div class="space-y-2 text-sm text-slate-300">
                     <div class="flex items-start gap-2">
@@ -430,11 +423,11 @@ export default function CharacterView() {
                     </div>
                     <div class="flex items-start gap-2">
                       <span class="text-amber-400">•</span>
-                      <span>Sens aiguisés (Perception)</span>
+                      <span>Keen Senses (Perception)</span>
                     </div>
                     <div class="flex items-start gap-2">
                       <span class="text-amber-400">•</span>
-                      <span>Ascendance féerique (résistance charme)</span>
+                      <span>Fey Ancestry (charm resistance)</span>
                     </div>
                   </div>
                 </div>
@@ -445,17 +438,17 @@ export default function CharacterView() {
               <div class="mt-6 flex flex-col sm:flex-row gap-4">
                 <button
                   class="flex-1 py-3 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold hover:from-purple-500 hover:to-indigo-500 transition-all shadow-lg hover:shadow-purple-500/25"
-                  onClick={() => navigate("/board")}
+                  onClick={() => navigate("/practice")}
                 >
                   <Swords class="w-4 h-4 inline-block mr-1.5" />
-                  Lancer en combat
+                  {t("characterView.launchCombat")}
                 </button>
                 <button
                   class="flex-1 py-3 px-6 rounded-xl bg-white/5 border border-white/10 text-white font-semibold hover:bg-white/10 transition-all"
                   onClick={() => navigate("/characters")}
                 >
                   <ArrowLeft class="w-4 h-4 inline-block mr-1.5" />
-                  Retour aux personnages
+                  {t("characterView.backToCharacters")}
                 </button>
               </div>
             </main>
@@ -470,7 +463,7 @@ export default function CharacterView() {
           <button
             onClick={() => setError(null)}
             class="ml-4 text-white/80 hover:text-white"
-            aria-label="Fermer"
+            aria-label={t("common.close")}
           >
             <X class="w-4 h-4" />
           </button>

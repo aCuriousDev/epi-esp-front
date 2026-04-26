@@ -71,6 +71,22 @@ export function formatModifier(score: number): string {
 }
 
 /**
+ * Classes with a matching 3D asset in the KayKit Adventurers pack.
+ * Keep in sync with backend CharacterClassExtensions.PlayableClasses.
+ */
+export const PLAYABLE_CLASSES: ReadonlySet<CharacterClass> = new Set([
+  CharacterClass.Barbare,
+  CharacterClass.Guerrier,
+  CharacterClass.Magicien,
+  CharacterClass.Rodeur,
+  CharacterClass.Voleur,
+]);
+
+export function isPlayableClass(characterClass: CharacterClass): boolean {
+  return PLAYABLE_CLASSES.has(characterClass);
+}
+
+/**
  * Map class to English name for asset lookup
  */
 export function getClassAssetName(characterClass: CharacterClass): string {

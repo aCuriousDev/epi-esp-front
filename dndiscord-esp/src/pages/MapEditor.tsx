@@ -1,7 +1,7 @@
 import { Component, onMount, onCleanup, createSignal, For, Show, createEffect, createMemo } from "solid-js";
 import { Portal } from "solid-js/web";
-import { A, useParams, useSearchParams, useNavigate } from "@solidjs/router";
-import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-solid";
+import { useParams, useSearchParams, useNavigate } from "@solidjs/router";
+import { ChevronDown, ChevronRight } from "lucide-solid";
 import { saveMap, loadMap, generateMapId, loadDungeon, saveDungeon, exportMapToFile, importMapFromJson, type SavedMapData, type SavedCellData, type SavedAssetData, type SavedLightData, type DungeonData } from "../services/mapStorage";
 import {
 	Engine,
@@ -1388,9 +1388,9 @@ export default function MapEditor() {
 			return;
 		}
 		if (saveMapSilent()) {
-			alert("Map sauvegardée avec succès !");
+			alert("Map saved successfully!");
 		} else {
-			alert("Erreur lors de la sauvegarde de la map");
+			alert("Failed to save map");
 		}
 	};
 
@@ -1424,7 +1424,7 @@ export default function MapEditor() {
 		try {
 			const text = await file.text();
 			const imported = importMapFromJson(text);
-			setImportStatus({ type: 'ok', message: `"${imported.name}" importée !` });
+			setImportStatus({ type: 'ok', message: `"${imported.name}" imported!` });
 			// Naviguer vers la carte importée après un court délai pour que le feedback soit visible
 			setTimeout(() => {
 				navigate(`/map-editor/${imported.id}`);
@@ -3294,13 +3294,13 @@ export default function MapEditor() {
 	// delete/edit/zone/collision/light "take over" the scene and should win
 	// over "Placement" even when an asset is still selected.
 	const currentModeLabel = () => {
-		if (deleteMode()) return { text: "Mode Suppression", color: "bg-red-600/80 text-white" };
-		if (editMode()) return { text: "Mode Édition", color: "bg-blue-600/80 text-white" };
-		if (zoneSelectionMode()) return { text: "Mode Zone", color: "bg-purple-600/80 text-white" };
-		if (collisionPreviewMode()) return { text: "Mode Collision", color: "bg-yellow-500/80 text-game-darker" };
-		if (lightMode()) return { text: "Mode Lumière", color: "bg-orange-500/90 text-game-darker" };
+		if (deleteMode()) return { text: "Delete mode", color: "bg-red-600/80 text-white" };
+		if (editMode()) return { text: "Edit Mode", color: "bg-blue-600/80 text-white" };
+		if (zoneSelectionMode()) return { text: "Zone mode", color: "bg-purple-600/80 text-white" };
+		if (collisionPreviewMode()) return { text: "Collision mode", color: "bg-yellow-500/80 text-game-darker" };
+		if (lightMode()) return { text: "Light Mode", color: "bg-orange-500/90 text-game-darker" };
 		if (selectedAsset() || editingAsset()) return { text: "Placement", color: "bg-emerald-600/80 text-white" };
-		return { text: "Consultation", color: "bg-slate-700/80 text-white" };
+		return { text: "View", color: "bg-slate-700/80 text-white" };
 	};
 
 	return (
@@ -3314,11 +3314,6 @@ export default function MapEditor() {
 					{currentModeLabel().text}
 				</div>
 			</div>
-
-			{/* Back button */}
-			<A href="/map-editor" class="settings-btn" aria-label="Retour">
-				<ArrowLeft class="settings-icon h-5 w-5" />
-			</A>
 
 			{/* Dungeon room header */}
 			<Show when={dungeonData() && getRoomIndex() !== undefined}>
@@ -3346,7 +3341,7 @@ export default function MapEditor() {
 										onClick={() => goToRoom(roomIdx - 1)}
 										class="px-3 py-1 rounded-lg bg-purple-700/50 hover:bg-purple-600/70 text-purple-200 text-xs transition"
 									>
-										Salle précédente
+										Previous room
 									</button>
 								</Show>
 								<Show when={!isLastRoom}>
@@ -3365,7 +3360,7 @@ export default function MapEditor() {
 							</Show>
 							<Show when={isLastRoom}>
 								<span class="text-amber-400/80 text-xs">
-									Dernière salle ! Portail ou tuer les ennemis = victoire
+									Last room! Portal or kill enemies = victory
 								</span>
 							</Show>
 						</div>
@@ -3374,7 +3369,7 @@ export default function MapEditor() {
 			</Show>
 
 			{/* Main menu (infos + assets) */}
-			<div class="absolute top-4 left-4 z-20 bg-black/60 backdrop-blur-sm rounded-xl p-4 border border-white/10 shadow-lg max-w-xs max-h-[90vh] overflow-y-auto">
+			<div class="absolute top-4 left-16 sm:left-20 z-20 bg-black/60 backdrop-blur-sm rounded-xl p-4 border border-white/10 shadow-lg max-w-xs max-h-[90vh] overflow-y-auto">
 				<h2 class="text-white font-display text-xl mb-4">Map Editor</h2>
 
 				{/* Map Name Input */}
@@ -3392,13 +3387,13 @@ export default function MapEditor() {
 				{/* ── Asset palette ─────────────────────────────────── */}
 				<div class="mb-4">
 					<div class="flex items-center justify-between mb-2">
-						<label class="text-sm text-slate-300">Sélectionner un asset</label>
+						<label class="text-sm text-slate-300">Select an asset</label>
 						<button
 							type="button"
 							onClick={() => { setShowLibrary(true); setLibrarySearch(""); setLibraryCategory(""); }}
 							class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600/40 hover:bg-indigo-500/60 border border-indigo-500/30 text-indigo-200 text-xs transition"
 						>
-							📚 Bibliothèque
+							📚 Library
 						</button>
 					</div>
 
@@ -3446,7 +3441,7 @@ export default function MapEditor() {
 									type="button"
 									class="text-indigo-300 underline underline-offset-2 hover:text-indigo-200"
 									onClick={() => { setShowLibrary(true); setLibrarySearch(""); setLibraryCategory(""); }}
-								>Bibliothèque</button> et cliquez ⭐ sur un asset pour l'ajouter ici.
+								>Library</button> and click ⭐ on an asset to add it here.
 							</p>
 						</div>
 					</Show>
@@ -3540,7 +3535,7 @@ export default function MapEditor() {
 							<button
 								class="flex-1 px-3 py-2 rounded-lg bg-black/40 hover:bg-black/60 border border-white/10 text-slate-200 text-sm transition"
 								onClick={() => setRotationAngle(0)}
-								title="Remettre à 0°"
+								title="Reset to 0°"
 							>
 								0°
 							</button>
@@ -3564,8 +3559,8 @@ export default function MapEditor() {
 							class="w-full accent-pink-500"
 						/>
 						<p class="mt-2 text-xs text-slate-400">
-							Raccourcis Q / D. La rotation est appliquée au preview
-							et enregistrée avec l'objet posé.
+							Shortcuts Q / D. Rotation is applied to the preview
+							and saved with the placed object.
 						</p>
 					</div>
 				)}
@@ -3644,7 +3639,7 @@ export default function MapEditor() {
 
 						<Show when={workingHeight() !== 'auto'}>
 							<p class="mt-1.5 text-[10px] text-slate-500">
-								L'asset sera placé avec son bas à Y = {(workingHeight() as number).toFixed(2)} — indépendamment des assets déjà présents.
+								The asset's base will be placed at Y = {(workingHeight() as number).toFixed(2)} — regardless of existing assets.
 							</p>
 						</Show>
 					</div>
@@ -3657,12 +3652,12 @@ export default function MapEditor() {
 				)}
 				{selectedAsset() && zoneSelectionMode() && (
 					<p class="mt-3 text-xs text-purple-400">
-						Mode zone: Cliquez et glissez pour sélectionner une zone, puis relâchez pour placer <strong>{selectedAsset()!.name}</strong>
+						Zone mode: Click and drag to select a zone, then release to place <strong>{selectedAsset()!.name}</strong>
 					</p>
 				)}
 				{editingAsset() && (
 					<p class="mt-3 text-xs text-blue-400">
-						Mode édition: Cliquez sur la grille pour replacer <strong>{editingAsset()!.asset.name}</strong>
+						Edit mode: Click on the grid to reposition <strong>{editingAsset()!.asset.name}</strong>
 					</p>
 				)}
 			</div>
@@ -3695,16 +3690,16 @@ export default function MapEditor() {
 							}
 						}}
 					>
-						{editMode() ? "Mode Édition Actif" : "Mode Édition"}
+						{editMode() ? "Edit Mode Active" : "Edit Mode"}
 					</button>
 					{editMode() && (
 						<p class="mt-2 text-xs text-slate-400">
-							Cliquez sur un objet pour le modifier, puis placez-le à la nouvelle position
+							Click on an object to modify it, then place it at the new position
 						</p>
 					)}
 					{editingAsset() && (
 						<p class="mt-1 text-xs text-green-400">
-							Édition: {editingAsset()!.asset.name}
+							Editing: {editingAsset()!.asset.name}
 						</p>
 					)}
 				</div>
@@ -3731,11 +3726,11 @@ export default function MapEditor() {
 							}
 						}}
 					>
-						{deleteMode() ? "✕ Mode Suppression Actif" : "✕ Mode Suppression"}
+						{deleteMode() ? "✕ Delete mode active" : "✕ Delete mode"}
 					</button>
 					{deleteMode() && (
 						<p class="mt-2 text-xs text-slate-400">
-							Cliquez sur un objet pour le supprimer
+							Click an object to delete it
 						</p>
 					)}
 				</div>
@@ -3765,12 +3760,12 @@ export default function MapEditor() {
 							}
 						}}
 					>
-						{zoneSelectionMode() ? "📐 Mode Zone Actif" : "📐 Mode Sélection Zone"}
+						{zoneSelectionMode() ? "📐 Zone Mode Active" : "📐 Zone Selection Mode"}
 					</button>
 					{zoneSelectionMode() && (
 						<div class="mt-2 text-xs text-slate-400 space-y-1">
-							<p>Sélectionnez une zone en cliquant et glissant</p>
-							<p>L'asset sera placé sur toutes les cellules de la zone</p>
+							<p>Select a zone by clicking and dragging</p>
+							<p>The asset will be placed on all cells in the zone</p>
 						</div>
 					)}
 				</div>
@@ -3807,14 +3802,14 @@ export default function MapEditor() {
 							}
 						}}
 					>
-						{collisionPreviewMode() ? "Mode Collision Actif" : "Mode Collision"}
+						{collisionPreviewMode() ? "Collision mode active" : "Collision mode"}
 					</button>
 					{collisionPreviewMode() && (
 						<div class="mt-2 text-xs text-slate-400 space-y-1">
-							<p>Affiche les collisions de toutes les cellules</p>
-							<p><span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" /> Vert = Zone walkable (marchable)</p>
-							<p><span class="inline-block w-2 h-2 rounded-full bg-yellow-500 mr-1" /> Jaune = Terrain difficile (coût élevé)</p>
-							<p><span class="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" /> Rouge = Zone bloquée (non walkable)</p>
+							<p>Shows collisions for all cells</p>
+							<p><span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" /> Green = Walkable zone</p>
+							<p><span class="inline-block w-2 h-2 rounded-full bg-yellow-500 mr-1" /> Yellow = Difficult terrain (high cost)</p>
+							<p><span class="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" /> Red = Blocked zone (not walkable)</p>
 						</div>
 					)}
 				</div>
@@ -3841,7 +3836,7 @@ export default function MapEditor() {
 							}
 						}}
 					>
-						{lightMode() ? "💡 Mode Lumière Actif" : "💡 Placer une lumière"}
+						{lightMode() ? "💡 Light Mode Active" : "💡 Place a light"}
 					</button>
 					<Show when={lightMode()}>
 						<div class="mt-2 grid grid-cols-3 gap-1 bg-black/40 rounded-lg p-1">
@@ -3862,7 +3857,7 @@ export default function MapEditor() {
 							</For>
 						</div>
 						<p class="mt-2 text-xs text-slate-400">
-							Cliquez sur une cellule pour y déposer la lumière. Utilisez le mode suppression pour retirer une lumière existante.
+							Click on a cell to place the light. Use delete mode to remove an existing light.
 						</p>
 					</Show>
 				</div>
@@ -3886,7 +3881,7 @@ export default function MapEditor() {
 					<button
 						class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-sky-700/60 hover:bg-sky-600/80 border border-sky-500/30 text-sky-200 text-xs font-medium transition"
 						onClick={exportCurrentMap}
-						title="Télécharger la carte en JSON"
+						title="Download map as JSON"
 					>
 						<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
 							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
@@ -4018,8 +4013,8 @@ export default function MapEditor() {
 							<div class="flex items-center gap-3 px-5 py-4 border-b border-white/10 shrink-0">
 								<span class="text-xl">📚</span>
 								<div class="flex-1">
-									<h2 class="text-white font-display text-lg leading-tight">Bibliothèque d'assets</h2>
-									<p class="text-slate-500 text-xs mt-0.5">Sélectionnez un asset pour le placer sur la carte</p>
+									<h2 class="text-white font-display text-lg leading-tight">Asset Library</h2>
+									<p class="text-slate-500 text-xs mt-0.5">Select an asset to place on the map</p>
 								</div>
 								<button
 									onClick={() => setShowLibrary(false)}
@@ -4031,7 +4026,7 @@ export default function MapEditor() {
 							<div class="px-5 py-3 border-b border-white/10 shrink-0">
 								<input
 									type="text"
-									placeholder="🔍  Rechercher un asset… (affiche les 10 premiers résultats)"
+									placeholder="🔍  Search an asset… (shows first 10 results)"
 									value={librarySearch()}
 									onInput={(e) => setLibrarySearch(e.currentTarget.value)}
 									class="w-full px-4 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/60 transition"
@@ -4051,7 +4046,7 @@ export default function MapEditor() {
 												: 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
 										}`}
 									>
-										Toutes les catégories
+										All categories
 									</button>
 									<For each={ASSET_CATEGORIES}>
 										{(cat) => (
@@ -4076,10 +4071,10 @@ export default function MapEditor() {
 									{/* Search results */}
 									<Show when={librarySearch().trim().length > 0}>
 										<p class="text-xs text-slate-500 mb-3">
-											{ALL_ASSETS.filter(a => a.name.toLowerCase().includes(librarySearch().toLowerCase().trim())).slice(0, 10).length} résultat{ALL_ASSETS.filter(a => a.name.toLowerCase().includes(librarySearch().toLowerCase().trim())).slice(0, 10).length !== 1 ? 's' : ''} pour « {librarySearch().trim()} »
+											{ALL_ASSETS.filter(a => a.name.toLowerCase().includes(librarySearch().toLowerCase().trim())).slice(0, 10).length} result{ALL_ASSETS.filter(a => a.name.toLowerCase().includes(librarySearch().toLowerCase().trim())).slice(0, 10).length !== 1 ? 's' : ''} for "{librarySearch().trim()}"
 										</p>
 										<Show when={ALL_ASSETS.filter(a => a.name.toLowerCase().includes(librarySearch().toLowerCase().trim())).length === 0}>
-											<p class="text-slate-600 text-sm text-center py-8">Aucun asset trouvé.</p>
+											<p class="text-slate-600 text-sm text-center py-8">No assets found.</p>
 										</Show>
 										<div class="grid grid-cols-3 gap-2">
 											<For each={ALL_ASSETS.filter(a => a.name.toLowerCase().includes(librarySearch().toLowerCase().trim())).slice(0, 10)}>
@@ -4198,21 +4193,21 @@ export default function MapEditor() {
 								onClick={() => handleSetSpawnZone("ally")}
 							>
 								<div class="w-3 h-3 rounded-full bg-green-500"></div>
-								Placer cellule allié
+								Place ally cell
 							</button>
 							<button
 								class="w-full text-left px-4 py-2 rounded hover:bg-red-600/20 text-red-400 text-sm transition flex items-center gap-2"
 								onClick={() => handleSetSpawnZone("enemy")}
 							>
 								<div class="w-3 h-3 rounded-full bg-red-500"></div>
-								Placer cellule ennemie
+								Place enemy cell
 							</button>
 							<button
 								class="w-full text-left px-4 py-2 rounded hover:bg-purple-600/20 text-purple-400 text-sm transition flex items-center gap-2"
 								onClick={() => handleSetSpawnZone("teleport")}
 							>
 								<div class="w-3 h-3 rounded-full bg-purple-500"></div>
-								Placer cellule téléportation
+								Place teleportation cell
 							</button>
 							{currentZoneType && (
 								<button

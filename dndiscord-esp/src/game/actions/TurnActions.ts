@@ -134,7 +134,7 @@ function initializeCombat(
     });
 
     addCombatLog(
-      "Placez vos personnages sur les cases alliées, puis cliquez sur Prêt.",
+      "Place your characters on the allied tiles, then click Ready.",
       "system",
     );
   });
@@ -463,7 +463,7 @@ function initializeDungeon(dungeonId: string): void {
       "system",
     );
     addCombatLog(
-      "Placez vos personnages sur les cases alliées, puis cliquez sur Prêt.",
+      "Place your characters on the allied tiles, then click Ready.",
       "system",
     );
   });
@@ -491,7 +491,7 @@ export function transitionToNextRoom(): void {
   if (nextRoomIndex >= dungeon.totalRooms) {
     // Last room: win the dungeon
     setGameState("phase", GamePhase.GAME_OVER);
-    addCombatLog("Victoire ! Le donjon est terminé !", "system");
+    addCombatLog("Victory! The dungeon is complete!", "system");
     return;
   }
 

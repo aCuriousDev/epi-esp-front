@@ -1,6 +1,5 @@
-import { A, useParams, useNavigate } from "@solidjs/router";
+import { useParams, useNavigate } from "@solidjs/router";
 import {
-  ArrowLeft,
   Crown,
   Users,
   Calendar,
@@ -23,6 +22,8 @@ import {
   Copy,
 } from "lucide-solid";
 import { createSignal, onCleanup, onMount, Show, For, type JSX } from "solid-js";
+import PageMeta from "../layouts/PageMeta";
+import { t } from "../i18n";
 import {
   Campaign,
   CampaignStatus,
@@ -183,7 +184,7 @@ export default function CampaignView() {
       });
     } catch (err: any) {
       console.error("Failed to load campaign:", err);
-      setError("Impossible de charger la campagne.");
+      setError("Failed to load campaign.");
     } finally {
       setLoading(false);
     }
@@ -191,7 +192,7 @@ export default function CampaignView() {
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString("fr-FR", {
+    return date.toLocaleDateString("en-US", {
       weekday: "long",
       day: "numeric",
       month: "long",
@@ -201,7 +202,7 @@ export default function CampaignView() {
 
   const formatDateTime = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString("fr-FR", {
+    return date.toLocaleDateString("en-US", {
       weekday: "short",
       day: "numeric",
       month: "short",
@@ -214,12 +215,12 @@ export default function CampaignView() {
   const formatRelativeTime = (dateStr: string): string => {
     const diffMs = Date.now() - new Date(dateStr).getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return "aujourd'hui";
-    if (diffDays === 1) return "il y a 1 jour";
-    if (diffDays < 30) return `il y a ${diffDays} jours`;
+    if (diffDays === 0) return t("campaignView.relativeTime.today");
+    if (diffDays === 1) return t("campaignView.relativeTime.yesterday");
+    if (diffDays < 30) return t("campaignView.relativeTime.daysAgo", { n: diffDays });
     const diffMonths = Math.floor(diffDays / 30);
-    if (diffMonths === 1) return "il y a 1 mois";
-    return `il y a ${diffMonths} mois`;
+    if (diffMonths === 1) return t("campaignView.relativeTime.monthAgo");
+    return t("campaignView.relativeTime.monthsAgo", { n: diffMonths });
   };
 
   /** Créer une session GameHub pour cette campagne et aller au board (DM uniquement). */
@@ -234,9 +235,9 @@ export default function CampaignView() {
         ensureMultiplayerHandlersRegistered();
       }
       await createSession(c.id);
-      navigate("/board");
+      navigate(`/campaigns/${c.id}/session`);
     } catch (e: any) {
-      setLaunchError(e?.message ?? "Impossible de créer la session.");
+      setLaunchError(e?.message ?? "Failed to create session.");
     } finally {
       setLaunchingSession(false);
     }
@@ -254,7 +255,7 @@ export default function CampaignView() {
       }
       const res = await joinSession(invite.sessionId);
       if (!res.success) {
-        setInviteError(res.message ?? "Impossible de rejoindre la session.");
+        setInviteError(res.message ?? "Failed to join session.");
         return;
       }
       setSessionInvite(null);
@@ -266,10 +267,10 @@ export default function CampaignView() {
       if (invite.campaignId && hasScenario(campaign()?.campaignTreeDefinition)) {
         navigate(`/campaigns/${invite.campaignId}/lobby`);
       } else {
-        navigate("/board");
+        navigate(invite.campaignId ? `/campaigns/${invite.campaignId}/session` : "/practice");
       }
     } catch (e: any) {
-      setInviteError(e?.message ?? "Impossible de rejoindre la session.");
+      setInviteError(e?.message ?? "Failed to join session.");
     } finally {
       setJoiningInvite(false);
     }
@@ -325,7 +326,7 @@ export default function CampaignView() {
       setCampaign({ ...c, status: newStatus });
     } catch (err) {
       console.error("Failed to update campaign status:", err);
-      setError("Impossible de modifier le statut de la campagne.");
+      setError("Failed to update campaign status.");
     }
   };
 
@@ -350,7 +351,7 @@ export default function CampaignView() {
       await createSession(c.id);
       navigate(`/campaigns/${params.id}/lobby`);
     } catch (e: any) {
-      setLaunchError(e?.message ?? 'Impossible de créer la session.');
+      setLaunchError(e?.message ?? 'Failed to create session.');
     } finally {
       setLaunchingSession(false);
     }
@@ -366,7 +367,7 @@ export default function CampaignView() {
 
     if (
       !safeConfirm(
-        `Êtes-vous sûr de vouloir supprimer "${c.title}" ? Cette action est irréversible.`,
+        `Are you sure you want to delete "${c.title}"? This action is irreversible.`,
       )
     ) {
       return;
@@ -377,7 +378,7 @@ export default function CampaignView() {
       navigate("/campaigns");
     } catch (err) {
       console.error("Failed to delete campaign:", err);
-      setError("Impossible de supprimer la campagne.");
+      setError("Failed to delete campaign.");
     }
   };
 
@@ -418,7 +419,7 @@ export default function CampaignView() {
       setShowInviteModal(true);
     } catch (err) {
       console.error("Failed to generate invite code:", err);
-      setError("Impossible de générer le code d'invitation.");
+      setError("Failed to generate invitation code.");
     }
   };
 
@@ -428,7 +429,7 @@ export default function CampaignView() {
 
     if (
       !safeConfirm(
-        "Êtes-vous sûr de vouloir retirer ce joueur de la campagne ?",
+        "Are you sure you want to remove this player from the campaign?",
       )
     ) {
       return;
@@ -442,7 +443,7 @@ export default function CampaignView() {
       setCampaign(mappedCampaign);
     } catch (err) {
       console.error("Failed to remove member:", err);
-      setError("Impossible de retirer le membre.");
+      setError("Failed to remove member.");
     }
   };
 
@@ -455,29 +456,13 @@ export default function CampaignView() {
   };
 
   return (
-    <div class="campaign-view-page min-h-screen w-full bg-brand-gradient">
-      {/* Background effects */}
-      <div class="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-        <div class="absolute top-0 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
-        <div class="absolute bottom-1/4 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl" />
-      </div>
-
-      {/* Vignette */}
-      <div class="vignette absolute inset-0" aria-hidden="true" />
-
-      {/* Back button */}
-      <A
-        href="/campaigns"
-        class="settings-btn !left-4 !right-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-        aria-label="Retour aux campagnes"
-      >
-        <ArrowLeft class="settings-icon h-5 w-5" aria-hidden="true" />
-      </A>
+    <div class="campaign-view-page min-h-screen w-full">
+      <PageMeta title={t("page.campaigns.title")} />
 
       <Show
         when={!loading()}
         fallback={
-          <div class="flex items-center justify-center min-h-screen" role="status" aria-label="Chargement de la campagne">
+          <div class="flex items-center justify-center min-h-screen" role="status" aria-label={t("common.loading")}>
             <div class="w-12 h-12 border-4 border-white/20 border-t-purple-500 rounded-full animate-spin" aria-hidden="true" />
           </div>
         }
@@ -495,7 +480,7 @@ export default function CampaignView() {
                   <div class="absolute top-4 right-4">
                     <span
                       class={`px-3 py-1.5 text-sm rounded-xl border ${getStatusColor(camp().status)}`}
-                      aria-label={`Statut : ${getStatusLabel(camp().status)}`}
+                      aria-label={`Status: ${getStatusLabel(camp().status)}`}
                     >
                       {getStatusLabel(camp().status)}
                     </span>
@@ -506,7 +491,7 @@ export default function CampaignView() {
                     <div class="absolute top-4 left-4 flex gap-2">
                       <button
                         onClick={toggleStatus}
-                        aria-label={camp().status === CampaignStatus.Active ? "Mettre en pause" : "Reprendre"}
+                        aria-label={camp().status === CampaignStatus.Active ? t("campaignView.pause") : t("campaignView.resume")}
                         class="p-2 rounded-lg bg-black/30 backdrop-blur-sm border border-white/10 hover:bg-black/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                       >
                         <Show
@@ -528,9 +513,9 @@ export default function CampaignView() {
                         {camp().title}
                       </h1>
                       <div class="flex flex-wrap items-center gap-3 text-slate-400 mb-4">
-                        <span class="flex items-center gap-1.5" aria-label={`${camp().currentPlayers} joueurs sur ${camp().maxPlayers}`}>
+                        <span class="flex items-center gap-1.5" aria-label={`${camp().currentPlayers} / ${camp().maxPlayers} ${t("campaignView.players")}`}>
                           <Users class="w-4 h-4" aria-hidden="true" />
-                          {camp().currentPlayers}/{camp().maxPlayers} joueurs
+                          {camp().currentPlayers}/{camp().maxPlayers} {t("campaignView.players")}
                         </span>
                       </div>
 
@@ -552,7 +537,7 @@ export default function CampaignView() {
                         </div>
                         <div>
                           <p class="text-xs text-amber-400 uppercase tracking-wider font-semibold">
-                            Maître du Jeu
+                            {t("campaignView.dungeonMaster")}
                           </p>
                           <p class="text-white font-semibold">
                             {displayDungeonMasterName(camp(), authStore.user()?.username)}
@@ -560,7 +545,7 @@ export default function CampaignView() {
                         </div>
                       </div>
                       <div class="text-sm text-slate-400 space-y-0.5">
-                        <p>Créé le {formatDate(camp().createdAt)}</p>
+                        <p>{t("campaignView.createdOn")} {formatDate(camp().createdAt)}</p>
                         <p class="text-slate-500 text-xs">{formatRelativeTime(camp().createdAt)}</p>
                       </div>
                     </div>
@@ -575,7 +560,7 @@ export default function CampaignView() {
                         </div>
                         <div>
                           <p class="text-sm text-green-400 font-medium">
-                            Prochaine session
+                            {t("campaignView.nextSession")}
                           </p>
                           <p class="text-white">
                             {formatDateTime(camp().nextSessionDate!)}
@@ -593,7 +578,7 @@ export default function CampaignView() {
                         >
                           <Loader2 class="w-4 h-4 animate-spin" aria-hidden="true" />
                         </Show>
-                        {launchingSession() ? "Création..." : "Lancer la session"}
+                        {launchingSession() ? t("campaignView.launchingSession") : t("campaignView.launchSession")}
                       </button>
                     </div>
                   </Show>
@@ -654,7 +639,7 @@ export default function CampaignView() {
               {/* Tabs */}
               <div
                 role="tablist"
-                aria-label="Sections de la campagne"
+                aria-label={t("campaignView.tabs.label")}
                 class="flex gap-2 mb-6 overflow-x-auto pb-2"
               >
                 <TabButton
@@ -664,7 +649,7 @@ export default function CampaignView() {
                   onClick={() => setActiveTab("overview")}
                   onKeyDown={(e) => handleTabKeyDown(e, "overview")}
                   icon={<BookOpen class="w-4 h-4" aria-hidden="true" />}
-                  label="Aperçu"
+                  label={t("campaignView.tabs.overview")}
                 />
                 <TabButton
                   id="tab-players"
@@ -673,7 +658,7 @@ export default function CampaignView() {
                   onClick={() => setActiveTab("players")}
                   onKeyDown={(e) => handleTabKeyDown(e, "players")}
                   icon={<Users class="w-4 h-4" aria-hidden="true" />}
-                  label="Joueurs"
+                  label={t("campaignView.tabs.players")}
                   count={camp().currentPlayers}
                 />
                 {/* Sessions tab removed — the backend doesn't persist session
@@ -693,14 +678,14 @@ export default function CampaignView() {
                   >
                     <StatCard
                       icon={<Users class="w-5 h-5" aria-hidden="true" />}
-                      label="Joueurs"
+                      label={t("campaignView.tabs.players")}
                       value={`${camp().currentPlayers}/${camp().maxPlayers}`}
                       color="purple"
                     />
                     <StatCard
                       icon={<Clock class="w-5 h-5" aria-hidden="true" />}
-                      label="Durée"
-                      value={`${Math.ceil((Date.now() - new Date(camp().createdAt).getTime()) / (1000 * 60 * 60 * 24 * 30))} mois`}
+                      label={t("campaignView.duration")}
+                      value={`${Math.ceil((Date.now() - new Date(camp().createdAt).getTime()) / (1000 * 60 * 60 * 24 * 30))} ${t("campaignView.months")}`}
                       color="green"
                     />
                   </div>
@@ -716,16 +701,16 @@ export default function CampaignView() {
                   >
                     <div class="p-4 border-b border-white/10 flex items-center justify-between">
                       <h2 class="font-display text-lg text-white">
-                        Joueurs ({camp().currentPlayers})
+                        {t("campaignView.tabs.players")} ({camp().currentPlayers})
                       </h2>
                       <Show when={isOwner() && camp().currentPlayers < camp().maxPlayers}>
                         <button
                           onClick={handleGenerateInvite}
-                          aria-label="Inviter un joueur"
+                          aria-label={t("campaignView.invitePlayer")}
                           class="flex items-center gap-2 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                         >
                           <UserPlus class="w-4 h-4" aria-hidden="true" />
-                          Inviter
+                          {t("campaignView.invite")}
                         </button>
                       </Show>
                     </div>
@@ -740,7 +725,7 @@ export default function CampaignView() {
                           <p class="text-white font-semibold">
                             {displayDungeonMasterName(camp(), authStore.user()?.username)}
                           </p>
-                          <p class="text-amber-400 text-sm">Maître du Jeu</p>
+                          <p class="text-amber-400 text-sm">{t("campaignView.dungeonMaster")}</p>
                         </div>
                       </div>
 
@@ -756,13 +741,13 @@ export default function CampaignView() {
                                 {player.username}
                               </p>
                               <p class="text-slate-400 text-sm truncate">
-                                {player.characterName || "Pas de personnage"}
+                                {player.characterName || t("campaignView.noCharacter")}
                               </p>
                             </div>
                             <Show when={isOwner()}>
                               <button
                                 onClick={() => handleRemoveMember(player.id)}
-                                aria-label={`Retirer ${player.username} de la campagne`}
+                                aria-label={t("campaignView.removeMember", { name: player.username })}
                                 class="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                               >
                                 <X class="w-4 h-4" aria-hidden="true" />
@@ -778,8 +763,8 @@ export default function CampaignView() {
                           <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-white/5 flex items-center justify-center">
                             <Users class="w-7 h-7 text-slate-500" aria-hidden="true" />
                           </div>
-                          <p class="text-slate-300 font-medium mb-1">Aucun joueur pour l'instant</p>
-                          <p class="text-slate-500 text-sm">Invitez-en via un code d'invitation.</p>
+                          <p class="text-slate-300 font-medium mb-1">{t("campaignView.noPlayersYet")}</p>
+                          <p class="text-slate-500 text-sm">{t("campaignView.noPlayersHint")}</p>
                         </div>
                       </Show>
 
@@ -792,7 +777,7 @@ export default function CampaignView() {
                                 <Plus class="w-5 h-5 text-slate-500" />
                               </div>
                               <div class="flex-1">
-                                <p class="text-slate-500">Place disponible</p>
+                                <p class="text-slate-500">{t("campaignView.openSlot")}</p>
                               </div>
                             </div>
                           )}
@@ -819,7 +804,7 @@ export default function CampaignView() {
                     class="py-3 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold transition-all shadow-lg shadow-purple-500/20 flex items-center justify-center gap-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 motion-safe:hover:-translate-y-0.5"
                     onClick={handleLaunchSession}
                     disabled={launchingSession()}
-                    aria-label="Lancement rapide — démarrer une session sans scénario"
+                    aria-label={t("campaignView.quickLaunch.ariaLabel")}
                   >
                     <Show
                       when={launchingSession()}
@@ -827,7 +812,7 @@ export default function CampaignView() {
                     >
                       <Loader2 class="w-5 h-5 animate-spin" aria-hidden="true" />
                     </Show>
-                    {launchingSession() ? "Création de la session..." : "Lancement rapide"}
+                    {launchingSession() ? t("campaignView.launchingSession") : t("campaignView.quickLaunch")}
                   </button>
 
                   {/* SECONDARY — story-tree lobby flow */}
@@ -835,13 +820,13 @@ export default function CampaignView() {
                     onClick={handleLaunchCampaignSession}
                     disabled={launchingSession()}
                     class="py-3 px-6 rounded-xl border border-purple-500/40 bg-purple-500/10 hover:bg-purple-500/20 text-purple-200 font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-                    aria-label="Lancer la session — démarre le lobby scénario"
+                    aria-label={t("campaignView.launchSession.ariaLabel")}
                   >
                     <Show when={launchingSession()} fallback={<Play class="w-5 h-5" aria-hidden="true" />}>
                       <Loader2 class="w-5 h-5 animate-spin" aria-hidden="true" />
                     </Show>
-                    <Show when={launchingSession()} fallback="Lancer la session">
-                      Création…
+                    <Show when={launchingSession()} fallback={t("campaignView.launchSession")}>
+                      {t("campaignView.launchingSession")}
                     </Show>
                   </button>
                 </div>
@@ -850,17 +835,17 @@ export default function CampaignView() {
                 <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <button
                     onClick={handleUpdate}
-                    aria-label="Modifier la campagne"
+                    aria-label={t("campaignView.editCampaign")}
                     class="py-2.5 px-4 rounded-xl bg-white/5 border border-white/10 text-slate-200 font-medium hover:bg-white/10 transition-all flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     <Edit3 class="w-4 h-4" aria-hidden="true" />
-                    Modifier
+                    {t("common.edit")}
                   </button>
 
                   <button
                     onClick={handleCampaignManager}
-                    title="Éditeur de scénario (work-in-progress, non branché sur le gameplay)"
-                    aria-label="Campaign Manager (work in progress)"
+                    title={t("campaignView.campaignManager.title")}
+                    aria-label={t("campaignView.campaignManager.ariaLabel")}
                     class="relative py-2.5 px-4 rounded-xl bg-white/5 border border-white/10 text-slate-200 font-medium hover:bg-white/10 transition-all flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     <MapIcon class="w-4 h-4" aria-hidden="true" />
@@ -872,27 +857,27 @@ export default function CampaignView() {
 
                   <button
                     onClick={handleViewSessions}
-                    aria-label="Voir l'historique des sessions"
+                    aria-label={t("campaignView.viewSessions.ariaLabel")}
                     class="py-2.5 px-4 rounded-xl bg-white/5 border border-white/10 text-slate-200 font-medium hover:bg-white/10 transition-all flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     <BookOpen class="w-4 h-4" aria-hidden="true" />
-                    Voir les sessions
+                    {t("campaignView.viewSessions")}
                   </button>
                 </div>
 
                 {/* Row 3: Destructive — visually isolated danger zone */}
                 <div class="mt-6 p-4 rounded-xl border border-red-500/20 bg-red-500/5 flex items-center justify-between gap-4">
                   <div>
-                    <p class="text-sm font-medium text-red-300">Zone dangereuse</p>
-                    <p class="text-xs text-red-400/70 mt-0.5">La suppression est irréversible.</p>
+                    <p class="text-sm font-medium text-red-300">{t("campaignView.dangerZone")}</p>
+                    <p class="text-xs text-red-400/70 mt-0.5">{t("campaignView.deleteIrreversible")}</p>
                   </div>
                   <button
                     onClick={handleDelete}
-                    aria-label="Supprimer définitivement cette campagne"
+                    aria-label={t("campaignView.deleteCampaign.ariaLabel")}
                     class="py-2 px-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 font-semibold hover:bg-red-500/20 hover:border-red-500/50 transition-all flex items-center gap-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     <Trash2 class="w-4 h-4" aria-hidden="true" />
-                    Supprimer
+                    {t("common.delete")}
                   </button>
                 </div>
               </Show>
@@ -946,11 +931,10 @@ export default function CampaignView() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="invite-modal-title" class="text-xl font-display text-white mb-4">
-              Code d'invitation
+              {t("campaignView.inviteModal.title")}
             </h2>
             <p class="text-slate-400 mb-4">
-              Partagez ce code avec vos joueurs pour les inviter à rejoindre la
-              campagne.
+              {t("campaignView.inviteModal.body")}
             </p>
             <div class="bg-white/5 border border-white/10 rounded-xl p-4 mb-4">
               <code class="text-purple-400 text-lg font-mono">
@@ -960,13 +944,13 @@ export default function CampaignView() {
             <button
               onClick={() => {
                 navigator.clipboard.writeText(inviteCode() || "");
-                showSuccessToast("Code copié dans le presse-papiers !");
+                showSuccessToast(t("campaignView.inviteModal.copied"));
                 setShowInviteModal(false);
               }}
               class="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-colors flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
               <Copy class="w-4 h-4" aria-hidden="true" />
-              Copier le code
+              {t("campaignView.inviteModal.copyCode")}
             </button>
           </div>
         </div>
@@ -1003,7 +987,7 @@ export default function CampaignView() {
           <span>{error()}</span>
           <button
             onClick={() => setError(null)}
-            aria-label="Fermer l'erreur"
+            aria-label={t("common.close")}
             class="text-white/80 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 rounded"
           >
             <X class="w-4 h-4" aria-hidden="true" />
@@ -1025,13 +1009,13 @@ export default function CampaignView() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="session-invite-title" class="text-xl font-display text-white mb-3">
-              Session de jeu démarrée
+              {t("campaignView.sessionInvite.title")}
             </h2>
             <p class="text-slate-300 mb-4">
               <span class="text-purple-300 font-semibold">
-                {sessionInvite()?.startedByUserName || "Un joueur"}
+                {sessionInvite()?.startedByUserName || t("campaignView.sessionInvite.aPlayer")}
               </span>{" "}
-              a démarré une session de jeu. Souhaitez-vous la rejoindre ?
+              {t("campaignView.sessionInvite.body")}
             </p>
             <Show when={inviteError()}>
               <p class="mb-3 text-red-400 text-sm" role="alert">{inviteError()}</p>
@@ -1042,15 +1026,15 @@ export default function CampaignView() {
                 class="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 disabled={joiningInvite()}
               >
-                Plus tard
+                {t("campaignView.sessionInvite.later")}
               </button>
               <button
                 onClick={handleJoinInvite}
                 class="flex-1 px-4 py-2.5 bg-purple-600 hover:bg-purple-500 rounded-xl text-white transition-all disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 disabled={joiningInvite()}
               >
-                <Show when={joiningInvite()} fallback={"Rejoindre"}>
-                  Rejoindre...
+                <Show when={joiningInvite()} fallback={t("campaignView.sessionInvite.join")}>
+                  {t("campaignView.sessionInvite.joining")}
                 </Show>
               </button>
             </div>
@@ -1058,16 +1042,6 @@ export default function CampaignView() {
         </div>
       </Show>
 
-      <style jsx>{`
-        .campaign-view-page {
-          background: linear-gradient(
-            135deg,
-            var(--ink-700) 0%,
-            var(--ink-800) 50%,
-            var(--ink-900) 100%
-          );
-        }
-      `}</style>
     </div>
   );
 }

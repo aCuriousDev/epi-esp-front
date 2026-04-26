@@ -79,14 +79,14 @@ export const DebugDialoguePanel: Component = () => {
               onChange={(e) => setIsDm(e.currentTarget.checked)}
               class="accent-purple-500 w-3.5 h-3.5"
             />
-            Parler en tant que MJ
+            Speak as DM
           </label>
 
           {/* Player dropdown (hidden when DM mode) */}
           {!isDm() && (
             <div>
               <label class="block text-[10px] uppercase tracking-wider text-gray-500 mb-1">
-                Joueur
+                Player
               </label>
               <select
                 class="w-full bg-game-dark border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-purple-500"
@@ -105,7 +105,7 @@ export const DebugDialoguePanel: Component = () => {
             <input
               type="text"
               class="w-full bg-game-dark border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-              placeholder={isDm() ? "Message du MJ…" : "Message du joueur…"}
+              placeholder={isDm() ? "DM message…" : "Player message…"}
               value={text()}
               onInput={(e) => setText(e.currentTarget.value)}
               onKeyDown={handleKeyDown}

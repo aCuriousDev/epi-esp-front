@@ -70,16 +70,16 @@ export default function LoginPage() {
               </span>
               <div class="flex-1 space-y-1">
                 <p class="text-emerald-100 font-semibold">
-                  Compte supprimé
+                  Account deleted
                 </p>
                 <p class="text-emerald-100/80 text-xs leading-relaxed">
-                  Vos personnages, campagnes possédées et adhésions ont été
-                  effacés. Pour révoquer aussi l'accès OAuth côté Discord :{" "}
+                  Your characters, owned campaigns and memberships have been
+                  deleted. To also revoke OAuth access on Discord's side:{" "}
                   <a
                     href="discord://users/@me/settings/authorized-apps"
                     class="underline hover:text-white"
                   >
-                    Applications autorisées
+                    Authorized Apps
                   </a>{" "}
                   (ou <a
                     href="https://discord.com/channels/@me"
@@ -109,14 +109,14 @@ export default function LoginPage() {
                 Bienvenue, aventurier !
               </h2>
               <p class="text-center text-slate-300/70 text-sm mb-8">
-                Connectez-vous avec Discord pour accéder à vos personnages et campagnes.
+                Sign in with Discord to access your characters and campaigns.
               </p>
 
               {/* Loading state */}
               <Show when={authStore.isLoading()}>
                 <div class="flex flex-col items-center gap-4 py-4">
                   <div class="w-10 h-10 border-3 border-white/20 border-t-purple-500 rounded-full animate-spin" />
-                  <p class="text-slate-300/70 text-sm">Vérification de la session...</p>
+                  <p class="text-slate-300/70 text-sm">Checking session...</p>
                 </div>
               </Show>
 
@@ -166,13 +166,13 @@ export default function LoginPage() {
               </A>{" "}
               et notre{" "}
               <A href="/privacy" class="text-slate-300 hover:text-white underline">
-                politique de confidentialité
+                privacy policy
               </A>
               .
             </p>
             <p class="flex items-center justify-center gap-2 text-[11px] text-slate-400/50">
               <A href="/legal" class="hover:text-slate-300 transition-colors">
-                Mentions légales
+                Legal notice
               </A>
               <span>·</span>
               <A href="/cookies" class="hover:text-slate-300 transition-colors">

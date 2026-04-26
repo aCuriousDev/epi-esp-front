@@ -75,20 +75,20 @@ const ChoicesNodeEditor: Component<ChoicesNodeEditorProps> = (props) => {
           onInput={(e) => handleUpdateTitle(e.currentTarget.value)}
           onKeyDown={(e) => e.stopPropagation()}
           onBlur={() => props.handleUpdateNode(props.node)}
-          placeholder="Nom affiché sur le canvas..."
+          placeholder="Name shown on canvas..."
           style={fieldStyle}
         />
       </div>
 
       {/* Texte narratif */}
       <div style={{ 'margin-bottom': '1.5rem' }}>
-        <label style={labelStyle}>📖 Texte narratif :</label>
+        <label style={labelStyle}>📖 Narrative text:</label>
         <textarea
           value={text()}
           onInput={(e) => handleUpdateText(e.currentTarget.value)}
           onKeyDown={(e) => e.stopPropagation()}
           onBlur={save}
-          placeholder="Décrivez la scène..."
+          placeholder="Describe the scene..."
           style={{ ...fieldStyle, 'min-height': '100px', resize: 'vertical' }}
         />
       </div>
@@ -107,7 +107,7 @@ const ChoicesNodeEditor: Component<ChoicesNodeEditorProps> = (props) => {
 
         <Show
           when={choices().length > 0}
-          fallback={<p style={{ color: '#888', 'font-size': '0.9rem', 'font-style': 'italic' }}>Aucun choix défini</p>}
+          fallback={<p style={{ color: '#888', 'font-size': '0.9rem', 'font-style': 'italic' }}>No choices defined</p>}
         >
           <div style={{ display: 'flex', 'flex-direction': 'column', gap: '0.5rem' }}>
             <Index each={choices()}>
