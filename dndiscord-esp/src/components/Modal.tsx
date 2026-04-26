@@ -1,5 +1,6 @@
 import { Component, JSX, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { useEscapeToClose } from '../hooks/useModalAccessibility';
 
 interface ModalProps {
   isOpen: boolean;
@@ -10,6 +11,8 @@ interface ModalProps {
 }
 
 const Modal: Component<ModalProps> = (props) => {
+  useEscapeToClose(() => props.isOpen, props.onClose);
+
   return (
     <Portal>
       <Show when={props.isOpen}>
