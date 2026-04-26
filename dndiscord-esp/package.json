@@ -38,6 +38,7 @@
     "@iconify-json/game-icons": "^1.2.3",
     "@types/node": "^22.7.5",
     "autoprefixer": "^10.4.20",
+    "happy-dom": "^20.9.0",
     "monaco-editor": "^0.55.1",
     "postcss": "^8.4.47",
     "prettier": "^3.8.1",

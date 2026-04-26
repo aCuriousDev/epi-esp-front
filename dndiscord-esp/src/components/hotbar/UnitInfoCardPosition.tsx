@@ -1,16 +1,36 @@
-import { Component } from "solid-js";
+import { Component, createMemo } from "solid-js";
 import { UnitInfoCard } from "./UnitInfoCard";
+import { gameState } from "../../game/stores/GameStateStore";
+import { GameMode, GamePhase } from "../../types";
+
+interface UnitInfoCardTopProps {
+  /** Current game mode (used to detect combat-style modes with a turn timeline). */
+  mode: GameMode;
+}
 
 /**
- * Positions the UnitInfoCard at the top-right corner of the canvas so it
- * doesn't collide with the always-visible turn-order banner at top-center
- * or the "Infos" / "Journal" drawer toggles at top-left/right. The card
- * auto-hides when nothing is selected so this slot only draws attention
- * when the viewer actually has a unit in focus.
+ * Top-center placement for the floating UnitInfoCard. Stacks under the
+ * turn-order timeline (combat) and/or the phase pill (free roam, prep) so
+ * it never overlaps the right-side journal toggle. Card auto-hides when no
+ * unit is hovered/selected so the slot only renders content when needed.
  */
-export const UnitInfoCardTop: Component = () => {
+export const UnitInfoCardTop: Component<UnitInfoCardTopProps> = (props) => {
+  const topClass = createMemo(() => {
+    const inCombat =
+      (props.mode === GameMode.COMBAT || props.mode === GameMode.DUNGEON) &&
+      gameState.turnOrder.length > 0;
+    const pillVisible =
+      gameState.phase !== GamePhase.PLAYER_TURN &&
+      gameState.phase !== GamePhase.ENEMY_TURN;
+    if (inCombat && pillVisible) return "top-[8.75rem] sm:top-[9.25rem]";
+    if (inCombat || pillVisible) return "top-[3.75rem] sm:top-[4.25rem]";
+    return "top-3 sm:top-4";
+  });
+
   return (
-    <div class="fixed top-16 right-4 z-20 pointer-events-none max-w-[calc(100vw-2rem)]">
+    <div
+      class={`absolute left-1/2 -translate-x-1/2 z-20 pointer-events-none max-w-[calc(100vw-2rem)] transition-all duration-200 ${topClass()}`}
+    >
       <UnitInfoCard />
     </div>
   );

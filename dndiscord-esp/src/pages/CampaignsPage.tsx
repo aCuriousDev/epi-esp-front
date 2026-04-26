@@ -1,30 +1,26 @@
 import { useNavigate } from "@solidjs/router";
 import {
-  ArrowLeft,
   Plus,
-  Users,
-  Crown,
   BookOpen,
-  LogIn,
+  Play,
   Search,
   X,
   UserPlus,
+  Users,
+  Crown,
 } from "lucide-solid";
 import { createSignal, For, Show, onMount, createEffect } from "solid-js";
 import {
   Campaign,
   CampaignStatus,
-  getStatusColor,
-  getStatusLabel,
   CampaignVisibility,
 } from "../types/campaign";
-import {
-  CampaignService,
-  CampaignResponse,
-  displayDungeonMasterName,
-  CampaignListResponse,
-} from "../services/campaign.service";
-import { authStore } from "../stores/auth.store";
+import { CampaignService, CampaignResponse } from "../services/campaign.service";
+import CampaignCard from "../components/CampaignCard";
+import PageMeta from "../layouts/PageMeta";
+import Button from "../components/common/Button";
+import SectionHeader from "../components/common/SectionHeader";
+import { t } from "../i18n";
 
 /**
  * Map backend campaign status to frontend status
@@ -42,9 +38,7 @@ function mapCampaignStatus(status: number | string): CampaignStatus {
 }
 
 /**
- * Map backend list-response to the front Campaign type. Only keeps fields the
- * backend actually persists; fabricated "sessions / level / tags / DM name"
- * scaffolding was removed because none of it round-tripped.
+ * Map backend list-response to the front Campaign type.
  */
 function mapCampaignResponse(response: CampaignResponse): Campaign {
   return {
@@ -154,7 +148,7 @@ export default function CampaignsPage() {
       setCampaigns(response.items.map(mapCampaignResponse));
     } catch (err) {
       console.error("Failed to load campaigns:", err);
-      setError("Impossible de charger les campagnes. Veuillez réessayer.");
+      setError(t("page.campaigns.loadError"));
     } finally {
       setLoading(false);
     }
@@ -163,7 +157,7 @@ export default function CampaignsPage() {
   const handleJoin = async () => {
     const code = inviteCode().trim();
     if (!code) {
-      setJoinError("Saisissez un code d'invitation.");
+      setJoinError(t("page.campaigns.joinCodeRequired"));
       return;
     }
     setJoining(true);
@@ -173,13 +167,10 @@ export default function CampaignsPage() {
       navigate(`/campaigns/${joined.id}`);
     } catch (err: any) {
       console.error("Failed to join campaign:", err);
-      // ASP.NET's ProblemDetails puts the human-readable reason in `detail`
-      // (lowercase). Reading only `title`/`error` silently swallowed the real
-      // message ("Invalid invite code", "You are already a member", etc.).
       const msg = err?.response?.data?.detail
         ?? err?.response?.data?.title
         ?? err?.response?.data?.error
-        ?? "Code invalide ou campagne introuvable.";
+        ?? t("page.campaigns.joinError");
       setJoinError(msg);
     } finally {
       setJoining(false);
@@ -187,75 +178,45 @@ export default function CampaignsPage() {
   };
 
   return (
-    <div class="campaigns-page min-h-screen w-full bg-brand-gradient">
-      <div class="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-        <div class="absolute top-1/4 -left-32 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
-        <div
-          class="absolute bottom-1/4 -right-32 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl animate-pulse"
-          style="animation-delay: 1s"
-        />
-        <div class="absolute top-3/4 left-1/3 w-64 h-64 bg-violet-500/8 rounded-full blur-3xl" />
-      </div>
+    <>
+      <PageMeta
+        title={t("page.campaigns.title")}
+        rightSlot={
+          <Button href="/campaigns/create" size="sm">
+            {t("common.create")}
+          </Button>
+        }
+      />
 
-      <div class="vignette absolute inset-0" aria-hidden="true" />
+      <div class="space-y-6">
+        <p class="font-old italic text-mid text-ds-body text-center max-w-2xl mx-auto">
+          {t("page.campaigns.subtitle")}
+        </p>
 
-      <header class="relative z-20 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-game-dark/70 backdrop-blur-md">
-        <button
-          onClick={() => navigate("/")}
-          aria-label="Retour au menu"
-          class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded-lg px-2 py-1"
-        >
-          <ArrowLeft class="w-5 h-5" aria-hidden="true" />
-          <span class="hidden sm:inline">Retour au menu</span>
-        </button>
-
-        <h1 class="font-display text-xl text-white tracking-wide">Campagnes</h1>
-
-        <div class="flex items-center gap-2">
-          <button
+        <div class="flex flex-wrap items-center justify-center gap-2 mb-6">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
             onClick={openSearchModal}
-            aria-label="Rechercher une campagne publique"
-            class="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/15 text-white rounded-xl transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+            leadingIcon={<Search class="w-3.5 h-3.5" aria-hidden="true" />}
           >
-            <Search class="w-4 h-4" aria-hidden="true" />
-            <span class="hidden sm:inline">Rechercher</span>
-          </button>
-          <button
-            onClick={() => navigate("/campaigns/create")}
-            aria-label="Créer une nouvelle campagne"
-            class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all shadow-lg shadow-purple-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-          >
-            <Plus class="w-4 h-4" aria-hidden="true" />
-            <span class="hidden sm:inline">Créer</span>
-          </button>
-        </div>
-      </header>
-
-      <main class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        <div class="text-center mb-8">
-          <h2 class="font-display text-4xl sm:text-5xl tracking-wide text-white drop-shadow-[0_2px_8px_rgba(139,92,246,0.5)]">
-            Mes Campagnes
-          </h2>
-          <p class="mt-3 text-slate-300 max-w-xl mx-auto">
-            Gérez vos aventures ou rejoignez une campagne existante via un code d'invitation.
-          </p>
-          <div class="mt-6 mx-auto decorative-divider" />
+            Rechercher une campagne publique
+          </Button>
         </div>
 
-        {/* Join-by-code panel — the only way a non-creator enters a campaign */}
-        <div class="mb-8 mx-auto max-w-xl bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-5">
-          <label
-            id="invite-code-label"
-            for="invite-code-input"
-            class="block text-sm text-slate-300 mb-1 font-medium"
-          >
-            Rejoindre avec un code d'invitation
-          </label>
-          <p id="invite-code-hint" class="text-xs text-slate-500 mb-3">
-            Ce code est généré par le MJ depuis la page de la campagne (bouton "Générer un code").
-            Il est distinct du code de session affiché en partie.
+        {/* Join-by-code panel */}
+        <div class="max-w-[560px] mx-auto mb-9 p-[22px] rounded-ds-lg surface-1 shadow-soft">
+          <div class="flex items-center gap-2 mb-1.5">
+            <BookOpen size={16} class="text-gold-300" aria-hidden="true" />
+            <span class="font-display text-[14px] tracking-wide text-high">
+              {t("page.campaigns.joinTitle")}
+            </span>
+          </div>
+          <p class="text-[12px] text-low leading-relaxed mb-3.5">
+            {t("page.campaigns.joinHelp")}
           </p>
-          <div class="flex flex-col sm:flex-row gap-2">
+          <div class="flex gap-2.5">
             <input
               id="invite-code-input"
               type="text"
@@ -263,37 +224,44 @@ export default function CampaignsPage() {
               onInput={(e) => setInviteCode(e.currentTarget.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleJoin(); }}
               disabled={joining()}
-              placeholder="XXXX-XXXX"
-              aria-labelledby="invite-code-label"
-              aria-describedby="invite-code-hint"
-              aria-label="Code d'invitation"
+              placeholder={t("page.campaigns.placeholder.code")}
+              aria-label={t("page.campaigns.joinTitle")}
               autocomplete="off"
-              class="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white font-mono tracking-wider placeholder:text-slate-500 focus:border-purple-400/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900 disabled:opacity-50 transition-colors"
+              class="flex-1 px-3.5 py-2.5 bg-ink-600 border border-ink-500 rounded-ds-sm text-high font-mono text-[14px] tracking-[0.15em] text-center placeholder:text-low focus:border-gold-400/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/40 disabled:opacity-50 transition-colors"
             />
-            <button
+            <Button
               onClick={handleJoin}
               disabled={joining() || !inviteCode().trim()}
-              class="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              size="md"
+              leadingIcon={<Play size={12} />}
             >
-              <LogIn class="w-4 h-4" aria-hidden="true" />
-              {joining() ? "…" : "Rejoindre"}
-            </button>
+              {t("page.campaigns.joinCta")}
+            </Button>
           </div>
           <Show when={joinError()}>
-            <p class="mt-2 text-red-400 text-sm" role="alert" aria-live="polite">{joinError()}</p>
+            <p class="mt-2 text-red-400 text-[12px]" role="alert" aria-live="polite">
+              {joinError()}
+            </p>
           </Show>
         </div>
 
         <Show when={error()}>
-          <div class="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-center" role="alert" aria-live="assertive">
+          <div
+            class="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-center"
+            role="alert"
+            aria-live="assertive"
+          >
             {error()}
           </div>
         </Show>
 
         <Show when={loading()}>
-          <div class="text-center py-16" role="status" aria-label="Chargement des campagnes">
-            <div class="w-16 h-16 mx-auto mb-4 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" aria-hidden="true" />
-            <p class="text-slate-300">Chargement des campagnes...</p>
+          <div class="text-center py-16" role="status" aria-label={t("common.loading")}>
+            <div
+              class="w-16 h-16 mx-auto mb-4 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"
+              aria-hidden="true"
+            />
+            <p class="text-slate-300">{t("common.loading")}</p>
           </div>
         </Show>
 
@@ -306,33 +274,36 @@ export default function CampaignsPage() {
                   <BookOpen class="w-10 h-10 text-slate-500" aria-hidden="true" />
                 </div>
                 <h3 class="text-xl font-semibold text-white mb-2">
-                  Pas encore de campagne
+                  {t("page.campaigns.empty")}
                 </h3>
                 <p class="text-slate-400 mb-6 max-w-sm mx-auto">
-                  Créez-en une ou rejoignez-en une avec un code d'invitation ci-dessus.
+                  {t("page.campaigns.emptyHint")}
                 </p>
                 <button
                   onClick={() => navigate("/campaigns/create")}
                   class="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all inline-flex items-center gap-2 shadow-lg shadow-purple-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 >
                   <Plus class="w-5 h-5" aria-hidden="true" />
-                  Créer une campagne
+                  {t("page.campaigns.createCta")}
                 </button>
               </div>
             </Show>
           }
         >
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <SectionHeader
+            eyebrow={t("page.campaigns.yourCampaignsEyebrow")}
+            counter={`${campaigns().length} ${t("page.campaigns.totalCounter")}`.toUpperCase()}
+          />
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <For each={campaigns()}>
-              {(campaign) => (
+              {(campaign, i) => (
                 <CampaignCard
                   campaign={campaign}
                   onClick={() => navigate(`/campaigns/${campaign.id}`)}
+                  index={i()}
                 />
               )}
             </For>
-            {/* "Nouvelle Campagne" ghost card — lives in the grid, not isolated below */}
-            <NewCampaignCard onClick={() => navigate("/campaigns/create")} />
           </div>
         </Show>
 
@@ -342,7 +313,7 @@ export default function CampaignsPage() {
             <NewCampaignCard onClick={() => navigate("/campaigns/create")} />
           </div>
         </Show>
-      </main>
+      </div>
 
       {/* ── Search campaigns modal ─────────────────────────────────────── */}
       <Show when={searchModalOpen()}>
@@ -503,67 +474,7 @@ export default function CampaignsPage() {
           .campaign-card:nth-child(6) { animation-delay: 400ms; }
         }
       `}</style>
-    </div>
-  );
-}
-
-/**
- * Campaign card — minimalist, shows only backend-persisted fields.
- */
-function CampaignCard(props: { campaign: Campaign; onClick: () => void }) {
-  const campaign = () => props.campaign;
-
-  return (
-    <button
-      onClick={props.onClick}
-      aria-label={`Ouvrir la campagne : ${campaign().title}`}
-      class="campaign-card group relative bg-ink-700 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-xl motion-safe:hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-purple-500/10 hover:border-purple-500/40 transition-all text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-    >
-      <div class="h-28 bg-gradient-to-br from-purple-800/50 via-indigo-800/40 to-violet-800/50 relative">
-        <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.08%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-50" aria-hidden="true" />
-        <div class="absolute top-3 right-3">
-          <span
-            class={`px-2.5 py-1 text-xs font-medium rounded-lg border backdrop-blur-sm ${getStatusColor(campaign().status)}`}
-            aria-label={`Statut : ${getStatusLabel(campaign().status)}`}
-          >
-            {getStatusLabel(campaign().status)}
-          </span>
-        </div>
-        <div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-ink-700 to-transparent" aria-hidden="true" />
-      </div>
-
-      <div class="p-5 pt-2">
-        <h3 class="font-display text-lg text-white group-hover:text-purple-300 transition-colors mb-2 line-clamp-1">
-          {campaign().title}
-        </h3>
-
-        <Show when={campaign().description}>
-          <p class="text-sm text-slate-400 line-clamp-2 mb-3 min-h-[2.5rem]">
-            {campaign().description}
-          </p>
-        </Show>
-
-        <div class="flex items-center gap-3 text-sm text-slate-300 mb-3">
-          <div class="flex items-center gap-1.5">
-            <Users class="w-4 h-4 text-slate-400" aria-hidden="true" />
-            <span aria-label={`${campaign().currentPlayers} joueurs sur ${campaign().maxPlayers}`}>
-              {campaign().currentPlayers}/{campaign().maxPlayers}
-            </span>
-          </div>
-        </div>
-
-        <div class="pt-3 border-t border-white/10 flex items-center gap-2">
-          <Crown class="w-4 h-4 text-amber-400" aria-hidden="true" />
-          <span class="text-sm text-slate-500 sr-only">Maître du jeu</span>
-          <span class="text-sm text-slate-500" aria-hidden="true">MJ</span>
-          <span class="text-sm text-white font-medium">
-            {displayDungeonMasterName(campaign(), authStore.user()?.username)}
-          </span>
-        </div>
-      </div>
-
-      <div class="absolute inset-0 bg-gradient-to-t from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" aria-hidden="true" />
-    </button>
+    </>
   );
 }
 

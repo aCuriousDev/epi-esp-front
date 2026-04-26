@@ -4,7 +4,12 @@
 
 import { createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
-import type { DmHiddenRollPayload, ItemGrantedPayload } from "../types/multiplayer";
+import type {
+  DmHiddenRollPayload,
+  ItemGrantedPayload,
+  CharacterProgressedPayload,
+  GoldGrantedPayload,
+} from "../types/multiplayer";
 
 export interface SpawnedEnemyEntry {
   name: string;
@@ -17,6 +22,10 @@ export interface DmToolsState {
   hiddenRolls: DmHiddenRollPayload[];
   /** Items granted during the session (visible to all). */
   grantedItems: ItemGrantedPayload[];
+  /** Character progression events (XP / level-up) from DM actions. */
+  characterProgressions: CharacterProgressedPayload[];
+  /** Gold grants/removals from DM actions. */
+  goldGranted: GoldGrantedPayload[];
   /** Recently spawned enemies (for toast notifications). */
   spawnedEnemies: SpawnedEnemyEntry[];
   /** DM's choice of whether the enemy AI auto-plays on its turn. When false,
@@ -28,6 +37,8 @@ export interface DmToolsState {
 const [state, setState] = createStore<DmToolsState>({
   hiddenRolls: [],
   grantedItems: [],
+  characterProgressions: [],
+  goldGranted: [],
   spawnedEnemies: [],
   aiAutoPlay: true,
 });
@@ -67,6 +78,14 @@ export function addGrantedItem(item: ItemGrantedPayload): void {
   setState("grantedItems", (prev) => [...prev, item]);
 }
 
+export function addCharacterProgressed(evt: CharacterProgressedPayload): void {
+  setState("characterProgressions", (prev) => [...prev, evt].slice(-100));
+}
+
+export function addGoldGranted(evt: GoldGrantedPayload): void {
+  setState("goldGranted", (prev) => [...prev, evt].slice(-100));
+}
+
 /** Record a spawned enemy (for toast notifications). */
 export function addSpawnedEnemy(entry: SpawnedEnemyEntry): void {
   setState("spawnedEnemies", (prev) => [...prev, entry]);
@@ -74,7 +93,14 @@ export function addSpawnedEnemy(entry: SpawnedEnemyEntry): void {
 
 /** Clear all DM tools state (on session leave/end). */
 export function clearDmToolsState(): void {
-  setState({ hiddenRolls: [], grantedItems: [], spawnedEnemies: [], aiAutoPlay: true });
+  setState({
+    hiddenRolls: [],
+    grantedItems: [],
+    characterProgressions: [],
+    goldGranted: [],
+    spawnedEnemies: [],
+    aiAutoPlay: true,
+  });
   setDmActiveMode(null);
   setDmDragUnit(null);
   setDmSpawnTemplate(null);

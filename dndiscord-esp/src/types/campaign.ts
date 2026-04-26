@@ -46,7 +46,7 @@ export interface Campaign {
   dungeonMasterId: string;
   /** When true, the current user is the DM (from API); use this for "Lancer la session". */
   isDungeonMaster?: boolean;
-  /** @deprecated The API doesn't provide DM display names yet. Fall back to "Maître du Jeu" at call sites. */
+  /** @deprecated The API doesn't provide DM display names yet. Fall back to "Dungeon Master" at call sites. */
   dungeonMasterName?: string;
   dungeonMasterAvatar?: string;
   maxPlayers: number;
@@ -100,36 +100,36 @@ export function getStatusColor(status: CampaignStatus): string {
 }
 
 /**
- * Get status label in French
+ * Get status label
  */
 export function getStatusLabel(status: CampaignStatus): string {
   switch (status) {
     case CampaignStatus.Planning:
-      return "En préparation";
+      return "In preparation";
     case CampaignStatus.Active:
-      return "En cours";
+      return "Active";
     case CampaignStatus.Paused:
-      return "En pause";
+      return "Paused";
     case CampaignStatus.Completed:
-      return "Terminée";
+      return "Completed";
     case CampaignStatus.Archived:
-      return "Archivée";
+      return "Archived";
     default:
       return status;
   }
 }
 
 /**
- * Get visibility label in French
+ * Get visibility label
  */
 export function getVisibilityLabel(visibility: CampaignVisibility): string {
   switch (visibility) {
     case CampaignVisibility.Public:
-      return "Publique";
+      return "Public";
     case CampaignVisibility.Private:
-      return "Privée";
+      return "Private";
     case CampaignVisibility.InviteOnly:
-      return "Sur invitation";
+      return "Invite only";
     default:
       return visibility;
   }

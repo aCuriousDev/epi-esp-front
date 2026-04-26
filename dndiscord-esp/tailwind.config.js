@@ -38,6 +38,13 @@ export default {
         warning: "#F59E0B",
         info:    "#38BDF8",
         fumble:  "#9F1239",
+        // Class accents — character avatars
+        'c-fighter': '#8B5A2B',
+        'c-wizard':  '#3F6BD1',
+        'c-rogue':   '#5A5260',
+        'c-cleric':  '#E6C35C',
+        'c-bard':    '#C97BB4',
+        'c-ranger':  '#3F7A4E',
         "discord-blurple":      "#5865F2",
         "discord-blurple-dark": "#4752C4",
         // === Legacy aliases — keep working so zero components break ===

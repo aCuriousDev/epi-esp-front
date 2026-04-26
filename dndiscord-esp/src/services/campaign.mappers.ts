@@ -107,7 +107,7 @@ const GUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 function prettyMemberName(nickname: string | null | undefined, userId: string): string {
   const trimmed = nickname?.trim();
   if (trimmed) return trimmed;
-  if (GUID_SHAPE.test(userId)) return `Joueur #${userId.replace(/-/g, "").slice(0, 6)}`;
+  if (GUID_SHAPE.test(userId)) return `Player #${userId.replace(/-/g, "").slice(0, 6)}`;
   return userId;
 }
 
@@ -142,7 +142,7 @@ export const displayDungeonMasterName = (
 ): string => {
   if (campaign.dungeonMasterName) return campaign.dungeonMasterName;
   if (campaign.isDungeonMaster && currentUsername) return currentUsername;
-  return "Maître du Jeu";
+  return "Dungeon Master";
 };
 
 /**

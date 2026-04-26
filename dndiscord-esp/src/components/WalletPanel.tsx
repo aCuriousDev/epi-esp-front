@@ -45,7 +45,7 @@ const COINS: CoinDef[] = [
   },
   {
     key: "electrumPieces",
-    label: "Électrum",
+    label: "Electrum",
     abbr: "PE",
     icon: "game-icons:coinflip",
     color: "text-blue-300",

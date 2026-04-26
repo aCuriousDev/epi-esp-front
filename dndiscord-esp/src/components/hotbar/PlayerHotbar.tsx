@@ -12,6 +12,7 @@ import {
 import InventoryPanel from "../InventoryPanel";
 import WalletPanel from "../WalletPanel";
 import { PlayerPortrait } from "./PlayerPortrait";
+import { PlayerSelfInspectModal } from "./PlayerSelfInspectModal";
 import { HotbarSpells } from "./HotbarSpells";
 import { HotbarConsumables } from "./HotbarConsumables";
 import { HotbarUtilities } from "./HotbarUtilities";
@@ -28,6 +29,7 @@ import { HotbarModal } from "./HotbarModal";
 export const PlayerHotbar: Component = () => {
   const [inventoryOpen, setInventoryOpen] = createSignal(false);
   const [walletOpen, setWalletOpen] = createSignal(false);
+  const [sheetOpen, setSheetOpen] = createSignal(false);
 
   const myUnit = createMemo(() => {
     const hubId = getHubUserId();
@@ -68,7 +70,7 @@ export const PlayerHotbar: Component = () => {
           data-testid="player-hotbar"
         >
           <div class="flex items-end gap-2 pointer-events-auto">
-            <PlayerPortrait unit={myUnit()} />
+            <PlayerPortrait unit={myUnit()} onClick={() => setSheetOpen(true)} />
             <HotbarSpells unit={myUnit()} canAct={canAct()} />
             <HotbarConsumables characterId={myCharacterId()} />
             <HotbarUtilities
@@ -96,6 +98,13 @@ export const PlayerHotbar: Component = () => {
         >
           <WalletPanel characterId={myCharacterId()!} isMJ={false} />
         </HotbarModal>
+
+        <PlayerSelfInspectModal
+          open={sheetOpen()}
+          onClose={() => setSheetOpen(false)}
+          unit={myUnit()}
+          characterId={myCharacterId()}
+        />
       </>
     </Show>
   );

@@ -1,9 +1,14 @@
+import { onMount } from "solid-js";
 import { render } from "solid-js/web";
-import { Router, Route, type RouteSectionProps } from "@solidjs/router";
+import { Router, Route, useNavigate, type RouteSectionProps } from "@solidjs/router";
 import "./index.css";
-import App from "./App";
+import "./App"; // keep font-side-effects from @fontsource imports defined in App.tsx
+
+// Pages
+import Home from "./pages/Home";
 import CreateCharacter from "./pages/CreateCharacter";
 import CharacterView from "./pages/CharacterView";
+import CharactersComponent from "./pages/CharactersComponent";
 import Rules from "./pages/Rules";
 import BoardGame from "./pages/BoardGame";
 import MapEditor from "./pages/MapEditor";
@@ -13,244 +18,105 @@ import ProfilePage from "./pages/ProfilePage";
 import CampaignsPage from "./pages/CampaignsPage";
 import CreateCampaign from "./pages/CreateCampaign";
 import CampaignView from "./pages/CampaignView";
+import EditCampaign from "./pages/EditCampaign";
+import CampaignManagerPage from "./pages/CampaignManagerPage";
+import CampaignLobbyPage from "./pages/CampaignLobbyPage";
+import CampaignSessionPage from "./pages/CampaignSessionPage";
+import CampaignSessionsListPage from "./pages/CampaignSessionsListPage";
+import CampaignSessionReplayPage from "./pages/CampaignSessionReplayPage";
 import SettingsPage from "./pages/SettingsPage";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import MentionsLegales from "./pages/MentionsLegales";
 import CookiesPolicy from "./pages/CookiesPolicy";
-import type {} from "solid-styled-jsx";
-import CharactersComponent from "./pages/CharactersComponent";
-import { AuthCallback, ProtectedRoute } from "./components/auth";
+import PracticeModeSelectPage from "./pages/PracticeModeSelectPage";
+
+// Auth
+import { AuthCallback } from "./components/auth";
+
+// Layouts
+import MenuShell from "./layouts/MenuShell";
+import GameShell from "./layouts/GameShell";
+
+// App-level wiring
 import { authStore } from "./stores/auth.store";
 import { initDiscordSDK } from "./services/discord";
 import { initDevLogBridge } from "./services/devLogBridge";
-import CampaignLobbyPage from "./pages/CampaignLobbyPage";
-import CampaignSessionPage from "./pages/CampaignSessionPage";
-import CampaignSessionsListPage from "./pages/CampaignSessionsListPage";
-import CampaignSessionReplayPage from "./pages/CampaignSessionReplayPage";
-// Story-tree authoring UI — WIP, exposed as /campaigns/:id/manager so DMs can
-// preview and continue Sam's work. Not wired to gameplay yet.
-import CampaignManagerPage from "./pages/CampaignManagerPage";
-import SessionInviteListener from "./components/SessionInviteListener";
-import EditCampaign from "./pages/EditCampaign";
-import TutorialOverlay from "./components/TutorialOverlay";
-import CookieConsent from "./components/CookieConsent";
 
-// Dev-only: mirror console output to back log file.
+import type {} from "solid-styled-jsx";
+
 if (import.meta.env.DEV) {
   initDevLogBridge();
 }
 
-// Initialize auth state on app load
 authStore.init();
 
-// Protected route wrapper component
-function Protected(props: { children: any }) {
-  return (
-    <ProtectedRoute fallbackPath="/login">
-      <SessionInviteListener />
-      <TutorialOverlay />
-      {props.children}
-    </ProtectedRoute>
-  );
-}
-
-// Initialise le SDK Discord en arrière-plan (ne bloque pas le rendu)
 async function initDiscord() {
   try {
-    // Timeout de 5 secondes pour éviter de bloquer indéfiniment
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(
-        () => reject(new Error("Discord SDK initialization timeout")),
-        5000,
-      ),
+      setTimeout(() => reject(new Error("Discord SDK initialization timeout")), 5000),
     );
-
     await Promise.race([initDiscordSDK(), timeoutPromise]);
     console.log("Discord Activity initialized successfully");
   } catch (error) {
-    // Ignore l'erreur - l'application fonctionne sans Discord SDK
-    console.log(
-      "Discord SDK not available (this is normal outside Discord):",
-      error,
-    );
+    console.log("Discord SDK not available (this is normal outside Discord):", error);
   }
 }
 
-// Wrapper du Router : CookieConsent doit être à l'intérieur du contexte
-// Router pour utiliser <A> et useLocation (cacher la bannière sur les
-// pages légales). `root` est le point d'extension propre de Solid Router.
 function RouterRoot(props: RouteSectionProps) {
-  return (
-    <>
-      <CookieConsent />
-      {props.children}
-    </>
-  );
+  return <>{props.children}</>;
 }
 
-// Rend l'application immédiatement, puis initialise Discord en arrière-plan
+function BoardRedirect() {
+  const navigate = useNavigate();
+  onMount(() => navigate("/practice", { replace: true }));
+  return null;
+}
+
 render(
   () => (
     <Router root={RouterRoot}>
-      {/* Public routes */}
+      {/* Public — no shell */}
       <Route path="/login" component={LoginPage} />
       <Route path="/auth/callback" component={AuthCallback} />
-      <Route path="/rules" component={Rules} />
       <Route path="/privacy" component={PrivacyPolicy} />
       <Route path="/terms" component={TermsOfService} />
       <Route path="/legal" component={MentionsLegales} />
       <Route path="/cookies" component={CookiesPolicy} />
 
-      {/* Protected routes - require authentication */}
-      <Route
-        path="/"
-        component={() => (
-          <Protected>
-            <App />
-          </Protected>
-        )}
-      />
-      <Route
-        path="/settings"
-        component={() => (
-          <Protected>
-            <SettingsPage />
-          </Protected>
-        )}
-      />
-      <Route
-        path="/profile"
-        component={() => (
-          <Protected>
-            <ProfilePage />
-          </Protected>
-        )}
-      />
-      <Route
-        path="/characters"
-        component={() => (
-          <Protected>
-            <CharactersComponent />
-          </Protected>
-        )}
-      />
-      <Route
-        path="/characters/create"
-        component={() => (
-          <Protected>
-            <CreateCharacter />
-          </Protected>
-        )}
-      />
-      <Route
-        path="/characters/:id"
-        component={() => (
-          <Protected>
-            <CharacterView />
-          </Protected>
-        )}
-      />
-      <Route
-        path="/campaigns"
-        component={() => (
-          <Protected>
-            <CampaignsPage />
-          </Protected>
-        )}
-      />
-      <Route
-        path="/campaigns/:id/manager"
-        component={() => (
-          <Protected>
-            <CampaignManagerPage />
-          </Protected>
-        )}
-      />
-      <Route
-        path="/campaigns/:id/lobby"
-        component={() => (
-          <Protected>
-            <CampaignLobbyPage />
-          </Protected>
-        )}
-      />
-      <Route
-        path="/campaigns/:id/session"
-        component={() => (
-          <Protected>
-            <CampaignSessionPage />
-          </Protected>
-        )}
-      />
-      <Route
-        path="/campaigns/:id/sessions"
-        component={() => (
-          <Protected>
-            <CampaignSessionsListPage />
-          </Protected>
-        )}
-      />
-      <Route
-        path="/campaigns/:id/sessions/:sessionId"
-        component={() => (
-          <Protected>
-            <CampaignSessionReplayPage />
-          </Protected>
-        )}
-      />
-      <Route
-        path="/campaigns/create"
-        component={() => (
-          <Protected>
-            <CreateCampaign />
-          </Protected>
-        )}
-      />
-      <Route
-        path="/campaigns/:id"
-        component={() => (
-          <Protected>
-            <CampaignView />
-          </Protected>
-        )}
-      />
-      <Route
-        path="/campaigns/:id/edit"
-        component={() => (
-          <Protected>
-            <EditCampaign />
-          </Protected>
-        )}
-      />
-      <Route
-        path="/board"
-        component={() => (
-          <Protected>
-            <BoardGame />
-          </Protected>
-        )}
-      />
-      <Route
-        path="/map-editor"
-        component={() => (
-          <Protected>
-            <MapSelectionScreen />
-          </Protected>
-        )}
-      />
-      <Route
-        path="/map-editor/:mapId"
-        component={() => (
-          <Protected>
-            <MapEditor />
-          </Protected>
-        )}
-      />
+      {/* Compat: old /board → /practice */}
+      <Route path="/board" component={BoardRedirect} />
+
+      {/* Menu shell — chromed pages with auth gate */}
+      <Route path="/" component={MenuShell}>
+        <Route path="/" component={Home} />
+        <Route path="/profile" component={ProfilePage} />
+        <Route path="/settings" component={SettingsPage} />
+        <Route path="/rules" component={Rules} />
+        <Route path="/characters" component={CharactersComponent} />
+        <Route path="/characters/create" component={CreateCharacter} />
+        <Route path="/characters/:id" component={CharacterView} />
+        <Route path="/campaigns" component={CampaignsPage} />
+        <Route path="/campaigns/create" component={CreateCampaign} />
+        <Route path="/campaigns/:id" component={CampaignView} />
+        <Route path="/campaigns/:id/edit" component={EditCampaign} />
+        <Route path="/campaigns/:id/manager" component={CampaignManagerPage} />
+        <Route path="/campaigns/:id/sessions" component={CampaignSessionsListPage} />
+        <Route path="/campaigns/:id/sessions/:sessionId" component={CampaignSessionReplayPage} />
+        <Route path="/map-editor" component={MapSelectionScreen} />
+        <Route path="/practice" component={PracticeModeSelectPage} />
+      </Route>
+
+      {/* Game shell — full-bleed in-game pages */}
+      <Route path="/" component={GameShell}>
+        <Route path="/campaigns/:id/lobby" component={CampaignLobbyPage} />
+        <Route path="/campaigns/:id/session" component={CampaignSessionPage} />
+        <Route path="/map-editor/:mapId" component={MapEditor} />
+        <Route path="/practice/:mode" component={BoardGame} />
+      </Route>
     </Router>
   ),
   document.getElementById("root") as HTMLElement,
 );
 
-// Initialise Discord en arrière-plan (ne bloque pas le rendu)
 initDiscord();
