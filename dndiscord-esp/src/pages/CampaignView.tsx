@@ -183,10 +183,12 @@ export default function CampaignView() {
         ensureMultiplayerHandlersRegistered();
       }
       await createSession(c.id);
-      // Quick Launch always lands in the multiplayer lobby (no scenario tree
-      // needed). The story-tree runner is reached via handleLaunchCampaignSession
-      // — routing both buttons to /session was the post-rework regression.
-      navigate(`/campaigns/${c.id}/lobby`);
+      // Quick Launch reuses the sandbox multiplayer lobby (LobbyScreen) — the
+      // session is already in the store with `campaignId` set, so BoardGame's
+      // onMount session-rehydration jumps straight to AppPhase.LOBBY.
+      // Routing through the stripped CampaignLobbyPage was the post-rework
+      // regression: it dropped map selection + default templates.
+      navigate(`/practice/multiplayer`);
     } catch (e: any) {
       setLaunchError(e?.message ?? "Failed to create session.");
     } finally {
@@ -211,14 +213,13 @@ export default function CampaignView() {
       }
       setSessionInvite(null);
       // Route based on whether the campaign has an authored story-tree:
-      //   - With scenario → Sam's lobby → session → board?fromSession=1 chain.
-      //   - Without scenario (POC "Lancement rapide" flow) → straight to /board.
-      // Mirrors SessionInviteListener which always routes to /board for
-      // campaigns reached via the global notification outside this page.
+      //   - With scenario → CampaignLobbyPage → /session (story tree) → maps.
+      //   - Without scenario (POC Quick Launch flow) → /practice/multiplayer
+      //     so the joiner lands in the same sandbox LobbyScreen as the DM.
       if (invite.campaignId && hasScenario(campaign()?.campaignTreeDefinition)) {
         navigate(`/campaigns/${invite.campaignId}/lobby`);
       } else {
-        navigate(invite.campaignId ? `/campaigns/${invite.campaignId}/session` : "/practice");
+        navigate(invite.campaignId ? `/practice/multiplayer` : "/practice");
       }
     } catch (e: any) {
       setInviteError(e?.message ?? "Failed to join session.");

@@ -47,6 +47,19 @@ export const en = {
   "home.resume.lastPlayed": "Last played {when}",
   "home.resume.details": "Details",
 
+  "home.live.eyebrow": "● Live session",
+  "home.live.title": "Your party is waiting.",
+  "home.live.flavorDm": "Your session is still active. Rejoin and pick up the table.",
+  "home.live.flavorPlayer": "The Dungeon Master's table is open. Take your seat.",
+  "home.live.cta": "Rejoin session",
+  "home.live.recovering": "Reconnecting…",
+  "home.live.role.dm": "Dungeon Master",
+  "home.live.role.player": "Player",
+  "home.live.state.lobby": "Lobby",
+  "home.live.state.inGame": "In game",
+  "home.live.players": "{n} player",
+  "home.live.playersPlural": "{n} players",
+
   // Page titles
   "page.characters.title": "Characters",
   "page.characters.subtitle": "All your created heroes appear here.",
