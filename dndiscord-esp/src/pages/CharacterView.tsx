@@ -30,7 +30,7 @@ import { GetCharacterProfilPic } from "../utils/characterProfilPic";
 import { safeConfirm } from "../services/ui/confirm";
 import InventoryPanel from "../components/InventoryPanel";
 import WalletPanel from "../components/WalletPanel";
-import { isHost } from "../stores/session.store";
+import { isHost, isInActiveSession } from "../stores/session.store";
 import PageMeta from "../layouts/PageMeta";
 import { t } from "../i18n";
 
@@ -135,6 +135,12 @@ export default function CharacterView() {
     return "bg-red-500";
   };
 
+  // CharacterView lives outside any game room, so DM-only controls (Level Up,
+  // give XP/gold/items, edit HP) must require both DM role AND a live hub
+  // session — otherwise a past DM's persisted session leaks these controls
+  // into the out-of-game roster screen.
+  const isDmInActiveSession = () => isHost() && isInActiveSession();
+
   const abilities = () => {
     const char = character();
     if (!char) return [];
@@ -214,8 +220,8 @@ export default function CharacterView() {
                       </Show>
                     </div>
 
-                    {/* Action buttons (MJ only) */}
-                    <Show when={isHost()}>
+                    {/* Action buttons (MJ only, in-game) */}
+                    <Show when={isDmInActiveSession()}>
                       <div class="flex gap-2 pt-4 sm:pt-8">
                         <button
                           onClick={handleLevelUp}
@@ -244,7 +250,7 @@ export default function CharacterView() {
                             {t("characterView.hitPoints")}
                           </span>
                         </div>
-                        <Show when={isHost()}>
+                        <Show when={isDmInActiveSession()}>
                           <div class="flex gap-1">
                             <button
                               onClick={() => handleHitPointsChange(-1)}
@@ -382,8 +388,8 @@ export default function CharacterView() {
 
               <Show when={activeTab() === "inventory"}>
                 <div class="mt-4 space-y-4">
-                  <WalletPanel characterId={char().id} isMJ={isHost()} />
-                  <InventoryPanel characterId={char().id} isMJ={isHost()} />
+                  <WalletPanel characterId={char().id} isMJ={isDmInActiveSession()} />
+                  <InventoryPanel characterId={char().id} isMJ={isDmInActiveSession()} />
                 </div>
               </Show>
 
