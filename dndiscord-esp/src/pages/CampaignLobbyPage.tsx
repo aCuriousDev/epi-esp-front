@@ -95,7 +95,7 @@ const CampaignLobbyPage: Component = () => {
   return (
     <div class="w-full min-h-full" style={{ color: '#d4d4d4', 'font-family': 'system-ui, -apple-system, sans-serif' }}>
       {/* Lobby header — room code + campaign name */}
-      <header class="sticky top-0 z-20 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-black/40 backdrop-blur-md">
+      <header class="sticky top-0 z-20 flex items-center justify-between pl-16 sm:pl-20 pr-6 py-4 border-b border-white/10 bg-black/40 backdrop-blur-md">
         <div class="text-center">
           <p class="text-xs text-purple-400 uppercase tracking-wider font-medium">Waiting room</p>
           <h1 class="font-display text-lg text-white">

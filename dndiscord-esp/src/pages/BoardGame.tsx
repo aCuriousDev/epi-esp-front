@@ -781,15 +781,8 @@ const BoardGame: Component = () => {
     >
       <div class="w-full h-screen-dynamic flex flex-col bg-game-darker overflow-hidden pb-safe-bottom">
         {/* Header */}
-        <header class="h-14 shrink-0 bg-gradient-to-r from-brandStart/90 to-brandEnd/90 backdrop-blur-sm border-b border-white/10 flex items-center justify-between px-3 sm:px-4 pt-safe-top">
+        <header class="h-14 shrink-0 bg-gradient-to-r from-brandStart/90 to-brandEnd/90 backdrop-blur-sm border-b border-white/10 flex items-center justify-between pl-16 sm:pl-20 pr-3 sm:pr-4 pt-safe-top">
           <div class="flex items-center gap-2 sm:gap-3">
-            <button
-              onClick={() => fromSession() ? backToSession() : returnToMenu()}
-              class="flex items-center justify-center w-9 h-9 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 transition-colors"
-              aria-label={fromSession() ? "Back to session" : "Back to menu"}
-            >
-              <ArrowLeft class="w-4 h-4 text-white" />
-            </button>
             <button
               onClick={() => setSettingsOpen(true)}
               class="flex items-center justify-center w-9 h-9 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 transition-colors"
