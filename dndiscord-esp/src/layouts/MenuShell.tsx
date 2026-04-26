@@ -52,7 +52,7 @@ const Footer: Component = () => (
       <A href="/legal" class="hover:text-mid focus-ring-gold rounded">Legal</A>
       <A href="/cookies" class="hover:text-mid focus-ring-gold rounded">Cookies</A>
       <span aria-hidden="true">·</span>
-      <span>POC</span>
+      <span>v{__APP_VERSION__}</span>
     </nav>
   </footer>
 );
