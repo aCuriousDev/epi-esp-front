@@ -306,6 +306,11 @@ const BoardGame: Component = () => {
     const qs = new URLSearchParams(location.search);
     if (qs.get("demo") === "1" || qs.get("fromSession") === "1") return;
     if (!m) return; // No param → keep legacy behavior (mode picker fallback).
+    // If the first onMount already moved us away from MODE_SELECTION (session
+    // detected, recovery, etc.), don't override that phase.  Without this guard
+    // the second onMount can race and call goToMultiplayer() on top of LOBBY /
+    // IN_GAME, sending players to RoomJoinScreen even though they already joined.
+    if (appPhase() !== AppPhase.MODE_SELECTION) return;
     switch (m) {
       case "exploration":
         startMode(GameMode.FREE_ROAM);
