@@ -4,7 +4,7 @@ import { getPlayerUnits } from "../../game/stores/UnitsStore";
 import { showPlayerBubble, showDmMessage } from "../../stores/dialogue.store";
 
 // Couleurs assignées aux joueurs pour les bulles
-const PLAYER_COLORS = ["#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#ec4899", "#06b6d4"];
+const PLAYER_COLORS = ["var(--arcindigo-300)", "var(--status-danger)", "var(--status-success)", "var(--status-warning)", "var(--plum-300)", "var(--status-info)"];
 
 export const DebugDialoguePanel: Component = () => {
   const [collapsed, setCollapsed] = createSignal(true);
@@ -79,14 +79,14 @@ export const DebugDialoguePanel: Component = () => {
               onChange={(e) => setIsDm(e.currentTarget.checked)}
               class="accent-purple-500 w-3.5 h-3.5"
             />
-            Parler en tant que MJ
+            Speak as DM
           </label>
 
           {/* Player dropdown (hidden when DM mode) */}
           {!isDm() && (
             <div>
               <label class="block text-[10px] uppercase tracking-wider text-gray-500 mb-1">
-                Joueur
+                Player
               </label>
               <select
                 class="w-full bg-game-dark border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-purple-500"
@@ -105,7 +105,7 @@ export const DebugDialoguePanel: Component = () => {
             <input
               type="text"
               class="w-full bg-game-dark border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-              placeholder={isDm() ? "Message du MJ…" : "Message du joueur…"}
+              placeholder={isDm() ? "DM message…" : "Player message…"}
               value={text()}
               onInput={(e) => setText(e.currentTarget.value)}
               onKeyDown={handleKeyDown}

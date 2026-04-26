@@ -152,6 +152,41 @@ export function playDiceRollSound(): void {
   getOrCreate().playDiceRoll();
 }
 
+export function playDiceImpactSound(volume = 0.7): void {
+  if (!soundSettings.sfxEnabled()) return;
+  getOrCreate().playDiceImpact(volume);
+}
+
+export function playDiceShakeSound(): void {
+  if (!soundSettings.sfxEnabled()) return;
+  getOrCreate().playDiceShake();
+}
+
+export function playDiceCritSuccessSound(opts?: { volume?: number }): void {
+  if (!soundSettings.sfxEnabled()) return;
+  getOrCreate().playDiceCritSuccess(opts);
+}
+
+export function playDiceCritFailSound(opts?: { volume?: number }): void {
+  if (!soundSettings.sfxEnabled()) return;
+  getOrCreate().playDiceCritFail(opts);
+}
+
+export function playDiceWindupSound(): void {
+  if (!soundSettings.sfxEnabled()) return;
+  getOrCreate().playDiceWindup();
+}
+
+export function playDiceLaunchSound(): void {
+  if (!soundSettings.sfxEnabled()) return;
+  getOrCreate().playDiceLaunch();
+}
+
+export function playDiceSuspenseSound(): void {
+  if (!soundSettings.sfxEnabled()) return;
+  getOrCreate().playDiceSuspense();
+}
+
 export function playBabbleSound(text: string, pitch: 'low' | 'mid' | 'high' = 'mid'): void {
   if (!soundSettings.sfxEnabled()) return;
   getOrCreate().playBabbleVoice(text, pitch);
@@ -184,4 +219,9 @@ export function playErrorSound(): void {
 export function playNotificationSound(): void {
   if (!soundSettings.sfxEnabled()) return;
   getOrCreate().playNotification();
+}
+
+export function playLevelUpSound(): void {
+  if (!soundSettings.sfxEnabled()) return;
+  getOrCreate().playVictory();
 }

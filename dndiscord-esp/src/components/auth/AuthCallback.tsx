@@ -85,7 +85,7 @@ export default function AuthCallback() {
         <Show when={status() === "loading"}>
           <div class="flex flex-col items-center gap-4">
             <div class="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin" />
-            <p class="text-white text-lg">Connexion en cours...</p>
+            <p class="text-white text-lg">Signing in...</p>
           </div>
         </Show>
 
@@ -107,9 +107,9 @@ export default function AuthCallback() {
                 />
               </svg>
             </div>
-            <p class="text-white text-lg font-medium">Connecté avec succès!</p>
+            <p class="text-white text-lg font-medium">Signed in successfully!</p>
             <p class="text-white/60 text-sm">
-              Cette fenêtre va se fermer automatiquement...
+              This window will close automatically...
             </p>
           </div>
         </Show>
@@ -132,10 +132,10 @@ export default function AuthCallback() {
                 />
               </svg>
             </div>
-            <p class="text-white text-lg font-medium">Erreur de connexion</p>
+            <p class="text-white text-lg font-medium">Authentication error</p>
             <p class="text-red-400 text-sm">{errorMessage()}</p>
             <p class="text-white/60 text-sm mt-2">
-              Cette fenêtre va se fermer automatiquement...
+              This window will close automatically...
             </p>
           </div>
         </Show>

@@ -11,12 +11,12 @@ export const PartyChatPanel: Component = () => {
 
   return (
     <div class="panel-game">
-      <h4 class="font-fantasy text-game-gold text-sm mb-3">Chat (vocal)</h4>
-      <div class="max-h-64 overflow-y-auto space-y-2 pr-1">
+      <h4 class="font-fantasy text-game-gold text-sm mb-3">Chat (voice)</h4>
+      <div class="max-h-64 overflow-y-auto space-y-2 pr-1" role="log" aria-live="polite" aria-label="Party chat messages">
         <For
           each={messages()}
           fallback={
-            <p class="text-xs text-gray-500">Aucun message pour l’instant.</p>
+            <p class="text-xs text-gray-500">No messages yet.</p>
           }
         >
           {(m) => (

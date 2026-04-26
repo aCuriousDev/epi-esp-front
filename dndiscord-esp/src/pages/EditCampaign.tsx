@@ -1,6 +1,5 @@
-import { A, useNavigate, useParams } from "@solidjs/router";
+import { useNavigate, useParams } from "@solidjs/router";
 import {
-  ArrowLeft,
   Crown,
   Users,
   Globe,
@@ -10,6 +9,8 @@ import {
   Save,
 } from "lucide-solid";
 import { createSignal, onMount, Show } from "solid-js";
+import PageMeta from "../layouts/PageMeta";
+import { t } from "../i18n";
 import {
   CampaignVisibility,
   getVisibilityLabel,
@@ -71,45 +72,26 @@ export default function EditCampaign() {
       console.error("Failed to update campaign:", err);
       setError(
         err.response?.data?.message ||
-          "Impossible de modifier la campagne. Veuillez réessayer.",
+          "Failed to update campaign. Please try again.",
       );
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div class="create-campaign-page min-h-screen w-full bg-brand-gradient">
-      {/* Background effects */}
-      <div class="absolute inset-0 overflow-hidden pointer-events-none">
-        <div class="absolute top-1/4 -left-32 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
-        <div
-          class="absolute bottom-1/4 -right-32 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl animate-pulse"
-          style="animation-delay: 1s"
-        />
-      </div>
+    <div class="min-h-screen w-full">
+      <PageMeta title={t("page.editCampaign.title")} />
 
-      {/* Vignette */}
-      <div class="vignette absolute inset-0" />
-
-      {/* Back button */}
-      <A
-        href={`/campaigns/${params.id}`}
-        class="settings-btn !left-4 !right-auto"
-        aria-label="Retour"
-      >
-        <ArrowLeft class="settings-icon h-5 w-5" />
-      </A>
-
-      <main class="relative z-10 max-w-2xl mx-auto p-6 pt-20">
+      <main class="relative z-10 max-w-2xl mx-auto p-6 pt-4">
         <div class="text-center mb-8">
           <div class="mx-auto mb-4 w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg">
             <Crown class="w-8 h-8 text-white" />
           </div>
           <h1 class="title-shine title-gradient font-display text-3xl sm:text-4xl tracking-wide bg-clip-text text-transparent">
-            Modifier la campagne
+            {t("page.editCampaign.title")}
           </h1>
           <p class="mt-2 text-slate-300/80">
-            Mettez à jour les informations principales
+            {t("editCampaign.subtitle")}
           </p>
         </div>
 
@@ -118,7 +100,7 @@ export default function EditCampaign() {
           fallback={
             <div class="text-center py-16">
               <div class="w-16 h-16 mx-auto mb-4 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
-              <p class="text-slate-300">Chargement...</p>
+              <p class="text-slate-300">{t("common.loading")}</p>
             </div>
           }
         >
@@ -136,47 +118,47 @@ export default function EditCampaign() {
               <div class="text-center pb-4 border-b border-white/10">
                 <h2 class="text-xl font-semibold text-white flex items-center justify-center gap-2">
                   <BookOpen class="w-5 h-5 text-purple-400" />
-                  Informations
+                  {t("editCampaign.info")}
                 </h2>
               </div>
 
               <div class="space-y-2">
                 <label class="block text-sm font-medium text-slate-300">
-                  Nom de la campagne *
+                  {t("createCampaign.nameLabel")}
                 </label>
                 <input
                   type="text"
                   value={title()}
                   onInput={(e) => setTitle(e.currentTarget.value)}
-                  placeholder="Nom de la campagne"
+                  placeholder={t("createCampaign.namePlaceholder")}
                   class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all"
                   maxLength={100}
                 />
                 <p class="text-xs text-slate-500">
-                  {title().length}/100 caractères
+                  {title().length}/100 {t("createCampaign.chars")}
                 </p>
               </div>
 
               <div class="space-y-2">
                 <label class="block text-sm font-medium text-slate-300">
-                  Description
+                  {t("createCampaign.descriptionLabel")}
                 </label>
                 <textarea
                   value={description()}
                   onInput={(e) => setDescription(e.currentTarget.value)}
-                  placeholder="Description de la campagne"
+                  placeholder={t("createCampaign.descriptionPlaceholder")}
                   rows={4}
                   class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all resize-none"
                   maxLength={500}
                 />
                 <p class="text-xs text-slate-500">
-                  {description().length}/500 caractères
+                  {description().length}/500 {t("createCampaign.chars")}
                 </p>
               </div>
 
               <div class="space-y-3">
                 <label class="block text-sm font-medium text-slate-300">
-                  Visibilité ({getVisibilityLabel(visibility())})
+                  {t("createCampaign.visibilityLabel")} ({getVisibilityLabel(visibility())})
                 </label>
                 <div class="grid grid-cols-3 gap-2">
                   <button
@@ -197,7 +179,7 @@ export default function EditCampaign() {
                     >
                       <Lock class="w-5 h-5" />
                     </div>
-                    <span class="text-sm">Privée</span>
+                    <span class="text-sm">{t("createCampaign.visibility.private")}</span>
                   </button>
                   <button
                     type="button"
@@ -217,7 +199,7 @@ export default function EditCampaign() {
                     >
                       <Mail class="w-5 h-5" />
                     </div>
-                    <span class="text-sm">Invitation</span>
+                    <span class="text-sm">{t("createCampaign.visibility.invite")}</span>
                   </button>
                   <button
                     type="button"
@@ -237,7 +219,7 @@ export default function EditCampaign() {
                     >
                       <Globe class="w-5 h-5" />
                     </div>
-                    <span class="text-sm">Publique</span>
+                    <span class="text-sm">{t("createCampaign.visibility.public")}</span>
                   </button>
                 </div>
               </div>
@@ -245,7 +227,7 @@ export default function EditCampaign() {
               <div class="space-y-3">
                 <label class="block text-sm font-medium text-slate-300">
                   <Users class="w-4 h-4 inline mr-2" />
-                  Nombre de joueurs maximum
+                  {t("createCampaign.maxPlayersLabel")}
                 </label>
                 <div class="flex items-center gap-4">
                   <input
@@ -272,7 +254,7 @@ export default function EditCampaign() {
                 class="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors"
                 disabled={isSubmitting()}
               >
-                Annuler
+                {t("common.cancel")}
               </button>
               <button
                 type="submit"
@@ -284,53 +266,18 @@ export default function EditCampaign() {
                   fallback={
                     <>
                       <Save class="w-5 h-5" />
-                      Enregistrer
+                      {t("common.save")}
                     </>
                   }
                 >
                   <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Sauvegarde...
+                  {t("editCampaign.saving")}
                 </Show>
               </button>
             </div>
           </form>
         </Show>
 
-        <style jsx>{`
-          .create-campaign-page {
-            background: linear-gradient(
-              135deg,
-              #1a1a2e 0%,
-              #16213e 50%,
-              #0f0f1a 100%
-            );
-          }
-
-          .campaign-form {
-            animation: cardSlideUp 0.5s ease-out;
-          }
-
-          @keyframes cardSlideUp {
-            from {
-              opacity: 0;
-              transform: translateY(20px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-
-          input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 20px;
-            height: 20px;
-            background: #8b5cf6;
-            border-radius: 50%;
-            cursor: pointer;
-            box-shadow: 0 2px 6px rgba(139, 92, 246, 0.4);
-          }
-        `}</style>
       </main>
     </div>
   );

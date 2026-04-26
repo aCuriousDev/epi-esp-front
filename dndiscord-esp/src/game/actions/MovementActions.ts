@@ -6,23 +6,40 @@
 
 import { batch } from 'solid-js';
 import { produce } from 'solid-js/store';
-import { GridPosition, GamePhase, TurnPhase, Team, GameMode } from '../../types';
+import { GridPosition, GamePhase, TurnPhase, Team, GameMode, TileType } from '../../types';
 import { gameState, setGameState, addCombatLog, getIsFreeRoamMode, getIsDungeonMode } from '../stores/GameStateStore';
 import { units, setUnits } from '../stores/UnitsStore';
 import { tiles, setTiles, pathfinder, updatePathfinder } from '../stores/TilesStore';
 import { posToKey } from '../utils/GridUtils';
-import { getCurrentSession, getHubUserId } from '../../stores/session.store';
+import { getCurrentSession, getHubUserId, isInSession } from '../../stores/session.store';
 import { isHost as getIsHost } from '../../stores/session.store';
-import { sendUnitMove } from '../../services/signalr/multiplayer.service';
+import { sendUnitMove, dmMoveToken } from '../../services/signalr/multiplayer.service';
 import { getAllySpawnPositions, getEnemySpawnPositions } from '../initialization/InitUnits';
 import { getTeleportPositions } from '../../services/mapStorage';
 import { transitionToNextRoom } from './TurnActions';
 import { playMovementDustEffect } from '../vfx/VFXIntegration';
 import { playFootstepSound, playSelectSound } from '../audio/SoundIntegration';
+import { isSessionMapActive, triggerSessionExit } from '../../stores/session-map.store';
 
 // ============================================
 // UNIT SELECTION
 // ============================================
+
+/**
+ * Clear the current unit selection. Also clears ability targeting and
+ * range highlights so the board returns to its "nothing selected" state.
+ * Safe to call even when nothing is selected.
+ */
+export function deselectUnit(): void {
+  batch(() => {
+    setGameState({
+      selectedUnit: null,
+      selectedAbility: null,
+      highlightedTiles: [],
+      targetableTiles: [],
+    });
+  });
+}
 
 export function selectUnit(unitId: string): void {
   const unit = units[unitId];
@@ -34,7 +51,6 @@ export function selectUnit(unitId: string): void {
   const isPreparation = gameState.phase === GamePhase.COMBAT_PREPARATION;
   const currentUnitId = gameState.turnOrder[gameState.currentUnitIndex];
   const isCurrentUnit = unitId === currentUnitId;
-  const isPlayerTurn = gameState.phase === GamePhase.PLAYER_TURN || isFreeRoam;
 
   // Multiplayer ownership check: if the unit has an owner, only its owner can control it
   const session = getCurrentSession();
@@ -42,7 +58,18 @@ export function selectUnit(unitId: string): void {
   const isHost = getIsHost();
   const isOwned = !!unit.ownerUserId;
   const isMine = !isOwned || unit.ownerUserId === myUserId;
-  const canControl = !session || isMine || (isPreparation && isHost); // Host can place during preparation
+  const canControl = !session || isMine || isHost; // DM (host) can control any unit
+
+  // DM piloting an enemy during ENEMY_TURN needs the same reach-tile UX the
+  // player gets on PLAYER_TURN — the "it's MY turn to act on this unit"
+  // check. Without this the isPlayerTurn gate below stayed false and
+  // shouldShowMovement collapsed to false, so clicking the current enemy
+  // opened the inspect panel but painted no blue reach tiles and the
+  // tile-click path couldn't move the unit.
+  const isPlayerTurn =
+    gameState.phase === GamePhase.PLAYER_TURN ||
+    isFreeRoam ||
+    (gameState.phase === GamePhase.ENEMY_TURN && isHost);
 
   console.log('[selectUnit]', unit.name, '| mode:', isFreeRoam ? 'Free Roam' : isPreparation ? 'Preparation' : 'Combat', '| isCurrentUnit:', isCurrentUnit, '| isPlayerTurn:', isPlayerTurn, '| canControl:', canControl);
 
@@ -120,7 +147,7 @@ export function moveUnit(targetPos: GridPosition): boolean {
   if (unit.ownerUserId) {
     const myUserId = getHubUserId();
     const isHost = getIsHost();
-    if (myUserId && unit.ownerUserId !== myUserId && !(gameState.phase === GamePhase.COMBAT_PREPARATION && isHost)) return false;
+    if (myUserId && unit.ownerUserId !== myUserId && !isHost) return false;
   }
 
   const isFreeRoam = getIsFreeRoamMode();
@@ -128,6 +155,12 @@ export function moveUnit(targetPos: GridPosition): boolean {
   
   // Phase de préparation : placement direct sur une case de spawn (sans pathfinding)
   if (isPreparation && (unit.team === Team.PLAYER || unit.team === Team.ENEMY)) {
+    // In multiplayer the preparation phase is skipped — the server's
+    // authoritative CombatStarted transitions straight to PlayerTurn. If this
+    // branch is ever reached in a session it's a leftover UI state and
+    // mutating tiles locally would desync peers. No-op defensively.
+    if (isInSession()) return false;
+
     const isHost = getIsHost();
     if (unit.team === Team.ENEMY && !isHost) return false;
 
@@ -250,20 +283,64 @@ export function moveUnit(targetPos: GridPosition): boolean {
   // Update pathfinder with new tile state
   updatePathfinder();
 
+  // ── Tile effects on landing ─────────────────────────────────────────────
+  const destTile = tiles[posToKey(targetPos)];
+  if (destTile) {
+    // TRAP: apply all damage effects then disarm (one-shot)
+    if (destTile.type === TileType.TRAP) {
+      for (const effect of destTile.effects ?? []) {
+        if (effect.type === 'damage') {
+          setUnits(unit.id, produce((u) => {
+            u.stats.currentHealth = Math.max(0, u.stats.currentHealth - effect.value);
+            if (u.stats.currentHealth <= 0) {
+              u.isAlive = false;
+              setTiles(posToKey(targetPos), 'occupiedBy', null);
+            }
+          }));
+          addCombatLog(`${unit.name} triggers a trap! −${effect.value} HP`, 'damage');
+        }
+      }
+      // Disarm trap after first trigger
+      setTiles(posToKey(targetPos), 'type', TileType.FLOOR);
+      setTiles(posToKey(targetPos), 'effects', []);
+    }
 
-  // En session multijoueur : diffuser le mouvement aux autres joueurs (backend envoie UnitMoved aux autres uniquement)
+    // EXIT: trigger session return when a player steps on this cell
+    if (destTile.type === TileType.EXIT && unit.team === Team.PLAYER) {
+      if (isSessionMapActive()) {
+        addCombatLog('Exit reached! Returning to scenario…', 'system');
+        setTimeout(() => triggerSessionExit(), 800);
+      }
+    }
+  }
+
+  // En session multijoueur : diffuser le mouvement aux autres joueurs
   const session = getCurrentSession();
   if (session) {
-    const remainingAp = units[unit.id].stats.currentActionPoints;
-    const pathForBackend = path.map((p) => ({ x: p.x, y: p.z }));
-    sendUnitMove({
-      unitId: unit.id,
-      path: pathForBackend,
-      apCost: movementCost,
-      remainingAp,
-    }).catch((err) => {
-      console.warn("[MovementActions] sendUnitMove failed:", err);
-    });
+    const myUserId = getHubUserId();
+    const isDmMovingOther = getIsHost() && unit.ownerUserId && unit.ownerUserId !== myUserId;
+
+    if (isDmMovingOther) {
+      // DM force-moving another player's token → use DmMoveToken for proper broadcast
+      dmMoveToken({
+        unitId: unit.id,
+        target: { x: targetPos.x, y: targetPos.z },
+      }).catch((err) => {
+        console.warn("[MovementActions] dmMoveToken failed:", err);
+      });
+    } else {
+      // Normal movement → legacy broadcast
+      const remainingAp = units[unit.id].stats.currentActionPoints;
+      const pathForBackend = path.map((p) => ({ x: p.x, y: p.z }));
+      sendUnitMove({
+        unitId: unit.id,
+        path: pathForBackend,
+        apCost: movementCost,
+        remainingAp,
+      }).catch((err) => {
+        console.warn("[MovementActions] sendUnitMove failed:", err);
+      });
+    }
   }
 
   // Check if the unit stepped on a teleport cell (dungeon mode only)
@@ -273,7 +350,7 @@ export function moveUnit(targetPos: GridPosition): boolean {
       (p) => p.x === targetPos.x && p.z === targetPos.z
     );
     if (isOnTeleport) {
-      addCombatLog('Portail de téléportation activé ! Transition vers la salle suivante...', 'system');
+      addCombatLog('Teleportation portal activated! Transitioning to next room...', 'system');
       setTimeout(() => {
         transitionToNextRoom();
       }, 500);

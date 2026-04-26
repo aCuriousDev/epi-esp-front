@@ -13,6 +13,15 @@ export class SignalRService {
   private _reconnectingCallbacks: Array<() => void> = [];
   /** Hub userId (Guid) received from Connected event. */
   public hubUserId: string | null = null;
+  /**
+   * Resolves when the server's `Connected` event arrives (which carries the
+   * hub userId). Hoisted to the instance so idempotent connect() calls during
+   * Connecting/Reconnecting can await the in-flight handshake instead of
+   * returning before hubUserId lands — which would race
+   * ensureMultiplayerHandlersRegistered → syncHubUserId and leave the session
+   * store's hubUserId null (breaks rejoin replay + ownership checks).
+   */
+  private _connectedPromise: Promise<void> | null = null;
 
   constructor() {}
 
@@ -25,6 +34,53 @@ export class SignalRService {
       throw new Error('No token available. Please login first.');
     }
 
+    // Idempotent: if a connection already exists and is alive, reuse it.
+    // Building a fresh HubConnection drops every prior `.on(...)` registration,
+    // which silently loses all SignalR event handlers (including dice ones).
+    // Multiple components (SessionInviteListener, CampaignView, LobbyScreen, etc.)
+    // call connect() at startup; without this guard the second call wipes
+    // handlers registered against the first connection.
+    if (this.connection) {
+      const state = this.connection.state;
+      if (state === signalR.HubConnectionState.Connected) {
+        console.log('[SignalRService] connect() reuse: already Connected');
+        return;
+      }
+      if (
+        state === signalR.HubConnectionState.Connecting ||
+        state === signalR.HubConnectionState.Reconnecting
+      ) {
+        // Wait for the in-flight handshake so callers see hubUserId populated
+        // before they invoke hub methods or call syncHubUserId().
+        console.log(
+          '[SignalRService] connect() during',
+          state,
+          '— awaiting in-flight Connected'
+        );
+        if (this._connectedPromise) {
+          await Promise.race([
+            this._connectedPromise,
+            new Promise((r) => setTimeout(r, 3000)),
+          ]);
+        }
+        return;
+      }
+      if (state === signalR.HubConnectionState.Disconnected) {
+        // Reuse the existing connection object; restart it to preserve handlers.
+        try {
+          await this.connection.start();
+          console.log('[SignalRService] reused disconnected connection, restarted');
+          return;
+        } catch (err) {
+          console.warn(
+            '[SignalRService] restart of disconnected connection failed; rebuilding',
+            err
+          );
+          // Fall through to rebuild path.
+        }
+      }
+    }
+
     // Clear lifecycle callbacks from previous connection to prevent stacking
     this._closeCallbacks = [];
     this._reconnectedCallbacks = [];
@@ -32,13 +88,15 @@ export class SignalRService {
 
     this.connection = new signalR.HubConnectionBuilder()
       .withUrl(`${API_URL}/hubs/game`, {
-        accessTokenFactory: () => AuthService.getToken() ?? ""
+        accessTokenFactory: () => AuthService.getToken() ?? "",
+        transport: signalR.HttpTransportType.WebSockets,
+        skipNegotiation: true,
       })
       .withAutomaticReconnect(RECONNECT_DELAYS)
       .configureLogging(signalR.LogLevel.Information)
       .build();
 
-    const connectedPromise = new Promise<void>((resolve) => {
+    this._connectedPromise = new Promise<void>((resolve) => {
       this.connection!.on('Connected', (data) => {
         console.log('Connected to SignalR:', data);
         if (data?.userId) {
@@ -47,6 +105,7 @@ export class SignalRService {
         resolve();
       });
     });
+    const connectedPromise = this._connectedPromise;
 
     this.connection.on('Pong', (timestamp) => {
       console.log('Pong received at:', timestamp);

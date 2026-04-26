@@ -24,6 +24,10 @@ export enum TileType {
   WATER = 'water',
   LAVA = 'lava',
   PIT = 'pit',
+  /** Defined by MapNode.exitCells — stepping here advances the scenario */
+  EXIT = 'exit',
+  /** Defined by MapNode.trapCells — stepping here triggers trap effects */
+  TRAP = 'trap',
 }
 
 export interface Tile {
@@ -49,11 +53,13 @@ export interface TileEffect {
 
 export enum UnitType {
   WARRIOR = 'warrior',
+  BARBARIAN = 'barbarian',
   MAGE = 'mage',
   ROGUE = 'rogue',
   ARCHER = 'archer',
-  HEALER = 'healer',
   ENEMY_SKELETON = 'enemy_skeleton',
+  ENEMY_SKELETON_ROGUE = 'enemy_skeleton_rogue',
+  ENEMY_SKELETON_MINION = 'enemy_skeleton_minion',
   ENEMY_MAGE = 'enemy_mage',
 }
 

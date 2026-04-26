@@ -1,38 +1,26 @@
+import { CampaignStatus } from "@/types/campaign";
 import axios from "axios";
 import { getApiUrl } from "./config";
+export {
+  APICampaignStatus,
+  CampaignMemberRole,
+  MembershipStatus,
+  mapMemberRole,
+  mapToAPICampaignStatus,
+  mapCampaignStatus,
+  mapCampaignResponse,
+  displayDungeonMasterName,
+  hasScenario,
+} from "./campaign.mappers";
+export type {
+  CampaignResponse,
+  CampaignMemberResponse,
+  CampaignDetailResponse,
+} from "./campaign.mappers";
+import { APICampaignStatus, CampaignMemberRole } from "./campaign.mappers";
+import type { CampaignResponse, CampaignDetailResponse, CampaignMemberResponse } from "./campaign.mappers";
 
 const API_URL = getApiUrl();
-
-/**
- * Campaign Status enum matching backend (integers)
- */
-export enum CampaignStatus {
-  Draft = 0,
-  Active = 1,
-  Paused = 2,
-  Completed = 3,
-  Archived = 4,
-}
-
-/**
- * Campaign Member Role enum
- */
-export enum CampaignMemberRole {
-  Player = "Player",
-  CoDungeonMaster = "CoDungeonMaster",
-  Spectator = "Spectator",
-}
-
-/**
- * Membership Status enum
- */
-export enum MembershipStatus {
-  Pending = "Pending",
-  Active = "Active",
-  Declined = "Declined",
-  Removed = "Removed",
-  Left = "Left",
-}
 
 /**
  * Backend API Types
@@ -43,7 +31,7 @@ export interface CreateCampaignRequest {
   imageUrl?: string;
   maxPlayers?: number;
   isPublic?: boolean;
-  status?: CampaignStatus;
+  status?: APICampaignStatus;
 }
 
 export interface UpdateCampaignRequest {
@@ -52,7 +40,7 @@ export interface UpdateCampaignRequest {
   imageUrl?: string;
   maxPlayers?: number;
   isPublic?: boolean;
-  status?: CampaignStatus;
+  status?: APICampaignStatus;
 }
 
 export interface CampaignFilterRequest {
@@ -85,41 +73,8 @@ export interface UpdateMemberRequest {
   notes?: string;
 }
 
-/**
- * Response types
- */
-export interface CampaignResponse {
-  id: string;
-  name: string;
-  description?: string;
-  dungeonMasterId: string;
-  status: CampaignStatus;
-  imageUrl?: string;
-  maxPlayers: number;
-  isPublic: boolean;
-  memberCount: number;
-  createdAt: string;
-  updatedAt: string;
-  lastPlayedAt?: string;
-}
-
-export interface CampaignMemberResponse {
-  id: string;
-  userId: string;
-  role: CampaignMemberRole;
-  status: MembershipStatus;
-  nickname?: string;
-  joinedAt: string;
-  acceptedAt?: string;
-}
-
-export interface CampaignDetailResponse extends CampaignResponse {
-  /** True when the current user is the Dungeon Master of this campaign (from API). */
-  isDungeonMaster?: boolean;
-  hasInviteCode: boolean;
-  inviteCodeExpiresAt?: string;
-  members: CampaignMemberResponse[];
-  snapshotCount: number;
+export interface UpdateCampaignManagerRequest {
+  campaignTreeDefinition:string
 }
 
 export interface CampaignListResponse {
@@ -142,13 +97,57 @@ export interface CampaignMemberListResponse {
   totalCount: number;
 }
 
+// ─── Session types ─────────────────────────────────────────────────────────
+
+export enum GameSessionStatus {
+  Active = 'Active',
+  Completed = 'Completed',
+  Abandoned = 'Abandoned',
+}
+
+export interface AdvanceSessionRequest {
+  nodeId: string;
+  nodeType: string;
+  nodeTitle?: string;
+  portUsed?: string;
+  choiceText?: string;
+}
+
+export interface SessionHistoryEntryResponse {
+  id: string;
+  nodeId: string;
+  nodeType: string;
+  nodeTitle: string;
+  portUsed?: string;
+  choiceText?: string;
+  visitedAt: string;
+}
+
+export interface GameSessionResponse {
+  id: string;
+  campaignId: string;
+  status: GameSessionStatus;
+  currentNodeId?: string;
+  startedBy: string;
+  startedAt: string;
+  endedAt?: string;
+  entries: SessionHistoryEntryResponse[];
+}
+
+export interface GameSessionListResponse {
+  items: GameSessionResponse[];
+  totalCount: number;
+}
+
 /**
  * Helper to get auth header
  */
 function getAuthHeaders() {
   const token = localStorage.getItem("token");
+  if (!token) throw new Error("Not authenticated");
   return {
     Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
   };
 }
 
@@ -166,6 +165,15 @@ export const CampaignService = {
       { headers: getAuthHeaders() }
     );
     return response.data;
+  },
+
+  async editCampaignManager(campaignId : string,request:UpdateCampaignManagerRequest) : Promise<CampaignDetailResponse>{
+     const response = await axios.put<CampaignDetailResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/manager`,
+      request,
+      { headers: getAuthHeaders() }
+      );
+      return response.data;
   },
 
   /**
@@ -305,5 +313,54 @@ export const CampaignService = {
       {},
       { headers: getAuthHeaders() }
     );
+  },
+
+  // ─── Session methods ──────────────────────────────────────────────────────
+
+  async createSession(campaignId: string): Promise<GameSessionResponse> {
+    const response = await axios.post<GameSessionResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/sessions`,
+      {},
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  },
+
+  async listSessions(campaignId: string): Promise<GameSessionListResponse> {
+    const response = await axios.get<GameSessionListResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/sessions`,
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  },
+
+  async getSession(campaignId: string, sessionId: string): Promise<GameSessionResponse> {
+    const response = await axios.get<GameSessionResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/sessions/${sessionId}`,
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  },
+
+  async advanceSession(
+    campaignId: string,
+    sessionId: string,
+    request: AdvanceSessionRequest
+  ): Promise<GameSessionResponse> {
+    const response = await axios.post<GameSessionResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/sessions/${sessionId}/advance`,
+      request,
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  },
+
+  async completeSession(campaignId: string, sessionId: string): Promise<GameSessionResponse> {
+    const response = await axios.post<GameSessionResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/sessions/${sessionId}/complete`,
+      {},
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
   },
 };

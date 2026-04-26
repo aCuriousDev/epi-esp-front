@@ -1,5 +1,6 @@
-import { Show, createEffect } from "solid-js";
-import { useNavigate } from "@solidjs/router";
+import { Show, createEffect, createSignal, type JSX } from "solid-js";
+import { A, useNavigate } from "@solidjs/router";
+import { Check, Swords, Drama, ScrollText } from "lucide-solid";
 import { authStore } from "../stores/auth.store";
 import { LoginButton } from "../components/auth";
 import { AnimatedD20 } from "../components/common/AnimatedD20";
@@ -10,7 +11,18 @@ import { AnimatedD20 } from "../components/common/AnimatedD20";
 export default function LoginPage() {
   const navigate = useNavigate();
 
-  // Redirect to home if already authenticated
+  // Flag one-shot positionné par SettingsPage juste avant le redirect après
+  // suppression du compte (RGPD art. 17). On le lit puis on l'efface
+  // immédiatement — la bannière ne réapparaîtra pas au reload.
+  const [showDeleted, setShowDeleted] = createSignal(false);
+  try {
+    if (sessionStorage.getItem("account_just_deleted") === "1") {
+      sessionStorage.removeItem("account_just_deleted");
+      setShowDeleted(true);
+    }
+  } catch { /* sessionStorage indisponible : pas de bannière, pas grave */ }
+
+  // Redirect to home if already authenticated.
   createEffect(() => {
     if (!authStore.isLoading() && authStore.isAuthenticated()) {
       navigate("/", { replace: true });
@@ -34,9 +46,9 @@ export default function LoginPage() {
         <div class="w-full max-w-md">
           {/* Logo/Brand section */}
           <header class="text-center mb-12">
-            {/* Animated D20 dice - click to re-roll */}
-            <div class="flex justify-center mb-6">
-              <AnimatedD20 size={96} />
+            {/* Animated D20 dice - click, hold-and-shake, or flick to roll */}
+            <div class="flex justify-center mb-8">
+              <AnimatedD20 size={180} />
             </div>
 
             <h1 class="login-title font-display text-5xl sm:text-6xl tracking-wide">
@@ -46,6 +58,46 @@ export default function LoginPage() {
               Votre aventure commence ici
             </p>
           </header>
+
+          {/* Bannière de confirmation après suppression de compte (RGPD art. 17) */}
+          <Show when={showDeleted()}>
+            <div
+              role="status"
+              class="mb-6 flex gap-3 items-start rounded-2xl bg-emerald-500/15 border border-emerald-400/40 p-4 text-sm"
+            >
+              <span class="mt-0.5 flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                <Check class="w-5 h-5 text-emerald-300" />
+              </span>
+              <div class="flex-1 space-y-1">
+                <p class="text-emerald-100 font-semibold">
+                  Account deleted
+                </p>
+                <p class="text-emerald-100/80 text-xs leading-relaxed">
+                  Your characters, owned campaigns and memberships have been
+                  deleted. To also revoke OAuth access on Discord's side:{" "}
+                  <a
+                    href="discord://users/@me/settings/authorized-apps"
+                    class="underline hover:text-white"
+                  >
+                    Authorized Apps
+                  </a>{" "}
+                  (ou <a
+                    href="https://discord.com/channels/@me"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="underline hover:text-white"
+                  >via le web</a>).
+                </p>
+              </div>
+              <button
+                onClick={() => setShowDeleted(false)}
+                aria-label="Fermer"
+                class="flex-shrink-0 text-emerald-200/70 hover:text-emerald-100 text-xl leading-none px-1"
+              >
+                ×
+              </button>
+            </div>
+          </Show>
 
           {/* Login card */}
           <div class="login-card relative bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl shadow-black/30">
@@ -57,14 +109,14 @@ export default function LoginPage() {
                 Bienvenue, aventurier !
               </h2>
               <p class="text-center text-slate-300/70 text-sm mb-8">
-                Connectez-vous avec Discord pour accéder à vos personnages et campagnes.
+                Sign in with Discord to access your characters and campaigns.
               </p>
 
               {/* Loading state */}
               <Show when={authStore.isLoading()}>
                 <div class="flex flex-col items-center gap-4 py-4">
                   <div class="w-10 h-10 border-3 border-white/20 border-t-purple-500 rounded-full animate-spin" />
-                  <p class="text-slate-300/70 text-sm">Vérification de la session...</p>
+                  <p class="text-slate-300/70 text-sm">Checking session...</p>
                 </div>
               </Show>
 
@@ -87,15 +139,15 @@ export default function LoginPage() {
                     </p>
                     <div class="grid grid-cols-3 gap-4">
                       <FeaturePreview 
-                        icon="⚔️" 
+                        icon={<Swords class="w-6 h-6 text-red-300" />} 
                         label="Combats tactiques" 
                       />
                       <FeaturePreview 
-                        icon="🎭" 
+                        icon={<Drama class="w-6 h-6 text-purple-300" />} 
                         label="Personnages" 
                       />
                       <FeaturePreview 
-                        icon="📜" 
+                        icon={<ScrollText class="w-6 h-6 text-amber-300" />} 
                         label="Campagnes" 
                       />
                     </div>
@@ -106,9 +158,26 @@ export default function LoginPage() {
           </div>
 
           {/* Footer */}
-          <footer class="mt-8 text-center">
+          <footer class="mt-8 text-center space-y-2">
             <p class="text-slate-400/60 text-xs">
-              En vous connectant, vous acceptez nos conditions d'utilisation.
+              En vous connectant, vous acceptez nos{" "}
+              <A href="/terms" class="text-slate-300 hover:text-white underline">
+                conditions d'utilisation
+              </A>{" "}
+              et notre{" "}
+              <A href="/privacy" class="text-slate-300 hover:text-white underline">
+                privacy policy
+              </A>
+              .
+            </p>
+            <p class="flex items-center justify-center gap-2 text-[11px] text-slate-400/50">
+              <A href="/legal" class="hover:text-slate-300 transition-colors">
+                Legal notice
+              </A>
+              <span>·</span>
+              <A href="/cookies" class="hover:text-slate-300 transition-colors">
+                Politique cookies
+              </A>
             </p>
           </footer>
         </div>
@@ -116,11 +185,11 @@ export default function LoginPage() {
 
       <style jsx>{`
         .login-page {
-          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1a 100%);
+          background: linear-gradient(135deg, var(--ink-700) 0%, var(--ink-800) 50%, var(--ink-900) 100%);
         }
 
         .login-title {
-          background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 25%, #8b5cf6 50%, #7c3aed 75%, #a78bfa 100%);
+          background: linear-gradient(135deg, var(--plum-300) 0%, var(--plum-300) 25%, var(--plum-500) 50%, var(--plum-500) 75%, var(--plum-300) 100%);
           background-size: 200% 200%;
           -webkit-background-clip: text;
           background-clip: text;
@@ -165,10 +234,10 @@ export default function LoginPage() {
 /**
  * Feature preview item component
  */
-function FeaturePreview(props: { icon: string; label: string }) {
+function FeaturePreview(props: { icon: JSX.Element; label: string }) {
   return (
     <div class="flex flex-col items-center gap-2 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors">
-      <span class="text-2xl">{props.icon}</span>
+      <span>{props.icon}</span>
       <span class="text-xs text-slate-300/80 text-center leading-tight">
         {props.label}
       </span>

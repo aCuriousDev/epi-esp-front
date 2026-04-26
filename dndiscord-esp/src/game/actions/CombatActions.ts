@@ -11,6 +11,9 @@ import { gameState, setGameState, addCombatLog } from '../stores/GameStateStore'
 import { units, setUnits, getPlayerUnits, getEnemyUnits } from '../stores/UnitsStore';
 import { tiles, setTiles, pathfinder, updatePathfinder } from '../stores/TilesStore';
 import { posToKey } from '../utils/GridUtils';
+import { calculateDamage } from '../utils/DamageCalc';
+import { isInSession } from '../../stores/session.store';
+import { signalRService } from '../../services/signalr/SignalRService';
 import { playSpellEffect, playDamageEffect, playDeathEffect, playHitReactionEffect, playCameraShake } from '../vfx/VFXIntegration';
 import { playSpellCastSound, playImpactSound, playDeathSound, playSwordHitSound, playVictorySound, playDefeatSound, playSelectSound, playArrowShotSound, playShieldBashSound, playClawAttackSound } from '../audio/SoundIntegration';
 
@@ -117,53 +120,89 @@ export function useAbility(targetPos: GridPosition): boolean {
     }
   }
   
+  // Pre-compute damage per target (same calc as before, runs on the caller).
+  const damages: Array<{ targetId: string; damage: number; target: Unit }> = [];
+  for (const targetId of targetUnitIds) {
+    const target = units[targetId];
+    if (!target) continue;
+    damages.push({ targetId, damage: calculateDamage(unit, target, ability), target });
+  }
+
+  // Fire VFX + sound locally for immediate attacker feedback — these never
+  // depend on the authoritative broadcast and are purely presentational.
+  for (const { targetId, damage, target } of damages) {
+    playDamageEffect(target.position, damage);
+    playImpactSound();
+    playHitReactionEffect(targetId);
+    playCameraShake(Math.min(0.05 + damage * 0.005, 0.2), 200);
+  }
+
+  // In a multiplayer session the hub broadcasts AbilityUsed to the whole group
+  // (including the caller). The gameSync AbilityUsed handler applies HP / AP /
+  // cooldown on every client identically — no local mutation here. Without this
+  // the attacker's client was the only one seeing HP drop (the useAbility
+  // desync flagged by the audit).
+  if (isInSession()) {
+    const effects = damages.map(({ targetId, damage }) => ({
+      type: "Damage",
+      targetId,
+      value: damage,
+    }));
+    signalRService
+      .invoke("SendAbilityUsed", {
+        unitId: unit.id,
+        abilityId: ability.id,
+        targets: targetUnitIds,
+        effects,
+        apCost: ability.apCost,
+        cooldown: ability.cooldown,
+      })
+      .catch((err) => console.warn("[useAbility] Hub SendAbilityUsed failed:", err));
+
+    // Local UI reset — these don't propagate to peers (transient attacker state).
+    batch(() => {
+      setGameState({
+        selectedAbility: null,
+        targetableTiles: [],
+        turnPhase: TurnPhase.MOVE,
+        highlightedTiles: [],
+      });
+    });
+
+    if (targetUnitIds.length === 0) {
+      addCombatLog(`${unit.name} uses ${ability.name} but misses!`, 'ability');
+    }
+    return true;
+  }
+
+  // Solo path: apply everything locally, no hub involvement.
   batch(() => {
-    // Apply damage to targets
-    targetUnitIds.forEach((targetId) => {
-      const target = units[targetId];
-      if (!target) return;
-      
-      const damage = calculateDamage(unit, target, ability);
-      
-      // Play damage impact VFX + sound
-      playDamageEffect(target.position, damage);
-      playImpactSound();
-      
-      // Play hit reaction (knockback animation) on the target unit
-      playHitReactionEffect(targetId);
-      
-      // Camera shake on hit (stronger for bigger damage)
-      const shakeIntensity = Math.min(0.05 + damage * 0.005, 0.2);
-      playCameraShake(shakeIntensity, 200);
-      
+    for (const { targetId, damage, target } of damages) {
       setUnits(targetId, produce((t) => {
         t.stats.currentHealth = Math.max(0, t.stats.currentHealth - damage);
         if (t.stats.currentHealth <= 0) {
           t.isAlive = false;
-          // Clear tile occupation
           setTiles(posToKey(t.position), 'occupiedBy', null);
         }
       }));
-      
+
       addCombatLog(
         `${unit.name} uses ${ability.name} on ${target.name} for ${damage} damage!`,
         'damage'
       );
-      
+
       if (units[targetId].stats.currentHealth <= 0) {
         addCombatLog(`${target.name} has been defeated!`, 'system');
-        // Play death VFX + sound (async, doesn't block)
         playDeathEffect(targetId, target.team as string);
         playDeathSound();
-        // Heavy camera shake on kill
         playCameraShake(0.2, 400);
       }
-    });
-    
+    }
+
     if (targetUnitIds.length === 0) {
       addCombatLog(`${unit.name} uses ${ability.name} but misses!`, 'ability');
     }
-    
+
     // Consume AP and set cooldown
     setUnits(unit.id, produce((u) => {
       u.stats.currentActionPoints -= ability.apCost;
@@ -173,36 +212,27 @@ export function useAbility(targetPos: GridPosition): boolean {
       }
       u.hasActed = true;
     }));
-    
-    // Clear ability selection
+
     setGameState({
       selectedAbility: null,
       targetableTiles: [],
       turnPhase: TurnPhase.MOVE,
     });
-    
+
     // Recalculate movement range based on remaining AP
     const updatedUnit = units[unit.id];
     if (updatedUnit.stats.currentActionPoints >= 1 && pathfinder) {
-      // Movement range is limited by both the unit's movement stat and remaining AP
       const effectiveRange = Math.min(updatedUnit.stats.movementRange, updatedUnit.stats.currentActionPoints);
-      const reachable = pathfinder.getReachableTiles(
-        updatedUnit.position,
-        effectiveRange
-      );
+      const reachable = pathfinder.getReachableTiles(updatedUnit.position, effectiveRange);
       const highlighted = Array.from(reachable.values()).map((r) => r.position);
       setGameState('highlightedTiles', highlighted);
     } else {
       setGameState('highlightedTiles', []);
     }
   });
-  
-  // Update pathfinder
+
   updatePathfinder();
-  
-  // Check game over
   checkGameOver();
-  
   return true;
 }
 
@@ -210,19 +240,21 @@ export function useAbility(targetPos: GridPosition): boolean {
 // DAMAGE CALCULATION
 // ============================================
 
-export function calculateDamage(attacker: Unit, defender: Unit, ability: Ability): number {
-  const baseDamage = ability.baseDamage + attacker.stats.attackDamage;
-  const defense = defender.stats.defense;
-  const reduction = defense / (defense + 50); // Diminishing returns formula
-  const damage = Math.floor(baseDamage * (1 - reduction));
-  return Math.max(1, damage); // Minimum 1 damage
-}
+export { calculateDamage } from '../utils/DamageCalc';
 
 // ============================================
 // GAME OVER CHECK
 // ============================================
 
 export function checkGameOver(): void {
+  // Defensive: in multiplayer, the server's CombatManager.CheckOutcome is the
+  // only authority for victory/defeat — it broadcasts the Resolved phase via
+  // TurnEnded.outcome, which the gameSync handler applies. Running this
+  // locally per-client would fork the GAME_OVER transition on an intermediate
+  // state (e.g. before the server has seen an attack), leaving peers on
+  // different phases.
+  if (isInSession()) return;
+
   const playerUnits = getPlayerUnits();
   const enemyUnits = getEnemyUnits();
   
@@ -238,10 +270,10 @@ export function checkGameOver(): void {
       const isLastRoom = gameState.dungeon.currentRoomIndex === gameState.dungeon.totalRooms - 1;
       if (isLastRoom) {
         setGameState('phase', GamePhase.GAME_OVER);
-        addCombatLog('Victoire ! Le donjon est terminé ! Tous les ennemis de la dernière salle sont vaincus !', 'system');
+        addCombatLog('Victory! The dungeon is complete! All enemies in the last room are defeated!', 'system');
         playVictorySound();
       } else {
-        addCombatLog('Tous les ennemis de cette salle sont vaincus ! Avancez vers le portail de téléportation.', 'system');
+        addCombatLog('All enemies in this room defeated! Move towards the teleportation portal.', 'system');
       }
     } else {
       setGameState('phase', GamePhase.GAME_OVER);

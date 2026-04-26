@@ -54,6 +54,8 @@ export class VFXManager {
   private idleAnimations: Map<string, Animation[]> = new Map();
   private selectionPulseObserver: any = null;
   private ambientSystems: ParticleSystem[] = [];
+  private ambientBaseEmitRates: Map<ParticleSystem, number> = new Map();
+  private ambientDensityMultiplier = 1.0;
   private activeParticleSystems: Set<ParticleSystem> = new Set();
 
   // Reusable particle texture (white radial gradient circle)
@@ -1373,8 +1375,12 @@ export class VFXManager {
   // ========================================
 
   /**
-   * Play a death dissolve effect on a unit
-   * Fades out mesh + emits soul particles rising
+   * Play a death effect on a unit: soul particles rise, then the rig tips
+   * over onto its back and stays laid on the ground as a corpse. User asked
+   * for a visible body rather than a full fade-out — the fade path left dead
+   * units without any on-map indicator; the skull overlay lives only in the
+   * turn order strip. The corpse is cleaned up by the GameCanvas diff-dispose
+   * loop when the store entry is removed (e.g. Play Again clearUnits).
    */
   public async playDeathVFX(mesh: AbstractMesh, team: string): Promise<void> {
     return new Promise<void>((resolve) => {
@@ -1411,10 +1417,16 @@ export class VFXManager {
       system.start();
       this.activeParticleSystems.add(system);
 
-      // Fade out mesh over 0.8s
-      this.fadeOutMesh(mesh, 800);
+      // Tip the rig over so the body lies on the ground. The rig
+      // (`unit_<id>__Rig_*`) carries the per-unit orientation; rotating
+      // its x-axis by ~90deg drops the character on its back. Fallback to
+      // the root mesh if the rig naming doesn't match.
+      const rig = this.findRig(mesh) ?? mesh;
+      this.layDown(rig, 700);
 
-      // Stop after 1.2 seconds
+      // Stop particles after 1.2s; resolve after they fade. Do NOT dispose
+      // the mesh — the corpse is a visible indicator that stays until the
+      // unit is removed from the store (Play Again / map switch / cleanup).
       setTimeout(() => {
         system.stop();
         setTimeout(() => {
@@ -1424,6 +1436,60 @@ export class VFXManager {
         }, 1500);
       }, 1200);
     });
+  }
+
+  /** Locate the `__Rig_*` transform under a unit root. Returns null if the
+   *  unit uses a plain mesh with no rig child (shouldn't happen for imported
+   *  character glTFs but we stay defensive). */
+  private findRig(root: AbstractMesh): AbstractMesh | null {
+    for (const child of root.getChildren()) {
+      if ((child as any).name && String((child as any).name).includes('__Rig_')) {
+        return child as AbstractMesh;
+      }
+    }
+    return null;
+  }
+
+  /** Animate a transform rotation.x from current to +PI/2 (fall backward)
+   *  and drop it slightly to sit on the ground plane. */
+  private layDown(target: AbstractMesh, durationMs: number): void {
+    const fps = 30;
+    const totalFrames = Math.round((durationMs / 1000) * fps);
+    const startX = target.rotation.x;
+    const endX = startX + Math.PI / 2;
+
+    const rotAnim = new Animation(
+      'death_layDown_rot', 'rotation.x', fps,
+      Animation.ANIMATIONTYPE_FLOAT,
+      Animation.ANIMATIONLOOPMODE_CONSTANT,
+    );
+    const ease = new QuadraticEase();
+    ease.setEasingMode(EasingFunction.EASINGMODE_EASEIN);
+    rotAnim.setEasingFunction(ease);
+    rotAnim.setKeys([
+      { frame: 0, value: startX },
+      { frame: totalFrames, value: endX },
+    ]);
+    // Replace the animations array (not push) so repeated death→revive→
+    // death cycles don't accumulate Animation instances that all re-fire
+    // every time we call beginAnimation on this target.
+    this.scene.stopAnimation(target);
+    target.animations = [rotAnim];
+    this.scene.beginAnimation(target, 0, totalFrames, false);
+  }
+
+  /** Reverse of playDeathVFX's lay-down pose: drop the rig back to
+   *  rotation.x = 0 when the DM revives a dead unit via DmAdjustHp. We
+   *  snap the rotation instantly (no animation) because the accumulated
+   *  death animation in rig.animations kept replaying the PI/2 keyframe
+   *  every time we tried to tween through beginAnimation — the mesh would
+   *  briefly look upright then flop back down. Instant snap is reliable
+   *  and visually fine for a quiet DM-only operation. */
+  public playReviveVFX(mesh: AbstractMesh): void {
+    const rig = this.findRig(mesh) ?? mesh;
+    this.scene.stopAnimation(rig);
+    rig.animations = [];
+    rig.rotation.x = 0;
   }
 
   /**
@@ -1640,6 +1706,8 @@ export class VFXManager {
     system.colorDead = new Color4(0.5, 0.5, 0.4, 0);
     system.minAngularSpeed = -0.5;
     system.maxAngularSpeed = 0.5;
+    this.ambientBaseEmitRates.set(system, system.emitRate);
+    system.emitRate = system.emitRate * this.ambientDensityMultiplier;
     system.start();
     this.ambientSystems.push(system);
   }
@@ -1671,6 +1739,8 @@ export class VFXManager {
     system.addSizeGradient(0.3, 0.04);
     system.addSizeGradient(0.7, 0.03);
     system.addSizeGradient(1, 0);
+    this.ambientBaseEmitRates.set(system, system.emitRate);
+    system.emitRate = system.emitRate * this.ambientDensityMultiplier;
     system.start();
     this.ambientSystems.push(system);
   }
@@ -1697,9 +1767,34 @@ export class VFXManager {
     system.addSizeGradient(0, 0.06);
     system.addSizeGradient(0.5, 0.04);
     system.addSizeGradient(1, 0);
+    this.ambientBaseEmitRates.set(system, system.emitRate);
+    system.emitRate = system.emitRate * this.ambientDensityMultiplier;
     system.start();
     this.ambientSystems.push(system);
     return system;
+  }
+
+  /**
+   * Scale ambient particle emission rate by `multiplier`. 0 stops emission;
+   * 1 is the authored default; 1.5 over-emits. Applies live to already-
+   * running systems and to any started afterwards.
+   */
+  public setAmbientDensity(multiplier: number): void {
+    this.ambientDensityMultiplier = multiplier;
+    this.ambientSystems.forEach((system) => {
+      const base = this.ambientBaseEmitRates.get(system);
+      if (base !== undefined) {
+        system.emitRate = base * multiplier;
+      }
+    });
+  }
+
+  public setAmbientEnabled(enabled: boolean): void {
+    if (enabled) {
+      this.resumeAmbient();
+    } else {
+      this.pauseAmbient();
+    }
   }
 
   // ========================================
@@ -1956,6 +2051,33 @@ export class VFXManager {
       s.dispose();
     });
     this.ambientSystems = [];
+    this.ambientBaseEmitRates.clear();
+  }
+
+  /**
+   * Pause ambient particle systems without disposing them so they can be
+   * resumed after a map reset. Also wipes the live particle buffer so we
+   * don't render trails from the previous map on the first frame of the
+   * next one.
+   */
+  public pauseAmbient(): void {
+    this.ambientSystems.forEach(s => {
+      s.stop();
+      // `reset` clears any particle that is currently alive.
+      s.reset();
+    });
+  }
+
+  /**
+   * Resume ambient systems paused by `pauseAmbient`. Called by
+   * SceneResetManager.finishLoad() once the new map is on screen.
+   */
+  public resumeAmbient(): void {
+    this.ambientSystems.forEach(s => {
+      if (!s.isStarted()) {
+        s.start();
+      }
+    });
   }
 
   public dispose(): void {

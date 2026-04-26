@@ -1,9 +1,18 @@
+/// <reference types="vitest" />
 import { defineConfig } from "vite";
 import solidPlugin from "vite-plugin-solid";
 import path from "path";
 
 export default defineConfig({
   plugins: [solidPlugin()],
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version),
+  },
+  test: {
+    globals: true,
+    environment: 'node',
+    passWithNoTests: true,
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

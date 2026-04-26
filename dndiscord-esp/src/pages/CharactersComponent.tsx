@@ -1,90 +1,107 @@
-import { A, useNavigate } from "@solidjs/router";
-import { ArrowLeft, Plus } from "lucide-solid";
+import { useNavigate } from "@solidjs/router";
+import { BookPlus } from "lucide-solid";
 import { createSignal, For, onMount, Show } from "solid-js";
-import ButtonMenu from "../components/common/ButtonMenu";
 import CharacterCard from "../components/CharacterCard";
 import { CharacterService, CharacterDto } from "../services/character.service";
+import PageMeta from "../layouts/PageMeta";
+import Button from "../components/common/Button";
+import SectionHeader from "../components/common/SectionHeader";
+import { t } from "../i18n";
 
 export default function CharactersComponent() {
-	const navigate = useNavigate();
-	const [characters, setCharacters] = createSignal<CharacterDto[]>([]);
-	const [loading, setLoading] = createSignal(true);
-	const [error, setError] = createSignal<string | null>(null);
+  const navigate = useNavigate();
+  const [characters, setCharacters] = createSignal<CharacterDto[]>([]);
+  const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal<string | null>(null);
 
-	// Load characters on mount
-	onMount(async () => {
-		try {
-			setLoading(true);
-			setError(null);
-			const charactersData = await CharacterService.getMyCharacters();
+  onMount(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await CharacterService.getMyCharacters();
+      setCharacters(data);
+    } catch (err) {
+      console.error("Failed to load characters:", err);
+      setError("Failed to load characters. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  });
 
-			console.log(charactersData);
-			setCharacters(charactersData);
-		} catch (err) {
-			console.error("Failed to load characters:", err);
-			setError("Impossible de charger les personnages. Veuillez réessayer.");
-		} finally {
-			setLoading(false);
-		}
-	});
+  const counter = () => {
+    const n = characters().length;
+    if (n === 0) return undefined;
+    return `${n} ${n === 1 ? t("page.characters.heroOne") : t("page.characters.heroMany")}`.toUpperCase();
+  };
 
-	return (
-		<div class="relative min-h-full w-full overflow-y-auto bg-brand-gradient">
-			<div class="vignette absolute inset-0 pointer-events-none"></div>
+  return (
+    <>
+      <PageMeta
+        title={t("page.characters.title")}
+        rightSlot={
+          <Button href="/characters/create" size="sm">
+            {t("common.create")}
+          </Button>
+        }
+      />
 
-			{/* Back button */}
-			<A href="/" class="settings-btn" aria-label="Retour">
-				<ArrowLeft class="settings-icon h-5 w-5" />
-			</A>
+      <div class="max-w-[720px] mx-auto space-y-5">
+        <p class="text-mid text-ds-body text-center font-old italic max-w-xl mx-auto">
+          {t("page.characters.subtitle")}
+        </p>
 
-			<header class="text-center pt-6">
-				<h1 class="title-shine title-gradient font-display text-white text-5xl sm:text-6xl md:text-7xl tracking-wide bg-clip-text text-transparent drop-shadow-[0_2px_0_rgba(0,0,0,0.35)]">
-					Mes Personnages
-				</h1>
-				<p class="mt-3 text-slate-100/90 max-w-xl mx-auto">
-					L'ensemble de vos héros créés apparaîtront ici.
-				</p>
-				<div class="mt-6 mx-auto decorative-divider"></div>
-			</header>
+        <Show when={error()}>
+          <div class="w-full p-4 bg-red-500/10 border border-red-500/30 rounded-ds-md text-danger text-center">
+            {error()}
+          </div>
+        </Show>
 
-			<main class="relative z-10 mx-auto flex min-h-full max-w-5xl flex-col items-center gap-6 p-6 sm:p-10">
-				{/* Error message */}
-				<Show when={error()}>
-					<div class="w-full max-w-md p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-center">
-						{error()}
-					</div>
-				</Show>
+        <Show when={loading()}>
+          <div class="text-center py-8">
+            <div class="w-12 h-12 mx-auto mb-3 border-4 border-plum-500/30 border-t-plum-500 rounded-full animate-spin" />
+            <p class="text-mid text-ds-small">{t("common.loading")}</p>
+          </div>
+        </Show>
 
-				{/* Loading state */}
-				<Show when={loading()}>
-					<div class="text-center">
-						<div class="w-16 h-16 mx-auto mb-4 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
-						<p class="text-slate-300">Chargement des personnages...</p>
-					</div>
-				</Show>
+        <Show when={!loading()}>
+          <div>
+            <SectionHeader
+              eyebrow={t("page.characters.rosterEyebrow")}
+              counter={counter()}
+            />
+            <div class="flex flex-col gap-3">
+              <Show
+                when={characters().length > 0}
+                fallback={
+                  <p class="text-low text-center py-6 font-old italic">
+                    {t("page.characters.empty")}
+                  </p>
+                }
+              >
+                <For each={characters()}>
+                  {(character) => (
+                    <CharacterCard
+                      character={character}
+                      onClick={() => navigate(`/characters/${character.id}`)}
+                    />
+                  )}
+                </For>
+              </Show>
 
-				{/* Characters list */}
-				<Show when={!loading()}>
-					<div class="w-full flex flex-col gap-4">
-						<For each={characters()}>
-							{(character) => (
-								<CharacterCard
-									character={character}
-									onClick={() => navigate(`/characters/${character.id}`)}
-								/>
-							)}
-						</For>
-
-						{/* Add new character button */}
-						<div class="w-full max-w-md mx-auto">
-							<ButtonMenu
-								icon={<Plus class="h-6 w-6" />}
-								onClick={() => navigate("/characters/create")}
-							/>
-						</div>
-					</div>
-				</Show>
-			</main>
-		</div>
-	);
+              <button
+                type="button"
+                onClick={() => navigate("/characters/create")}
+                class="menu-card menu-card-ghost flex items-center justify-center gap-2.5 !py-4 !px-6"
+              >
+                <BookPlus size={18} class="text-gold-300" aria-hidden="true" />
+                <span class="font-display font-semibold tracking-wide text-mid">
+                  {t("page.characters.forgeNew")}
+                </span>
+              </button>
+            </div>
+          </div>
+        </Show>
+      </div>
+    </>
+  );
 }

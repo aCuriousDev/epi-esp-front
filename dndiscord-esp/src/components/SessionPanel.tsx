@@ -26,7 +26,7 @@ export const SessionPanel: Component = () => {
   const handleConnectAndCreate = async () => {
     const campaignId = campaignIdInput().trim();
     if (!campaignId) {
-      setSessionError("Indiquez un ID de campagne (GUID).");
+      setSessionError("Enter a campaign ID (GUID).");
       return;
     }
     setSessionError(null);
@@ -38,7 +38,7 @@ export const SessionPanel: Component = () => {
       }
       await createSession(campaignId);
     } catch (e: any) {
-      setSessionError(e?.message ?? "Impossible de créer la session.");
+      setSessionError(e?.message ?? "Failed to create session.");
     } finally {
       setSessionLoading(false);
     }
@@ -47,7 +47,7 @@ export const SessionPanel: Component = () => {
   const handleConnectAndJoin = async () => {
     const sessionId = sessionIdInput().trim();
     if (!sessionId) {
-      setSessionError("Indiquez l'ID de la session à rejoindre.");
+      setSessionError("Enter the session ID to join.");
       return;
     }
     setSessionError(null);
@@ -58,9 +58,9 @@ export const SessionPanel: Component = () => {
         ensureMultiplayerHandlersRegistered();
       }
       const result = await joinSession(sessionId);
-      if (!result.success) setSessionError(result.message ?? "Impossible de rejoindre.");
+      if (!result.success) setSessionError(result.message ?? "Failed to join.");
     } catch (e: any) {
-      setSessionError(e?.message ?? "Impossible de rejoindre la session.");
+      setSessionError(e?.message ?? "Failed to join session.");
     } finally {
       setSessionLoading(false);
     }
@@ -71,7 +71,7 @@ export const SessionPanel: Component = () => {
     try {
       await leaveSession();
     } catch (e: any) {
-      setSessionError(e?.message ?? "Erreur en quittant la session.");
+      setSessionError(e?.message ?? "Error leaving session.");
     } finally {
       setSessionLoading(false);
     }
@@ -81,7 +81,7 @@ export const SessionPanel: Component = () => {
     try {
       await kickPlayer(userId);
     } catch (e: any) {
-      setSessionError(e?.message ?? "Erreur en excluant le joueur.");
+      setSessionError(e?.message ?? "Error kicking player.");
     }
   };
 
@@ -89,7 +89,7 @@ export const SessionPanel: Component = () => {
     <div class="panel-game">
       <h3 class="font-fantasy text-game-gold text-lg mb-3 flex items-center gap-2">
         <Users class="w-5 h-5" />
-        Multijoueur
+        Multiplayer
       </h3>
 
       <Show when={sessionState.error}>
@@ -101,10 +101,10 @@ export const SessionPanel: Component = () => {
         fallback={
           <div class="space-y-4">
             <p class="text-gray-400 text-sm">
-              Connectez-vous au hub puis créez ou rejoignez une session.
+              Connect to the hub then create or join a session.
             </p>
             <div class="space-y-2">
-              <label class="block text-xs text-gray-500">ID Campagne (créer une session)</label>
+              <label class="block text-xs text-gray-500">Campaign ID (create a session)</label>
               <input
                 type="text"
                 placeholder="ex: 550e8400-e29b-41d4-a716-446655440000"
@@ -117,14 +117,14 @@ export const SessionPanel: Component = () => {
                 onClick={handleConnectAndCreate}
                 disabled={sessionState.isLoading}
               >
-                <Show when={sessionState.isLoading} fallback={<span>Créer une session</span>}>
+                <Show when={sessionState.isLoading} fallback={<span>Create session</span>}>
                   <Loader2 class="w-4 h-4 animate-spin" />
-                  <span>Création...</span>
+                  <span>Creating...</span>
                 </Show>
               </button>
             </div>
             <div class="border-t border-white/10 pt-3 space-y-2">
-              <label class="block text-xs text-gray-500">ID Session (rejoindre)</label>
+              <label class="block text-xs text-gray-500">Session ID (join)</label>
               <input
                 type="text"
                 placeholder="ex: session_abc123..."
@@ -137,9 +137,9 @@ export const SessionPanel: Component = () => {
                 onClick={handleConnectAndJoin}
                 disabled={sessionState.isLoading}
               >
-                <Show when={sessionState.isLoading} fallback={<span>Rejoindre</span>}>
+                <Show when={sessionState.isLoading} fallback={<span>Join</span>}>
                   <Loader2 class="w-4 h-4 animate-spin" />
-                  <span>Connexion...</span>
+                  <span>Connecting...</span>
                 </Show>
               </button>
             </div>
@@ -151,7 +151,7 @@ export const SessionPanel: Component = () => {
             Session: <span class="text-game-gold font-mono text-xs">{sessionState.session!.sessionId.slice(0, 12)}…</span>
           </p>
           <p class="text-sm text-gray-300">
-            Joueurs ({sessionState.session!.playerCount}/{sessionState.session!.maxPlayers})
+            Players ({sessionState.session!.playerCount}/{sessionState.session!.maxPlayers})
           </p>
           <ul class="space-y-1.5">
             {sessionState.session!.players.map((p) => (
@@ -166,7 +166,7 @@ export const SessionPanel: Component = () => {
                   <button
                     class="p-1 rounded text-red-400 hover:bg-red-500/20"
                     onClick={() => handleKick(p.userId)}
-                    title="Exclure"
+                    title="Kick"
                   >
                     <UserX class="w-3.5 h-3.5" />
                   </button>

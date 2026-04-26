@@ -1,78 +1,91 @@
-import { A, useNavigate } from "@solidjs/router";
+import { useNavigate } from "@solidjs/router";
 import {
-  ArrowLeft,
-  Crown,
   Users,
   Globe,
   Lock,
   Mail,
-  Sparkles,
   BookOpen,
-  Map,
-  Wand2,
+  Plus,
 } from "lucide-solid";
-import { createSignal, For, Show } from "solid-js";
-import { CampaignVisibility, getVisibilityLabel } from "../types/campaign";
+import { Component, createSignal, JSX, Show } from "solid-js";
+import PageMeta from "../layouts/PageMeta";
+import { t } from "../i18n";
+import { Button } from "../components/common/Button";
+import { CampaignVisibility } from "../types/campaign";
 import {
   CampaignService,
-  CampaignStatus as APICampaignStatus,
+  APICampaignStatus,
 } from "../services/campaign.service";
 
-// Preset campaign settings
-const SETTINGS_PRESETS = [
-  { id: "forgotten_realms", name: "Royaumes Oubliés", icon: "🏰" },
-  { id: "eberron", name: "Eberron", icon: "⚙️" },
-  { id: "ravenloft", name: "Ravenloft", icon: "🦇" },
-  { id: "greyhawk", name: "Faucongris", icon: "⚔️" },
-  { id: "homebrew", name: "Homebrew", icon: "✨" },
-  { id: "other", name: "Autre", icon: "📜" },
-];
+/**
+ * Single-step campaign creation — only fields the backend actually persists:
+ * name, description, imageUrl, maxPlayers, isPublic, status. The old 3-step
+ * wizard collected setting/startingLevel/tags that were silently dropped at the
+ * API boundary and displayed back as hardcoded placeholders — pure scaffolding.
+ */
 
-const CAMPAIGN_TAGS = [
-  "Aventure",
-  "Horreur",
-  "Mystère",
-  "Combat",
-  "RP Intense",
-  "Exploration",
-  "Intrigue",
-  "Humour",
-  "Sombre",
-  "Épique",
-  "Débutants bienvenus",
-  "Joueurs expérimentés",
-];
+// ---------------------------------------------------------------------------
+// VisChip
+// ---------------------------------------------------------------------------
+
+interface VisChipProps {
+  icon: JSX.Element;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}
+
+const VisChip: Component<VisChipProps> = (props) => (
+  <button
+    type="button"
+    onClick={props.onClick}
+    class={
+      "flex-1 flex flex-col items-center gap-1.5 px-3 py-3.5 rounded-ds-md transition-all duration-ds-xs focus-ring-gold " +
+      (props.active
+        ? "border text-high"
+        : "bg-ink-700 border border-ink-500 text-high hover:border-plum-500")
+    }
+    style={
+      props.active
+        ? {
+            background:
+              "linear-gradient(135deg, rgba(75,30,78,0.7), rgba(22,44,68,0.7))",
+            "border-color": "rgba(244,197,66,0.45)",
+            "box-shadow":
+              "0 0 20px rgba(244,197,66,0.35), 0 0 40px rgba(75,30,78,0.4)",
+          }
+        : undefined
+    }
+  >
+    {props.icon}
+    <span class="font-display font-semibold text-[13px] tracking-wide">
+      {props.label}
+    </span>
+  </button>
+);
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 export default function CreateCampaign() {
   const navigate = useNavigate();
 
-  // Form state
   const [title, setTitle] = createSignal("");
   const [description, setDescription] = createSignal("");
+  const [imageUrl, setImageUrl] = createSignal("");
   const [visibility, setVisibility] = createSignal<CampaignVisibility>(
     CampaignVisibility.Private,
   );
   const [maxPlayers, setMaxPlayers] = createSignal(5);
-  const [setting, setSetting] = createSignal("forgotten_realms");
-  const [startingLevel, setStartingLevel] = createSignal(1);
-  const [selectedTags, setSelectedTags] = createSignal<string[]>([]);
   const [isSubmitting, setIsSubmitting] = createSignal(false);
-  const [step, setStep] = createSignal(1);
   const [error, setError] = createSignal<string | null>(null);
 
-  const toggleTag = (tag: string) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag)
-        ? prev.filter((t) => t !== tag)
-        : prev.length < 5
-          ? [...prev, tag]
-          : prev,
-    );
-  };
+  const canSubmit = () => title().trim().length >= 3 && !isSubmitting();
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
-    if (!title().trim()) return;
+    if (!canSubmit()) return;
 
     setIsSubmitting(true);
     setError(null);
@@ -81,437 +94,202 @@ export default function CreateCampaign() {
       const response = await CampaignService.createCampaign({
         name: title().trim(),
         description: description().trim() || undefined,
+        imageUrl: imageUrl().trim() || undefined,
         maxPlayers: maxPlayers(),
         isPublic: visibility() === CampaignVisibility.Public,
         status: APICampaignStatus.Draft,
       });
-
-      // Redirect to the new campaign page
       navigate(`/campaigns/${response.id}`);
     } catch (err: any) {
       console.error("Failed to create campaign:", err);
       setError(
-        err.response?.data?.message ||
-          "Impossible de créer la campagne. Veuillez réessayer.",
+        err.response?.data?.message ??
+          "Failed to create campaign. Please try again.",
       );
       setIsSubmitting(false);
     }
   };
 
-  const canProceed = () => {
-    if (step() === 1) return title().trim().length >= 3;
-    if (step() === 2) return true;
-    return true;
-  };
+  // Common input class
+  const inputCls =
+    "w-full px-3.5 py-3 bg-ink-600 border border-ink-500 rounded-ds-sm text-high text-[14px] outline-none focus:border-gold-400 transition-colors placeholder:text-mute";
 
   return (
-    <div class="create-campaign-page min-h-screen w-full bg-brand-gradient">
-      {/* Background effects */}
-      <div class="absolute inset-0 overflow-hidden pointer-events-none">
-        <div class="absolute top-1/4 -left-32 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
-        <div
-          class="absolute bottom-1/4 -right-32 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl animate-pulse"
-          style="animation-delay: 1s"
-        />
-      </div>
+    <>
+      <PageMeta title={t("page.createCampaign.title")} />
 
-      {/* Vignette */}
-      <div class="vignette absolute inset-0" />
+      <div class="max-w-[640px] mx-auto">
+        <p class="font-old italic text-mid text-center mb-6 max-w-xl mx-auto">
+          {t("createCampaign.subtitle")}
+        </p>
 
-      {/* Back button */}
-      <A
-        href="/campaigns"
-        class="settings-btn !left-4 !right-auto"
-        aria-label="Retour"
-      >
-        <ArrowLeft class="settings-icon h-5 w-5" />
-      </A>
-
-      <main class="relative z-10 max-w-2xl mx-auto p-6 pt-20">
-        {/* Header */}
-        <div class="text-center mb-8">
-          <div class="mx-auto mb-4 w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg">
-            <Crown class="w-8 h-8 text-white" />
-          </div>
-          <h1 class="title-shine title-gradient font-display text-3xl sm:text-4xl tracking-wide bg-clip-text text-transparent">
-            Nouvelle Campagne
-          </h1>
-          <p class="mt-2 text-slate-300/80">
-            Créez votre propre aventure épique
-          </p>
-        </div>
-
-        {/* Progress steps */}
-        <div class="flex justify-center gap-2 mb-8">
-          <For each={[1, 2, 3]}>
-            {(s) => (
-              <div
-                class={`w-3 h-3 rounded-full transition-all ${
-                  s === step()
-                    ? "bg-purple-500 scale-125"
-                    : s < step()
-                      ? "bg-purple-500/50"
-                      : "bg-white/20"
-                }`}
-              />
-            )}
-          </For>
-        </div>
-
-        {/* Error message */}
-        <Show when={error()}>
-          <div class="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-center">
-            {error()}
-          </div>
-        </Show>
-
-        {/* Form Card */}
         <form
           onSubmit={handleSubmit}
-          class="campaign-form bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl"
+          class="surface-1 rounded-ds-lg shadow-soft p-8"
+          style={{ "border-color": "rgba(244,197,66,0.2)" }}
         >
-          {/* Step 1: Basic Info */}
-          <Show when={step() === 1}>
-            <div class="p-6 space-y-6">
-              <div class="text-center pb-4 border-b border-white/10">
-                <h2 class="text-xl font-semibold text-white flex items-center justify-center gap-2">
-                  <BookOpen class="w-5 h-5 text-purple-400" />
-                  Informations de base
-                </h2>
-              </div>
-
-              {/* Title */}
-              <div class="space-y-2">
-                <label class="block text-sm font-medium text-slate-300">
-                  Nom de la campagne *
-                </label>
-                <input
-                  type="text"
-                  value={title()}
-                  onInput={(e) => setTitle(e.currentTarget.value)}
-                  placeholder="Ex: La Malédiction de Strahd"
-                  class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all"
-                  maxLength={100}
-                />
-                <p class="text-xs text-slate-500">
-                  {title().length}/100 caractères
-                </p>
-              </div>
-
-              {/* Description */}
-              <div class="space-y-2">
-                <label class="block text-sm font-medium text-slate-300">
-                  Description
-                </label>
-                <textarea
-                  value={description()}
-                  onInput={(e) => setDescription(e.currentTarget.value)}
-                  placeholder="Décrivez votre campagne, son ambiance, son histoire..."
-                  rows={4}
-                  class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all resize-none"
-                  maxLength={500}
-                />
-                <p class="text-xs text-slate-500">
-                  {description().length}/500 caractères
-                </p>
-              </div>
-
-              {/* Visibility */}
-              <div class="space-y-3">
-                <label class="block text-sm font-medium text-slate-300">
-                  Visibilité
-                </label>
-                <div class="grid grid-cols-3 gap-2">
-                  <VisibilityOption
-                    value={CampaignVisibility.Private}
-                    selected={visibility() === CampaignVisibility.Private}
-                    onClick={() => setVisibility(CampaignVisibility.Private)}
-                    icon={<Lock class="w-5 h-5" />}
-                    label="Privée"
-                  />
-                  <VisibilityOption
-                    value={CampaignVisibility.InviteOnly}
-                    selected={visibility() === CampaignVisibility.InviteOnly}
-                    onClick={() => setVisibility(CampaignVisibility.InviteOnly)}
-                    icon={<Mail class="w-5 h-5" />}
-                    label="Invitation"
-                  />
-                  <VisibilityOption
-                    value={CampaignVisibility.Public}
-                    selected={visibility() === CampaignVisibility.Public}
-                    onClick={() => setVisibility(CampaignVisibility.Public)}
-                    icon={<Globe class="w-5 h-5" />}
-                    label="Publique"
-                  />
-                </div>
-              </div>
-            </div>
-          </Show>
-
-          {/* Step 2: Settings */}
-          <Show when={step() === 2}>
-            <div class="p-6 space-y-6">
-              <div class="text-center pb-4 border-b border-white/10">
-                <h2 class="text-xl font-semibold text-white flex items-center justify-center gap-2">
-                  <Map class="w-5 h-5 text-purple-400" />
-                  Paramètres de jeu
-                </h2>
-              </div>
-
-              {/* Setting */}
-              <div class="space-y-3">
-                <label class="block text-sm font-medium text-slate-300">
-                  Univers
-                </label>
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  <For each={SETTINGS_PRESETS}>
-                    {(preset) => (
-                      <button
-                        type="button"
-                        onClick={() => setSetting(preset.id)}
-                        class={`p-3 rounded-xl border text-left transition-all ${
-                          setting() === preset.id
-                            ? "bg-purple-500/20 border-purple-500/50 text-white"
-                            : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white"
-                        }`}
-                      >
-                        <span class="text-xl mr-2">{preset.icon}</span>
-                        <span class="text-sm">{preset.name}</span>
-                      </button>
-                    )}
-                  </For>
-                </div>
-              </div>
-
-              {/* Max Players */}
-              <div class="space-y-3">
-                <label class="block text-sm font-medium text-slate-300">
-                  <Users class="w-4 h-4 inline mr-2" />
-                  Nombre de joueurs maximum
-                </label>
-                <div class="flex items-center gap-4">
-                  <input
-                    type="range"
-                    min={2}
-                    max={6}
-                    value={maxPlayers()}
-                    onInput={(e) =>
-                      setMaxPlayers(parseInt(e.currentTarget.value))
-                    }
-                    class="flex-1 h-2 bg-white/10 rounded-full appearance-none cursor-pointer accent-purple-500"
-                  />
-                  <span class="w-12 h-12 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-xl font-bold text-white">
-                    {maxPlayers()}
-                  </span>
-                </div>
-              </div>
-
-              {/* Starting Level */}
-              <div class="space-y-3">
-                <label class="block text-sm font-medium text-slate-300">
-                  <Wand2 class="w-4 h-4 inline mr-2" />
-                  Niveau de départ
-                </label>
-                <div class="flex items-center gap-4">
-                  <input
-                    type="range"
-                    min={1}
-                    max={20}
-                    value={startingLevel()}
-                    onInput={(e) =>
-                      setStartingLevel(parseInt(e.currentTarget.value))
-                    }
-                    class="flex-1 h-2 bg-white/10 rounded-full appearance-none cursor-pointer accent-purple-500"
-                  />
-                  <span class="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-xl font-bold text-amber-400">
-                    {startingLevel()}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </Show>
-
-          {/* Step 3: Tags & Review */}
-          <Show when={step() === 3}>
-            <div class="p-6 space-y-6">
-              <div class="text-center pb-4 border-b border-white/10">
-                <h2 class="text-xl font-semibold text-white flex items-center justify-center gap-2">
-                  <Sparkles class="w-5 h-5 text-purple-400" />
-                  Tags & Finalisation
-                </h2>
-              </div>
-
-              {/* Tags */}
-              <div class="space-y-3">
-                <label class="block text-sm font-medium text-slate-300">
-                  Tags (max 5)
-                </label>
-                <div class="flex flex-wrap gap-2">
-                  <For each={CAMPAIGN_TAGS}>
-                    {(tag) => (
-                      <button
-                        type="button"
-                        onClick={() => toggleTag(tag)}
-                        class={`px-3 py-1.5 rounded-full text-sm border transition-all ${
-                          selectedTags().includes(tag)
-                            ? "bg-purple-500/30 border-purple-500/50 text-white"
-                            : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white"
-                        }`}
-                      >
-                        {tag}
-                      </button>
-                    )}
-                  </For>
-                </div>
-              </div>
-
-              {/* Summary */}
-              <div class="p-4 bg-white/5 rounded-xl border border-white/10 space-y-3">
-                <h3 class="font-semibold text-white">Résumé</h3>
-                <div class="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <span class="text-slate-400">Nom:</span>
-                    <span class="text-white ml-2">{title() || "—"}</span>
-                  </div>
-                  <div>
-                    <span class="text-slate-400">Visibilité:</span>
-                    <span class="text-white ml-2">
-                      {getVisibilityLabel(visibility())}
-                    </span>
-                  </div>
-                  <div>
-                    <span class="text-slate-400">Univers:</span>
-                    <span class="text-white ml-2">
-                      {SETTINGS_PRESETS.find((s) => s.id === setting())?.name}
-                    </span>
-                  </div>
-                  <div>
-                    <span class="text-slate-400">Joueurs:</span>
-                    <span class="text-white ml-2">{maxPlayers()} max</span>
-                  </div>
-                  <div>
-                    <span class="text-slate-400">Niveau:</span>
-                    <span class="text-white ml-2">{startingLevel()}</span>
-                  </div>
-                  <div>
-                    <span class="text-slate-400">Tags:</span>
-                    <span class="text-white ml-2">{selectedTags().length}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Show>
-
-          {/* Actions */}
-          <div class="px-6 py-4 bg-white/5 border-t border-white/10 flex gap-3">
-            <Show when={step() > 1}>
-              <button
-                type="button"
-                onClick={() => setStep((s) => s - 1)}
-                class="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors"
-              >
-                Retour
-              </button>
-            </Show>
-
-            <Show when={step() < 3}>
-              <button
-                type="button"
-                onClick={() => setStep((s) => s + 1)}
-                disabled={!canProceed()}
-                class="flex-1 px-6 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:bg-purple-600/50 disabled:cursor-not-allowed text-white rounded-xl transition-colors"
-              >
-                Continuer
-              </button>
-            </Show>
-
-            <Show when={step() === 3}>
-              <button
-                type="submit"
-                disabled={isSubmitting() || !canProceed()}
-                class="flex-1 px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl transition-all font-semibold flex items-center justify-center gap-2"
-              >
-                <Show
-                  when={isSubmitting()}
-                  fallback={
-                    <>
-                      <Crown class="w-5 h-5" />
-                      Créer la campagne
-                    </>
-                  }
-                >
-                  <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Création...
-                </Show>
-              </button>
-            </Show>
+          {/* Eyebrow */}
+          <div
+            class="flex items-center gap-2.5 mb-6 pb-4.5 border-b"
+            style={{ "border-color": "rgba(244,197,66,0.2)" }}
+          >
+            <BookOpen size={18} class="text-gold-300" aria-hidden="true" />
+            <span class="font-display font-semibold text-[16px] tracking-wide text-high">
+              {t("page.createCampaign.basicInfo")}
+            </span>
           </div>
+
+          {/* Campaign name */}
+          <div class="mb-4">
+            <label class="block font-inter font-medium text-[13px] text-mid mb-2">
+              {t("createCampaign.nameLabel").replace(" *", "")}{" "}
+              <span class="text-gold-300">*</span>
+            </label>
+            <input
+              type="text"
+              value={title()}
+              onInput={(e) => setTitle(e.currentTarget.value)}
+              placeholder={t("createCampaign.namePlaceholder")}
+              class={inputCls}
+              maxLength={100}
+            />
+            <div class="flex justify-end mt-1 font-mono text-[11px] text-mute">
+              {t("page.createCampaign.charCounter", {
+                n: title().length,
+                max: 100,
+              })}
+            </div>
+          </div>
+
+          {/* Description */}
+          <div class="mb-4">
+            <label class="block font-inter font-medium text-[13px] text-mid mb-2">
+              {t("createCampaign.descriptionLabel")}
+            </label>
+            <textarea
+              value={description()}
+              onInput={(e) => setDescription(e.currentTarget.value)}
+              placeholder={t("createCampaign.descriptionPlaceholder")}
+              class={
+                "w-full min-h-[90px] px-3.5 py-3 bg-ink-600 border border-ink-500 rounded-ds-sm text-high text-[14px] outline-none resize-y focus:border-gold-400 transition-colors placeholder:text-mute"
+              }
+              maxLength={500}
+            />
+            <div class="flex justify-end mt-1 font-mono text-[11px] text-mute">
+              {t("page.createCampaign.charCounter", {
+                n: description().length,
+                max: 500,
+              })}
+            </div>
+          </div>
+
+          {/* Cover image */}
+          <div class="mb-5">
+            <label class="block font-inter font-medium text-[13px] text-mid mb-2">
+              {t("createCampaign.imageUrlLabel")}
+            </label>
+            <input
+              type="url"
+              value={imageUrl()}
+              onInput={(e) => setImageUrl(e.currentTarget.value)}
+              placeholder="https://…"
+              class={inputCls}
+            />
+          </div>
+
+          {/* Visibility chips */}
+          <div class="mb-5">
+            <label class="block font-inter font-medium text-[13px] text-mid mb-2">
+              {t("createCampaign.visibilityLabel")}
+            </label>
+            <div class="flex gap-2.5">
+              <VisChip
+                icon={<Lock size={20} strokeWidth={1.5} />}
+                label={t("createCampaign.visibility.private")}
+                active={visibility() === CampaignVisibility.Private}
+                onClick={() => setVisibility(CampaignVisibility.Private)}
+              />
+              <VisChip
+                icon={<Mail size={20} strokeWidth={1.5} />}
+                label={t("createCampaign.visibility.invite")}
+                active={visibility() === CampaignVisibility.InviteOnly}
+                onClick={() => setVisibility(CampaignVisibility.InviteOnly)}
+              />
+              <VisChip
+                icon={<Globe size={20} strokeWidth={1.5} />}
+                label={t("createCampaign.visibility.public")}
+                active={visibility() === CampaignVisibility.Public}
+                onClick={() => setVisibility(CampaignVisibility.Public)}
+              />
+            </div>
+          </div>
+
+          {/* Max players slider */}
+          <div class="mb-6">
+            <label class="block font-inter font-medium text-[13px] text-mid mb-2">
+              <span class="inline-flex items-center gap-1.5">
+                <Users size={13} class="text-gold-300" aria-hidden="true" />
+                <span>{t("createCampaign.maxPlayersLabel")}</span>
+              </span>
+            </label>
+            <div class="flex items-center gap-3.5">
+              <input
+                type="range"
+                min="2"
+                max="8"
+                value={maxPlayers()}
+                onInput={(e) =>
+                  setMaxPlayers(parseInt(e.currentTarget.value, 10))
+                }
+                class="flex-1"
+                style={{ "accent-color": "#F4C542" }}
+              />
+              <span
+                class="min-w-[42px] text-center px-3 py-2 rounded-ds-md font-mono text-[14px] font-semibold text-gold-300"
+                style={{
+                  background:
+                    "linear-gradient(135deg, rgba(75,30,78,0.6), rgba(22,44,68,0.6))",
+                  border: "1px solid rgba(244,197,66,0.35)",
+                }}
+              >
+                {maxPlayers()}
+              </span>
+            </div>
+            <div class="flex justify-between mt-1.5 font-mono text-[11px] text-mute">
+              <span>2 {t("page.createCampaign.minPlayers")}</span>
+              <span>8 {t("page.createCampaign.maxPlayers")}</span>
+            </div>
+          </div>
+
+          {/* Error */}
+          <Show when={error()}>
+            <div class="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-ds-md text-danger text-[13px]">
+              {error()}
+            </div>
+          </Show>
+
+          {/* Submit */}
+          <Button
+            type="submit"
+            disabled={!canSubmit()}
+            fullWidth
+            size="lg"
+            leadingIcon={
+              <Show when={!isSubmitting()}>
+                <Plus size={18} aria-hidden="true" />
+              </Show>
+            }
+          >
+            <Show
+              when={isSubmitting()}
+              fallback={t("createCampaign.submit")}
+            >
+              <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              {t("createCampaign.submitting")}
+            </Show>
+          </Button>
         </form>
-      </main>
-
-      <style jsx>{`
-        .create-campaign-page {
-          background: linear-gradient(
-            135deg,
-            #1a1a2e 0%,
-            #16213e 50%,
-            #0f0f1a 100%
-          );
-        }
-
-        .campaign-form {
-          animation: cardSlideUp 0.5s ease-out;
-        }
-
-        @keyframes cardSlideUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        input[type="range"]::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          width: 20px;
-          height: 20px;
-          background: #8b5cf6;
-          border-radius: 50%;
-          cursor: pointer;
-          box-shadow: 0 2px 6px rgba(139, 92, 246, 0.4);
-        }
-      `}</style>
-    </div>
-  );
-}
-
-/**
- * Visibility option button
- */
-function VisibilityOption(props: {
-  value: CampaignVisibility;
-  selected: boolean;
-  onClick: () => void;
-  icon: any;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={props.onClick}
-      class={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${
-        props.selected
-          ? "bg-purple-500/20 border-purple-500/50 text-white"
-          : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white"
-      }`}
-    >
-      <div class={props.selected ? "text-purple-400" : "text-slate-400"}>
-        {props.icon}
       </div>
-      <span class="text-sm">{props.label}</span>
-    </button>
+    </>
   );
 }

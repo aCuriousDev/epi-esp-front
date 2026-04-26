@@ -1,0 +1,34 @@
+name: Front CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+defaults:
+  run:
+    working-directory: dndiscord-esp
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: rm -f package-lock.json && npm install
+
+      - name: Typecheck
+        run: npx tsc -b
+
+      - name: Test
+        run: npx vitest run
+
+      - name: Build
+        run: npx vite build

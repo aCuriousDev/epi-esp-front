@@ -1,132 +1,87 @@
 import draw2d from 'draw2d';
+import { tokens } from "@/styles/design-tokens";
 import { CampaignNode, BaseNodeData } from './CampaignNode';
+import { ICON_COMBAT } from '../constants/nodeIcons';
+
+export interface VillainPlacement {
+  characterId: string;
+  position: { x: number; y: number };
+}
 
 export interface CombatNodeData extends BaseNodeData {
   type: 'combat';
-  enemies?: string[];
+  title?: string;
+  selectedMap?: string;
   difficulty?: 'easy' | 'medium' | 'hard';
+  villains?: VillainPlacement[];
 }
 
-
-/**
- * CombatNode - Node pour les combats
- * Visuel différent du StoryNode (couleur rouge, icône d'épée, etc.)
- */
 export class CombatNode extends CampaignNode {
-  private enemiesLabel: draw2d.shape.basic.Label = new draw2d.shape.basic.Label({
-    text: '⚔️ Ennemis: 0',
-    fontSize: 12});
-  private difficultyLabel: draw2d.shape.basic.Label = new draw2d.shape.basic.Label({
-    text: '★★☆',
-    fontSize: 14,
-    bold: true
-  });
-  
-  
+  static NAME = 'CombatNode';
+
   constructor(x: number, y: number, data: CombatNodeData) {
-    // On peut avoir une taille différente pour les combats
     super(x, y, data);
+  }
+
+  protected initDimensions(): void {
     this.nodeWidth = 240;
     this.nodeHeight = 120;
-    this.background.setBackgroundColor('#4a1a1a');
-    this.background.setColor('#8b0000');
   }
-  
-  /**
-   * Créer les éléments visuels spécifiques au CombatNode
-   */
-  protected createVisualElements(): void {
-    const combatData = this.nodeData as CombatNodeData;
 
-    
+  protected getIconSvg(): string { return ICON_COMBAT; }
 
-    // 1. Label pour les ennemis
-    this.enemiesLabel = new draw2d.shape.basic.Label({
-      text: `⚔️ Ennemis: ${(combatData.enemies || []).length}`,
-      fontSize: 12,
-      fontColor: '#ffcccc',
-      color: '#ffcccc'
-    });
-    
-    // Positionner en haut
-    this.add(this.enemiesLabel, new draw2d.layout.locator.XYAbsPortLocator(120, 30));
-    
-    // 2. Label pour la difficulté
-    const difficultyText = this.getDifficultyIcon(combatData.difficulty || 'medium');
-    this.difficultyLabel = new draw2d.shape.basic.Label({
-      text: difficultyText,
-      fontSize: 14,
-      fontColor: '#ff8888',
-      color: '#ff8888',
-      bold: true
-    });
-    
-    // Positionner en bas
-    this.add(this.difficultyLabel, new draw2d.layout.locator.XYAbsPortLocator(120, 70));
+  override createBackground(): void {
+    this.background.setBackgroundColor(tokens.nodes.combat.fill);
+    this.background.setColor(tokens.nodes.combat.stroke);
   }
-  
-  /**
-   * Créer les ports spécifiques au CombatNode
-   */
+
   protected createPorts(): void {
-    // Port d'entrée
-    const inputPort = this.createPort(
+    // Port d'entrée à gauche — même layout que Scene/Choices
+    const inputPort = this.createSinglePort(
       'input',
-      new draw2d.layout.locator.XYAbsPortLocator(this.nodeWidth / 2, 0)
+      new draw2d.layout.locator.XYRelPortLocator(-5, 50)
     );
     inputPort.setName('input');
-    
-    // Deux ports de sortie : Victoire et Défaite
-    const victoryPort = this.createPort(
+
+    // Port victoire — droite haut
+    const victoryPort = this.createSinglePort(
       'output',
-      new draw2d.layout.locator.XYAbsPortLocator(this.nodeWidth / 3, this.nodeHeight)
+      new draw2d.layout.locator.XYRelPortLocator(105, 33)
     );
     victoryPort.setName('victory');
-    
-    const defeatPort = this.createPort(
+
+    // Port défaite — droite bas
+    const defeatPort = this.createSinglePort(
       'output',
-      new draw2d.layout.locator.XYAbsPortLocator((this.nodeWidth / 3) * 2, this.nodeHeight)
+      new draw2d.layout.locator.XYRelPortLocator(105, 66)
     );
     defeatPort.setName('defeat');
   }
-  
-  /**
-   * Dessiner le fond du node en ROUGE pour les combats
-   */
-  public setCanvas(canvas: any): void {
-    super.setCanvas(canvas);
 
-  }
-  
-  /**
-   * Obtenir l'icône de difficulté
-   */
-  private getDifficultyIcon(difficulty: string): string {
-    switch (difficulty) {
-      case 'easy': return '★☆☆';
-      case 'medium': return '★★☆';
-      case 'hard': return '★★★';
-      default: return '★★☆';
-    }
-  }
-  
-  /**
-   * Mettre à jour les ennemis
-   */
-  public updateEnemies(enemies: string[]): void {
-    const combatData = this.nodeData as CombatNodeData;
-    combatData.enemies = enemies;
-    this.enemiesLabel.setText(`⚔️ Ennemis: ${enemies.length}`);
+  public updateMap(mapId: string): void {
+    (this.nodeData as CombatNodeData).selectedMap = mapId;
     this.setUserData(this.nodeData);
   }
-  
-  /**
-   * Mettre à jour la difficulté
-   */
+
   public updateDifficulty(difficulty: 'easy' | 'medium' | 'hard'): void {
-    const combatData = this.nodeData as CombatNodeData;
-    combatData.difficulty = difficulty;
-    this.difficultyLabel.setText(this.getDifficultyIcon(difficulty));
+    (this.nodeData as CombatNodeData).difficulty = difficulty;
     this.setUserData(this.nodeData);
+  }
+
+  public updateVillains(villains: VillainPlacement[]): void {
+    (this.nodeData as CombatNodeData).villains = villains;
+    this.setUserData(this.nodeData);
+  }
+
+  public getPersistentAttributes(): any {
+    return { ...super.getPersistentAttributes(), nodeData: this.nodeData };
+  }
+
+  public setPersistentAttributes(memento: any): void {
+    super.setPersistentAttributes(memento);
+    if (memento.nodeData) {
+      const data = this.nodeData as CombatNodeData;
+      this.updateTitle(data?.title ?? '');
+    }
   }
 }

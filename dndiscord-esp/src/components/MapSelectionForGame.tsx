@@ -1,5 +1,5 @@
 import { Component, createSignal, onMount, For, Show } from 'solid-js';
-import { ArrowLeft } from 'lucide-solid';
+import { ArrowLeft, Map, Dices } from 'lucide-solid';
 import { getAllMaps, type SavedMapData } from '../services/mapStorage';
 
 interface MapSelectionForGameProps {
@@ -37,17 +37,18 @@ export const MapSelectionForGame: Component<MapSelectionForGameProps> = (props) 
       {/* Back button */}
       <button
         onClick={props.onBack}
-        class="settings-btn"
-        aria-label="Retour"
+        class="in-game-back-btn"
+        aria-label="Back"
       >
-        <ArrowLeft class="settings-icon h-5 w-5" />
+        <ArrowLeft class="in-game-back-icon h-5 w-5" />
       </button>
 
-      <div class="max-w-4xl w-full px-8">
+      <div class="max-w-4xl w-full px-4 sm:px-8">
         {/* Title */}
         <div class="text-center mb-12">
-          <h1 class="font-fantasy text-5xl text-game-gold mb-4">
-            🗺️ Select a Map
+          <h1 class="font-fantasy text-3xl sm:text-4xl md:text-5xl text-game-gold mb-4 flex items-center justify-center gap-3">
+            <Map class="w-8 h-8 sm:w-10 sm:h-10" />
+            Select a Map
           </h1>
           <p class="text-xl text-gray-300">Choose the battlefield for your game</p>
         </div>
@@ -57,7 +58,7 @@ export const MapSelectionForGame: Component<MapSelectionForGameProps> = (props) 
           onClick={() => props.onSelectMap(null)}
           class="w-full mb-6 px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-medium rounded-xl transition shadow-lg flex items-center justify-center gap-2"
         >
-          <span>🎲</span>
+          <Dices class="w-5 h-5" />
           <span>Use Default Map</span>
         </button>
 

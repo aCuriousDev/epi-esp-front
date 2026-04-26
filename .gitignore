@@ -16,7 +16,11 @@ build/
 # IDE
 .vscode/
 .idea/
+
+# AI assistants
 .cursor/
+.cursorrules
+CLAUDE.md
 *.swp
 *.swo
 *~
@@ -39,4 +43,9 @@ docs/
 .code-review-graph/
 .code-review-graphignore
 .code-review-graph*
+
+# graphify
+graphify-out/
+.graphify_*
+.graphifyignore
 

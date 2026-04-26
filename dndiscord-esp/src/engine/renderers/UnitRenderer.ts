@@ -19,7 +19,7 @@ import {
   QuadraticEase,
 } from '@babylonjs/core';
 import { Unit, UnitType, GridPosition, Team } from '../../types';
-import { gridToWorld } from '../../game';
+import { gridToWorld, gameState } from '../../game';
 import { ModelLoader } from '../ModelLoader';
 
 /**
@@ -72,11 +72,15 @@ export class UnitRenderer {
   private readonly MODEL_PATHS: Record<string, string> = {
     // Player models
     [UnitType.WARRIOR]: '/models/characters/knight/knight.glb',
+    [UnitType.BARBARIAN]: '/models/characters/barbarian/barbarian.glb',
     [UnitType.MAGE]: '/models/characters/mage/mage.glb',
     [UnitType.ARCHER]: '/models/characters/ranger/ranger.glb',
-    
+    [UnitType.ROGUE]: '/models/characters/rogue/rogue.glb',
+
     // Enemy models
     [UnitType.ENEMY_SKELETON]: '/models/enemies/skeleton_warrior/skeleton_warrior.glb',
+    [UnitType.ENEMY_SKELETON_ROGUE]: '/models/enemies/skeleton_rogue/skeleton_rogue.glb',
+    [UnitType.ENEMY_SKELETON_MINION]: '/models/enemies/skeleton_minion/skeleton_minion.glb',
     [UnitType.ENEMY_MAGE]: '/models/enemies/skeleton_mage/skeleton_mage.glb',
   };
   
@@ -107,13 +111,19 @@ export class UnitRenderer {
    * Falls back to capsule mesh if model loading fails.
    */
   public async createUnit(unit: Unit): Promise<void> {
+    // Guard: if a mesh already exists for this unit, dispose it first to prevent duplicates
+    const existing = this.unitMeshes.get(unit.id);
+    if (existing) {
+      console.warn(`[UnitRenderer] createUnit called for ${unit.id} but mesh already exists — skipping`);
+      return;
+    }
+
     console.log(`Creating unit: ${unit.id}, team: ${unit.team}, type: ${unit.type}, name: ${unit.name}`);
     const worldPosObj = gridToWorld(unit.position);
     const worldPos = new Vector3(worldPosObj.x, worldPosObj.y, worldPosObj.z);
     
     let mesh: AbstractMesh;
     
-    // Determine model path (handle special case for Skeleton Archer)
     const modelPath = this.getModelPath(unit);
     
     if (modelPath) {
@@ -139,16 +149,9 @@ export class UnitRenderer {
   }
 
   /**
-   * Get the model path for a unit
-   * Handles special cases like Skeleton Archer (uses rogue model)
+   * Get the model path for a unit by its UnitType.
    */
   private getModelPath(unit: Unit): string | null {
-    // Special case: Skeleton Archer uses the rogue model variant
-    if (unit.type === UnitType.ENEMY_SKELETON && unit.name.includes('Archer')) {
-      return '/models/enemies/skeleton_rogue/skeleton_rogue.glb';
-    }
-    
-    // Default: use type-based mapping
     return this.MODEL_PATHS[unit.type] || null;
   }
 
@@ -233,7 +236,11 @@ export class UnitRenderer {
     
     const worldPosObj = gridToWorld(unit.position);
     const worldPos = new Vector3(worldPosObj.x, worldPosObj.y, worldPosObj.z);
-    const currentY = mesh.position.y;
+    // Use the known Y offset instead of mesh.position.y to avoid capturing
+    // a mid-animation elevated Y that causes units to float higher over time
+    const currentY = unit.team === 'player'
+      ? this.MODEL_CONFIG.playerYOffset
+      : this.MODEL_CONFIG.enemyYOffset;
     
     // Use previous position if available, otherwise use current mesh position
     const fromPosObj = previousPosition 
@@ -267,8 +274,11 @@ export class UnitRenderer {
       this.animateRotation(mesh, targetRotation);
     }
     
-    // Then animate movement
-    this.animateMovement(mesh, worldPos, currentY);
+    // Only animate movement if position actually changed
+    if (willAnimate) {
+      this.scene.stopAnimation(mesh);
+      this.animateMovement(mesh, worldPos, currentY);
+    }
     
     // Update visibility
     this.updateVisibility(mesh, unit.isAlive);
@@ -621,13 +631,7 @@ export class UnitRenderer {
    * Check if a unit is currently selected
    */
   private isUnitSelected(unitId: string): boolean {
-    // Import game state dynamically to avoid circular dependencies
-    try {
-      const { gameState } = require('../../game');
-      return gameState.selectedUnit === unitId;
-    } catch {
-      return false;
-    }
+    return gameState.selectedUnit === unitId;
   }
 
   /**
@@ -664,27 +668,27 @@ export class UnitRenderer {
 
   /**
    * Définit la visibilité des unités ennemies
+   * Attends que tous les meshes soient créés avant d'appliquer (retry loop).
    * @param visible - true pour rendre visibles, false pour invisibles
    * @param enemyUnitIds - Liste des IDs des unités ennemies
    */
-  public setEnemyVisibility(visible: boolean, enemyUnitIds: string[]): void {
-    console.log(`[UnitRenderer] setEnemyVisibility(${visible}) for ${enemyUnitIds.length} enemies:`, enemyUnitIds);
-    let visibleCount = 0;
-    let notFoundCount = 0;
-    
+  public async setEnemyVisibility(visible: boolean, enemyUnitIds: string[]): Promise<void> {
+    const maxRetries = 20; // 20 × 100ms = 2s max
+    let retries = 0;
+
+    while (retries < maxRetries) {
+      const missing = enemyUnitIds.filter(id => !this.unitMeshes.get(id));
+      if (missing.length === 0) break;
+      retries++;
+      await new Promise(r => setTimeout(r, 100));
+    }
+
     enemyUnitIds.forEach(unitId => {
       const mesh = this.unitMeshes.get(unitId);
       if (mesh) {
         this.setMeshVisibility(mesh, visible);
-        visibleCount++;
-        console.log(`[UnitRenderer] ${visible ? 'Showed' : 'Hid'} enemy unit: ${unitId}`);
-      } else {
-        notFoundCount++;
-        console.warn(`[UnitRenderer] Enemy unit mesh not found: ${unitId} (may not be created yet)`);
       }
     });
-    
-    console.log(`[UnitRenderer] Visibility update complete: ${visibleCount} updated, ${notFoundCount} not found`);
   }
 
   /**
@@ -756,20 +760,19 @@ export class UnitRenderer {
     return this.unitMeshes.get(unitId);
   }
 
+  /** Snapshot of every tracked unit id. Callers diff against the UnitsStore
+   *  to dispose meshes whose store entry has been removed. */
+  public getTrackedUnitIds(): string[] {
+    return Array.from(this.unitMeshes.keys());
+  }
+
   /**
-   * Preload all character models (player and enemy)
-   * 
-   * Preloads:
-   * - Player models: Knight, Mage, Ranger
-   * - Enemy models: Skeleton Warrior, Skeleton Mage
-   * - Enemy variant: Skeleton Rogue (loaded separately for Skeleton Archer)
+   * Preload all character models (player and enemy).
+   * One path per UnitType, all taken from MODEL_PATHS.
    */
   public async preloadModels(): Promise<void> {
-    const modelPaths = [
-      ...Object.values(this.MODEL_PATHS),
-      '/models/enemies/skeleton_rogue/skeleton_rogue.glb', // For Skeleton Archer variant
-    ];
-    
+    const modelPaths = Object.values(this.MODEL_PATHS);
+
     try {
       await this.modelLoader.preloadModels(modelPaths);
       console.log('All character models (player + enemy) preloaded successfully');
