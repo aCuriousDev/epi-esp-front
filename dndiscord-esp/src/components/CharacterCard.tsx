@@ -1,66 +1,81 @@
+import { Component } from "solid-js";
+import { ChevronRight } from "lucide-solid";
 import { CharacterDto } from "../services/character.service";
-import { GetCharacterProfilPic } from "../utils/characterProfilPic";
-import { CharacterClass } from "../types/character";
+import { getClassHex } from "../utils/classColor";
+import { t } from "../i18n";
 
 interface CharacterCardProps {
-	character: CharacterDto;
-	onClick?: () => void;
+  character: CharacterDto;
+  onClick?: () => void;
 }
 
-export default function CharacterCard({ character, onClick }: CharacterCardProps) {
-	const profilPicUrl = GetCharacterProfilPic.getCharacterProfilPic(
-		character.class as CharacterClass
-	);
+const CharacterCard: Component<CharacterCardProps> = (props) => {
+  const c = () => props.character;
+  const initial = () => (c().name?.charAt(0) || "?").toUpperCase();
+  const color = () => getClassHex(c().class);
 
-	return (
-		<button
-			onClick={onClick}
-			class="group relative w-full max-w-md mx-auto overflow-hidden rounded-xl border border-purple-500/30 bg-gradient-to-br from-purple-900/20 to-blue-900/20 backdrop-blur-sm transition-all duration-300 hover:border-purple-400/50 hover:shadow-lg hover:shadow-purple-500/20 hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-		>
-			{/* Background gradient overlay */}
-			<div class="absolute inset-0 bg-gradient-to-br from-purple-600/10 via-transparent to-blue-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+  return (
+    <button
+      type="button"
+      onClick={props.onClick}
+      class="menu-card !p-[18px] block w-full text-left"
+    >
+      <div class="grid items-center gap-[18px]" style={{ "grid-template-columns": "88px 1fr auto" }}>
+        <div
+          class="w-[88px] h-[88px] rounded-ds-md flex items-center justify-center font-display font-bold text-[32px] shrink-0"
+          style={{
+            background: `linear-gradient(135deg, ${color()} 0%, rgba(0,0,0,0.5) 120%)`,
+            border: "1px solid rgba(244,197,66,0.3)",
+            color: "rgba(255,224,138,0.9)",
+            "text-shadow": "0 2px 6px rgba(0,0,0,0.5)",
+          }}
+          aria-hidden="true"
+        >
+          {initial()}
+        </div>
 
-			<div class="relative p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-4">
-				{/* Character Portrait */}
-				<div class="flex-shrink-0">
-					<div class="w-23 h-23 sm:w-25 sm:h-25 p-1 transition-colors duration-300">
-						<img
-							src={profilPicUrl}
-							alt={`${character.name} portrait`}
-							class="w-20 h-23 sm:w-25 sm:h-25 object-contain"
-						/>
-					</div>
-				</div>
+        <div class="min-w-0">
+          <h3 class="font-display font-semibold text-[20px] text-high tracking-wide mb-2 truncate">
+            {c().name}
+          </h3>
+          <div class="flex flex-wrap gap-1.5">
+            <span
+              class="inline-flex items-center px-2 py-0.5 rounded-full font-mono text-[11px] font-semibold tracking-wide"
+              style={{
+                background: "rgba(75,30,78,0.7)",
+                border: "1px solid rgba(244,197,66,0.35)",
+                color: "var(--gold-200)",
+              }}
+            >
+              {t("page.characters.level", { n: c().level })}
+            </span>
+            <span
+              class="inline-flex items-center px-2 py-0.5 rounded-full font-mono text-[11px] font-semibold tracking-wide"
+              style={{
+                background: "rgba(22,44,68,0.7)",
+                border: "1px solid rgba(106,144,192,0.4)",
+                color: "#a4c0e0",
+              }}
+            >
+              {String(c().class)}
+            </span>
+            <span
+              class="inline-flex items-center px-2 py-0.5 rounded-full font-mono text-[11px] font-semibold tracking-wide"
+              style={{
+                background: "rgba(20,22,43,0.8)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                color: "var(--text-mid)",
+              }}
+            >
+              {String(c().race)}
+            </span>
+          </div>
+        </div>
 
-				{/* Character Info */}
-				<div class="flex-1 text-center sm:text-left min-w-0">
-					{/* Name */}
-					<h3 class="font-fantasy text-xl sm:text-2xl font-bold text-white mb-3 truncate drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
-						{character.name}
-					</h3>
+        <ChevronRight size={18} class="text-mid" aria-hidden="true" />
+      </div>
+    </button>
+  );
+};
 
-					{/* Level, Class, Race */}
-					<div class="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-						{/* Level Badge */}
-						<span class="inline-flex items-center px-3 py-1 rounded-full bg-purple-600/40 border border-purple-400/50 text-sm font-semibold text-purple-100 shadow-sm">
-							Niveau {character.level}
-						</span>
-
-						{/* Class */}
-						<span class="inline-flex items-center px-3 py-1 rounded-full bg-blue-600/40 border border-blue-400/50 text-sm font-medium text-blue-100">
-							{character.class}
-						</span>
-
-						{/* Race */}
-						<span class="inline-flex items-center px-3 py-1 rounded-full bg-slate-600/40 border border-slate-400/50 text-sm font-medium text-slate-100">
-							{character.race}
-						</span>
-					</div>
-				</div>
-			</div>
-
-			{/* Hover effect indicator */}
-			<div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 via-blue-500 to-purple-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300" />
-		</button>
-	);
-}
+export default CharacterCard;
