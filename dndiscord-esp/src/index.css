@@ -220,6 +220,20 @@ body {
   background: transparent !important;
 }
 
+/* Cacher les scrollbars du canvas draw2d tout en gardant le scroll actif */
+.campaign-tree-canvas-scroll {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE / Edge */
+  cursor: default;
+}
+.campaign-tree-canvas-scroll::-webkit-scrollbar {
+  display: none;                /* Chrome / Safari / Opera */
+}
+/* Curseur "main" sur le fond vide pour indiquer le pan */
+.campaign-tree-canvas-scroll.is-panning {
+  cursor: grabbing !important;
+}
+
 .menu-button-primary {
 	@apply menu-button;
 }

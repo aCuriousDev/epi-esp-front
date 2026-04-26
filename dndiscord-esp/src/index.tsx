@@ -106,7 +106,6 @@ render(
         <Route path="/campaigns/create" component={CreateCampaign} />
         <Route path="/campaigns/:id" component={CampaignView} />
         <Route path="/campaigns/:id/edit" component={EditCampaign} />
-        <Route path="/campaigns/:id/manager" component={CampaignManagerPage} />
         <Route path="/campaigns/:id/sessions" component={CampaignSessionsListPage} />
         <Route path="/campaigns/:id/sessions/:sessionId" component={CampaignSessionReplayPage} />
         <Route path="/map-editor" component={MapSelectionScreen} />
@@ -117,6 +116,7 @@ render(
       <Route path="/" component={GameShell}>
         <Route path="/campaigns/:id/lobby" component={CampaignLobbyPage} />
         <Route path="/campaigns/:id/session" component={CampaignSessionPage} />
+        <Route path="/campaigns/:id/manager" component={CampaignManagerPage} />
         <Route path="/map-editor/:mapId" component={MapEditor} />
         <Route path="/practice/:mode" component={BoardGame} />
       </Route>

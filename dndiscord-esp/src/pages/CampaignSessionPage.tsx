@@ -399,9 +399,10 @@ const CampaignSessionPage: Component = () => {
           setCurrentNodeId(resumeNodeId);
         }
 
-        // autoAdvance=1 : le MJ a cliqué "Prochain nœud" depuis le board.
-        // Appeler followPort automatiquement sans attendre un clic supplémentaire.
-        // Seul le MJ advance ; les joueurs suivront via NodeAdvanced.
+        // autoAdvance=1 : le MJ a cliqué "Prochain nœud" depuis le board, ou une
+        // case EXIT a été déclenchée.  Appeler followPort automatiquement sans
+        // attendre un clic supplémentaire.  Seul le MJ avance ; les joueurs
+        // suivront via NodeAdvanced (et CampaignMapLaunched si c'est une carte).
         // Si pas de port 'output' → fin de scénario → handleEnd.
         const autoAdvance = search.get('autoAdvance') === '1';
         if (autoAdvance && isHost()) {
@@ -413,6 +414,15 @@ const CampaignSessionPage: Component = () => {
             const hasOutput = parsedTree()?.edges.has(`${node.id}::output`);
             if (hasOutput) {
               await followPort('output');
+              // Si le bloc suivant est une carte avec une map configurée,
+              // la lancer automatiquement — inutile que le MJ clique "Lancer la carte".
+              // Les joueurs recevront CampaignMapLaunched et seront redirigés.
+              setTimeout(() => {
+                const next = currentNode();
+                if (next?.type === 'map' && (next as MapData).selectedMap) {
+                  launchMap();
+                }
+              }, 0);
             } else {
               // Aucun nœud suivant → fin de session
               await handleEnd();
@@ -703,6 +713,55 @@ const CampaignSessionPage: Component = () => {
 
         {/* Session */}
         <Show when={!loading() && !error()}>
+
+          {/* ── Écran de transition entre deux cartes (joueurs uniquement) ──────────
+              Quand le nœud courant est une carte et que l'utilisateur n'est pas MJ,
+              afficher un écran d'attente dédié plutôt que l'interface scénario complète.
+              Le MJ voit toujours son panneau normal avec le bouton "Lancer la carte".
+          ─────────────────────────────────────────────────────────────────────── */}
+          <Show when={currentNode()?.type === 'map' && !isHost()}>
+            {(() => {
+              const node = () => currentNode() as MapData;
+              const name = () => getMapName(node());
+              return (
+                <div class="w-full max-w-md flex flex-col items-center gap-8 text-center">
+                  {/* Icône pulsante */}
+                  <div class="relative">
+                    <div class="absolute inset-0 rounded-3xl bg-blue-500/20 animate-ping" style={{ 'animation-duration': '2s' }} />
+                    <div class="relative w-24 h-24 rounded-3xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center">
+                      <MapIcon class="w-12 h-12 text-blue-400" />
+                    </div>
+                  </div>
+
+                  {/* Nom de la carte */}
+                  <div>
+                    <p class="text-xs text-blue-400 uppercase tracking-widest font-semibold mb-3">
+                      Prochaine carte
+                    </p>
+                    <h2 class="font-display text-3xl text-white leading-tight">
+                      {name() || 'Carte à venir'}
+                    </h2>
+                  </div>
+
+                  {/* Attente */}
+                  <div class="flex flex-col items-center gap-3">
+                    <div class="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/5 border border-white/10">
+                      <Loader2 class="w-4 h-4 animate-spin text-purple-400 flex-shrink-0" />
+                      <span class="text-slate-300 text-sm">
+                        En attente du lancement par le Maître du Jeu…
+                      </span>
+                    </div>
+                    <p class="text-xs text-slate-600">
+                      Vous serez redirigé automatiquement
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+          </Show>
+
+          {/* ── Contenu scénario normal (MJ + tous les autres types de nœuds) ─────── */}
+          <Show when={!(currentNode()?.type === 'map' && !isHost())}>
           <div class="w-full max-w-2xl">
             {/* Fil d'Ariane */}
             <Show when={history().length > 0}>
@@ -1011,7 +1070,9 @@ const CampaignSessionPage: Component = () => {
               </Switch>
             </div>
           </div>
-        </Show>
+          </Show>{/* fin Show !(map && !isHost()) */}
+
+        </Show>{/* fin Show !loading && !error */}
       </main>
 
       {/* ══════════════════════════════════════════════════════════════════

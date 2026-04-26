@@ -83,7 +83,14 @@ const BoardGame: Component = () => {
   // reads this flag before scheduling the next tick so orphaned timeouts
   // that fire after an unmount are no-ops.
   let mounted = true;
-  onCleanup(() => { mounted = false; });
+  onCleanup(() => {
+    mounted = false;
+    // Nettoyer pendingSessionExit pour que la prochaine carte parte d'un état vierge.
+    // Sans ce nettoyage, si un joueur quitte le board via CampaignMapExited
+    // (navigate direct, pas via backToSession), le signal reste non-null et
+    // la notification "en attente du MJ" réapparaît immédiatement sur la carte suivante.
+    clearPendingSessionExit();
+  });
 
   const [appPhase, setAppPhase] = createSignal<AppPhase>(
     AppPhase.MODE_SELECTION,
@@ -133,6 +140,12 @@ const BoardGame: Component = () => {
         // joueurs et les renvoyait vers "/". La session est gardée en vie le
         // temps du board et peut être reprise quand on revient à la session.
         (async () => {
+          // ── Nettoyage de la carte précédente ─────────────────────────────────
+          // Évite que pendingSessionExit de la carte N-1 réapparaisse sur la
+          // carte N, et que les tiles/units de l'ancienne carte restent en mémoire.
+          clearPendingSessionExit();
+          await clearEngineState();
+
           // En mode session, on passe toujours un tableau pour rester sur la
           // branche multiplayer de initializeFreeRoam. Si undefined, cette
           // branche spawne les 3 personnages solo par défaut (Sir Roland /
@@ -146,7 +159,10 @@ const BoardGame: Component = () => {
           setSelectedMapId(cfg.mapId);
           setAppPhase(AppPhase.IN_GAME);
 
-          setSessionExitCallback((exitType) => backToSession(exitType));
+          // autoAdvance=true pour les sorties 'next' : CampaignSessionPage
+          // avancera automatiquement au bloc suivant (et lancera la carte si besoin).
+          // Pour 'end' on ne s'avance pas — la session se termine.
+          setSessionExitCallback((exitType) => backToSession(exitType, exitType === 'next'));
 
           let attempts = 0;
           const checkEngine = () => {
@@ -970,6 +986,14 @@ const BoardGame: Component = () => {
                         const req = pendingSessionExit();
                         if (!req) return;
                         clearPendingSessionExit();
+                        // Notifier les joueurs pour qu'ils quittent aussi le board
+                        // (même comportement que le bouton "Prochain nœud" du DmPanel).
+                        if (req.exitType === 'next') {
+                          const exitCfg = getSessionMapConfig();
+                          if (exitCfg) {
+                            dmExitMap(exitCfg.campaignId, exitCfg.nodeId).catch(() => {});
+                          }
+                        }
                         triggerSessionExit(req.exitType);
                       }}
                       class={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${

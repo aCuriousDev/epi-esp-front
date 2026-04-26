@@ -329,8 +329,8 @@ const CampaignManager: Component = () => {
     }}>
       <PageMeta title={t('page.campaignManager.title')} />
 
-      {/* Toolbar */}
-      <div class="relative z-20 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-game-dark/70 backdrop-blur-md">
+      {/* Toolbar — pl-16 sm:pl-20 pour laisser la place au bouton retour du GameShell */}
+      <div class="relative z-20 flex items-center justify-between pl-28 pr-6 py-4 border-b border-white/10 bg-game-dark/70 backdrop-blur-md">
         <div class="flex flex-row gap-2">
           <button
             onClick={() => setModalOpen(true)}

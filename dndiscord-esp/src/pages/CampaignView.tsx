@@ -223,7 +223,9 @@ export default function CampaignView() {
     return t("campaignView.relativeTime.monthsAgo", { n: diffMonths });
   };
 
-  /** Créer une session GameHub pour cette campagne et aller au board (DM uniquement). */
+  /** Créer une session GameHub et aller au lobby Quick Launch (DM uniquement).
+   *  En mode Quick Launch le MJ choisit la carte dans le lobby et lance
+   *  directement le board — pas besoin d'arbre de scénario. */
   const handleLaunchSession = async () => {
     const c = campaign();
     if (!c || !isOwner()) return;
@@ -235,7 +237,7 @@ export default function CampaignView() {
       }
       ensureMultiplayerHandlersRegistered();
       await createSession(c.id);
-      navigate(`/campaigns/${c.id}/session`);
+      navigate(`/campaigns/${c.id}/lobby?quickLaunch=1`);
     } catch (e: any) {
       setLaunchError(e?.message ?? "Failed to create session.");
     } finally {
