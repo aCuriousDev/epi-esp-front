@@ -23,6 +23,7 @@ import { DmPanel } from "../components/dm/DmPanel";
 import DmPlayerInspectPanel from "../components/dm/DmPlayerInspectPanel";
 import { ItemReceivedToast } from "../components/dm/ItemReceivedToast";
 import { EnemySpawnToast } from "../components/dm/EnemySpawnToast";
+import { ProgressionToast } from "../components/dm/ProgressionToast";
 import DiceRequestListener from "../components/dice/DiceRequestListener";
 import DiceRollPrompt from "../components/dice/DiceRollPrompt";
 import DiceResultToast from "../components/dice/DiceResultToast";
@@ -841,6 +842,9 @@ const BoardGame: Component = () => {
 
             {/* Enemy spawn notification toasts */}
             <EnemySpawnToast />
+
+            {/* XP/level-up/gold recipient toasts */}
+            <ProgressionToast />
 
             {/* DM-triggered D20 roll request feature */}
             <DiceRequestListener />
