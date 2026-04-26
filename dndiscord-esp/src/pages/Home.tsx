@@ -1,16 +1,29 @@
 import { Component, Show, createResource, createEffect, createSignal, onMount } from "solid-js";
+import { useNavigate } from "@solidjs/router";
 import AnimatedD20 from "../components/common/AnimatedD20";
 import ResumeHero from "../components/home/ResumeHero";
 import WelcomeBanner from "../components/home/WelcomeBanner";
+import LiveSessionHero from "../components/home/LiveSessionHero";
 import PlayGroup from "../components/home/PlayGroup";
 import CreateGroup from "../components/home/CreateGroup";
 import StatsStrip from "../components/home/StatsStrip";
 import { CampaignService } from "../services/campaign.service";
 import { CharacterService } from "../services/character.service";
 import { readLastCampaignId, clearLastCampaignId } from "../hooks/useLastCampaign";
+import {
+  sessionState,
+  getPersistedSession,
+} from "../stores/session.store";
+import {
+  tryRecoverSession,
+  ensureMultiplayerHandlersRegistered,
+} from "../services/signalr/multiplayer.service";
+import { signalRService } from "../services/signalr/SignalRService";
 import { t } from "../i18n";
 
 export const Home: Component = () => {
+  const navigate = useNavigate();
+
   const [lastId, setLastId] = createSignal<string | null>(null);
   onMount(() => setLastId(readLastCampaignId()));
 
@@ -49,6 +62,57 @@ export const Home: Component = () => {
     }
   });
 
+  // ── Live session detection ────────────────────────────────────────────────
+  // sessionStorage outlives F5/back-nav within the same tab. If a persisted
+  // session exists, optimistically show the rejoin hero and trigger silent
+  // recovery to populate sessionState (so the hero can render real campaign
+  // name + player count). If recovery fails, tryRecoverSession clears the
+  // persisted entry — we then drop the optimistic flag and fall through to
+  // ResumeHero / WelcomeBanner.
+  const [hasPersistedSession, setHasPersistedSession] = createSignal(false);
+  const [recovering, setRecovering] = createSignal(false);
+
+  onMount(async () => {
+    if (sessionState.session) {
+      setHasPersistedSession(true);
+      return;
+    }
+    if (!getPersistedSession()) return;
+    setHasPersistedSession(true);
+    setRecovering(true);
+    try {
+      const ok = await tryRecoverSession();
+      if (!ok) setHasPersistedSession(false);
+    } catch {
+      setHasPersistedSession(false);
+    } finally {
+      setRecovering(false);
+    }
+  });
+
+  const showLive = () => !!sessionState.session || hasPersistedSession();
+
+  const handleResume = async () => {
+    // If the session was cleared between mount and click, attempt recovery
+    // once more before navigating so BoardGame doesn't bounce to mode select.
+    if (!sessionState.session && getPersistedSession()) {
+      setRecovering(true);
+      try {
+        if (!signalRService.isConnected) {
+          await signalRService.connect();
+          ensureMultiplayerHandlersRegistered();
+        }
+        await tryRecoverSession();
+      } finally {
+        setRecovering(false);
+      }
+    }
+    // Always route through the sandbox multiplayer shell — its onMount
+    // session-rehydration jumps straight to LobbyScreen for Lobby state or
+    // IN_GAME for InProgress, regardless of campaign vs sandbox origin.
+    navigate("/practice/multiplayer");
+  };
+
   const totalItems = () => (campaignsCount() ?? 0) + (charactersCount() ?? 0);
 
   const counterLabel = () => {
@@ -85,8 +149,15 @@ export const Home: Component = () => {
         </p>
       </header>
 
-      <Show when={campaign()} fallback={<WelcomeBanner />}>
-        {(c) => <ResumeHero campaign={c()} />}
+      <Show
+        when={showLive()}
+        fallback={
+          <Show when={campaign()} fallback={<WelcomeBanner />}>
+            {(c) => <ResumeHero campaign={c()} />}
+          </Show>
+        }
+      >
+        <LiveSessionHero onResume={handleResume} recovering={recovering()} />
       </Show>
 
       <PlayGroup
