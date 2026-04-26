@@ -9,7 +9,7 @@ import {
 import { useNavigate, useParams, useSearchParams } from '@solidjs/router';
 import { ArrowLeft, Copy, Check, Play, Loader2, Users, UserCircle2, Zap, Map as MapIcon } from 'lucide-solid';
 import { sessionState, isHost } from '@/stores/session.store';
-import { PlayerRole } from '@/types/multiplayer';
+import { PlayerRole, SessionState } from '@/types/multiplayer';
 import {
   selectCharacter,
   selectDefaultTemplate,
@@ -153,10 +153,9 @@ const CampaignLobbyPage: Component = () => {
     // créées par CampaignSessionPage mais jamais jouées.
     try {
       const sessionsRes = await CampaignService.listSessions(params.id);
-      const running = sessionsRes.items.find(
-        s => s.status === GameSessionStatus.Active &&
-             (!!s.currentNodeId || s.entries.length > 0)
-      );
+      // Dans le lobby on cherche toute session Active, même sans progression
+      // (ex. session créée mais pas encore démarrée) pour proposer le "Rejoindre".
+      const running = sessionsRes.items.find(s => s.status === GameSessionStatus.Active);
       if (running) setActiveSession(running);
     } catch {
       // Non-critique
@@ -647,39 +646,86 @@ const CampaignLobbyPage: Component = () => {
         {/* Contrôles MJ */}
         <Show when={amHost()}>
           <section class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
-            <Show when={!allPlayersReady()}>
+            <Show when={session()?.state === SessionState.InProgress}
+              fallback={
+                /* Session en Lobby → bouton Démarrer normal */
+                <>
+                  <Show when={!allPlayersReady()}>
+                    <p class="text-center text-sm text-amber-400/80 mb-4">
+                      ⚠️ Certains joueurs n'ont pas encore sélectionné leur personnage.
+                    </p>
+                  </Show>
+                  <button
+                    onClick={handleStartSession}
+                    disabled={starting()}
+                    class="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-lg rounded-xl transition-all shadow-lg shadow-purple-500/20"
+                  >
+                    <Show when={starting()} fallback={<Play class="w-5 h-5" />}>
+                      <Loader2 class="w-5 h-5 animate-spin" />
+                    </Show>
+                    <Show when={starting()}
+                      fallback={quickLaunch() ? 'Lancer la carte' : 'Démarrer la session'}
+                    >
+                      Lancement…
+                    </Show>
+                  </button>
+                  <p class="text-center text-sm text-slate-500 mt-3">
+                    {quickLaunch()
+                      ? 'Les joueurs seront redirigés vers la carte automatiquement.'
+                      : 'Players will be redirected automatically.'}
+                  </p>
+                </>
+              }
+            >
+              {/* Session déjà InProgress → proposer de reprendre au lieu de redémarrer */}
               <p class="text-center text-sm text-amber-400/80 mb-4">
-                ⚠️ Certains joueurs n'ont pas encore sélectionné leur personnage.
+                ⚡ La session est déjà en cours.
+              </p>
+              <button
+                onClick={() => navigate(`/campaigns/${params.id}/session`)}
+                class="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-lg rounded-xl transition-all shadow-lg shadow-emerald-500/20"
+              >
+                <Play class="w-5 h-5" />
+                Reprendre la session
+              </button>
+              <p class="text-center text-sm text-slate-500 mt-3">
+                La session a déjà été lancée — reprenez depuis le scénario.
               </p>
             </Show>
-            <button
-              onClick={handleStartSession}
-              disabled={starting()}
-              class="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-lg rounded-xl transition-all shadow-lg shadow-purple-500/20"
-            >
-              <Show when={starting()} fallback={<Play class="w-5 h-5" />}>
-                <Loader2 class="w-5 h-5 animate-spin" />
-              </Show>
-              <Show when={starting()}
-                fallback={quickLaunch() ? 'Lancer la carte' : 'Démarrer la session'}
-              >
-                Lancement…
-              </Show>
-            </button>
-            <p class="text-center text-sm text-slate-500 mt-3">
-              {quickLaunch()
-                ? 'Les joueurs seront redirigés vers la carte automatiquement.'
-                : 'Players will be redirected automatically.'}
-            </p>
           </section>
         </Show>
 
-        {/* Attente MJ */}
+        {/* Attente MJ — ou Rejoindre si session existante et utilisateur hors session */}
         <Show when={!amHost()}>
-          <div class="text-center py-4 text-slate-400">
-            <Loader2 class="w-6 h-6 animate-spin text-purple-400 mx-auto mb-2" />
-            Waiting for the Dungeon Master to start…
-          </div>
+          <Show
+            when={activeSession() && !session()}
+            fallback={
+              <div class="text-center py-4 text-slate-400">
+                <Loader2 class="w-6 h-6 animate-spin text-purple-400 mx-auto mb-2" />
+                Waiting for the Dungeon Master to start…
+              </div>
+            }
+          >
+            {/* Session active détectée mais utilisateur pas encore dedans */}
+            <section class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 text-center">
+              <p class="text-sm text-amber-400/80 mb-4">
+                ⚡ Une session est déjà en cours pour cette campagne.
+              </p>
+              <button
+                onClick={handleJoinActiveSession}
+                disabled={joiningActive()}
+                class="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-60 text-white font-bold text-lg rounded-xl transition-all shadow-lg shadow-emerald-500/20"
+              >
+                <Show when={joiningActive()} fallback={<Play class="w-5 h-5" />}>
+                  <Loader2 class="w-5 h-5 animate-spin" />
+                </Show>
+                {joiningActive() ? 'Connexion…' : 'Rejoindre la session'}
+              </button>
+              <Show when={joinActiveError()}>
+                <p class="text-red-400 text-sm mt-2">{joinActiveError()}</p>
+              </Show>
+            </section>
+          </Show>
         </Show>
 
       </main>

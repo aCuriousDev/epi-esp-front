@@ -1,6 +1,6 @@
 import { Component, createSignal, For, onMount, Show } from 'solid-js';
 import { useNavigate, useParams } from '@solidjs/router';
-import { BookOpen, ChevronRight, Clock, Loader2 } from 'lucide-solid';
+import { BookOpen, ChevronRight, Clock, Loader2, StopCircle } from 'lucide-solid';
 import {
   CampaignService,
   type GameSessionResponse,
@@ -8,6 +8,7 @@ import {
 } from '@/services/campaign.service';
 import PageMeta from '../layouts/PageMeta';
 import { t } from '../i18n';
+import { safeConfirm } from '@/services/ui/confirm';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -58,6 +59,8 @@ const CampaignSessionsListPage: Component = () => {
   const [error, setError]             = createSignal<string | null>(null);
   const [sessions, setSessions]       = createSignal<GameSessionResponse[]>([]);
   const [campaignName, setCampaignName] = createSignal('');
+  const [isDm, setIsDm]               = createSignal(false);
+  const [endingId, setEndingId]       = createSignal<string | null>(null);
 
   onMount(async () => {
     try {
@@ -66,6 +69,7 @@ const CampaignSessionsListPage: Component = () => {
         CampaignService.listSessions(params.id),
       ]);
       setCampaignName(camp.name);
+      setIsDm(camp.isDungeonMaster ?? false);
       // API already returns desc order; keep it
       setSessions(list.items);
     } catch (e) {
@@ -75,6 +79,22 @@ const CampaignSessionsListPage: Component = () => {
       setLoading(false);
     }
   });
+
+  const handleEndSession = async (session: GameSessionResponse, e: MouseEvent) => {
+    e.stopPropagation(); // ne pas déclencher la navigation vers le replay
+    if (!safeConfirm(`Mettre fin à cette session ? Cette action est irréversible.`)) return;
+    setEndingId(session.id);
+    try {
+      await CampaignService.completeSession(params.id, session.id);
+      setSessions(prev => prev.map(s =>
+        s.id === session.id ? { ...s, status: GameSessionStatus.Completed } : s
+      ));
+    } catch (err) {
+      console.error('[SessionsList] Failed to end session:', err);
+    } finally {
+      setEndingId(null);
+    }
+  };
 
   return (
     <div
@@ -130,53 +150,73 @@ const CampaignSessionsListPage: Component = () => {
                   STATUS_CFG[session.status] ??
                   STATUS_CFG[GameSessionStatus.Abandoned];
                 return (
-                  <button
-                    onClick={() =>
-                      navigate(
-                        `/campaigns/${params.id}/sessions/${session.id}`,
-                      )
-                    }
-                    class="w-full text-left bg-game-dark/60 backdrop-blur-xl border border-white/10 hover:border-purple-500/40 rounded-2xl px-6 py-5 transition-all hover:bg-white/5 group"
-                  >
-                    <div class="flex items-center justify-between gap-4">
-                      {/* Left */}
-                      <div class="flex items-center gap-4 flex-1 min-w-0">
-                        {/* Index badge */}
-                        <div class="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center flex-shrink-0 text-purple-400 font-bold text-sm">
-                          #{sessions().length - i()}
+                  <div class="flex items-stretch gap-2">
+                    {/* Card — navigate to replay */}
+                    <button
+                      onClick={() =>
+                        navigate(
+                          `/campaigns/${params.id}/sessions/${session.id}`,
+                        )
+                      }
+                      class="flex-1 text-left bg-game-dark/60 backdrop-blur-xl border border-white/10 hover:border-purple-500/40 rounded-2xl px-6 py-5 transition-all hover:bg-white/5 group"
+                    >
+                      <div class="flex items-center justify-between gap-4">
+                        {/* Left */}
+                        <div class="flex items-center gap-4 flex-1 min-w-0">
+                          {/* Index badge */}
+                          <div class="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center flex-shrink-0 text-purple-400 font-bold text-sm">
+                            #{sessions().length - i()}
+                          </div>
+
+                          <div class="min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap mb-1">
+                              <span
+                                class={`text-xs px-2 py-0.5 rounded-full border font-medium ${cfg.cls}`}
+                              >
+                                {t(cfg.labelKey as any)}
+                              </span>
+                              <span class="text-xs text-slate-500">
+                                {formatDate(session.startedAt)}
+                              </span>
+                            </div>
+                            <div class="flex items-center gap-4 text-sm text-slate-400">
+                              <span class="flex items-center gap-1.5">
+                                <Clock class="w-3.5 h-3.5" />
+                                {formatDuration(session.startedAt, session.endedAt)}
+                              </span>
+                              <span class="flex items-center gap-1.5">
+                                <BookOpen class="w-3.5 h-3.5" />
+                                {session.entries.length}{' '}
+                                {session.entries.length === 1
+                                  ? t('sessionsList.blocVisited.one')
+                                  : t('sessionsList.blocVisited.other')}
+                              </span>
+                            </div>
+                          </div>
                         </div>
 
-                        <div class="min-w-0">
-                          <div class="flex items-center gap-2 flex-wrap mb-1">
-                            <span
-                              class={`text-xs px-2 py-0.5 rounded-full border font-medium ${cfg.cls}`}
-                            >
-                              {t(cfg.labelKey as any)}
-                            </span>
-                            <span class="text-xs text-slate-500">
-                              {formatDate(session.startedAt)}
-                            </span>
-                          </div>
-                          <div class="flex items-center gap-4 text-sm text-slate-400">
-                            <span class="flex items-center gap-1.5">
-                              <Clock class="w-3.5 h-3.5" />
-                              {formatDuration(session.startedAt, session.endedAt)}
-                            </span>
-                            <span class="flex items-center gap-1.5">
-                              <BookOpen class="w-3.5 h-3.5" />
-                              {session.entries.length}{' '}
-                              {session.entries.length === 1
-                                ? t('sessionsList.blocVisited.one')
-                                : t('sessionsList.blocVisited.other')}
-                            </span>
-                          </div>
-                        </div>
+                        {/* Arrow */}
+                        <ChevronRight class="w-5 h-5 text-slate-600 group-hover:text-white transition-colors flex-shrink-0" />
                       </div>
+                    </button>
 
-                      {/* Arrow */}
-                      <ChevronRight class="w-5 h-5 text-slate-600 group-hover:text-white transition-colors flex-shrink-0" />
-                    </div>
-                  </button>
+                    {/* Bouton "Terminer" — MJ uniquement, sessions actives seulement */}
+                    <Show when={isDm() && session.status === GameSessionStatus.Active}>
+                      <button
+                        onClick={(e) => handleEndSession(session, e)}
+                        disabled={endingId() === session.id}
+                        title="Mettre fin à cette session"
+                        aria-label="Mettre fin à cette session"
+                        class="flex items-center justify-center w-12 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 hover:border-red-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                      >
+                        <Show when={endingId() === session.id}
+                          fallback={<StopCircle class="w-5 h-5" />}
+                        >
+                          <Loader2 class="w-4 h-4 animate-spin" />
+                        </Show>
+                      </button>
+                    </Show>
+                  </div>
                 );
               }}
             </For>
