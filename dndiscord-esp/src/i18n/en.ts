@@ -313,6 +313,17 @@ export const en = {
   "createCharacter.submitting": "Creating…",
   "createCharacter.errorNameRequired": "Please enter a name for your character.",
 
+  // CampaignSessionsListPage
+  "sessionsList.loading": "Loading sessions…",
+  "sessionsList.loadError": "Failed to load sessions.",
+  "sessionsList.empty": "No sessions played for this campaign.",
+  "sessionsList.emptyHint": "Launch a session from the campaign page.",
+  "sessionsList.status.active": "Active",
+  "sessionsList.status.completed": "Completed",
+  "sessionsList.status.abandoned": "Abandoned",
+  "sessionsList.blocVisited.one": "block visited",
+  "sessionsList.blocVisited.other": "blocks visited",
+
   // CampaignManagerPage
   "campaignManager.toolbar.exportImport": "Export / Import",
   "campaignManager.toolbar.save": "Save",
