@@ -59,17 +59,19 @@ export const TopBar: Component = () => {
               type="button"
               onClick={() => safeBack(navigate)}
               aria-label={t("topbar.back")}
-              class="p-2 rounded-ds-md text-mid hover:text-high hover:bg-ink-700 transition-colors duration-ds-xs focus-ring-gold"
+              class="w-9 h-9 inline-flex items-center justify-center rounded-ds-md text-mid hover:text-high hover:bg-ink-700 transition-colors duration-ds-xs focus-ring-gold"
             >
               <ChevronLeft size={20} aria-hidden="true" />
             </button>
           </Show>
           <A
             href="/"
-            class="flex items-center gap-2 px-2 py-1 rounded-ds-md hover:bg-ink-700 transition-colors duration-ds-xs focus-ring-gold"
+            class="flex items-center gap-2 px-2 py-1 rounded-ds-md hover:bg-ink-700 transition-colors duration-ds-xs focus-ring-gold min-w-fit"
           >
-            <Hexagon size={18} class="text-gold-300" aria-hidden="true" />
-            <span class="font-display font-semibold text-ds-body text-high tracking-wide">DnDiscord</span>
+            <span class="inline-flex items-center justify-center w-[22px] h-[22px]">
+              <Hexagon size={18} class="text-gold-300" aria-hidden="true" />
+            </span>
+            <span class="font-display font-bold text-[14px] text-high uppercase tracking-[0.12em]">DnDiscord</span>
           </A>
         </div>
 
@@ -110,7 +112,7 @@ export const TopBar: Component = () => {
             <A
               href="/settings"
               aria-label={t("topbar.settings")}
-              class="p-2 rounded-ds-md text-mid hover:text-high hover:bg-ink-700 transition-colors duration-ds-xs focus-ring-gold"
+              class="w-9 h-9 inline-flex items-center justify-center rounded-ds-md text-mid hover:text-high hover:bg-ink-700 transition-colors duration-ds-xs focus-ring-gold"
             >
               <SettingsIcon size={20} aria-hidden="true" />
             </A>

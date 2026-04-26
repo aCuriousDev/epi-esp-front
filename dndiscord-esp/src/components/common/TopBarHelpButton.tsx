@@ -25,7 +25,7 @@ export const TopBarHelpButton: Component = () => {
         type="button"
         onClick={handle}
         aria-label={t("topbar.help")}
-        class="p-2 rounded-ds-md text-mid hover:text-high hover:bg-ink-700 transition-colors duration-ds-xs focus-ring-gold"
+        class="w-9 h-9 inline-flex items-center justify-center rounded-ds-md text-mid hover:text-high hover:bg-ink-700 transition-colors duration-ds-xs focus-ring-gold"
       >
         <BookOpen size={20} aria-hidden="true" />
       </button>

@@ -27,7 +27,7 @@ export const OverflowMenu: Component<{ items: OverflowMenuItem[]; ariaLabel: str
         aria-label={props.ariaLabel}
         aria-haspopup="menu"
         aria-expanded={open()}
-        class="p-2 rounded-ds-md text-mid hover:text-high hover:bg-ink-700 transition-colors duration-ds-xs focus-ring-gold"
+        class="w-9 h-9 inline-flex items-center justify-center rounded-ds-md text-mid hover:text-high hover:bg-ink-700 transition-colors duration-ds-xs focus-ring-gold"
       >
         <MoreHorizontal size={20} aria-hidden="true" />
       </button>
