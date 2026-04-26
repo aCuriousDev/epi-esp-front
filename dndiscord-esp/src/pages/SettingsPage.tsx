@@ -1,7 +1,6 @@
 import { A, useNavigate } from "@solidjs/router";
 import { createSignal, Show, For } from "solid-js";
 import {
-  ArrowLeft,
   Settings,
   Volume2,
   VolumeX,
@@ -51,13 +50,15 @@ import type {
   HardwareScaling,
 } from "../engine/quality/QualityPresets";
 import { getEngine } from "../components/GameCanvas";
+import PageMeta from "../layouts/PageMeta";
+import { t } from "../i18n";
 
 const PRESETS: { id: QualityPreset; label: string }[] = [
-  { id: "low", label: "Bas" },
-  { id: "medium", label: "Moyen" },
-  { id: "high", label: "Élevé" },
+  { id: "low", label: "Low" },
+  { id: "medium", label: "Medium" },
+  { id: "high", label: "High" },
   { id: "ultra", label: "Ultra" },
-  { id: "custom", label: "Perso." },
+  { id: "custom", label: "Custom" },
 ];
 
 const EFFECT_ITEMS: {
@@ -69,8 +70,8 @@ const EFFECT_ITEMS: {
   { key: "vignette", label: "Vignette" },
   { key: "chromaticAberration", label: "Aberration" },
   { key: "glow", label: "Glow" },
-  { key: "ambientParticles", label: "Particules" },
-  { key: "shadows", label: "Ombres" },
+  { key: "ambientParticles", label: "Particles" },
+  { key: "shadows", label: "Shadows" },
 ];
 
 const DEBUG_ITEMS: {
@@ -102,9 +103,7 @@ export default function SettingsPage() {
   const [deleteError, setDeleteError] = createSignal<string | null>(null);
   const [exportError, setExportError] = createSignal<string | null>(null);
 
-  // ESC ferme le modal de confirmation de suppression (tant qu'on n'est
-  // pas déjà en cours de suppression — un ESC pendant la requête serait
-  // trompeur).
+  // ESC closes the delete confirmation modal (unless deletion is in progress).
   useEscapeToClose(
     () => showDeleteConfirm() && !isDeletingAccount(),
     () => setShowDeleteConfirm(false),
@@ -115,8 +114,6 @@ export default function SettingsPage() {
     setIsDeletingAccount(true);
     try {
       await AuthService.deleteAccount();
-      // Suppression effective : on vide l'état front, on pose un flag
-      // one-shot pour afficher la confirmation côté /login, puis redirect.
       consentStore.clearPreferenceStorage();
       await authStore.logout();
       try { sessionStorage.setItem("account_just_deleted", "1"); } catch { /* ignore */ }
@@ -125,7 +122,7 @@ export default function SettingsPage() {
       setDeleteError(
         typeof err === "string"
           ? err
-          : "La suppression a échoué. Merci de réessayer ou de contacter le support.",
+          : "Deletion failed. Please try again or contact support.",
       );
     } finally {
       setIsDeletingAccount(false);
@@ -140,8 +137,6 @@ export default function SettingsPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      // Préfixe DiscordId + horodatage ms pour éviter la collision en cas
-      // d'export multiple rapproché (avant/après édition de profil).
       const idPrefix = authStore.user()?.discordId?.slice(0, 8) ?? "user";
       const ts = new Date().toISOString().replace(/[:.]/g, "-");
       a.download = `dndiscord-export-${idPrefix}-${ts}.json`;
@@ -150,10 +145,7 @@ export default function SettingsPage() {
       a.remove();
       URL.revokeObjectURL(url);
     } catch (err: any) {
-      // En cas d'erreur 5xx, axios résout tout de même le body en Blob
-      // (à cause de responseType: "blob"). On tente de le lire en texte
-      // pour récupérer le message d'erreur JSON serveur (sinon fallback).
-      let msg = "L'export a échoué. Merci de réessayer ou de contacter le support.";
+      let msg = "Export failed. Please try again or contact support.";
       try {
         const blob = err?.response?.data;
         if (blob instanceof Blob) {
@@ -164,7 +156,7 @@ export default function SettingsPage() {
           msg = err;
         }
       } catch {
-        /* on garde le fallback */
+        /* keep fallback */
       }
       setExportError(msg);
     } finally {
@@ -190,669 +182,639 @@ export default function SettingsPage() {
 
   function handleReplayTutorial() {
     restartTutorialTest();
-    // Revenir au menu pour démarrer proprement le flow du tuto
     navigate("/", { replace: true });
   }
 
   return (
-    <div class="settings-page min-h-screen w-full overflow-y-auto">
-      {/* Animated background elements */}
-      <div class="fixed inset-0 overflow-hidden pointer-events-none">
-        <div class="absolute top-1/4 -left-32 w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-3xl" />
-        <div class="absolute bottom-1/4 -right-32 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-3xl" />
-      </div>
+    <>
+      <PageMeta title={t("page.settings.title")} />
 
-      {/* Vignette */}
-      <div class="vignette fixed inset-0 pointer-events-none" />
+      <div class="settings-page min-h-screen w-full overflow-y-auto">
+        {/* Animated background elements */}
+        <div class="fixed inset-0 overflow-hidden pointer-events-none">
+          <div class="absolute top-1/4 -left-32 w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-3xl" />
+          <div class="absolute bottom-1/4 -right-32 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-3xl" />
+        </div>
 
-      {/* Header */}
-      <header class="sticky top-0 z-30 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-game-dark/80 backdrop-blur-md">
-        <button
-          onClick={() => navigate("/")}
-          class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
-        >
-          <ArrowLeft class="w-5 h-5" />
-          <span class="hidden sm:inline">Retour au menu</span>
-        </button>
+        <main class="relative z-10 max-w-2xl mx-auto p-6 pt-8 pb-20 space-y-6">
+          {/* User Profile Section */}
+          <Show when={authStore.isAuthenticated()}>
+            <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
+              <div class="p-5 border-b border-white/10">
+                <h2 class="font-display text-lg text-white flex items-center gap-2">
+                  <User class="w-5 h-5 text-purple-400" />
+                  {t("page.settings.section.account")}
+                </h2>
+              </div>
+              <div class="p-5">
+                <div class="flex items-center gap-4">
+                  <div class="w-16 h-16 rounded-full overflow-hidden border-2 border-purple-500/30">
+                    <img
+                      src={avatarUrl()}
+                      alt={user()?.username || "Avatar"}
+                      class="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div class="flex-1">
+                    <p class="text-white font-semibold text-lg">
+                      {user()?.username}
+                    </p>
+                    <p class="text-slate-400 text-sm">
+                      {user()?.email || t("page.settings.emailEmpty")}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => navigate("/profile")}
+                    class="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-slate-300 hover:text-white transition-all text-sm"
+                  >
+                    {t("page.settings.viewProfile")}
+                  </button>
+                </div>
+              </div>
+            </section>
+          </Show>
 
-        <h1 class="font-display text-xl text-white tracking-wide flex items-center gap-2">
-          <Settings class="w-5 h-5 text-purple-400" />
-          Paramètres
-        </h1>
-
-        <div class="w-24" />
-      </header>
-
-      <main class="relative z-10 max-w-2xl mx-auto p-6 pt-8 pb-20 space-y-6">
-        {/* User Profile Section */}
-        <Show when={authStore.isAuthenticated()}>
+          {/* Audio Settings */}
           <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
             <div class="p-5 border-b border-white/10">
               <h2 class="font-display text-lg text-white flex items-center gap-2">
-                <User class="w-5 h-5 text-purple-400" />
-                Compte
-              </h2>
-            </div>
-            <div class="p-5">
-              <div class="flex items-center gap-4">
-                <div class="w-16 h-16 rounded-full overflow-hidden border-2 border-purple-500/30">
-                  <img
-                    src={avatarUrl()}
-                    alt={user()?.username || "Avatar"}
-                    class="w-full h-full object-cover"
-                  />
-                </div>
-                <div class="flex-1">
-                  <p class="text-white font-semibold text-lg">
-                    {user()?.username}
-                  </p>
-                  <p class="text-slate-400 text-sm">
-                    {user()?.email || "Email non renseigné"}
-                  </p>
-                </div>
-                <button
-                  onClick={() => navigate("/profile")}
-                  class="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-slate-300 hover:text-white transition-all text-sm"
-                >
-                  Voir le profil
-                </button>
-              </div>
-            </div>
-          </section>
-        </Show>
-
-        {/* Audio Settings */}
-        <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
-          <div class="p-5 border-b border-white/10">
-            <h2 class="font-display text-lg text-white flex items-center gap-2">
-              <Volume2 class="w-5 h-5 text-blue-400" />
-              Audio
-            </h2>
-          </div>
-          <div class="p-5 space-y-4">
-            <SettingToggle
-              icon={<Volume2 class="w-5 h-5" />}
-              label="Effets sonores"
-              description="Sons d'interface et de combat"
-              enabled={soundEnabled()}
-              onToggle={() => setSfxEnabled(!soundEnabled())}
-            />
-            <SettingToggle
-              icon={<Gamepad2 class="w-5 h-5" />}
-              label="Musique de fond"
-              description="Ambiance musicale pendant le jeu"
-              enabled={musicEnabled()}
-              onToggle={() => setMusicEnabled(!musicEnabled())}
-            />
-          </div>
-        </section>
-
-        {/* Graphics Settings */}
-        <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
-          <div class="p-5 border-b border-white/10">
-            <h2 class="font-display text-lg text-white flex items-center gap-2">
-              <Sparkles class="w-5 h-5 text-pink-400" />
-              Graphique
-            </h2>
-          </div>
-          <div class="p-5 space-y-5">
-            {/* Preset picker */}
-            <div>
-              <div class="flex items-center gap-3 mb-3">
-                <div class="w-10 h-10 rounded-xl bg-pink-500/20 flex items-center justify-center text-pink-400">
-                  <Gauge class="w-5 h-5" />
-                </div>
-                <div>
-                  <p class="text-white font-medium">Préréglage</p>
-                  <p class="text-slate-400 text-sm">
-                    Applique un jeu de valeurs équilibré pour votre machine
-                  </p>
-                </div>
-              </div>
-              <div class="grid grid-cols-5 gap-1 bg-white/5 rounded-xl p-1">
-                <For each={PRESETS}>
-                  {(p) => (
-                    <button
-                      onClick={() => setPreset(p.id)}
-                      class={`px-2 py-1.5 rounded-lg text-xs transition-all ${
-                        graphicsSettings.preset() === p.id
-                          ? "bg-pink-600 text-white"
-                          : "text-slate-400 hover:text-white hover:bg-white/10"
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  )}
-                </For>
-              </div>
-            </div>
-
-            {/* Effect toggles */}
-            <div class="space-y-3">
-              <p class="text-white text-sm font-medium flex items-center gap-2">
-                <Sliders class="w-4 h-4 text-pink-300" />
-                Effets visuels
-              </p>
-              <div class="grid grid-cols-2 gap-2">
-                <For each={EFFECT_ITEMS}>
-                  {(e) => (
-                    <label class="flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors cursor-pointer">
-                      <span class="text-slate-200 text-sm">{e.label}</span>
-                      <input
-                        type="checkbox"
-                        class="accent-pink-500"
-                        checked={graphicsSettings.effects()[e.key]}
-                        onChange={(ev) =>
-                          setEffect(e.key, ev.currentTarget.checked)
-                        }
-                      />
-                    </label>
-                  )}
-                </For>
-              </div>
-            </div>
-
-            {/* Shadow resolution */}
-            <div>
-              <p class="text-white text-sm font-medium mb-2">
-                Résolution des ombres
-              </p>
-              <div class="grid grid-cols-4 gap-1 bg-white/5 rounded-xl p-1">
-                <For each={SHADOW_RESOLUTIONS}>
-                  {(res) => (
-                    <button
-                      onClick={() => setShadowResolution(res)}
-                      class={`px-2 py-1.5 rounded-lg text-xs transition-all ${
-                        graphicsSettings.shadowResolution() === res
-                          ? "bg-pink-600 text-white"
-                          : "text-slate-400 hover:text-white hover:bg-white/10"
-                      }`}
-                    >
-                      {res}
-                    </button>
-                  )}
-                </For>
-              </div>
-            </div>
-
-            {/* Hardware scaling */}
-            <div>
-              <p class="text-white text-sm font-medium mb-2">
-                Échelle de rendu
-                <span class="text-slate-500 text-xs ml-2">
-                  (plus haut = plus rapide, moins net)
-                </span>
-              </p>
-              <div class="grid grid-cols-4 gap-1 bg-white/5 rounded-xl p-1">
-                <For each={HARDWARE_SCALINGS}>
-                  {(s) => (
-                    <button
-                      onClick={() => setHardwareScaling(s)}
-                      class={`px-2 py-1.5 rounded-lg text-xs transition-all ${
-                        graphicsSettings.hardwareScaling() === s
-                          ? "bg-pink-600 text-white"
-                          : "text-slate-400 hover:text-white hover:bg-white/10"
-                      }`}
-                    >
-                      {s.toFixed(2)}x
-                    </button>
-                  )}
-                </For>
-              </div>
-            </div>
-
-            {/* Debug */}
-            <div class="space-y-3 border-t border-white/10 pt-4">
-              <p class="text-white text-sm font-medium flex items-center gap-2">
-                <Bug class="w-4 h-4 text-amber-300" />
-                Outils de debug
-              </p>
-              <div class="grid grid-cols-2 gap-2">
-                <For each={DEBUG_ITEMS}>
-                  {(d) => (
-                    <label class="flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors cursor-pointer">
-                      <span class="text-slate-200 text-sm">{d.label}</span>
-                      <input
-                        type="checkbox"
-                        class="accent-amber-400"
-                        checked={graphicsSettings.debug()[d.key]}
-                        onChange={(ev) =>
-                          setDebug(d.key, ev.currentTarget.checked)
-                        }
-                      />
-                    </label>
-                  )}
-                </For>
-              </div>
-              <button
-                onClick={() => getEngine()?.showInspector()}
-                class="w-full px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-400/30 rounded-lg text-amber-200 text-sm transition-colors"
-              >
-                Ouvrir l'inspecteur Babylon
-              </button>
-            </div>
-
-            <button
-              onClick={resetGraphicsDefaults}
-              class="w-full px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-slate-300 text-sm transition-colors"
-            >
-              Réinitialiser aux valeurs par défaut
-            </button>
-          </div>
-        </section>
-
-        {/* Appearance Settings */}
-        <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
-          <div class="p-5 border-b border-white/10">
-            <h2 class="font-display text-lg text-white flex items-center gap-2">
-              <Palette class="w-5 h-5 text-purple-400" />
-              Apparence
-            </h2>
-          </div>
-          <div class="p-5 space-y-4">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400">
-                  <Moon class="w-5 h-5" />
-                </div>
-                <div>
-                  <p class="text-white font-medium">Thème</p>
-                  <p class="text-slate-400 text-sm">
-                    Choisissez l'apparence de l'interface
-                  </p>
-                </div>
-              </div>
-              <div class="flex gap-1 bg-white/5 rounded-xl p-1">
-                <ThemeButton
-                  icon={<Moon class="w-4 h-4" />}
-                  active={theme() === "dark"}
-                  onClick={() => setTheme("dark")}
-                  label="Sombre"
-                />
-                <ThemeButton
-                  icon={<Sun class="w-4 h-4" />}
-                  active={theme() === "light"}
-                  onClick={() => setTheme("light")}
-                  label="Clair"
-                />
-                <ThemeButton
-                  icon={<Monitor class="w-4 h-4" />}
-                  active={theme() === "system"}
-                  onClick={() => setTheme("system")}
-                  label="Auto"
-                />
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Notifications Settings */}
-        <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
-          <div class="p-5 border-b border-white/10">
-            <h2 class="font-display text-lg text-white flex items-center gap-2">
-              <Bell class="w-5 h-5 text-yellow-400" />
-              Notifications
-            </h2>
-          </div>
-          <div class="p-5 space-y-4">
-            <SettingToggle
-              icon={<Bell class="w-5 h-5" />}
-              label="Notifications"
-              description="Recevoir des notifications pour les sessions et messages"
-              enabled={notificationsEnabled()}
-              onToggle={() => setNotificationsEnabled(!notificationsEnabled())}
-            />
-          </div>
-        </section>
-
-        {/* Tutorial (test mode) */}
-        <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
-          <div class="p-5 border-b border-white/10">
-            <h2 class="font-display text-lg text-white flex items-center gap-2">
-              <BookOpen class="w-5 h-5 text-purple-400" />
-              Tutoriel
-            </h2>
-          </div>
-          <div class="p-5">
-            <div class="flex items-center justify-between gap-4">
-              <div class="min-w-0">
-                <p class="text-white font-medium">Rejouer le tutoriel</p>
-                <p class="text-slate-400 text-sm">
-                  Relance l’onboarding pour tester ou revoir les étapes.
-                </p>
-              </div>
-              <button
-                onClick={handleReplayTutorial}
-                class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-xl text-white transition-all text-sm whitespace-nowrap"
-              >
-                Lancer
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* Language Settings */}
-        <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
-          <div class="p-5 border-b border-white/10">
-            <h2 class="font-display text-lg text-white flex items-center gap-2">
-              <Globe class="w-5 h-5 text-green-400" />
-              Langue
-            </h2>
-          </div>
-          <div class="p-5">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center text-green-400">
-                  <Globe class="w-5 h-5" />
-                </div>
-                <div>
-                  <p class="text-white font-medium">Langue de l'interface</p>
-                  <p class="text-slate-400 text-sm">
-                    Choisissez votre langue préférée
-                  </p>
-                </div>
-              </div>
-              <select
-                value={language()}
-                onChange={(e) => setLanguage(e.currentTarget.value)}
-                class="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50 cursor-pointer"
-              >
-                <option value="fr" class="bg-game-dark">
-                  FR — Français
-                </option>
-                <option value="en" class="bg-game-dark">
-                  EN — English
-                </option>
-                <option value="es" class="bg-game-dark">
-                  ES — Español
-                </option>
-                <option value="de" class="bg-game-dark">
-                  DE — Deutsch
-                </option>
-              </select>
-            </div>
-          </div>
-        </section>
-
-        {/* Privacy & Data (RGPD) — section entièrement gatée : le bouton
-            "Exporter" et la section "Supprimer le compte" (Danger Zone)
-            nécessitent un compte authentifié. Les liens légaux restent
-            accessibles via le footer de LoginPage pour les non-loggués. */}
-        <Show when={authStore.isAuthenticated()}>
-        <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
-          <div class="p-5 border-b border-white/10">
-            <h2 class="font-display text-lg text-white flex items-center gap-2">
-              <ShieldCheck class="w-5 h-5 text-purple-400" />
-              Confidentialité & données
-            </h2>
-          </div>
-          <div class="p-5 space-y-4">
-              <div class="flex items-center justify-between gap-3">
-                <div class="flex items-center gap-3 min-w-0">
-                  <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
-                    <Download class="w-5 h-5" />
-                  </div>
-                  <div class="min-w-0">
-                    <p class="text-white font-medium">Exporter mes données</p>
-                    <p class="text-slate-400 text-sm">
-                      Télécharge un fichier JSON de votre compte, personnages
-                      et campagnes (droit à la portabilité — RGPD art. 20).
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={handleExportData}
-                  disabled={isExporting()}
-                  class="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-xl text-purple-200 transition-all text-sm whitespace-nowrap disabled:opacity-50"
-                >
-                  {isExporting() ? "Export..." : "Exporter"}
-                </button>
-              </div>
-              <Show when={exportError()}>
-                <p class="text-red-400 text-xs">{exportError()}</p>
-              </Show>
-
-            <div class="flex items-center justify-between gap-3 pt-4 border-t border-white/10">
-              <div class="flex items-center gap-3 min-w-0">
-                <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
-                  <Cookie class="w-5 h-5" />
-                </div>
-                <div class="min-w-0">
-                  <p class="text-white font-medium">Stockage local</p>
-                  <p class="text-slate-400 text-sm">
-                    Consultez et effacez vos préférences locales.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => consentStore.openPreferences()}
-                class="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-slate-200 transition-all text-sm whitespace-nowrap"
-              >
-                Gérer
-              </button>
-            </div>
-
-            <div class="flex flex-wrap items-center gap-3 pt-4 border-t border-white/10">
-              <A
-                href="/privacy"
-                class="inline-flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200 transition-colors"
-              >
-                <ShieldCheck class="w-4 h-4" />
-                Politique de confidentialité
-              </A>
-              <span class="text-slate-600">·</span>
-              <A
-                href="/terms"
-                class="inline-flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200 transition-colors"
-              >
-                <Scale class="w-4 h-4" />
-                Conditions générales
-              </A>
-              <span class="text-slate-600">·</span>
-              <A
-                href="/legal"
-                class="inline-flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200 transition-colors"
-              >
-                Mentions légales
-              </A>
-              <span class="text-slate-600">·</span>
-              <A
-                href="/cookies"
-                class="inline-flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200 transition-colors"
-              >
-                <Cookie class="w-4 h-4" />
-                Politique cookies
-              </A>
-            </div>
-          </div>
-        </section>
-        </Show>
-
-        {/* Danger Zone */}
-        <Show when={authStore.isAuthenticated()}>
-          <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-red-500/20 rounded-2xl overflow-hidden">
-            <div class="p-5 border-b border-red-500/20">
-              <h2 class="font-display text-lg text-red-400 flex items-center gap-2">
-                <Trash2 class="w-5 h-5" />
-                Zone de danger
+                <Volume2 class="w-5 h-5 text-blue-400" />
+                {t("page.settings.section.audio")}
               </h2>
             </div>
             <div class="p-5 space-y-4">
-              {/* Logout */}
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center text-orange-400">
-                    <LogOut class="w-5 h-5" />
+              <SettingToggle
+                icon={<Volume2 class="w-5 h-5" />}
+                label={t("page.settings.sfx")}
+                description={t("page.settings.sfx.desc")}
+                enabled={soundEnabled()}
+                onToggle={() => setSfxEnabled(!soundEnabled())}
+              />
+              <SettingToggle
+                icon={<Gamepad2 class="w-5 h-5" />}
+                label={t("page.settings.music")}
+                description={t("page.settings.music.desc")}
+                enabled={musicEnabled()}
+                onToggle={() => setMusicEnabled(!musicEnabled())}
+              />
+            </div>
+          </section>
+
+          {/* Graphics Settings */}
+          <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
+            <div class="p-5 border-b border-white/10">
+              <h2 class="font-display text-lg text-white flex items-center gap-2">
+                <Sparkles class="w-5 h-5 text-pink-400" />
+                {t("page.settings.section.graphics")}
+              </h2>
+            </div>
+            <div class="p-5 space-y-5">
+              {/* Preset picker */}
+              <div>
+                <div class="flex items-center gap-3 mb-3">
+                  <div class="w-10 h-10 rounded-xl bg-pink-500/20 flex items-center justify-center text-pink-400">
+                    <Gauge class="w-5 h-5" />
                   </div>
                   <div>
-                    <p class="text-white font-medium">Se déconnecter</p>
-                    <p class="text-slate-400 text-sm">Fermer votre session</p>
+                    <p class="text-white font-medium">{t("page.settings.preset")}</p>
+                    <p class="text-slate-400 text-sm">
+                      {t("page.settings.preset.desc")}
+                    </p>
                   </div>
                 </div>
+                <div class="grid grid-cols-5 gap-1 bg-white/5 rounded-xl p-1">
+                  <For each={PRESETS}>
+                    {(p) => (
+                      <button
+                        onClick={() => setPreset(p.id)}
+                        class={`px-2 py-1.5 rounded-lg text-xs transition-all ${
+                          graphicsSettings.preset() === p.id
+                            ? "bg-pink-600 text-white"
+                            : "text-slate-400 hover:text-white hover:bg-white/10"
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </div>
+
+              {/* Effect toggles */}
+              <div class="space-y-3">
+                <p class="text-white text-sm font-medium flex items-center gap-2">
+                  <Sliders class="w-4 h-4 text-pink-300" />
+                  {t("page.settings.effects")}
+                </p>
+                <div class="grid grid-cols-2 gap-2">
+                  <For each={EFFECT_ITEMS}>
+                    {(e) => (
+                      <label class="flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors cursor-pointer">
+                        <span class="text-slate-200 text-sm">{e.label}</span>
+                        <input
+                          type="checkbox"
+                          class="accent-pink-500"
+                          checked={graphicsSettings.effects()[e.key]}
+                          onChange={(ev) =>
+                            setEffect(e.key, ev.currentTarget.checked)
+                          }
+                        />
+                      </label>
+                    )}
+                  </For>
+                </div>
+              </div>
+
+              {/* Shadow resolution */}
+              <div>
+                <p class="text-white text-sm font-medium mb-2">
+                  {t("page.settings.shadowRes")}
+                </p>
+                <div class="grid grid-cols-4 gap-1 bg-white/5 rounded-xl p-1">
+                  <For each={SHADOW_RESOLUTIONS}>
+                    {(res) => (
+                      <button
+                        onClick={() => setShadowResolution(res)}
+                        class={`px-2 py-1.5 rounded-lg text-xs transition-all ${
+                          graphicsSettings.shadowResolution() === res
+                            ? "bg-pink-600 text-white"
+                            : "text-slate-400 hover:text-white hover:bg-white/10"
+                        }`}
+                      >
+                        {res}
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </div>
+
+              {/* Hardware scaling */}
+              <div>
+                <p class="text-white text-sm font-medium mb-2">
+                  {t("page.settings.renderScale")}
+                  <span class="text-slate-500 text-xs ml-2">
+                    {t("page.settings.renderScale.hint")}
+                  </span>
+                </p>
+                <div class="grid grid-cols-4 gap-1 bg-white/5 rounded-xl p-1">
+                  <For each={HARDWARE_SCALINGS}>
+                    {(s) => (
+                      <button
+                        onClick={() => setHardwareScaling(s)}
+                        class={`px-2 py-1.5 rounded-lg text-xs transition-all ${
+                          graphicsSettings.hardwareScaling() === s
+                            ? "bg-pink-600 text-white"
+                            : "text-slate-400 hover:text-white hover:bg-white/10"
+                        }`}
+                      >
+                        {s.toFixed(2)}x
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </div>
+
+              {/* Debug */}
+              <div class="space-y-3 border-t border-white/10 pt-4">
+                <p class="text-white text-sm font-medium flex items-center gap-2">
+                  <Bug class="w-4 h-4 text-amber-300" />
+                  {t("page.settings.debug")}
+                </p>
+                <div class="grid grid-cols-2 gap-2">
+                  <For each={DEBUG_ITEMS}>
+                    {(d) => (
+                      <label class="flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors cursor-pointer">
+                        <span class="text-slate-200 text-sm">{d.label}</span>
+                        <input
+                          type="checkbox"
+                          class="accent-amber-400"
+                          checked={graphicsSettings.debug()[d.key]}
+                          onChange={(ev) =>
+                            setDebug(d.key, ev.currentTarget.checked)
+                          }
+                        />
+                      </label>
+                    )}
+                  </For>
+                </div>
                 <button
-                  onClick={handleLogout}
-                  disabled={isLoggingOut()}
-                  class="px-4 py-2 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 rounded-xl text-orange-400 transition-all text-sm disabled:opacity-50"
+                  onClick={() => getEngine()?.showInspector()}
+                  class="w-full px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-400/30 rounded-lg text-amber-200 text-sm transition-colors"
                 >
-                  {isLoggingOut() ? "Déconnexion..." : "Déconnexion"}
+                  {t("page.settings.openInspector")}
                 </button>
               </div>
 
-              {/* Delete Account */}
-              <div class="flex items-center justify-between pt-4 border-t border-white/10">
+              <button
+                onClick={resetGraphicsDefaults}
+                class="w-full px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-slate-300 text-sm transition-colors"
+              >
+                {t("page.settings.resetDefaults")}
+              </button>
+            </div>
+          </section>
+
+          {/* Appearance Settings */}
+          <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
+            <div class="p-5 border-b border-white/10">
+              <h2 class="font-display text-lg text-white flex items-center gap-2">
+                <Palette class="w-5 h-5 text-purple-400" />
+                {t("page.settings.section.appearance")}
+              </h2>
+            </div>
+            <div class="p-5 space-y-4">
+              <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center text-red-400">
-                    <Trash2 class="w-5 h-5" />
+                  <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400">
+                    <Moon class="w-5 h-5" />
                   </div>
                   <div>
-                    <p class="text-white font-medium">Supprimer le compte</p>
+                    <p class="text-white font-medium">{t("page.settings.theme")}</p>
                     <p class="text-slate-400 text-sm">
-                      Cette action est irréversible (droit à l'effacement —
-                      RGPD art. 17).
+                      {t("page.settings.theme.desc")}
+                    </p>
+                  </div>
+                </div>
+                <div class="flex gap-1 bg-white/5 rounded-xl p-1">
+                  <ThemeButton
+                    icon={<Moon class="w-4 h-4" />}
+                    active={theme() === "dark"}
+                    onClick={() => setTheme("dark")}
+                    label={t("page.settings.theme.dark")}
+                  />
+                  <ThemeButton
+                    icon={<Sun class="w-4 h-4" />}
+                    active={theme() === "light"}
+                    onClick={() => setTheme("light")}
+                    label={t("page.settings.theme.light")}
+                  />
+                  <ThemeButton
+                    icon={<Monitor class="w-4 h-4" />}
+                    active={theme() === "system"}
+                    onClick={() => setTheme("system")}
+                    label={t("page.settings.theme.auto")}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Notifications Settings */}
+          <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
+            <div class="p-5 border-b border-white/10">
+              <h2 class="font-display text-lg text-white flex items-center gap-2">
+                <Bell class="w-5 h-5 text-yellow-400" />
+                {t("page.settings.section.notifications")}
+              </h2>
+            </div>
+            <div class="p-5 space-y-4">
+              <SettingToggle
+                icon={<Bell class="w-5 h-5" />}
+                label={t("page.settings.notifications")}
+                description={t("page.settings.notifications.desc")}
+                enabled={notificationsEnabled()}
+                onToggle={() => setNotificationsEnabled(!notificationsEnabled())}
+              />
+            </div>
+          </section>
+
+          {/* Tutorial (test mode) */}
+          <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
+            <div class="p-5 border-b border-white/10">
+              <h2 class="font-display text-lg text-white flex items-center gap-2">
+                <BookOpen class="w-5 h-5 text-purple-400" />
+                {t("page.settings.section.tutorial")}
+              </h2>
+            </div>
+            <div class="p-5">
+              <div class="flex items-center justify-between gap-4">
+                <div class="min-w-0">
+                  <p class="text-white font-medium">{t("page.settings.replayTutorial")}</p>
+                  <p class="text-slate-400 text-sm">
+                    {t("page.settings.replayTutorial.desc")}
+                  </p>
+                </div>
+                <button
+                  onClick={handleReplayTutorial}
+                  class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-xl text-white transition-all text-sm whitespace-nowrap"
+                >
+                  {t("page.settings.replayTutorial.cta")}
+                </button>
+              </div>
+            </div>
+          </section>
+
+          {/* Language Settings */}
+          <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
+            <div class="p-5 border-b border-white/10">
+              <h2 class="font-display text-lg text-white flex items-center gap-2">
+                <Globe class="w-5 h-5 text-green-400" />
+                {t("page.settings.section.language")}
+              </h2>
+            </div>
+            <div class="p-5">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center text-green-400">
+                    <Globe class="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p class="text-white font-medium">{t("page.settings.languageLabel")}</p>
+                    <p class="text-slate-400 text-sm">
+                      {t("page.settings.languageHint")}
+                    </p>
+                  </div>
+                </div>
+                <select
+                  value={language()}
+                  onChange={(e) => setLanguage(e.currentTarget.value)}
+                  class="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50 cursor-pointer"
+                >
+                  <option value="fr" class="bg-game-dark">
+                    FR — Français
+                  </option>
+                  <option value="en" class="bg-game-dark">
+                    EN — English
+                  </option>
+                  <option value="es" class="bg-game-dark">
+                    ES — Español
+                  </option>
+                  <option value="de" class="bg-game-dark">
+                    DE — Deutsch
+                  </option>
+                </select>
+              </div>
+            </div>
+          </section>
+
+          {/* Privacy & Data (GDPR) — gated: requires authenticated account */}
+          <Show when={authStore.isAuthenticated()}>
+          <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
+            <div class="p-5 border-b border-white/10">
+              <h2 class="font-display text-lg text-white flex items-center gap-2">
+                <ShieldCheck class="w-5 h-5 text-purple-400" />
+                {t("page.settings.section.privacy")}
+              </h2>
+            </div>
+            <div class="p-5 space-y-4">
+                <div class="flex items-center justify-between gap-3">
+                  <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
+                      <Download class="w-5 h-5" />
+                    </div>
+                    <div class="min-w-0">
+                      <p class="text-white font-medium">{t("page.settings.exportData")}</p>
+                      <p class="text-slate-400 text-sm">
+                        {t("page.settings.exportData.desc")}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleExportData}
+                    disabled={isExporting()}
+                    class="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-xl text-purple-200 transition-all text-sm whitespace-nowrap disabled:opacity-50"
+                  >
+                    {isExporting() ? t("page.settings.exporting") : t("page.settings.export.cta")}
+                  </button>
+                </div>
+                <Show when={exportError()}>
+                  <p class="text-red-400 text-xs">{exportError()}</p>
+                </Show>
+
+              <div class="flex items-center justify-between gap-3 pt-4 border-t border-white/10">
+                <div class="flex items-center gap-3 min-w-0">
+                  <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
+                    <Cookie class="w-5 h-5" />
+                  </div>
+                  <div class="min-w-0">
+                    <p class="text-white font-medium">{t("page.settings.localStorage")}</p>
+                    <p class="text-slate-400 text-sm">
+                      {t("page.settings.localStorage.desc")}
                     </p>
                   </div>
                 </div>
                 <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  class="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-xl text-red-400 transition-all text-sm"
+                  onClick={() => consentStore.openPreferences()}
+                  class="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-slate-200 transition-all text-sm whitespace-nowrap"
                 >
-                  Supprimer
+                  {t("page.settings.manage")}
                 </button>
               </div>
-              <Show when={deleteError()}>
-                <p class="text-red-400 text-xs">{deleteError()}</p>
-              </Show>
+
+              <div class="flex flex-wrap items-center gap-3 pt-4 border-t border-white/10">
+                <A
+                  href="/privacy"
+                  class="inline-flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200 transition-colors"
+                >
+                  <ShieldCheck class="w-4 h-4" />
+                  {t("page.settings.privacyPolicy")}
+                </A>
+                <span class="text-slate-600">·</span>
+                <A
+                  href="/terms"
+                  class="inline-flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200 transition-colors"
+                >
+                  <Scale class="w-4 h-4" />
+                  {t("page.settings.terms")}
+                </A>
+                <span class="text-slate-600">·</span>
+                <A
+                  href="/legal"
+                  class="inline-flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200 transition-colors"
+                >
+                  {t("page.settings.legal")}
+                </A>
+                <span class="text-slate-600">·</span>
+                <A
+                  href="/cookies"
+                  class="inline-flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200 transition-colors"
+                >
+                  <Cookie class="w-4 h-4" />
+                  {t("page.settings.cookies")}
+                </A>
+              </div>
             </div>
           </section>
-        </Show>
+          </Show>
 
-        {/* App Info */}
-        <footer class="text-center pt-8 text-slate-500 text-sm">
-          <p>DnDiscord v1.0.0</p>
-          <p class="mt-1">Fait avec passion pour les joueurs de D&D</p>
-        </footer>
-      </main>
+          {/* Danger Zone */}
+          <Show when={authStore.isAuthenticated()}>
+            <section class="settings-card bg-game-dark/60 backdrop-blur-xl border border-red-500/20 rounded-2xl overflow-hidden">
+              <div class="p-5 border-b border-red-500/20">
+                <h2 class="font-display text-lg text-red-400 flex items-center gap-2">
+                  <Trash2 class="w-5 h-5" />
+                  {t("page.settings.section.dangerZone")}
+                </h2>
+              </div>
+              <div class="p-5 space-y-4">
+                {/* Logout */}
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center text-orange-400">
+                      <LogOut class="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p class="text-white font-medium">{t("page.settings.logout")}</p>
+                      <p class="text-slate-400 text-sm">{t("page.settings.logout.desc")}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    disabled={isLoggingOut()}
+                    class="px-4 py-2 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 rounded-xl text-orange-400 transition-all text-sm disabled:opacity-50"
+                  >
+                    {isLoggingOut() ? t("page.settings.loggingOut") : t("page.settings.logout")}
+                  </button>
+                </div>
 
-      {/* Delete Confirmation Modal */}
-      <Show when={showDeleteConfirm()}>
-        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div class="bg-game-dark border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl">
-            <div class="text-center mb-6">
-              <div class="mx-auto w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
-                <Trash2 class="w-8 h-8 text-red-400" />
-              </div>
-              <h3 class="text-xl font-semibold text-white mb-2">
-                Supprimer votre compte ?
-              </h3>
-              <p class="text-slate-400 text-sm">
-                Cette action supprimera définitivement votre compte, vos
-                personnages et toutes vos données. Cette action est
-                irréversible.
-              </p>
-              <div class="mt-4 rounded-lg bg-purple-500/10 border border-purple-500/20 p-3 text-left">
-                <p class="text-purple-200 text-xs font-medium mb-1">
-                  Révoquer aussi l'accès Discord ?
-                </p>
-                <p class="text-slate-300 text-xs leading-relaxed">
-                  Supprimer votre compte chez nous ne révoque pas
-                  l'autorisation OAuth côté Discord. Pour retirer
-                  complètement l'accès :{" "}
-                  <strong>Paramètres Discord → Applications autorisées →
-                  DnDiscord → Désautoriser</strong>.{" "}
-                  <a
-                    href="discord://users/@me/settings/authorized-apps"
-                    class="text-purple-300 underline hover:text-purple-200"
+                {/* Delete Account */}
+                <div class="flex items-center justify-between pt-4 border-t border-white/10">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center text-red-400">
+                      <Trash2 class="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p class="text-white font-medium">{t("page.settings.deleteAccount")}</p>
+                      <p class="text-slate-400 text-sm">
+                        {t("page.settings.deleteAccount.desc")}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    class="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-xl text-red-400 transition-all text-sm"
                   >
-                    Ouvrir dans Discord
-                  </a>{" "}
-                  ·{" "}
-                  <a
-                    href="https://discord.com/channels/@me"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-purple-300 underline hover:text-purple-200"
-                  >
-                    Web
-                  </a>
-                </p>
+                    {t("page.settings.delete.cta")}
+                  </button>
+                </div>
+                <Show when={deleteError()}>
+                  <p class="text-red-400 text-xs">{deleteError()}</p>
+                </Show>
               </div>
-            </div>
-            <Show when={deleteError()}>
-              <p class="text-red-400 text-xs mb-3 text-center">
-                {deleteError()}
-              </p>
-            </Show>
-            <div class="flex gap-3">
-              <button
-                ref={(el) => {
-                  // Autofocus sur "Annuler" plutôt que "Supprimer" — choix
-                  // destructif ne doit pas être le défaut clavier.
-                  if (showDeleteConfirm()) queueMicrotask(() => el?.focus());
-                }}
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={isDeletingAccount()}
-                class="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white transition-all disabled:opacity-50"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleDeleteAccount}
-                disabled={isDeletingAccount()}
-                class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-500 rounded-xl text-white transition-all disabled:opacity-50"
-              >
-                {isDeletingAccount() ? "Suppression..." : "Supprimer"}
-              </button>
+            </section>
+          </Show>
+
+          {/* App Info */}
+          <footer class="text-center pt-8 text-slate-500 text-sm">
+            <p>{t("page.settings.appVersion")}</p>
+            <p class="mt-1">{t("page.settings.appTagline")}</p>
+          </footer>
+        </main>
+
+        {/* Delete Confirmation Modal */}
+        <Show when={showDeleteConfirm()}>
+          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div class="bg-game-dark border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+              <div class="text-center mb-6">
+                <div class="mx-auto w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
+                  <Trash2 class="w-8 h-8 text-red-400" />
+                </div>
+                <h3 class="text-xl font-semibold text-white mb-2">
+                  {t("page.settings.deleteConfirm.title")}
+                </h3>
+                <p class="text-slate-400 text-sm">
+                  {t("page.settings.deleteConfirm.body")}
+                </p>
+                <div class="mt-4 rounded-lg bg-purple-500/10 border border-purple-500/20 p-3 text-left">
+                  <p class="text-purple-200 text-xs font-medium mb-1">
+                    {t("page.settings.deleteConfirm.revokeTitle")}
+                  </p>
+                  <p class="text-slate-300 text-xs leading-relaxed">
+                    {t("page.settings.deleteConfirm.revokeBody")}{" "}
+                    <strong>{t("page.settings.deleteConfirm.revokeInstructions")}</strong>.{" "}
+                    <a
+                      href="discord://users/@me/settings/authorized-apps"
+                      class="text-purple-300 underline hover:text-purple-200"
+                    >
+                      {t("page.settings.deleteConfirm.openDiscord")}
+                    </a>{" "}
+                    ·{" "}
+                    <a
+                      href="https://discord.com/channels/@me"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-purple-300 underline hover:text-purple-200"
+                    >
+                      {t("page.settings.deleteConfirm.web")}
+                    </a>
+                  </p>
+                </div>
+              </div>
+              <Show when={deleteError()}>
+                <p class="text-red-400 text-xs mb-3 text-center">
+                  {deleteError()}
+                </p>
+              </Show>
+              <div class="flex gap-3">
+                <button
+                  ref={(el) => {
+                    if (showDeleteConfirm()) queueMicrotask(() => el?.focus());
+                  }}
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={isDeletingAccount()}
+                  class="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white transition-all disabled:opacity-50"
+                >
+                  {t("page.settings.deleteConfirm.cancel")}
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={isDeletingAccount()}
+                  class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-500 rounded-xl text-white transition-all disabled:opacity-50"
+                >
+                  {isDeletingAccount() ? t("page.settings.deleting") : t("page.settings.deleteConfirm.confirm")}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      </Show>
+        </Show>
 
-      <style jsx>{`
-        .settings-page {
-          background: linear-gradient(
-            135deg,
-            var(--ink-700) 0%,
-            var(--ink-800) 50%,
-            var(--ink-900) 100%
-          );
-        }
-
-        .settings-card {
-          animation: cardFadeIn 0.4s ease-out;
-          animation-fill-mode: both;
-        }
-
-        .settings-card:nth-child(1) {
-          animation-delay: 0ms;
-        }
-        .settings-card:nth-child(2) {
-          animation-delay: 50ms;
-        }
-        .settings-card:nth-child(3) {
-          animation-delay: 100ms;
-        }
-        .settings-card:nth-child(4) {
-          animation-delay: 150ms;
-        }
-        .settings-card:nth-child(5) {
-          animation-delay: 200ms;
-        }
-        .settings-card:nth-child(6) {
-          animation-delay: 250ms;
-        }
-
-        @keyframes cardFadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(12px);
+        <style jsx>{`
+          .settings-page {
+            background: linear-gradient(
+              135deg,
+              var(--ink-700) 0%,
+              var(--ink-800) 50%,
+              var(--ink-900) 100%
+            );
           }
-          to {
-            opacity: 1;
-            transform: translateY(0);
+
+          .settings-card {
+            animation: cardFadeIn 0.4s ease-out;
+            animation-fill-mode: both;
           }
-        }
-      `}</style>
-    </div>
+
+          .settings-card:nth-child(1) {
+            animation-delay: 0ms;
+          }
+          .settings-card:nth-child(2) {
+            animation-delay: 50ms;
+          }
+          .settings-card:nth-child(3) {
+            animation-delay: 100ms;
+          }
+          .settings-card:nth-child(4) {
+            animation-delay: 150ms;
+          }
+          .settings-card:nth-child(5) {
+            animation-delay: 200ms;
+          }
+          .settings-card:nth-child(6) {
+            animation-delay: 250ms;
+          }
+
+          @keyframes cardFadeIn {
+            from {
+              opacity: 0;
+              transform: translateY(12px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+        `}</style>
+      </div>
+    </>
   );
 }
 
