@@ -29,6 +29,7 @@ import {
 import {
   setSession,
   clearSession,
+  clearGameStarted,
   setSessionError,
   setSessionLoading,
   applyJoinResult,
@@ -175,6 +176,10 @@ export async function createSession(campaignId: string): Promise<SessionInfo> {
   clearUnits();
   clearTiles();
   resetGameState();
+  // Effacer l'ancien payload GameStarted AVANT setSession.
+  // Sans ça, LobbyScreen lit immédiatement le payload de la session précédente
+  // et appelle onMultiplayerGameStart → le MJ atterrit sur la carte au lieu du lobby.
+  clearGameStarted();
   setSession(result);
   clearPartyChat();
   await tryBindDiscordVoiceToSession(result.sessionId);
@@ -308,6 +313,7 @@ export async function createRoom(maxPlayers: number): Promise<SessionInfo> {
   const raw = await signalRService.invoke(HUB.createRoom, maxPlayers);
   syncHubUserId();
   const result = normalizeSession(raw as Record<string, unknown>);
+  clearGameStarted(); // même protection que createSession
   setSession(result);
   return result;
 }

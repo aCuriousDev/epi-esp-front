@@ -50,7 +50,7 @@ export default function LoginButton(props: LoginButtonProps) {
         </svg>
         
         <span>
-          {isLoggingIn() ? "Connexion..." : "Se connecter avec Discord"}
+          {isLoggingIn() ? "Signing in..." : "Sign in with Discord"}
         </span>
 
         {/* Shine effect on hover */}

@@ -60,7 +60,9 @@ export default function CampaignView() {
   const [activeTab, setActiveTab] = createSignal<"overview" | "players">("overview");
   const [showInviteModal, setShowInviteModal] = createSignal(false);
   const [inviteCode, setInviteCode] = createSignal<string | null>(null);
-  const [launchingSession, setLaunchingSession] = createSignal(false);
+  // Signals indépendants — chaque bouton ne bloque que lui-même
+  const [launchingSession, setLaunchingSession] = createSignal(false); // lancement scénario
+  const [quickLaunching,   setQuickLaunching]   = createSignal(false); // lancement rapide
   const [launchError, setLaunchError] = createSignal<string | null>(null);
   const [sessionInvite, setSessionInvite] = createSignal<{
     sessionId: string;
@@ -223,30 +225,31 @@ export default function CampaignView() {
     return t("campaignView.relativeTime.monthsAgo", { n: diffMonths });
   };
 
-  /** Créer une session GameHub et aller au lobby Quick Launch (DM uniquement).
-   *  En mode Quick Launch le MJ choisit la carte dans le lobby et lance
-   *  directement le board — pas besoin d'arbre de scénario. */
+  /** Lancement rapide — session SignalR pure, SANS session DB ni historique.
+   *
+   *  createSession (SignalR hub) ≠ CampaignService.createSession (HTTP).
+   *  L'appel SignalR crée uniquement la session en mémoire et broadcast
+   *  SessionStarted au groupe campagne (les joueurs sont invités automatiquement),
+   *  sans écrire de CampaignGameSession en base.
+   *  La session DB n'est créée que dans CampaignSessionPage — que le lancement
+   *  rapide ne visite jamais → aucun historique généré. */
   const handleLaunchSession = async () => {
     const c = campaign();
-    if (!c || !isOwner() || launchingSession()) return;
+    if (!c || !isOwner() || quickLaunching()) return;
     setLaunchError(null);
-    setLaunchingSession(true);
+    setQuickLaunching(true);
     try {
       if (!signalRService.isConnected) {
         await signalRService.connect();
       }
       ensureMultiplayerHandlersRegistered();
+      // createSession (SignalR) : in-memory + broadcast SessionStarted — pas de DB
       await createSession(c.id);
-      // Quick Launch reuses the sandbox multiplayer lobby (LobbyScreen) — the
-      // session is already in the store with `campaignId` set, so BoardGame's
-      // onMount session-rehydration jumps straight to AppPhase.LOBBY.
-      // Routing through the stripped CampaignLobbyPage was the post-rework
-      // regression: it dropped map selection + default templates.
       navigate(`/practice/multiplayer`);
     } catch (e: any) {
       setLaunchError(e?.message ?? "Failed to create session.");
     } finally {
-      setLaunchingSession(false);
+      setQuickLaunching(false);
     }
   };
 
@@ -346,7 +349,7 @@ export default function CampaignView() {
 
   const handleLaunchCampaignSession = async () => {
     const c = campaign();
-    if (!c || !isOwner() || launchingSession()) return;
+    if (!c || !isOwner() || launchingSession()) return; // signal indépendant du quick launch
     setLaunchError(null);
     setLaunchingSession(true);
     try {
@@ -805,23 +808,23 @@ export default function CampaignView() {
               <Show when={isOwner()}>
                 {/* Row 1: Primary (Lancement rapide) + Secondary (Lancer la session) */}
                 <div class="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* PRIMARY — POC fast launch */}
+                  {/* PRIMARY — Lancement rapide (createRoom, sans historique) */}
                   <button
                     class="py-3 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold transition-all shadow-lg shadow-purple-500/20 flex items-center justify-center gap-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 motion-safe:hover:-translate-y-0.5"
                     onClick={handleLaunchSession}
-                    disabled={launchingSession()}
+                    disabled={quickLaunching()}
                     aria-label={t("campaignView.quickLaunch.ariaLabel")}
                   >
                     <Show
-                      when={launchingSession()}
+                      when={quickLaunching()}
                       fallback={<Swords class="w-5 h-5" aria-hidden="true" />}
                     >
                       <Loader2 class="w-5 h-5 animate-spin" aria-hidden="true" />
                     </Show>
-                    {launchingSession() ? t("campaignView.launchingSession") : t("campaignView.quickLaunch")}
+                    {quickLaunching() ? t("campaignView.launchingSession") : t("campaignView.quickLaunch")}
                   </button>
 
-                  {/* SECONDARY — story-tree lobby flow */}
+                  {/* SECONDARY — Lancement avec scénario (createSession, avec historique) */}
                   <button
                     onClick={handleLaunchCampaignSession}
                     disabled={launchingSession()}

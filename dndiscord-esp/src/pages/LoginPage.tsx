@@ -11,16 +11,16 @@ import { AnimatedD20 } from "../components/common/AnimatedD20";
 export default function LoginPage() {
   const navigate = useNavigate();
 
-  // Flag one-shot positionné par SettingsPage juste avant le redirect après
-  // suppression du compte (RGPD art. 17). On le lit puis on l'efface
-  // immédiatement — la bannière ne réapparaîtra pas au reload.
+  // One-shot flag set by SettingsPage just before the redirect after
+  // account deletion (GDPR art. 17). We read it then clear it
+  // immediately — the banner won't reappear on reload.
   const [showDeleted, setShowDeleted] = createSignal(false);
   try {
     if (sessionStorage.getItem("account_just_deleted") === "1") {
       sessionStorage.removeItem("account_just_deleted");
       setShowDeleted(true);
     }
-  } catch { /* sessionStorage indisponible : pas de bannière, pas grave */ }
+  } catch { /* sessionStorage unavailable: no banner, no big deal */ }
 
   // Redirect to home if already authenticated.
   createEffect(() => {
@@ -55,7 +55,7 @@ export default function LoginPage() {
               DnDiscord
             </h1>
             <p class="mt-4 text-slate-200/80 text-lg">
-              Votre aventure commence ici
+              Your adventure starts here
             </p>
           </header>
 
@@ -81,17 +81,17 @@ export default function LoginPage() {
                   >
                     Authorized Apps
                   </a>{" "}
-                  (ou <a
+                  (or <a
                     href="https://discord.com/channels/@me"
                     target="_blank"
                     rel="noopener noreferrer"
                     class="underline hover:text-white"
-                  >via le web</a>).
+                  >via the web</a>).
                 </p>
               </div>
               <button
                 onClick={() => setShowDeleted(false)}
-                aria-label="Fermer"
+                aria-label="Close"
                 class="flex-shrink-0 text-emerald-200/70 hover:text-emerald-100 text-xl leading-none px-1"
               >
                 ×
@@ -106,7 +106,7 @@ export default function LoginPage() {
             
             <div class="relative z-10">
               <h2 class="text-center text-xl font-semibold text-white mb-2">
-                Bienvenue, aventurier !
+                Welcome, adventurer!
               </h2>
               <p class="text-center text-slate-300/70 text-sm mb-8">
                 Sign in with Discord to access your characters and campaigns.
@@ -135,20 +135,20 @@ export default function LoginPage() {
                   {/* Features preview */}
                   <div class="w-full pt-6 border-t border-white/10">
                     <p class="text-center text-xs text-slate-400 uppercase tracking-wider mb-4">
-                      Ce qui vous attend
+                      What awaits you
                     </p>
                     <div class="grid grid-cols-3 gap-4">
-                      <FeaturePreview 
-                        icon={<Swords class="w-6 h-6 text-red-300" />} 
-                        label="Combats tactiques" 
+                      <FeaturePreview
+                        icon={<Swords class="w-6 h-6 text-red-300" />}
+                        label="Tactical combat"
                       />
-                      <FeaturePreview 
-                        icon={<Drama class="w-6 h-6 text-purple-300" />} 
-                        label="Personnages" 
+                      <FeaturePreview
+                        icon={<Drama class="w-6 h-6 text-purple-300" />}
+                        label="Characters"
                       />
-                      <FeaturePreview 
-                        icon={<ScrollText class="w-6 h-6 text-amber-300" />} 
-                        label="Campagnes" 
+                      <FeaturePreview
+                        icon={<ScrollText class="w-6 h-6 text-amber-300" />}
+                        label="Campaigns"
                       />
                     </div>
                   </div>
@@ -160,11 +160,11 @@ export default function LoginPage() {
           {/* Footer */}
           <footer class="mt-8 text-center space-y-2">
             <p class="text-slate-400/60 text-xs">
-              En vous connectant, vous acceptez nos{" "}
+              By signing in, you agree to our{" "}
               <A href="/terms" class="text-slate-300 hover:text-white underline">
-                conditions d'utilisation
+                terms of service
               </A>{" "}
-              et notre{" "}
+              and our{" "}
               <A href="/privacy" class="text-slate-300 hover:text-white underline">
                 privacy policy
               </A>
@@ -176,7 +176,7 @@ export default function LoginPage() {
               </A>
               <span>·</span>
               <A href="/cookies" class="hover:text-slate-300 transition-colors">
-                Politique cookies
+                Cookies policy
               </A>
             </p>
           </footer>

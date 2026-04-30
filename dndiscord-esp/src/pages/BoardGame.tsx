@@ -661,6 +661,38 @@ const BoardGame: Component = () => {
     }
   });
 
+  // ── Toast "Tour de…" ──────────────────────────────────────────────────────
+  // Affiché pendant 2.5 s à chaque changement de tour en PLAYER_TURN.
+  // isMyTurn = true → style accentué ("C'est votre tour !").
+  // isMyTurn = false → style sobre ("Tour de [nom]").
+  const [turnToast, setTurnToast] = createSignal<{ unitName: string; isMyTurn: boolean } | null>(null);
+  let turnToastTimer: number | null = null;
+  {
+    let lastTurnKey = '';
+    createEffect(() => {
+      const phase = gameState.phase;
+      const idx   = gameState.currentUnitIndex;
+      if (phase !== GamePhase.PLAYER_TURN) return;
+
+      const current = getCurrentUnit();
+      if (!current) return;
+
+      const key = `${idx}-${current.id}`;
+      if (key === lastTurnKey) return; // même tour, ne pas re-déclencher
+      lastTurnKey = key;
+
+      const mine = isCurrentUnitMine();
+      setTurnToast({ unitName: current.name, isMyTurn: mine });
+
+      if (turnToastTimer !== null) clearTimeout(turnToastTimer);
+      turnToastTimer = window.setTimeout(() => {
+        setTurnToast(null);
+        turnToastTimer = null;
+      }, 2500);
+    });
+  }
+  onCleanup(() => { if (turnToastTimer !== null) clearTimeout(turnToastTimer); });
+
   const [endTurnPending, setEndTurnPending] = createSignal(false);
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   let endTurnPendingTimer: number | null = null;
@@ -849,7 +881,7 @@ const BoardGame: Component = () => {
     >
       <div class="w-full h-screen-dynamic flex flex-col bg-game-darker overflow-hidden pb-safe-bottom">
         {/* Header */}
-        <header class="h-14 shrink-0 bg-gradient-to-r from-brandStart/90 to-brandEnd/90 backdrop-blur-sm border-b border-white/10 flex items-center justify-between pl-16 sm:pl-20 pr-3 sm:pr-4 pt-safe-top">
+        <header class="h-14 shrink-0 bg-gradient-to-r from-brandStart/90 to-brandEnd/90 backdrop-blur-sm border-b border-white/10 flex items-center justify-between pl-16 sm:pl-20 pr-16 sm:pr-20 pt-safe-top">
           <div class="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => setSettingsOpen(true)}
@@ -1034,6 +1066,32 @@ const BoardGame: Component = () => {
             <UnitInfoCardTop mode={getCurrentMode()} />
             <PlayerHotbar />
             <EnemyHotbar />
+
+            {/* ── Toast "Tour de…" ────────────────────────────────────────────
+                Centré en haut du canvas, visible 2.5 s à chaque début de tour
+                joueur. Style accentué si c'est le tour du joueur local.
+            ──────────────────────────────────────────────────────────────── */}
+            <Show when={turnToast()}>
+              <div
+                class={`absolute top-16 left-1/2 -translate-x-1/2 z-50
+                        flex items-center gap-3 px-5 py-3 rounded-2xl
+                        backdrop-blur-sm shadow-2xl
+                        pointer-events-none select-none
+                        animate-[fadeSlideDown_0.3s_ease-out]
+                        ${turnToast()!.isMyTurn
+                          ? 'bg-amber-500/90 border border-amber-300/60 text-white shadow-amber-500/30'
+                          : 'bg-slate-800/90 border border-white/15 text-slate-200 shadow-black/40'
+                        }`}
+                style={{ 'animation-fill-mode': 'both' }}
+              >
+                <span class="text-lg">{turnToast()!.isMyTurn ? '⚔️' : '🎲'}</span>
+                <span class="font-semibold text-sm whitespace-nowrap">
+                  {turnToast()!.isMyTurn
+                    ? `C'est votre tour, ${turnToast()!.unitName} !`
+                    : `Tour de ${turnToast()!.unitName}`}
+                </span>
+              </div>
+            </Show>
 
             {/* Loading Overlay */}
             <Show when={!isEngineReady()}>

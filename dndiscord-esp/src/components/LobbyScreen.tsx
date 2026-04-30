@@ -2,12 +2,15 @@ import {
   Component,
   createSignal,
   createEffect,
+  onCleanup,
   onMount,
   For,
   Show,
 } from "solid-js";
-import { ArrowLeft, Copy, Check } from "lucide-solid";
+import { Copy, Check } from "lucide-solid";
+import { useNavigate } from "@solidjs/router";
 import { sessionState, isHost, clearSession } from "../stores/session.store";
+import { useGameShellExit } from "../layouts/GameShell";
 import { PlayerRole, type PlayerInfo } from "../types/multiplayer";
 import {
   selectCharacter,
@@ -19,7 +22,7 @@ import {
   CharacterService,
   type CharacterDto,
 } from "../services/character.service";
-import { fetchMine, loadMap as loadMapLocal } from "../services/mapRepository";
+import { fetchMine, loadMap as loadMapLocal, ensureMapCached } from "../services/mapRepository";
 import { MapService } from "../services/map.service";
 import type { GameStartedPayload } from "../types/multiplayer";
 import { safeConfirm } from "../services/ui/confirm";
@@ -37,6 +40,7 @@ const TEMPLATE_LABELS: Record<string, string> = {
 };
 
 export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
+  const navigate = useNavigate();
   const [characters, setCharacters] = createSignal<CharacterDto[]>([]);
   const [selectedCharId, setSelectedCharId] = createSignal<string | null>(null);
   type DefaultTemplate = "warrior" | "mage" | "archer";
@@ -77,9 +81,21 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
   // React to gameStartedPayload
   createEffect(() => {
     const payload = sessionState.gameStartedPayload;
-    if (payload) {
-      props.onGameStart(payload);
+    if (!payload) return;
+
+    if (payload.mapId === 'campaign') {
+      // Le MJ a lancé une session avec arbre de scénario.
+      // LobbyScreen ne doit PAS appeler onGameStart (qui chargerait 'campaign'
+      // comme une vraie mapId → loadMap('campaign') = null → carte par défaut).
+      // On redirige vers CampaignSessionPage qui gère le runner de scénario.
+      const campaignId = session()?.campaignId;
+      if (campaignId) {
+        navigate(`/campaigns/${campaignId}/session`);
+        return;
+      }
     }
+
+    props.onGameStart(payload);
   });
 
   // Fetch character details for every player who has selected a real
@@ -176,15 +192,26 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
     if (!mapId && !safeConfirm("No map selected. Use the default map?")) return;
     setStarting(true);
     try {
+      // S'assurer que la map est en cache localStorage avant startGameHub.
+      // startGame (multiplayer.service) appelle loadMap(mapId) pour inclure le
+      // blob dans le payload GameStarted. Si la map est uniquement en DB (jamais
+      // téléchargée), loadMap retourne null → mapData absent → tous les clients
+      // chargent la grille par défaut.
+      const resolvedMapId = mapId ?? "default";
+      if (resolvedMapId !== "default") {
+        const session = sessionState.session;
+        await ensureMapCached(resolvedMapId, session?.campaignId ?? undefined);
+      }
+
       // Campaign sessions only: auto-push the chosen map to the campaign's
       // server-side map pool so the DM's "Cartes" tab is populated straight
       // away, without needing the manual "Importer mes cartes locales" step.
       // Best-effort — any failure here is swallowed so the game still starts.
       const session = sessionState.session;
-      if (session?.campaignId && mapId && mapId !== "default") {
-        await maybePushMapToCampaign(session.campaignId, mapId);
+      if (session?.campaignId && resolvedMapId !== "default") {
+        await maybePushMapToCampaign(session.campaignId, resolvedMapId);
       }
-      await startGameHub(mapId ?? "default");
+      await startGameHub(resolvedMapId);
     } catch (err: any) {
       console.error("[Lobby] startGame failed:", err);
       setStartError(
@@ -240,6 +267,16 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
     props.onLeave();
   };
 
+  // Wire the GameShell top-left Exit button to perform a real session leave
+  // (hub invoke + local clear) instead of plain history-back. Without this,
+  // the user could navigate away while still being a participant on the
+  // server, leaving a ghost in the room.
+  const exitApi = useGameShellExit();
+  onMount(() => {
+    exitApi.setExitHandler(handleLeave);
+    onCleanup(() => exitApi.setExitHandler(null));
+  });
+
   const playerCount = () => session()?.players.length ?? 0;
   const MIN_PLAYERS_TO_START = 2;
   // Allow host (DM) to force-start alone for testing
@@ -270,19 +307,11 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
   };
 
   return (
-    <div class="relative min-h-screen w-full overflow-hidden bg-brand-gradient">
-      <div class="vignette absolute inset-0" />
+    <div class="relative h-full w-full overflow-hidden bg-brand-gradient">
+      <div class="vignette absolute inset-0 pointer-events-none" />
 
-      <button
-        onClick={handleLeave}
-        class="in-game-back-btn !fixed !top-4 !left-4 !right-auto"
-        aria-label="Leave room"
-      >
-        <ArrowLeft class="w-5 h-5 text-white" />
-      </button>
-
-      <main class="relative z-10 flex min-h-screen items-center justify-center p-6 sm:p-10">
-        <div class="max-w-3xl w-full space-y-6">
+      <main class="relative z-10 h-full overflow-y-auto flex flex-col p-6 sm:p-10">
+        <div class="my-auto mx-auto max-w-3xl w-full space-y-6">
           {/* Room Code */}
           <div class="text-center">
             <p class="text-slate-200/70 text-sm mb-2">Room code</p>
