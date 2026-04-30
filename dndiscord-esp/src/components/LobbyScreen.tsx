@@ -22,7 +22,7 @@ import {
   CharacterService,
   type CharacterDto,
 } from "../services/character.service";
-import { fetchMine, loadMap as loadMapLocal } from "../services/mapRepository";
+import { fetchMine, loadMap as loadMapLocal, ensureMapCached } from "../services/mapRepository";
 import { MapService } from "../services/map.service";
 import type { GameStartedPayload } from "../types/multiplayer";
 import { safeConfirm } from "../services/ui/confirm";
@@ -192,15 +192,26 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
     if (!mapId && !safeConfirm("No map selected. Use the default map?")) return;
     setStarting(true);
     try {
+      // S'assurer que la map est en cache localStorage avant startGameHub.
+      // startGame (multiplayer.service) appelle loadMap(mapId) pour inclure le
+      // blob dans le payload GameStarted. Si la map est uniquement en DB (jamais
+      // téléchargée), loadMap retourne null → mapData absent → tous les clients
+      // chargent la grille par défaut.
+      const resolvedMapId = mapId ?? "default";
+      if (resolvedMapId !== "default") {
+        const session = sessionState.session;
+        await ensureMapCached(resolvedMapId, session?.campaignId ?? undefined);
+      }
+
       // Campaign sessions only: auto-push the chosen map to the campaign's
       // server-side map pool so the DM's "Cartes" tab is populated straight
       // away, without needing the manual "Importer mes cartes locales" step.
       // Best-effort — any failure here is swallowed so the game still starts.
       const session = sessionState.session;
-      if (session?.campaignId && mapId && mapId !== "default") {
-        await maybePushMapToCampaign(session.campaignId, mapId);
+      if (session?.campaignId && resolvedMapId !== "default") {
+        await maybePushMapToCampaign(session.campaignId, resolvedMapId);
       }
-      await startGameHub(mapId ?? "default");
+      await startGameHub(resolvedMapId);
     } catch (err: any) {
       console.error("[Lobby] startGame failed:", err);
       setStartError(

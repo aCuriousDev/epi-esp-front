@@ -143,10 +143,12 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
       const tpl = ENEMY_CATALOGUE.find((t) => t.id === tplId);
       if (!tpl) return;
 
-      // crypto.randomUUID() is CSP-safe and collision-free across concurrent
-      // DMs; the previous module-local counter reused ids across browser
-      // tabs which caused duplicate-spawn races.
-      const uid = `dm_spawn_${tpl.id}_${crypto.randomUUID()}`;
+      // crypto.randomUUID() n'est disponible qu'en contexte sécurisé (HTTPS).
+      // Fallback pour HTTP (dev local, Discord Activity) : timestamp + random.
+      const uuid = typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+      const uid = `dm_spawn_${tpl.id}_${uuid}`;
       const unit: Unit = {
         id: uid, name: tpl.name, type: tpl.unitType, team: Team.ENEMY, position: pos,
         stats: { ...tpl.stats }, abilities: cloneAbilities(tpl.abilities),

@@ -119,6 +119,14 @@ const CampaignSessionPage: Component = () => {
 
   const [loading, setLoading]               = createSignal(true);
   const [error, setError]                   = createSignal<string | null>(null);
+
+  // true quand le joueur arrive via mapExit=next (retour entre deux cartes).
+  // On masque tout contenu jusqu'à la fin du chargement : CampaignMapLaunched
+  // naviguera vers la nouvelle carte avant qu'on affiche quoi que ce soit.
+  // Sans ce flag, l'écran "Prochaine carte / En attente du MJ" flashe
+  // brièvement avant la redirection.
+  const mapExitPending = !isHost() &&
+    new URLSearchParams(window.location.search).get('mapExit') === 'next';
   const [campaignTitle, setCampaignTitle]   = createSignal('');
   /** UUID → nom de carte, chargé depuis /api/campaigns/:id/maps */
   const [campaignMapNames, setCampaignMapNames] = createSignal<Map<string, string>>(new Map());
@@ -203,11 +211,8 @@ const CampaignSessionPage: Component = () => {
           setPlayerVotes(prev => ({ ...prev, [userId]: { name: userName, index: choiceIndex } }));
         }
 
-        // Vérifier le consensus après chaque vote reçu.
-        // C'est ce chemin qui avance le MJ (qui ne vote jamais) et tous les
-        // clients qui n'ont pas encore atteint le consensus localement.
-        // votingLocked empêche un double-followPort si handleVote l'a déjà déclenché.
-        checkConsensus();
+        // Les votes sont purement indicatifs — pas de checkConsensus.
+        // Le MJ confirme le choix final via le bouton "Confirmer".
       };
 
       signalRService.on('ChoiceVoted', voteHandler);
@@ -570,20 +575,20 @@ const CampaignSessionPage: Component = () => {
   };
 
   /**
-   * Seuls les joueurs (non-MJ) votent.
-   * Fallback solo : si aucun joueur non-MJ n'est connecté (test DM seul),
-   * le MJ peut tout de même interagir pour dérouler le scénario.
+   * Seuls les joueurs (non-MJ) votent — résultat purement indicatif.
+   * Le MJ voit les votes et confirme le choix final via le bouton "Confirmer".
+   * Aucun auto-avancement par consensus : le MJ a toujours le dernier mot.
    */
   const handleVote = async (choiceIndex: number, choiceText: string) => {
     const node = currentNode();
     if (!node) return;
-    // Bloquer le MJ quand des joueurs sont présents
+    // Bloquer le MJ quand des joueurs sont présents (il confirme via "Confirmer")
     if (isHost() && connectedPlayerCount() > 0) return;
 
     const alreadyVoted = playerVotes()[myUserId()]?.index === choiceIndex;
     const newIndex = alreadyVoted ? -1 : choiceIndex; // toggle
 
-    // Optimistic local update
+    // Mise à jour locale optimiste
     if (newIndex < 0) {
       setPlayerVotes(prev => { const n = { ...prev }; delete n[myUserId()]; return n; });
     } else {
@@ -596,36 +601,7 @@ const CampaignSessionPage: Component = () => {
     } catch (e) {
       console.warn('[CampaignSession] voteForChoice failed:', e);
     }
-
-    checkConsensus();
-  };
-
-  const checkConsensus = () => {
-    const node = currentNode();
-    // Déjà avancé pour ce nœud (verrou) ou nœud non-choices → ignorer
-    if (!node || node.type !== 'choices' || votingLocked()) return;
-
-    const votes = playerVotes();
-    const voteValues = Object.values(votes);
-    if (voteValues.length === 0) return;
-
-    // Seuls les joueurs non-MJ comptent. Fallback 1 pour test solo DM.
-    const required = Math.max(connectedPlayerCount(), 1);
-
-    const allSame =
-      voteValues.length >= required &&
-      voteValues.every(v => v.index === voteValues[0].index);
-
-    if (allSame) {
-      // Verrouiller avant followPort pour éviter un double-déclenchement si
-      // checkConsensus est appelé une seconde fois (ex. broadcast tardif).
-      setVotingLocked(true);
-      const winningIndex = voteValues[0].index;
-      // Récupérer le texte depuis le nœud plutôt que depuis le vote local —
-      // fonctionne pour tous les clients (MJ inclus) sans argument.
-      const choiceText = (node as ChoicesData).choices?.[winningIndex] ?? '';
-      followPort(`choice-${winningIndex}`, choiceText);
-    }
+    // Pas de checkConsensus — le MJ confirme manuellement
   };
 
   const hasPort = (port: string) => {
@@ -692,16 +668,19 @@ const CampaignSessionPage: Component = () => {
       </header>
 
       <main class="flex-1 flex flex-col items-center justify-center px-4 py-12">
-        {/* Loading */}
-        <Show when={loading()}>
+        {/* Transition entre deux cartes côté joueur — spinner neutre.
+            Masque tout contenu jusqu'à ce que le chargement soit terminé.
+            CampaignMapLaunched naviguera avant qu'on montre quoi que ce soit,
+            évitant le flash de l'écran "En attente du MJ". */}
+        <Show when={loading() || mapExitPending}>
           <div class="flex flex-col items-center gap-4 text-slate-400">
             <Loader2 class="w-10 h-10 animate-spin text-purple-400" />
             <p>Loading scenario…</p>
           </div>
         </Show>
 
-        {/* Error */}
-        <Show when={!loading() && error()}>
+        {/* Error — masqué pendant mapExitPending */}
+        <Show when={!loading() && !mapExitPending && error()}>
           <div class="max-w-md text-center">
             <div class="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
               <span class="text-3xl">⚠️</span>
@@ -712,8 +691,8 @@ const CampaignSessionPage: Component = () => {
           </div>
         </Show>
 
-        {/* Session */}
-        <Show when={!loading() && !error()}>
+        {/* Session — masqué pendant mapExitPending (CampaignMapLaunched naviguera avant) */}
+        <Show when={!loading() && !mapExitPending && !error()}>
 
           {/* ── Écran de transition entre deux cartes (joueurs uniquement) ──────────
               Quand le nœud courant est une carte et que l'utilisateur n'est pas MJ,
@@ -852,7 +831,7 @@ const CampaignSessionPage: Component = () => {
                         <div class="flex items-center justify-between mb-3">
                           <Show when={dmIsObserver()}>
                             <span class="text-xs text-amber-400/70 flex items-center gap-1">
-                              👁 Vous observez — les joueurs votent
+                              👁 Les joueurs votent — confirmez le choix final
                             </span>
                           </Show>
                           <p class="text-xs text-slate-500 ml-auto">
@@ -928,18 +907,20 @@ const CampaignSessionPage: Component = () => {
                                       </Show>
                                     </button>
 
-                                    <Show when={dmIsObserver() && hasLink()}>
+                                    {/* Bouton Confirmer — MJ uniquement, toujours visible sur les choix liés.
+                                        Le MJ a toujours le dernier mot, qu'il y ait des joueurs ou non. */}
+                                    <Show when={isHost() && hasLink()}>
                                       <button
                                         onClick={() => {
                                           if (votingLocked()) return;
                                           setVotingLocked(true);
                                           followPort(`choice-${i()}`, choice || `Choix ${i() + 1}`, true);
                                         }}
-                                        class="self-center flex-shrink-0 flex flex-col items-center justify-center gap-0.5 px-3 py-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[10px] font-semibold hover:bg-amber-500/25 hover:border-amber-400/60 transition-all"
-                                        title="Forcer ce choix sans attendre le consensus des joueurs"
+                                        class="self-center flex-shrink-0 flex flex-col items-center justify-center gap-0.5 px-3 py-3 rounded-xl bg-emerald-600/20 border border-emerald-500/50 text-emerald-300 text-[10px] font-semibold hover:bg-emerald-600/35 hover:border-emerald-400/70 transition-all"
+                                        title="Confirmer ce choix et avancer le scénario"
                                       >
                                         <ChevronRight class="w-4 h-4" />
-                                        <span>Forcer</span>
+                                        <span>Confirmer</span>
                                       </button>
                                     </Show>
                                   </div>
@@ -948,10 +929,11 @@ const CampaignSessionPage: Component = () => {
                             </For>
                           </div>
 
-                          <Show when={Object.keys(votes()).length > 0 && Object.keys(votes()).length < totalPlayers()}>
-                            <p class="mt-4 text-center text-sm text-amber-400/70 flex items-center justify-center gap-2">
-                              <Loader2 class="w-3.5 h-3.5 animate-spin" />
-                              En attente des autres joueurs…
+                          {/* Message d'attente uniquement pour les joueurs (pas le MJ) */}
+                          <Show when={!isHost() && Object.keys(votes()).length > 0}>
+                            <p class="mt-4 text-center text-sm text-slate-500 flex items-center justify-center gap-2">
+                              <Loader2 class="w-3.5 h-3.5 animate-spin text-purple-400" />
+                              En attente de la confirmation du Maître du Jeu…
                             </p>
                           </Show>
                         </Show>
