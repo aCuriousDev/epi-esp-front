@@ -1,4 +1,5 @@
 import { onMount, onCleanup, createSignal, Show } from "solid-js";
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-solid";
 import draw2d from "draw2d";
 import { CampaignNode } from "./nodes/CampaignNode";
 import { CombatNode } from "./nodes/CombatNode";
@@ -57,6 +58,21 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
   let canvas: draw2d.Canvas | null = null;
   let selectedNode: CampaignNode | null = null;
   const [currentZoom, setCurrentZoom] = createSignal(1.0);
+
+  const panBtnStyle = {
+    padding: "0.25rem",
+    background: tokens.ink[500],
+    border: `1px solid ${tokens.ink[500]}`,
+    "border-radius": "4px",
+    color: tokens.text.high,
+    cursor: "pointer",
+    "font-size": "0.75rem",
+    width: "28px",
+    height: "28px",
+    display: "flex",
+    "align-items": "center",
+    "justify-content": "center",
+  } as const;
 
   const addStartNode = () => {
     if (!canvas) return;
@@ -412,6 +428,12 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     canvas.setZoom(currentZoom());
   };
 
+  const PAN_STEP = 120;
+  const panLeft  = () => { if (canvasRef) canvasRef.scrollLeft -= PAN_STEP; };
+  const panRight = () => { if (canvasRef) canvasRef.scrollLeft += PAN_STEP; };
+  const panUp    = () => { if (canvasRef) canvasRef.scrollTop  -= PAN_STEP; };
+  const panDown  = () => { if (canvasRef) canvasRef.scrollTop  += PAN_STEP; };
+
   /**
    * Highlight visited nodes and traversed connections in green (for replay view)
    */
@@ -685,7 +707,16 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           border: `1px solid ${tokens.ink[600]}`,
         }}
       >
-        {/* Zoom controls always visible */}
+        {/* Navigation (pan) — 4 arrow buttons arranged as a D-pad */}
+        <div style={{ display: "flex", "flex-direction": "column", "align-items": "center", gap: "2px" }}>
+          <button onClick={panUp}    title="Monter"    style={panBtnStyle}><ChevronUp size={14} /></button>
+          <div style={{ display: "flex", gap: "2px" }}>
+            <button onClick={panLeft}  title="Gauche"    style={panBtnStyle}><ChevronLeft size={14} /></button>
+            <button onClick={panDown}  title="Descendre" style={panBtnStyle}><ChevronDown size={14} /></button>
+            <button onClick={panRight} title="Droite"    style={panBtnStyle}><ChevronRight size={14} /></button>
+          </div>
+        </div>
+
         {/* Zoom controls */}
         <div
           style={{
