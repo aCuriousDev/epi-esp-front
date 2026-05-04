@@ -20,6 +20,8 @@ export interface Item {
   category: ItemCategory;
   /** URL d'un modèle 3D poly.pizza (optionnel). */
   modelUrl?: string | null;
+  /** Prix en GP. 0 = non disponible en boutique. */
+  goldCost: number;
 }
 
 export interface InventoryEntry {
@@ -42,6 +44,18 @@ export interface GiveItemRequest {
   quantity: number;
   /** Required by the back so the server can verify the caller is the DM of this campaign. */
   campaignId: string;
+}
+
+export interface BuyItemRequest {
+  itemId: string;
+  quantity: number;
+  campaignId?: string;
+}
+
+export interface BuyItemResult {
+  entry: InventoryEntry;
+  remainingGold: number;
+  totalCost: number;
 }
 
 // ---- Wallet (monnaies D&D 5e) ----

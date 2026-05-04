@@ -28,6 +28,7 @@ import DiceRollPrompt from "../components/dice/DiceRollPrompt";
 import DiceResultToast from "../components/dice/DiceResultToast";
 import InventoryPanel from "../components/InventoryPanel";
 import WalletPanel from "../components/WalletPanel";
+import ShopPanel from "../components/ShopPanel";
 import { PlayerHotbar } from "../components/hotbar/PlayerHotbar";
 import { EnemyHotbar } from "../components/hotbar/EnemyHotbar";
 import { UnitInfoCardTop } from "../components/hotbar/UnitInfoCardPosition";
@@ -67,7 +68,7 @@ import {
 import type { GameStartedPayload } from "../types/multiplayer";
 import { cacheMap, preloadBuiltin, ensureMapCached, type SavedMapData } from "../services/mapRepository";
 import { dmExitMap } from "../services/signalr/multiplayer.service";
-import { LogOut } from "lucide-solid";
+import { LogOut, ShoppingBag } from "lucide-solid";
 import { PartyChatPanel } from "../components/PartyChatPanel";
 import RollHistoryPanel from "../components/dm/RollHistoryPanel";
 import { SessionState } from "../types/multiplayer";
@@ -695,6 +696,7 @@ const BoardGame: Component = () => {
 
   const [endTurnPending, setEndTurnPending] = createSignal(false);
   const [settingsOpen, setSettingsOpen] = createSignal(false);
+  const [shopOpen, setShopOpen] = createSignal(false);
   let endTurnPendingTimer: number | null = null;
   const handleEndTurnClick = () => {
     if (!canEndPlayerTurn()) return;
@@ -904,6 +906,17 @@ const BoardGame: Component = () => {
               >
                 <ArrowLeft class="w-3.5 h-3.5" />
                 <span class="hidden sm:inline">Back to session</span>
+              </button>
+            </Show>
+            {/* Shop — visible uniquement pour les joueurs (pas le DM) en session */}
+            <Show when={isInSession() && !isDm()}>
+              <button
+                class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-yellow-400/30 bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-300 text-sm transition-colors"
+                onClick={() => setShopOpen(true)}
+                title="Boutique"
+              >
+                <ShoppingBag class="w-3.5 h-3.5" />
+                <span class="hidden sm:inline">Boutique</span>
               </button>
             </Show>
             {/* Quitter — any MP participant (BUG-I). Drawer Quitter is DM-only. */}
@@ -1462,6 +1475,13 @@ const BoardGame: Component = () => {
 
         {/* Quick settings overlay — opens over the canvas without
             unmounting the engine. Game state persists. */}
+        <Show when={shopOpen() && !isDm() && myBoardCharacterId()}>
+          <ShopPanel
+            characterId={myBoardCharacterId()!}
+            campaignId={sessionState.session?.campaignId ?? undefined}
+            onClose={() => setShopOpen(false)}
+          />
+        </Show>
         <Show when={settingsOpen()}>
           <InGameSettingsModal onClose={() => setSettingsOpen(false)} />
         </Show>
