@@ -3,6 +3,8 @@ import { getApiUrl } from "./config";
 import { signalRService } from "./signalr/SignalRService";
 import { isCharacterInCurrentSession } from "../stores/session.store";
 import type {
+  BuyItemRequest,
+  BuyItemResult,
   GiveItemRequest,
   InventoryChangedEvent,
   InventoryEntry,
@@ -98,6 +100,18 @@ export const InventoryService = {
     const base = `${API_URL}/api/games/inventory/${characterId}/entry/${entryId}/use`;
     const url = campaignId ? `${base}?campaignId=${campaignId}` : base;
     await axios.post(url, null, { headers: getAuthHeaders() });
+  },
+
+  /**
+   * Le joueur achète un objet depuis le shop. Déduit les GP et ajoute l'item.
+   */
+  async buyItem(characterId: string, request: BuyItemRequest): Promise<BuyItemResult> {
+    const res = await axios.post<BuyItemResult>(
+      `${API_URL}/api/games/inventory/${characterId}/buy`,
+      request,
+      { headers: getAuthHeaders() },
+    );
+    return res.data;
   },
 
   /**
