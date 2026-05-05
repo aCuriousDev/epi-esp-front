@@ -537,12 +537,29 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
       let _panActive = false;
       let _startX = 0, _startY = 0;
       let _scrollLeft = 0, _scrollTop = 0;
+      let rafId: number | null = null;
+      let nextScrollLeft = 0;
+      let nextScrollTop = 0;
+
+      const flushScroll = () => {
+        rafId = null;
+        if (!viewportRef) return;
+        viewportRef.scrollLeft = nextScrollLeft;
+        viewportRef.scrollTop = nextScrollTop;
+      };
 
       const onMouseDown = (e: MouseEvent) => {
-        if (e.button !== 0) return;
+        // Pan uniquement avec le clic molette (bouton milieu) pour éviter
+        // d'interférer avec la sélection (clic gauche).
+        if (e.button !== 1) return;
+
+        // Empêcher les comportements navigateur liés au bouton milieu.
+        e.preventDefault?.();
+        e.stopPropagation?.();
+
         const target = e.target as Element;
-        // Only pan on background SVG, not on draw2d figures
-        if (target.closest('.draw2d_Figure')) return;
+        // On laisse pan sur tout (y compris figures), le clic gauche reste
+        // pour la sélection/édition draw2d.
         _panActive = true;
         _startX = e.clientX;
         _startY = e.clientY;
@@ -552,13 +569,23 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
       };
       const onMouseMove = (e: MouseEvent) => {
         if (!_panActive || !viewportRef) return;
-        viewportRef.scrollLeft = _scrollLeft - (e.clientX - _startX);
-        viewportRef.scrollTop  = _scrollTop  - (e.clientY - _startY);
+
+        nextScrollLeft = _scrollLeft - (e.clientX - _startX);
+        nextScrollTop  = _scrollTop  - (e.clientY - _startY);
+
+        // Throttle via rAF pour éviter le lag sur scrollLeft/scrollTop.
+        if (rafId == null) {
+          rafId = requestAnimationFrame(flushScroll);
+        }
       };
       const onMouseUp = () => {
         if (_panActive) {
           _panActive = false;
           viewportRef?.classList.remove('is-panning');
+        }
+        if (rafId != null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
         }
       };
 
@@ -684,7 +711,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           width: "100%",
           height: "100%",
           overflow: "auto",
-          cursor: "grab",
+          cursor: "default",
           "background-image": `
             linear-gradient(${tokens.ink[800]} 1px, transparent 1px),
             linear-gradient(90deg, ${tokens.ink[800]} 1px, transparent 1px)

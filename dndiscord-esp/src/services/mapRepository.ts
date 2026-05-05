@@ -333,6 +333,35 @@ export function deleteMap(mapId: string): void {
   }
 }
 
+/**
+ * Delete for "mine" maps (standalone maps).
+ *
+ * - For DB maps (UUID): call API DELETE /api/maps/mine/:id (then clear local cache)
+ * - For legacy/local maps ("map_..."): clear localStorage only
+ */
+export async function deleteMineMap(mapId: string): Promise<void> {
+  const token = AuthService.getToken();
+  const isUuid = UUID_RE.test(mapId);
+
+  // If this looks like a DB map, try to delete it on the backend.
+  if (isUuid && token) {
+    try {
+      const res = await fetch(`${getApiUrl()}/api/maps/mine/${mapId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        console.warn(`[mapRepository] deleteMineMap API failed for ${mapId}: HTTP ${res.status}`);
+      }
+    } catch (err) {
+      console.warn(`[mapRepository] deleteMineMap API error for ${mapId}:`, err);
+    }
+  }
+
+  // Always clear local cache so the UI doesn't keep stale data.
+  deleteMap(mapId);
+}
+
 export function generateMapId(): string {
   return `map_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
