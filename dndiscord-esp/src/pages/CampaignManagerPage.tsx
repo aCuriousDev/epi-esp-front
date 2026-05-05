@@ -38,6 +38,7 @@ const CampaignManager: Component = () => {
     {
       label: t('campaignManager.block.combat'), icon: <Sword class="w-5 h-5" />, blockName: 'combat',
       bgColor: '#2a0909', borderColor: '#dc2626', accentColor: '#f87171',
+      comingSoon: true,
     },
     {
       label: t('campaignManager.block.map'), icon: <MapIcon class="w-5 h-5" />, blockName: 'map',
@@ -228,10 +229,7 @@ const CampaignManager: Component = () => {
           data: { title: 'New choice', text: '', choices: ['Choice 1', 'Choice 2'] },
         });
       } else if (type === 'combat') {
-        newNode = canvas.addNode({
-          type: 'combat', x: baseX, y: baseY,
-          data: { title: 'New combat', difficulty: 'medium', villains: [] },
-        });
+        return;
       } else if (type === 'map') {
         newNode = canvas.addNode({
           type: 'map', x: baseX, y: baseY,
@@ -405,26 +403,28 @@ const CampaignManager: Component = () => {
               <For each={blocs}>
                 {(item) => (
                   <button
-                    onClick={() => handleAddNode(item.blockName)}
+                    onClick={() => !item.comingSoon && handleAddNode(item.blockName)}
+                    disabled={item.comingSoon}
                     style={{
                       display: 'flex',
                       'align-items': 'center',
                       gap: '0.875rem',
                       width: '100%',
                       padding: '0.75rem 1rem',
-                      background: item.bgColor,
-                      border: `2px solid ${item.borderColor}`,
+                      background: item.comingSoon ? 'rgba(30,30,30,0.5)' : item.bgColor,
+                      border: `2px solid ${item.comingSoon ? 'rgba(255,255,255,0.08)' : item.borderColor}`,
                       'border-radius': '0.75rem',
-                      color: '#ffffff',
-                      cursor: 'pointer',
+                      color: item.comingSoon ? 'rgba(255,255,255,0.3)' : '#ffffff',
+                      cursor: item.comingSoon ? 'not-allowed' : 'pointer',
                       transition: 'filter 0.15s, transform 0.15s',
                       'font-size': '1rem',
                       'font-weight': '600',
                       'letter-spacing': '0.01em',
                       'text-align': 'left',
+                      opacity: item.comingSoon ? '0.6' : '1',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(1.18)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
+                    onMouseEnter={(e) => { if (!item.comingSoon) e.currentTarget.style.filter = 'brightness(1.18)'; }}
+                    onMouseLeave={(e) => { if (!item.comingSoon) e.currentTarget.style.filter = 'brightness(1)'; }}
                   >
                     {/* Coloured icon */}
                     <span style={{
@@ -433,16 +433,34 @@ const CampaignManager: Component = () => {
                       'justify-content': 'center',
                       width: '2.25rem',
                       height: '2.25rem',
-                      background: `${item.accentColor}28`,
-                      border: `1.5px solid ${item.accentColor}80`,
+                      background: item.comingSoon ? 'rgba(255,255,255,0.05)' : `${item.accentColor}28`,
+                      border: `1.5px solid ${item.comingSoon ? 'rgba(255,255,255,0.1)' : `${item.accentColor}80`}`,
                       'border-radius': '0.5rem',
-                      color: item.accentColor,
+                      color: item.comingSoon ? 'rgba(255,255,255,0.25)' : item.accentColor,
                       'flex-shrink': '0',
                     }}>
                       {item.icon}
                     </span>
                     <span style={{ flex: 1 }}>{item.label}</span>
-                    <span style={{ 'font-size': '1.25rem', opacity: '0.5', 'line-height': 1 }}>+</span>
+                    <Show
+                      when={item.comingSoon}
+                      fallback={<span style={{ 'font-size': '1.25rem', opacity: '0.5', 'line-height': 1 }}>+</span>}
+                    >
+                      <span style={{
+                        'font-size': '0.65rem',
+                        'font-weight': '600',
+                        'letter-spacing': '0.05em',
+                        'text-transform': 'uppercase',
+                        padding: '0.2rem 0.5rem',
+                        background: 'rgba(255,255,255,0.07)',
+                        border: '1px solid rgba(255,255,255,0.12)',
+                        'border-radius': '0.375rem',
+                        color: 'rgba(255,255,255,0.35)',
+                        'white-space': 'nowrap',
+                      }}>
+                        Bientôt
+                      </span>
+                    </Show>
                   </button>
                 )}
               </For>

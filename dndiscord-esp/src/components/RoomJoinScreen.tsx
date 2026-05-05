@@ -24,7 +24,7 @@ export const RoomJoinScreen: Component<RoomJoinScreenProps> = (props) => {
     try {
       const ok = await tryRecoverSession();
       if (ok) {
-        const gamePayload = getPersistedGameStarted();
+        const gamePayload = getPersistedGameStarted(sessionState.session?.sessionId ?? null);
         if (sessionState.session?.state === SessionState.InProgress && gamePayload) {
           props.onGameRecover(gamePayload);
         } else {
