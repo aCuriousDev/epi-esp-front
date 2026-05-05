@@ -3,7 +3,7 @@ import { useNavigate, A } from "@solidjs/router";
 import { Map, ChevronRight, Trash2 } from "lucide-solid";
 import { fetchMine, deleteMap, getAllDungeons, deleteDungeon, loadDungeon } from "../services/mapRepository";
 import { DungeonCreationWizard } from "../components/DungeonCreationWizard";
-import { safeConfirm } from "../services/ui/confirm";
+import ConfirmModal from "../components/common/ConfirmModal";
 import PageMeta from "../layouts/PageMeta";
 import { SectionHeader } from "../components/common/SectionHeader";
 import { t } from "../i18n";
@@ -47,6 +47,10 @@ export default function MapSelectionScreen() {
 	const [deletingId, setDeletingId] = createSignal<string | null>(null);
 	const [showDungeonWizard, setShowDungeonWizard] = createSignal(false);
 
+	// ── Confirm modal state ───────────────────────────────────────────────────
+	interface PendingDelete { kind: 'map' | 'dungeon'; id: string; name: string; }
+	const [pendingDelete, setPendingDelete] = createSignal<PendingDelete | null>(null);
+
 	onMount(() => {
 		loadData();
 	});
@@ -80,24 +84,28 @@ export default function MapSelectionScreen() {
 		navigate(`/map-editor/${mapId}`);
 	};
 
-	const handleDelete = (e: Event, mapId: string) => {
+	const handleDelete = (e: Event, mapId: string, mapName: string) => {
 		e.stopPropagation();
-		if (safeConfirm(t("page.mapSelection.deleteMapConfirm"))) {
-			setDeletingId(mapId);
-			deleteMap(mapId);
-			loadData();
-			setDeletingId(null);
-		}
+		setPendingDelete({ kind: 'map', id: mapId, name: mapName });
 	};
 
-	const handleDeleteDungeon = (e: Event, dungeonId: string) => {
+	const handleDeleteDungeon = (e: Event, dungeonId: string, dungeonName: string) => {
 		e.stopPropagation();
-		if (safeConfirm(t("page.mapSelection.deleteDungeonConfirm"))) {
-			setDeletingId(dungeonId);
-			deleteDungeon(dungeonId);
-			loadData();
-			setDeletingId(null);
+		setPendingDelete({ kind: 'dungeon', id: dungeonId, name: dungeonName });
+	};
+
+	const confirmDelete = async () => {
+		const target = pendingDelete();
+		if (!target) return;
+		setPendingDelete(null);
+		setDeletingId(target.id);
+		if (target.kind === 'map') {
+			deleteMap(target.id);
+		} else {
+			deleteDungeon(target.id);
 		}
+		await loadData();
+		setDeletingId(null);
 	};
 
 	return (
@@ -212,7 +220,7 @@ export default function MapSelectionScreen() {
 													/>
 													<button
 														type="button"
-														onClick={(e) => handleDeleteDungeon(e, d.id)}
+														onClick={(e) => handleDeleteDungeon(e, d.id, d.name)}
 														class="p-1.5 rounded text-mute hover:text-danger transition"
 														title={t("common.delete")}
 														aria-label={`${t("common.delete")} ${d.name}`}
@@ -281,7 +289,7 @@ export default function MapSelectionScreen() {
 													/>
 													<button
 														type="button"
-														onClick={(e) => handleDelete(e, m.id)}
+														onClick={(e) => handleDelete(e, m.id, m.name)}
 														class="p-1.5 rounded text-mute hover:text-danger transition"
 														title={t("common.delete")}
 														aria-label={`${t("common.delete")} ${m.name}`}
@@ -306,6 +314,16 @@ export default function MapSelectionScreen() {
 					</Show>
 
 				</div>
+
+			<ConfirmModal
+				open={!!pendingDelete()}
+				title={pendingDelete()?.kind === 'map' ? "Supprimer la carte" : "Supprimer le donjon"}
+				message={`Supprimer "${pendingDelete()?.name ?? ''}" ? Cette action est irréversible.`}
+				confirmLabel="Supprimer"
+				danger
+				onConfirm={confirmDelete}
+				onCancel={() => setPendingDelete(null)}
+			/>
 			</>
 		</Show>
 	);
