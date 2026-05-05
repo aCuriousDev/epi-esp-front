@@ -21,7 +21,7 @@ import {
 } from '@/services/signalr/multiplayer.service';
 import { signalRService } from '@/services/signalr/SignalRService';
 import { ensureMultiplayerHandlersRegistered } from '@/services/signalr/multiplayer.service';
-import { sessionState, isHost } from '@/stores/session.store';
+import { sessionState, isHost, getHubUserId } from '@/stores/session.store';
 import { authStore } from '@/stores/auth.store';
 import { PlayerRole } from '@/types/multiplayer';
 import InventoryPanel from '@/components/InventoryPanel';
@@ -155,6 +155,9 @@ const CampaignSessionPage: Component = () => {
   // ChoiceVoted broadcast) appelle followPort deux fois pour le même nœud.
   const [votingLocked, setVotingLocked] = createSignal(false);
   const myUserId = () => authStore.user()?.id ?? '';
+  // Pour les votes, utiliser le Guid du hub (même format que ChoiceVoted.userId côté serveur).
+  // authStore.user().id est le Discord ID ; le hub envoie un Guid → deux clés différentes → double comptage.
+  const myVoteKey = () => getHubUserId() ?? myUserId();
 
 
   onMount(async () => {
@@ -585,15 +588,15 @@ const CampaignSessionPage: Component = () => {
     // Bloquer le MJ quand des joueurs sont présents (il confirme via "Confirmer")
     if (isHost() && connectedPlayerCount() > 0) return;
 
-    const alreadyVoted = playerVotes()[myUserId()]?.index === choiceIndex;
+    const alreadyVoted = playerVotes()[myVoteKey()]?.index === choiceIndex;
     const newIndex = alreadyVoted ? -1 : choiceIndex; // toggle
 
     // Mise à jour locale optimiste
     if (newIndex < 0) {
-      setPlayerVotes(prev => { const n = { ...prev }; delete n[myUserId()]; return n; });
+      setPlayerVotes(prev => { const n = { ...prev }; delete n[myVoteKey()]; return n; });
     } else {
       const name = authStore.user()?.username ?? 'Moi';
-      setPlayerVotes(prev => ({ ...prev, [myUserId()]: { name, index: newIndex } }));
+      setPlayerVotes(prev => ({ ...prev, [myVoteKey()]: { name, index: newIndex } }));
     }
 
     try {
@@ -803,7 +806,7 @@ const CampaignSessionPage: Component = () => {
                     const votersFor = (idx: number) =>
                       Object.values(votes()).filter(v => v.index === idx);
 
-                    const myVoteIndex = () => votes()[myUserId()]?.index ?? -1;
+                    const myVoteIndex = () => votes()[myVoteKey()]?.index ?? -1;
 
                     // Joueurs connectés hors MJ (ceux qui doivent voter). Fallback 1 = solo DM.
                     const totalPlayers = () => Math.max(connectedPlayerCount(), 1);
