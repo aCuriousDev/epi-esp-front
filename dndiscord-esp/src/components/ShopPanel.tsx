@@ -206,7 +206,7 @@ export default function ShopPanel(props: ShopPanelProps) {
                       style={{ opacity: affordable() ? "1" : "0.55" }}
                     >
                       {/* Icon */}
-                      <div class="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-lg bg-black/30">
+                      <div class="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-lg bg-black/30 overflow-hidden">
                         <ItemIcon iconKey={item.icon} class="w-6 h-6" />
                       </div>
 
