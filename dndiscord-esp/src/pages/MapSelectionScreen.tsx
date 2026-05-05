@@ -1,7 +1,7 @@
 import { Component, createSignal, onMount, For, Show } from "solid-js";
 import { useNavigate, A } from "@solidjs/router";
 import { Map, ChevronRight, Trash2, Upload } from "lucide-solid";
-import { fetchMine, deleteMap, getAllDungeons, deleteDungeon, loadDungeon, generateMapId, saveMap, cacheMap, type SavedMapData } from "../services/mapRepository";
+import { fetchMine, deleteMineMap, getAllDungeons, deleteDungeon, loadDungeon, generateMapId, saveMap, cacheMap, type SavedMapData } from "../services/mapRepository";
 import { DungeonCreationWizard } from "../components/DungeonCreationWizard";
 import ConfirmModal from "../components/common/ConfirmModal";
 import PageMeta from "../layouts/PageMeta";
@@ -104,7 +104,7 @@ export default function MapSelectionScreen() {
 		setPendingDelete(null);
 		setDeletingId(target.id);
 		if (target.kind === 'map') {
-			deleteMap(target.id);
+			await deleteMineMap(target.id);
 		} else {
 			deleteDungeon(target.id);
 		}
