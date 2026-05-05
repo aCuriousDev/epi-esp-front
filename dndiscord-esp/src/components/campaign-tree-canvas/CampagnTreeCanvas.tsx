@@ -725,6 +725,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           class="campaign-view-page"
           ref={canvasRef}
           id={props.canvasId ?? "campaign-tree-canvas"}
+          style={{ position: "relative" }}
         />
       </div>
 
