@@ -68,6 +68,7 @@ import {
 import type { GameStartedPayload } from "../types/multiplayer";
 import { cacheMap, preloadBuiltin, ensureMapCached, type SavedMapData } from "../services/mapRepository";
 import { dmExitMap } from "../services/signalr/multiplayer.service";
+import { signalRService } from "../services/signalr/SignalRService";
 import { LogOut, ShoppingBag } from "lucide-solid";
 import { PartyChatPanel } from "../components/PartyChatPanel";
 import RollHistoryPanel from "../components/dm/RollHistoryPanel";
@@ -478,6 +479,21 @@ const BoardGame: Component = () => {
       backToModeSelection();
     }
   };
+
+  // Quand le MJ clique "Continuer" depuis le board, il diffuse CampaignMapExited.
+  // Les joueurs reçoivent cet événement ici (ils ne sont plus sur CampaignSessionPage)
+  // et doivent aussi revenir à la session. backToSession est déclaré avant ce bloc.
+  const _mapExitedFromBoardHandler = (data: Record<string, unknown>) => {
+    if (isDm()) return;
+    if (!getSessionMapConfig()) return; // pas en mode session map → ignorer
+    const nodeId = String(data.nodeId ?? data.NodeId ?? '');
+    if (!nodeId) return;
+    backToSession('next', false).catch(console.error);
+  };
+  signalRService.on('CampaignMapExited', _mapExitedFromBoardHandler);
+  onCleanup(() => {
+    try { signalRService.off('CampaignMapExited', _mapExitedFromBoardHandler); } catch {}
+  });
 
   const returnToMenu = async () => {
     console.log("[BoardGame] ========== RETURNING TO MENU ==========");
