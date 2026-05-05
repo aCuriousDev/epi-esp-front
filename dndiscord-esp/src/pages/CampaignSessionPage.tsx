@@ -683,7 +683,7 @@ const CampaignSessionPage: Component = () => {
         </div>
       </header>
 
-      <main class="flex-1 flex flex-col items-center justify-center px-4 py-12">
+      <main class="flex-1 flex flex-col items-center justify-center overflow-y-auto px-4 py-12">
         {/* Transition entre deux cartes côté joueur — spinner neutre.
             Masque tout contenu jusqu'à ce que le chargement soit terminé.
             CampaignMapLaunched naviguera avant qu'on montre quoi que ce soit,
