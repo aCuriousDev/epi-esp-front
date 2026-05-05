@@ -309,7 +309,10 @@ const CampaignLobbyPage: Component = () => {
         }
         return;
       }
-      navigate(`/campaigns/${params.id}/session`);
+      // Ne pas naviguer immédiatement : laisser le createEffect réagir à GameStarted.
+      // - Si la session SignalR est InProgress : SendRejoinSnapshotAsync rejoue GameStarted → createEffect navigue.
+      // - Si la session est en Lobby : le joueur reste dans le lobby et attend que le MJ clique "Démarrer".
+      // Naviguer ici contournait l'attente du MJ et envoyait le joueur sur un nœud issu d'une session solo.
     } catch (e: any) {
       setJoinActiveError(e?.message ?? 'Impossible de rejoindre la session.');
     } finally {
