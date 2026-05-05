@@ -104,10 +104,15 @@ function waitUntilInSession(timeoutMs = 3_000): Promise<boolean> {
   return new Promise(resolve => {
     if (sessionState.session) { resolve(true); return; }
     const start = Date.now();
-    const tid = setInterval(() => {
-      if (sessionState.session)             { clearInterval(tid); resolve(true);  }
-      else if (Date.now() - start >= timeoutMs) { clearInterval(tid); resolve(false); }
-    }, 100);
+    let delay = 50;
+    let tid: number | undefined;
+    const tick = () => {
+      if (sessionState.session) { if (tid) clearTimeout(tid); resolve(true); return; }
+      if (Date.now() - start >= timeoutMs) { if (tid) clearTimeout(tid); resolve(false); return; }
+      delay = Math.min(Math.floor(delay * 1.5), 500);
+      tid = window.setTimeout(tick, delay);
+    };
+    tid = window.setTimeout(tick, delay);
   });
 }
 
@@ -369,9 +374,9 @@ const CampaignSessionPage: Component = () => {
           // Fix #2 : si deux instances du composant montent simultanément,
           // elles partagent la même Promise → une seule session créée en base.
           if (!_pendingSessionCreate.has(params.id)) {
-            const p = CampaignService.createSession(params.id).finally(() =>
-              setTimeout(() => _pendingSessionCreate.delete(params.id), 5_000)
-            );
+            const p = CampaignService
+              .createSession(params.id)
+              .finally(() => _pendingSessionCreate.delete(params.id));
             _pendingSessionCreate.set(params.id, p);
           }
           const fresh = await _pendingSessionCreate.get(params.id)!;
@@ -418,23 +423,31 @@ const CampaignSessionPage: Component = () => {
           // Attendre que les signaux SolidJS soient propagés (parsedTree, currentNodeId)
           // avant d'appeler followPort qui les lit en synchrone.
           setTimeout(async () => {
-            const node = currentNode();
-            if (!node) return;
-            const hasOutput = parsedTree()?.edges.has(`${node.id}::output`);
-            if (hasOutput) {
-              await followPort('output');
-              // Si le bloc suivant est une carte avec une map configurée,
-              // la lancer automatiquement — inutile que le MJ clique "Lancer la carte".
-              // Les joueurs recevront CampaignMapLaunched et seront redirigés.
-              setTimeout(() => {
-                const next = currentNode();
-                if (next?.type === 'map' && (next as MapData).selectedMap) {
-                  launchMap();
-                }
-              }, 0);
-            } else {
-              // Aucun nœud suivant → fin de session
-              await handleEnd();
+            try {
+              const node = currentNode();
+              if (!node) return;
+              const hasOutput = parsedTree()?.edges.has(`${node.id}::output`);
+              if (hasOutput) {
+                await followPort('output');
+                // Si le bloc suivant est une carte avec une map configurée,
+                // la lancer automatiquement — inutile que le MJ clique "Lancer la carte".
+                // Les joueurs recevront CampaignMapLaunched et seront redirigés.
+                setTimeout(() => {
+                  try {
+                    const next = currentNode();
+                    if (next?.type === 'map' && (next as MapData).selectedMap) {
+                      void launchMap();
+                    }
+                  } catch (e) {
+                    console.warn('[CampaignSession] auto-launch map failed:', e);
+                  }
+                }, 0);
+              } else {
+                // Aucun nœud suivant → fin de session
+                await handleEnd();
+              }
+            } catch (e) {
+              console.warn('[CampaignSession] autoAdvance followPort failed:', e);
             }
           }, 0);
         }
@@ -914,10 +927,20 @@ const CampaignSessionPage: Component = () => {
                                         Le MJ a toujours le dernier mot, qu'il y ait des joueurs ou non. */}
                                     <Show when={isHost() && hasLink()}>
                                       <button
-                                        onClick={() => {
+                                        onClick={async () => {
                                           if (votingLocked()) return;
                                           setVotingLocked(true);
-                                          followPort(`choice-${i()}`, choice || `Choix ${i() + 1}`, true);
+                                          try {
+                                            await followPort(
+                                              `choice-${i()}`,
+                                              choice || `Choix ${i() + 1}`,
+                                              true,
+                                            );
+                                          } catch (e) {
+                                            console.warn('[CampaignSession] followPort(choice) failed:', e);
+                                          } finally {
+                                            setVotingLocked(false);
+                                          }
                                         }}
                                         class="self-center flex-shrink-0 flex flex-col items-center justify-center gap-0.5 px-3 py-3 rounded-xl bg-emerald-600/20 border border-emerald-500/50 text-emerald-300 text-[10px] font-semibold hover:bg-emerald-600/35 hover:border-emerald-400/70 transition-all"
                                         title="Confirmer ce choix et avancer le scénario"
