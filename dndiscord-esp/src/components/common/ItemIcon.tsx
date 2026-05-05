@@ -12,8 +12,7 @@ export default function ItemIcon(props: ItemIconProps) {
   return (
     <Icon
       icon={getItemIcon(props.iconKey)}
-      width={props.size ?? "3em"}
-      height={props.size ?? "3em"}
+      {...(props.size ? { width: props.size, height: props.size } : {})}
       class={props.class ?? ""}
     />
   );
