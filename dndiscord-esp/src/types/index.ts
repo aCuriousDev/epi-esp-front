@@ -40,6 +40,8 @@ export interface Tile {
   effects: TileEffect[];
   /** Set for TileType.EXIT cells — defines what happens when a player steps on it. */
   exitType?: 'next' | 'end';
+  /** Port draw2d à suivre dans l'arbre de campagne (ex: 'exit-0', 'exit-1', 'exit-end'). */
+  exitPortName?: string;
 }
 
 export interface TileEffect {
