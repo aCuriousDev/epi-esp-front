@@ -5,7 +5,7 @@ import { CombatNode } from '../components/campaign-tree-canvas/nodes/CombatNode'
 import { ChoicesNode } from '../components/campaign-tree-canvas/nodes/ChoicesNode';
 import { MapNode } from '../components/campaign-tree-canvas/nodes/MapNode';
 import { Component, createSignal, createEffect, Show, For, onMount, onCleanup } from 'solid-js';
-import { Book, CheckCircle, Edit, GripHorizontal, Loader2, Map as MapIcon, Save, Sword, XCircle } from 'lucide-solid';
+import { Book, CheckCircle, Edit, GripHorizontal, Loader2, Map as MapIcon, Save, Skull, Sword, Trophy, XCircle } from 'lucide-solid';
 import { CampaignService, mapCampaignResponse } from '@/services/campaign.service';
 import { Campaign } from '@/types/campaign';
 import { getApiUrl } from '@/services/config';
@@ -43,6 +43,14 @@ const CampaignManager: Component = () => {
     {
       label: t('campaignManager.block.map'), icon: <MapIcon class="w-5 h-5" />, blockName: 'map',
       bgColor: '#0a1830', borderColor: '#1d4ed8', accentColor: '#60a5fa',
+    },
+    {
+      label: 'Victoire', icon: <Trophy class="w-5 h-5" />, blockName: 'victory',
+      bgColor: '#1a1400', borderColor: '#f59e0b', accentColor: '#fbbf24',
+    },
+    {
+      label: 'Défaite', icon: <Skull class="w-5 h-5" />, blockName: 'defeat',
+      bgColor: '#1a0505', borderColor: '#dc2626', accentColor: '#f87171',
     },
   ];
 
@@ -234,6 +242,16 @@ const CampaignManager: Component = () => {
         newNode = canvas.addNode({
           type: 'map', x: baseX, y: baseY,
           data: { title: 'New map' },
+        });
+      } else if (type === 'victory') {
+        newNode = canvas.addNode({
+          type: 'victory', x: baseX, y: baseY,
+          data: { title: 'Victoire' },
+        });
+      } else if (type === 'defeat') {
+        newNode = canvas.addNode({
+          type: 'defeat', x: baseX, y: baseY,
+          data: { title: 'Défaite' },
         });
       }
 

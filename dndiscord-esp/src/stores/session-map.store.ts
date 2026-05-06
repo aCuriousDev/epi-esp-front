@@ -18,6 +18,8 @@ export type ExitType = 'next' | 'end';
 
 export interface ExitCell extends CellCoord {
   exitType: ExitType;
+  /** Pour les sorties 'next' : index parmi les sorties 'next' (0-based). */
+  exitIndex?: number;
 }
 
 export interface SessionMapConfig {
@@ -60,10 +62,10 @@ export function isSessionMapActive(): boolean {
 // Registered by BoardGame so the game engine can navigate back to the session
 // without importing the router (keeps the game layer framework-agnostic).
 
-let _onExit: ((exitType: ExitType) => void) | null = null;
+let _onExit: ((exitType: ExitType, portName: string) => void) | null = null;
 
 /** BoardGame calls this to register where to go when an EXIT tile is stepped on. */
-export function setSessionExitCallback(cb: (exitType: ExitType) => void): void {
+export function setSessionExitCallback(cb: (exitType: ExitType, portName: string) => void): void {
   _onExit = cb;
 }
 
@@ -71,9 +73,9 @@ export function clearSessionExitCallback(): void {
   _onExit = null;
 }
 
-/** Called by MovementActions when a player steps on a TileType.EXIT cell. */
-export function triggerSessionExit(exitType: ExitType = 'next'): void {
-  _onExit?.(exitType);
+/** Called by BoardGame when the DM confirms the exit. */
+export function triggerSessionExit(exitType: ExitType = 'next', portName = 'exit-0'): void {
+  _onExit?.(exitType, portName);
 }
 
 // ─── Pending exit request (reactive) ─────────────────────────────────────────
@@ -84,6 +86,8 @@ export function triggerSessionExit(exitType: ExitType = 'next'): void {
 export interface PendingExitRequest {
   unitName: string;
   exitType: ExitType;
+  /** Nom du port draw2d à suivre dans l'arbre de campagne (ex: 'exit-0', 'exit-1', 'exit-end'). */
+  portName: string;
 }
 
 const [_pendingExit, _setPendingExit] =

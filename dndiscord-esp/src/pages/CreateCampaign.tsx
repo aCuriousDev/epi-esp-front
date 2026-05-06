@@ -236,7 +236,7 @@ export default function CreateCampaign() {
               <input
                 type="range"
                 min="2"
-                max="8"
+                max="6"
                 value={maxPlayers()}
                 onInput={(e) =>
                   setMaxPlayers(parseInt(e.currentTarget.value, 10))
@@ -257,7 +257,7 @@ export default function CreateCampaign() {
             </div>
             <div class="flex justify-between mt-1.5 font-mono text-[11px] text-mute">
               <span>2 {t("page.createCampaign.minPlayers")}</span>
-              <span>8 {t("page.createCampaign.maxPlayers")}</span>
+              <span>6 {t("page.createCampaign.maxPlayers")}</span>
             </div>
           </div>
 

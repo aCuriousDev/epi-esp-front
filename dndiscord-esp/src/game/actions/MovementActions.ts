@@ -418,8 +418,9 @@ export function moveUnit(targetPos: GridPosition): boolean {
     if (destTile.type === TileType.EXIT && unit.team === Team.PLAYER) {
       if (isSessionMapActive()) {
         const exitType: 'next' | 'end' = destTile.exitType ?? 'next';
+        const portName: string = destTile.exitPortName ?? (exitType === 'end' ? 'exit-end' : 'exit-0');
         addCombatLog(`${unit.name} a atteint la sortie — en attente du MJ…`, 'system');
-        requestSessionExit({ unitName: unit.name, exitType });
+        requestSessionExit({ unitName: unit.name, exitType, portName });
       }
     }
   }
