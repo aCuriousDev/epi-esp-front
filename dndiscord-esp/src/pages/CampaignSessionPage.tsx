@@ -161,6 +161,8 @@ const CampaignSessionPage: Component = () => {
   // Verrou : évite qu'un double-déclenchement de checkConsensus (handleVote +
   // ChoiceVoted broadcast) appelle followPort deux fois pour le même nœud.
   const [votingLocked, setVotingLocked] = createSignal(false);
+  // Buffer for NodeAdvanced events that arrive before currentNodeId is set (page still loading).
+  const [pendingNodeAdvance, setPendingNodeAdvance] = createSignal<{ from: string; next: string } | null>(null);
   const myUserId = () => authStore.user()?.id ?? '';
   // Pour les votes, utiliser le Guid du hub (même format que ChoiceVoted.userId côté serveur).
   // authStore.user().id est le Discord ID ; le hub envoie un Guid → deux clés différentes → double comptage.
@@ -170,13 +172,27 @@ const CampaignSessionPage: Component = () => {
   onMount(async () => {
     writeLastCampaignId(params.id);
     // ── SignalR subscription for votes ──────────────────────────────────────
+    // subscribeCampaign is kept in its own try/catch so a server-side binding
+    // error (e.g. InvalidDataException on Guid) does NOT abort handler
+    // registration below. Handlers must be active even if the subscribe
+    // invocation temporarily fails — a retry will recover the subscription.
     try {
       if (!signalRService.isConnected) {
         await signalRService.connect();
         ensureMultiplayerHandlersRegistered();
       }
       await subscribeCampaign(params.id);
+    } catch (subErr) {
+      console.warn('[CampaignSession] subscribeCampaign failed, will retry once:', subErr);
+      // Retry once after a short delay — the hub may not be ready yet on first connect.
+      setTimeout(() => {
+        subscribeCampaign(params.id).catch(e =>
+          console.warn('[CampaignSession] subscribeCampaign retry failed:', e)
+        );
+      }, 2000);
+    }
 
+    try {
       // ── Sélection automatique du personnage (joueurs seulement) ─────────
       // Permet à l'InventoryPanel de connaître le characterId de chaque joueur
       // via sessionState.session.players[].selectedCharacterId.
@@ -237,7 +253,16 @@ const CampaignSessionPage: Component = () => {
         const from = String(data.fromNodeId ?? data.FromNodeId ?? '');
         const next = String(data.nextNodeId ?? data.NextNodeId ?? '');
         if (!next) return;
-        if (from && currentNodeId() !== from) return; // pas sur le bon nœud
+        const curId = currentNodeId();
+        if (curId === undefined) {
+          // Page is still loading — buffer the event so the createEffect can
+          // apply it once currentNodeId is initialised. Without this, events
+          // that arrive during the async DB fetch are silently dropped and the
+          // player gets stuck on the previous map-node waiting screen.
+          setPendingNodeAdvance({ from, next });
+          return;
+        }
+        if (from && curId !== from) return; // pas sur le bon nœud
         setHistory(h => {
           const cur = currentNodeId();
           return cur ? [...h, cur] : h;
@@ -359,6 +384,9 @@ const CampaignSessionPage: Component = () => {
 
       // ── Session : reprendre l'active existante ou en créer une nouvelle ─────
       let startNodeId = tree.firstNodeId; // fallback : début du scénario
+      // Track the DB-persisted node separately so the mapExit block can detect
+      // when the DM already advanced past resumeNodeId before this page loaded.
+      let dbNodeId: string | undefined;
 
       try {
         const list = await CampaignService.listSessions(params.id);
@@ -370,6 +398,7 @@ const CampaignSessionPage: Component = () => {
           // Restaurer la position si le nœud est toujours dans l'arbre
           if (active.currentNodeId && tree.nodeMap.has(active.currentNodeId)) {
             startNodeId = active.currentNodeId;
+            dbNodeId = active.currentNodeId;
           }
         } else {
           // Première fois (ou session précédente terminée) : nouvelle session.
@@ -399,9 +428,16 @@ const CampaignSessionPage: Component = () => {
         // Nettoyer l'URL immédiatement pour éviter un re-déclenchement
         window.history.replaceState({}, '', window.location.pathname);
 
-        // Restaurer la position dans l'arbre au nœud de la carte jouée
+        // Restaurer la position dans l'arbre au nœud de la carte jouée.
+        // Ne pas écraser une position DB plus avancée : si le MJ a déjà appelé
+        // followPort avant que cette page finisse de charger, dbNodeId pointe
+        // vers le nœud suivant (ex: 'fuite') et resumeNodeId est l'ancien nœud
+        // carte ('duel'). On conserve la position DB dans ce cas.
         if (resumeNodeId && tree.nodeMap.has(resumeNodeId)) {
-          setCurrentNodeId(resumeNodeId);
+          if (!dbNodeId || dbNodeId === resumeNodeId) {
+            setCurrentNodeId(resumeNodeId);
+          }
+          // else: DB already has a more advanced node — keep startNodeId
         }
 
         // autoAdvance=1 : le MJ a cliqué "Prochain nœud" depuis le board, ou une
@@ -412,17 +448,17 @@ const CampaignSessionPage: Component = () => {
         const autoAdvance  = search.get('autoAdvance') === '1';
         const exitPortName = search.get('exitPortName') ?? 'exit-0';
         if (autoAdvance && isHost()) {
-          // Délai de 2500 ms : le MJ et les joueurs naviguent vers la session en même
+          // Délai de 4000 ms : le MJ et les joueurs naviguent vers la session en même
           // temps (après CampaignMapExited). Les joueurs doivent se reconnecter à SignalR
-          // avant de recevoir NodeAdvanced — 0 ms provoque un race condition où ils
-          // ratent l'événement et restent bloqués sur l'écran "En attente du lancement".
+          // et terminer le chargement avant de recevoir NodeAdvanced.
+          // 4 s donne plus de marge que l'ancien 2500 ms pour les connexions lentes.
           setTimeout(async () => {
             try {
               const node = currentNode();
               if (!node) return;
               // Essayer le port exact, puis fallback sur 'output' (anciens nœuds MapNode).
               const hasPort = parsedTree()?.edges.has(`${node.id}::${exitPortName}`)
-                ?? parsedTree()?.edges.has(`${node.id}::output`);
+                || parsedTree()?.edges.has(`${node.id}::output`);
               const portToFollow = parsedTree()?.edges.has(`${node.id}::${exitPortName}`)
                 ? exitPortName
                 : 'output';
@@ -448,7 +484,7 @@ const CampaignSessionPage: Component = () => {
             } catch (e) {
               console.warn('[CampaignSession] autoAdvance followPort failed:', e);
             }
-          }, 2500);
+          }, 4000);
         }
       }
     } catch (err: any) {
@@ -464,6 +500,19 @@ const CampaignSessionPage: Component = () => {
     currentNodeId(); // track
     setPlayerVotes({});
     setVotingLocked(false);
+  });
+
+  // Apply a NodeAdvanced event that was buffered while the page was still loading.
+  // Runs whenever currentNodeId or pendingNodeAdvance changes.
+  createEffect(() => {
+    const curId = currentNodeId();
+    const pending = pendingNodeAdvance();
+    if (!curId || !pending) return;
+    if (!pending.from || pending.from === curId) {
+      setPendingNodeAdvance(null);
+      setHistory(h => [...h, curId]);
+      setCurrentNodeId(pending.next);
+    }
   });
 
   const currentNode = (): NodeData | null => {
