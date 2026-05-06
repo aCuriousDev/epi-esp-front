@@ -7,14 +7,8 @@ export interface CellCoord {
   z: number;
 }
 
-/** Type d'une sortie : 'next' → bloc suivant dans l'arbre, 'end' → fin de scénario. */
-export type ExitType = 'next' | 'end';
-
 export interface ExitCell extends CellCoord {
-  /** Comportement déclenché quand un joueur marche sur cette case sortie. */
-  exitType: ExitType;
-  /** Pour les sorties 'next' uniquement : index parmi les sorties 'next' (0-based).
-   *  Détermine le port draw2d : exit-0, exit-1, etc. */
+  /** Index de cette sortie (0-based) — détermine le port draw2d : exit-0, exit-1, etc. */
   exitIndex?: number;
 }
 
@@ -27,26 +21,27 @@ export interface MapNodeData extends BaseNodeData {
   selectedMapName?: string;
   /** Point d'apparition des joueurs (coordonnées de la grille) */
   spawnPoint?: CellCoord;
-  /** Cases de sortie de la carte (chaque case porte son type : suite ou fin) */
+  /** Cases de sortie de la carte */
   exitCells?: ExitCell[];
   /** Cases de pièges */
   trapCells?: CellCoord[];
 }
 
-/** Réassigne exitIndex séquentiellement pour toutes les sorties 'next'. */
+/** Réassigne exitIndex séquentiellement sur toutes les sorties. */
 export function reindexExits(cells: ExitCell[]): ExitCell[] {
-  let nextIdx = 0;
-  return cells.map(c => c.exitType === 'next' ? { ...c, exitIndex: nextIdx++ } : c);
+  return cells.map((c, i) => ({ ...c, exitIndex: i }));
 }
 
 /** Retourne le nom du port draw2d correspondant à une ExitCell. */
 export function exitPortName(cell: ExitCell): string {
-  if (cell.exitType === 'end') return 'exit-end';
   return `exit-${cell.exitIndex ?? 0}`;
 }
 
 export class MapNode extends CampaignNode {
   static NAME = 'MapNode';
+
+  /** Labels draw2d accrochés au groupe pour identifier chaque port de sortie. */
+  private _portLabels: any[] = [];
 
   constructor(x: number, y: number, data: MapNodeData) {
     super(x, y, data);
@@ -80,13 +75,40 @@ export class MapNode extends CampaignNode {
 
   /** Calcule la liste ordonnée des ports de sortie à partir des exitCells. */
   static computePortDefs(exitCells: ExitCell[]): Array<{ name: string }> {
-    const nextCount = exitCells.filter(e => e.exitType === 'next').length;
-    const hasEnd    = exitCells.some(e => e.exitType === 'end');
-    const ports: Array<{ name: string }> = [];
-    for (let i = 0; i < nextCount; i++) ports.push({ name: `exit-${i}` });
-    if (hasEnd) ports.push({ name: 'exit-end' });
-    if (ports.length === 0) ports.push({ name: 'output' }); // nœud non configuré
-    return ports;
+    if (exitCells.length === 0) return [{ name: 'output' }]; // nœud non configuré
+    return exitCells.map((_, i) => ({ name: `exit-${i}` }));
+  }
+
+  private applyPortStyle(port: any): void {
+    port.setBackgroundColor('#d97706');
+    port.setColor('#f59e0b');
+  }
+
+  private clearPortLabels(): void {
+    this._portLabels.forEach(l => { try { this.remove(l); } catch (_) {} });
+    this._portLabels = [];
+  }
+
+  private addPortLabel(text: string, yPercent: number): void {
+    const label = new draw2d.shape.basic.Label({
+      text,
+      fontSize: 9,
+      fontColor: '#ffffff',
+      bgColor: 'none',
+      stroke: 0,
+      bold: false,
+    });
+    this.add(label, new draw2d.layout.locator.XYRelPortLocator(88, yPercent));
+    this._portLabels.push(label);
+  }
+
+  private rebuildPortLabels(defs: Array<{ name: string }>, total: number): void {
+    this.clearPortLabels();
+    defs.forEach((_, i) => {
+      const yPercent = total <= 1 ? 50 : ((i + 1) / (total + 1)) * 100;
+      const text = defs.length === 1 ? '→' : `→${i + 1}`;
+      this.addPortLabel(text, yPercent);
+    });
   }
 
   private createOutputPorts(exitCells: ExitCell[]): void {
@@ -98,7 +120,9 @@ export class MapNode extends CampaignNode {
         new draw2d.layout.locator.XYRelPortLocator(105, yPercent)
       );
       port.setName(def.name);
+      this.applyPortStyle(port);
     });
+    this.rebuildPortLabels(defs, defs.length);
   }
 
   public updateExitPorts(exitCells: ExitCell[]): void {
@@ -121,7 +145,7 @@ export class MapNode extends CampaignNode {
       this.removePort(currentPorts[i]);
     }
 
-    // Recollecte + repositionnement + renommage
+    // Recollecte + repositionnement + renommage + style
     const allPorts: any[] = [];
     this.getOutputPorts().each((_: number, p: any) => allPorts.push(p));
     allPorts.forEach((port, i) => {
@@ -129,8 +153,10 @@ export class MapNode extends CampaignNode {
       const yPercent = total <= 1 ? 50 : ((i + 1) / (total + 1)) * 100;
       port.setName(defs[i].name);
       port.setLocator(new draw2d.layout.locator.XYRelPortLocator(105, yPercent));
+      this.applyPortStyle(port);
     });
 
+    this.rebuildPortLabels(defs, defs.length);
     this.repaint();
   }
 

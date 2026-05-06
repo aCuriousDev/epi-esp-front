@@ -37,7 +37,7 @@ interface MapData     {
    *  sans lookup localStorage (les joueurs n'ont pas la map en local). */
   selectedMapName?: string;
   spawnPoint?: { x: number; z: number };
-  exitCells?:  { x: number; z: number; exitType?: 'next' | 'end' }[];
+  exitCells?:  { x: number; z: number; exitIndex?: number }[];
   trapCells?:  { x: number; z: number }[];
 }
 interface CombatData  { id: string; type: 'combat'; title: string; }
@@ -259,7 +259,7 @@ const CampaignSessionPage: Component = () => {
             nodeId: string; mapId: string;
             mapData?: string | null;
             spawnPoint?: { x: number; z: number };
-            exitCells?: { x: number; z: number; exitType?: 'next' | 'end' }[];
+            exitCells?: { x: number; z: number; exitIndex?: number }[];
             trapCells?: { x: number; z: number }[];
           };
 
@@ -285,7 +285,7 @@ const CampaignSessionPage: Component = () => {
             nodeId:     cfg.nodeId,
             mapId:      cfg.mapId,
             spawnPoint: cfg.spawnPoint,
-            exitCells:  cfg.exitCells?.map(e => ({ ...e, exitType: e.exitType ?? 'next' as const })),
+            exitCells:  cfg.exitCells,
             trapCells:  cfg.trapCells,
           });
           navigate('/practice/session?fromSession=1');
@@ -391,26 +391,15 @@ const CampaignSessionPage: Component = () => {
 
       setCurrentNodeId(startNodeId);
 
-      // ── Retour depuis une carte : gérer le type de sortie ────────────────
+      // ── Retour depuis une carte : restaurer la position dans l'arbre ────────
       const search       = new URLSearchParams(window.location.search);
-      const mapExit      = search.get('mapExit') as 'next' | 'end' | null;
+      const mapExit      = search.get('mapExit');
       const resumeNodeId = search.get('resumeNodeId');
       if (mapExit) {
         // Nettoyer l'URL immédiatement pour éviter un re-déclenchement
         window.history.replaceState({}, '', window.location.pathname);
 
-        if (mapExit === 'end') {
-          // Fin de scénario directe
-          const sid = sessionId();
-          if (sid) {
-            try { await CampaignService.completeSession(params.id, sid); } catch {}
-          }
-          navigate(`/campaigns/${params.id}`);
-          return;
-        }
-
-        // mapExit === 'next' : restaurer la position dans l'arbre au nœud de la carte
-        // qui vient d'être jouée, pour que le DM voie "Continuer le scénario".
+        // Restaurer la position dans l'arbre au nœud de la carte jouée
         if (resumeNodeId && tree.nodeMap.has(resumeNodeId)) {
           setCurrentNodeId(resumeNodeId);
         }
@@ -423,8 +412,10 @@ const CampaignSessionPage: Component = () => {
         const autoAdvance  = search.get('autoAdvance') === '1';
         const exitPortName = search.get('exitPortName') ?? 'exit-0';
         if (autoAdvance && isHost()) {
-          // Attendre que les signaux SolidJS soient propagés (parsedTree, currentNodeId)
-          // avant d'appeler followPort qui les lit en synchrone.
+          // Délai de 2500 ms : le MJ et les joueurs naviguent vers la session en même
+          // temps (après CampaignMapExited). Les joueurs doivent se reconnecter à SignalR
+          // avant de recevoir NodeAdvanced — 0 ms provoque un race condition où ils
+          // ratent l'événement et restent bloqués sur l'écran "En attente du lancement".
           setTimeout(async () => {
             try {
               const node = currentNode();
@@ -457,7 +448,7 @@ const CampaignSessionPage: Component = () => {
             } catch (e) {
               console.warn('[CampaignSession] autoAdvance followPort failed:', e);
             }
-          }, 0);
+          }, 2500);
         }
       }
     } catch (err: any) {
@@ -508,8 +499,7 @@ const CampaignSessionPage: Component = () => {
       nodeId:     node.id,
       mapId:      node.selectedMap,
       spawnPoint: node.spawnPoint,
-      // Normaliser les exitCells : garantir que exitType est toujours défini
-      exitCells:  node.exitCells?.map(e => ({ ...e, exitType: e.exitType ?? 'next' as const })),
+      exitCells:  node.exitCells,
       trapCells:  node.trapCells,
     };
 

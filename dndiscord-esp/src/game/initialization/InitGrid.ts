@@ -57,15 +57,10 @@ function applySessionMapOverrides(newTiles: Record<string, any>): void {
   for (const cell of cfg.exitCells ?? []) {
     const key = posToKey(cell);
     if (newTiles[key]) {
-      const exitType = cell.exitType ?? 'next';
       newTiles[key].type         = TileType.EXIT;
       newTiles[key].walkable     = true;
       newTiles[key].movementCost = 1;
-      newTiles[key].exitType     = exitType;
-      // Port draw2d à suivre dans l'arbre de campagne
-      newTiles[key].exitPortName = exitType === 'end'
-        ? 'exit-end'
-        : `exit-${cell.exitIndex ?? 0}`;
+      newTiles[key].exitPortName = `exit-${cell.exitIndex ?? 0}`;
     }
   }
 
