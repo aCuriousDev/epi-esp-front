@@ -1238,6 +1238,8 @@ export class SoundManager {
     this.stopAmbient();
     this.removeGestureHandler();
     this.pendingAmbient = null;
-    this.ctx.close();
+    if (this.ctx.state !== 'closed') {
+      this.ctx.close().catch(() => {});
+    }
   }
 }
