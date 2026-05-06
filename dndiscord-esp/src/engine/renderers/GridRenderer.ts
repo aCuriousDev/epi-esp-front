@@ -378,43 +378,36 @@ export class GridRenderer {
   }
 
   /**
-   * Draw an arrow (↑) or stop (⛔) icon onto a 64×64 canvas used as a DynamicTexture.
-   * 'next' exits → amber upward arrow ; 'end' exits → rose cross.
+   * Draw an amber upward arrow + exit number onto a 64×64 DynamicTexture canvas.
+   * @param exitIndex 0-based index — displayed as 1-based number on the tile.
+   *                  Pass -1 (unconfigured node fallback) to omit the number.
    */
-  private drawExitArrowTexture(
-    texture: DynamicTexture,
-    exitType: 'next' | 'end',
-  ): void {
+  private drawExitArrowTexture(texture: DynamicTexture, exitIndex: number): void {
     const ctx  = texture.getContext() as CanvasRenderingContext2D;
     const size = 64;
     ctx.clearRect(0, 0, size, size);
 
-    if (exitType === 'end') {
-      // Rose/red cross  ╳
-      const clr = '#f87171';
-      ctx.strokeStyle = clr;
-      ctx.lineWidth   = 9;
-      ctx.lineCap     = 'round';
-      ctx.beginPath();
-      ctx.moveTo(16, 16); ctx.lineTo(48, 48);
-      ctx.moveTo(48, 16); ctx.lineTo(16, 48);
-      ctx.stroke();
-    } else {
-      // Amber upward arrow  ↑
-      const clr = '#fbbf24';
-      ctx.strokeStyle = clr;
-      ctx.lineWidth   = 7;
-      ctx.lineCap     = 'round';
-      ctx.lineJoin    = 'round';
-      // Shaft
-      ctx.beginPath();
-      ctx.moveTo(32, 52); ctx.lineTo(32, 18);
-      ctx.stroke();
-      // Arrowhead
-      ctx.beginPath();
-      ctx.moveTo(32, 12); ctx.lineTo(18, 28);
-      ctx.moveTo(32, 12); ctx.lineTo(46, 28);
-      ctx.stroke();
+    const clr = '#fbbf24';
+    ctx.strokeStyle = clr;
+    ctx.lineWidth   = 7;
+    ctx.lineCap     = 'round';
+    ctx.lineJoin    = 'round';
+    // Shaft (shifted up slightly to leave room for the number)
+    ctx.beginPath();
+    ctx.moveTo(32, 48); ctx.lineTo(32, 16);
+    ctx.stroke();
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(32, 10); ctx.lineTo(18, 26);
+    ctx.moveTo(32, 10); ctx.lineTo(46, 26);
+    ctx.stroke();
+    // Exit number (1-based) at the bottom of the tile
+    if (exitIndex >= 0) {
+      ctx.fillStyle    = clr;
+      ctx.font         = 'bold 18px sans-serif';
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(`${exitIndex + 1}`, 32, 62);
     }
     texture.update();
   }
@@ -432,19 +425,17 @@ export class GridRenderer {
     const exitTiles = Object.values(tileData).filter(t => t.type === TileType.EXIT);
     if (exitTiles.length === 0) return;
 
-    // One material per exit type, shared across all cells of the same type
-    const matNext = new StandardMaterial('exitArrowMatNext', this.scene);
-    matNext.disableLighting = true;
-    matNext.alpha = 0.55;
-
-    const matEnd  = new StandardMaterial('exitArrowMatEnd', this.scene);
-    matEnd.disableLighting  = true;
-    matEnd.alpha = 0.55;
+    const matBase = new StandardMaterial('exitArrowMatBase', this.scene);
+    matBase.disableLighting = true;
+    matBase.alpha = 0.55;
 
     exitTiles.forEach(tile => {
       const { x, z } = tile.position;
       const worldPos  = gridToWorld(tile.position);
-      const isEnd     = tile.exitType === 'end';
+      // Parse 0-based index from exitPortName (e.g. 'exit-0' → 0, 'exit-2' → 2)
+      const portName  = tile.exitPortName ?? '';
+      const match     = portName.match(/^exit-(\d+)$/);
+      const exitIndex = match ? parseInt(match[1], 10) : -1;
 
       // DynamicTexture — draw the arrow icon into a canvas
       const texSize = 64;
@@ -454,10 +445,10 @@ export class GridRenderer {
         this.scene,
         false // no mip maps needed for a small overlay
       );
-      this.drawExitArrowTexture(tex, isEnd ? 'end' : 'next');
+      this.drawExitArrowTexture(tex, exitIndex);
 
       // Clone the shared material so each tile can pulse independently
-      const mat = (isEnd ? matEnd : matNext).clone(`exitArrowMat_${x}_${z}`) as StandardMaterial;
+      const mat = matBase.clone(`exitArrowMat_${x}_${z}`) as StandardMaterial;
       mat.diffuseTexture  = tex;
       mat.emissiveTexture = tex;
       mat.opacityTexture  = tex;
@@ -493,9 +484,8 @@ export class GridRenderer {
       this.exitArrowOverlays.push(plane);
     });
 
-    // Dispose the temporary base materials (each tile uses its own clone)
-    matNext.dispose();
-    matEnd.dispose();
+    // Dispose the temporary base material (each tile uses its own clone)
+    matBase.dispose();
   }
 
   /**

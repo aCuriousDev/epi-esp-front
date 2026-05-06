@@ -159,9 +159,8 @@ export function registerGameSyncHandlers(): void {
     if (isHost() && isSessionMapActive()) {
       const destTile = tiles[posToKey(dest)];
       if (destTile?.type === TileType.EXIT && unitData?.team === Team.PLAYER) {
-        const exitType: 'next' | 'end' = destTile.exitType ?? 'next';
-        const portName: string = destTile.exitPortName ?? (exitType === 'end' ? 'exit-end' : 'exit-0');
-        requestSessionExit({ unitName: unitData.name, exitType, portName });
+        const portName: string = destTile.exitPortName ?? 'exit-0';
+        requestSessionExit({ unitName: unitData.name, portName });
       }
     }
 

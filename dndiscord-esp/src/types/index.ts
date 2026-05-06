@@ -38,9 +38,7 @@ export interface Tile {
   movementCost: number;
   occupiedBy: string | null; // Unit ID
   effects: TileEffect[];
-  /** Set for TileType.EXIT cells — defines what happens when a player steps on it. */
-  exitType?: 'next' | 'end';
-  /** Port draw2d à suivre dans l'arbre de campagne (ex: 'exit-0', 'exit-1', 'exit-end'). */
+  /** Port draw2d à suivre dans l'arbre de campagne (ex: 'exit-0', 'exit-1'). */
   exitPortName?: string;
 }
 

@@ -63,7 +63,6 @@ import {
   pendingSessionExit,
   clearPendingSessionExit,
   triggerSessionExit,
-  type ExitType,
 } from "../stores/session-map.store";
 import type { GameStartedPayload } from "../types/multiplayer";
 import { cacheMap, preloadBuiltin, ensureMapCached, type SavedMapData } from "../services/mapRepository";
@@ -161,10 +160,7 @@ const BoardGame: Component = () => {
           setSelectedMapId(cfg.mapId);
           setAppPhase(AppPhase.IN_GAME);
 
-          // autoAdvance=true pour les sorties 'next' : CampaignSessionPage
-          // avancera automatiquement au bloc suivant (et lancera la carte si besoin).
-          // Pour 'end' on ne s'avance pas — la session se termine.
-          setSessionExitCallback((exitType, portName) => { backToSession(exitType, exitType === 'next', portName).catch(console.error); });
+          setSessionExitCallback((portName) => { backToSession(true, portName).catch(console.error); });
 
           let attempts = 0;
           const checkEngine = () => {
@@ -457,12 +453,7 @@ const BoardGame: Component = () => {
     clearSession();
   };
 
-  /** Return to the campaign session page after playing a session map.
-   *  @param exitType    'next' = advance to next node, 'end' = end session
-   *  @param autoAdvance If true, CampaignSessionPage will call followPort automatically
-   *  @param portName    Port draw2d à suivre (ex: 'exit-0', 'exit-1', 'exit-end')
-   */
-  const backToSession = async (exitType: 'next' | 'end' = 'next', autoAdvance = false, portName = 'exit-0') => {
+  const backToSession = async (autoAdvance = false, portName = 'exit-0') => {
     const cfg = getSessionMapConfig();
     clearPendingSessionExit();
     clearSessionExitCallback();
@@ -470,7 +461,7 @@ const BoardGame: Component = () => {
     await clearEngineState(); // doit être awaité : ghost render loop sinon
     if (cfg) {
       const params = new URLSearchParams({
-        mapExit: exitType,
+        mapExit: 'next',
         resumeNodeId: cfg.nodeId,
         exitPortName: portName,
         ...(autoAdvance ? { autoAdvance: '1' } : {}),
@@ -489,7 +480,7 @@ const BoardGame: Component = () => {
     if (!getSessionMapConfig()) return; // pas en mode session map → ignorer
     const nodeId = String(data.nodeId ?? data.NodeId ?? '');
     if (!nodeId) return;
-    backToSession('next', false).catch(console.error);
+    backToSession(false).catch(console.error);
   };
   signalRService.on('CampaignMapExited', _mapExitedFromBoardHandler);
   onCleanup(() => {
@@ -778,7 +769,7 @@ const BoardGame: Component = () => {
             dmExitMap(cfg.campaignId, cfg.nodeId).catch(() => {});
           }
           // autoAdvance=true : CampaignSessionPage appellera followPort automatiquement
-          backToSession('next', true).catch(console.error);
+          backToSession(true).catch(console.error);
         } : undefined} />
         <DmPlayerInspectPanel />
       </Show>
@@ -1024,28 +1015,18 @@ const BoardGame: Component = () => {
                             backdrop-blur-sm shadow-2xl">
 
                   {/* Icon */}
-                  <div class={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                    pendingSessionExit()?.exitType === 'end'
-                      ? 'bg-rose-500/20 border border-rose-500/40'
-                      : 'bg-amber-500/20 border border-amber-500/40'
-                  }`}>
-                    <span class="text-xl">
-                      {pendingSessionExit()?.exitType === 'end' ? '⛔' : '🚪'}
-                    </span>
+                  <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-amber-500/20 border border-amber-500/40">
+                    <span class="text-xl">🚪</span>
                   </div>
 
                   {/* Text */}
                   <div class="flex flex-col gap-0.5 min-w-0">
                     <p class="text-sm font-semibold text-white leading-snug">
-                      <span class={pendingSessionExit()?.exitType === 'end' ? 'text-rose-400' : 'text-amber-400'}>
-                        {pendingSessionExit()?.unitName}
-                      </span>
+                      <span class="text-amber-400">{pendingSessionExit()?.unitName}</span>
                       {' '}a atteint la sortie
                     </p>
                     <p class="text-xs text-slate-400">
-                      {pendingSessionExit()?.exitType === 'end'
-                        ? 'Cette sortie met fin au scénario.'
-                        : 'Cette sortie continue vers le bloc suivant.'}
+                      Cette sortie continue vers le bloc suivant.
                     </p>
                   </div>
 
@@ -1064,23 +1045,15 @@ const BoardGame: Component = () => {
                         const req = pendingSessionExit();
                         if (!req) return;
                         clearPendingSessionExit();
-                        // Notifier les joueurs pour qu'ils quittent aussi le board
-                        // (même comportement que le bouton "Prochain nœud" du DmPanel).
-                        if (req.exitType === 'next') {
-                          const exitCfg = getSessionMapConfig();
-                          if (exitCfg) {
-                            dmExitMap(exitCfg.campaignId, exitCfg.nodeId).catch(() => {});
-                          }
+                        const exitCfg = getSessionMapConfig();
+                        if (exitCfg) {
+                          dmExitMap(exitCfg.campaignId, exitCfg.nodeId).catch(() => {});
                         }
-                        triggerSessionExit(req.exitType, req.portName);
+                        triggerSessionExit(req.portName);
                       }}
-                      class={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                        pendingSessionExit()?.exitType === 'end'
-                          ? 'bg-rose-600 hover:bg-rose-500 text-white border border-rose-500'
-                          : 'bg-amber-600 hover:bg-amber-500 text-white border border-amber-500'
-                      }`}
+                      class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-amber-600 hover:bg-amber-500 text-white border border-amber-500"
                     >
-                      {pendingSessionExit()?.exitType === 'end' ? '⛔ Terminer' : '🚪 Continuer'}
+                      🚪 Continuer
                     </button>
                   </div>
                 </div>
