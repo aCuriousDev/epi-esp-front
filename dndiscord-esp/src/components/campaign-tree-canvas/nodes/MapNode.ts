@@ -85,7 +85,7 @@ export class MapNode extends CampaignNode {
   }
 
   private clearPortLabels(): void {
-    this._portLabels.forEach(l => { try { this.remove(l); } catch (_) {} });
+    (this._portLabels ?? []).forEach(l => { try { this.remove(l); } catch (_) {} });
     this._portLabels = [];
   }
 
