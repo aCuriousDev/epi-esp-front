@@ -19,6 +19,7 @@ import {
   leaveSession,
 } from '@/services/signalr/multiplayer.service';
 import { CharacterService, CharacterClass, type CharacterDto } from '@/services/character.service';
+import { characterClassDisplay, characterRaceDisplay } from '../i18n/characterDisplay';
 import { CampaignService, GameSessionStatus, type GameSessionResponse } from '@/services/campaign.service';
 import { MapService, type CampaignMapRecord } from '@/services/map.service';
 import { ensureMapCached } from '@/services/mapRepository';
@@ -32,10 +33,10 @@ const DEFAULT_CHARACTERS = [
   {
     id: 'archer' as const,
     label: 'Archer',
-    subtitle: 'Rôdeur · Nv.1',
-    description: 'Expert des distances. Agile et précis.',
+    subtitle: 'Ranger · Lv.1',
+    description: 'Ranged expert. Agile and precise.',
     emoji: '🏹',
-    consumables: ['Flèches (×20)', 'Potion de soin'],
+    consumables: ['Arrows (×20)', 'Healing potion'],
     accent: '#4ade80',
     border: '#22c55e',
     bg: 'rgba(5,46,22,0.65)',
@@ -43,10 +44,10 @@ const DEFAULT_CHARACTERS = [
   {
     id: 'warrior' as const,
     label: 'Chevalier',
-    subtitle: 'Guerrier · Nv.1',
-    description: 'Combattant robuste, bouclier de l\'équipe.',
+    subtitle: 'Fighter · Lv.1',
+    description: 'Sturdy fighter, the party shield.',
     emoji: '⚔️',
-    consumables: ['Potion de soin (×2)'],
+    consumables: ['Healing potion (×2)'],
     accent: '#f87171',
     border: '#ef4444',
     bg: 'rgba(42,9,9,0.65)',
@@ -54,10 +55,10 @@ const DEFAULT_CHARACTERS = [
   {
     id: 'mage' as const,
     label: 'Mage',
-    subtitle: 'Magicien · Nv.1',
-    description: 'Maître des arcanes, puissant mais fragile.',
+    subtitle: 'Wizard · Lv.1',
+    description: 'Master of arcana, powerful but fragile.',
     emoji: '🔮',
-    consumables: ['Parchemin (Boule de feu)', 'Potion de mana'],
+    consumables: ['Scroll (Fireball)', 'Mana potion'],
     accent: '#a78bfa',
     border: '#8b5cf6',
     bg: 'rgba(28,19,51,0.65)',
@@ -345,13 +346,13 @@ const CampaignLobbyPage: Component = () => {
       <header class="sticky top-0 z-20 flex items-center justify-between pl-16 sm:pl-20 pr-16 sm:pr-20 py-4 border-b border-white/10 bg-black/40 backdrop-blur-md">
         <div class="text-center">
           <p class="text-xs text-purple-400 uppercase tracking-wider font-medium">
-            {quickLaunch() ? '⚡ Lancement rapide' : 'Salle d\'attente'}
+            {quickLaunch() ? '⚡ Quick launch' : 'Waiting room'}
           </p>
-          <h1 class="font-display text-lg text-white">{session()?.campaignName ?? 'Campagne'}</h1>
+          <h1 class="font-display text-lg text-white">{session()?.campaignName ?? 'Campaign'}</h1>
         </div>
         <button onClick={copyCode}
           class="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm text-slate-300 transition-all"
-          title="Copier le code">
+          title="Copy code">
           <span class="font-mono tracking-widest text-white font-bold">
             {session()?.joinCode ?? session()?.sessionId?.slice(0, 8) ?? '...'}
           </span>
@@ -377,13 +378,13 @@ const CampaignLobbyPage: Component = () => {
                 </div>
                 <div class="min-w-0">
                   <p class="text-emerald-300 font-semibold text-sm uppercase tracking-wider mb-0.5">
-                    Session en cours
+                    Session in progress
                   </p>
                   <p class="text-white font-semibold text-base leading-tight">
-                    Une session est déjà active pour cette campagne
+                    A session is already active for this campaign
                   </p>
                   <p class="text-slate-400 text-sm mt-0.5">
-                    Rejoignez la partie en cours directement
+                    Join the ongoing game directly
                   </p>
                 </div>
               </div>
@@ -398,7 +399,7 @@ const CampaignLobbyPage: Component = () => {
                   <Show when={!joiningActive()} fallback={<Loader2 class="w-4 h-4 animate-spin" />}>
                     <Play class="w-4 h-4" />
                   </Show>
-                  {joiningActive() ? 'Connexion…' : 'Rejoindre la session'}
+                  {joiningActive() ? 'Connecting…' : 'Join session'}
                 </button>
                 <Show when={joinActiveError()}>
                   <p class="text-red-400 text-xs" role="alert">{joinActiveError()}</p>
@@ -427,15 +428,15 @@ const CampaignLobbyPage: Component = () => {
                     <div class={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${player.status === 'Connected' ? 'bg-emerald-400' : 'bg-slate-500'}`} />
                     <span class="text-white font-medium">{player.userName}</span>
                     <Show when={player.role === PlayerRole.DungeonMaster}>
-                      <span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">MJ</span>
+                      <span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">DM</span>
                     </Show>
                   </div>
                   <Show when={player.role !== PlayerRole.DungeonMaster}
-                    fallback={<span class="text-xs text-amber-400/70 italic">Maître du Jeu</span>}>
+                    fallback={<span class="text-xs text-amber-400/70 italic">Dungeon Master</span>}>
                     <Show when={playerLabel(player)}
                       fallback={
                         <span class="text-xs text-slate-500 italic flex items-center gap-1">
-                          <Loader2 class="w-3 h-3 animate-spin" /> Sélection…
+                          <Loader2 class="w-3 h-3 animate-spin" /> Selecting…
                         </span>
                       }>
                       <span class="text-sm font-medium text-purple-300">{playerLabel(player)}</span>
@@ -452,13 +453,13 @@ const CampaignLobbyPage: Component = () => {
           <section class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
             <div class="flex items-center gap-2 mb-5">
               <UserCircle2 class="w-5 h-5 text-purple-400" />
-              <h2 class="font-display text-xl text-white">Choisissez votre personnage</h2>
+              <h2 class="font-display text-xl text-white">Choose your character</h2>
             </div>
 
             {/* ── Personnages par défaut ── */}
             <div class="mb-6">
               <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-3">
-                Personnages par défaut
+                Default characters
               </p>
               <div class="grid grid-cols-3 gap-3">
                 <For each={DEFAULT_CHARACTERS}>
@@ -501,32 +502,32 @@ const CampaignLobbyPage: Component = () => {
                             border: `1px solid ${def.border}50`,
                             'border-radius': '9999px', padding: '0.15rem 0.6rem',
                             'margin-top': '0.25rem',
-                          }}>✓ Sélectionné</span>
+                          }}>✓ Selected</span>
                         </Show>
                       </button>
                     );
                   }}
                 </For>
               </div>
-              <p class="text-xs text-slate-600 mt-2">Pas d'or · Pas d'inventaire · Consommables uniquement</p>
+              <p class="text-xs text-slate-600 mt-2">No gold · No inventory · Consumables only</p>
             </div>
 
             {/* ── Personnages de l'utilisateur ── */}
             <div>
               <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-3">
-                Mes personnages
+                My characters
               </p>
 
               <Show when={loadingChars()}>
                 <div class="flex items-center gap-3 py-4 text-slate-400 text-sm">
                   <Loader2 class="w-4 h-4 animate-spin text-purple-400" />
-                  Chargement…
+                  Loading…
                 </div>
               </Show>
 
               <Show when={!loadingChars() && characters().length === 0}>
                 <p class="text-slate-500 text-sm italic py-2">
-                  Aucun personnage créé — utilisez un personnage par défaut ou créez-en un depuis votre profil.
+                  No characters created - use a default character or create one from your profile.
                 </p>
               </Show>
 
@@ -555,12 +556,12 @@ const CampaignLobbyPage: Component = () => {
                                 <p class={`font-semibold truncate ${isSelected() ? 'text-white' : 'text-slate-200'}`}>
                                   {char.name}
                                 </p>
-                                <p class="text-xs text-slate-400">{char.race} · {char.class} · Nv.{char.level}</p>
+                                <p class="text-xs text-slate-400">{characterRaceDisplay[char.race as unknown as keyof typeof characterRaceDisplay] ?? char.race} · {characterClassDisplay[char.class as unknown as keyof typeof characterClassDisplay] ?? char.class} · Lv.{char.level}</p>
                               </div>
                             </div>
                             <div class="flex items-center gap-3 shrink-0 text-xs text-slate-400">
-                              <span title="PV">❤️ {char.currentHitPoints}/{char.maxHitPoints}</span>
-                              <span title="CA">🛡️ {char.armorClass}</span>
+                              <span title="HP">❤️ {char.currentHitPoints}/{char.maxHitPoints}</span>
+                              <span title="AC">🛡️ {char.armorClass}</span>
                               <Show when={isSelected()}>
                                 <span class="text-purple-300 font-bold">✓</span>
                               </Show>
@@ -577,10 +578,10 @@ const CampaignLobbyPage: Component = () => {
             {/* Statut de sélection */}
             <div class="mt-4 text-center text-sm">
               <Show when={!hasSelection()}>
-                <p class="text-amber-400/80">⚠️ Sélectionnez un personnage avant le début de la partie.</p>
+                <p class="text-amber-400/80">⚠️ Select a character before the game starts.</p>
               </Show>
               <Show when={hasSelection()}>
-                <p class="text-emerald-400/80">✓ Personnage retenu — votre sélection est sauvegardée pour cette campagne.</p>
+                <p class="text-emerald-400/80">✓ Character locked — your selection is saved for this campaign.</p>
               </Show>
             </div>
           </section>
@@ -591,13 +592,13 @@ const CampaignLobbyPage: Component = () => {
           <section class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
             <div class="flex items-center gap-2 mb-4">
               <MapIcon class="w-5 h-5 text-blue-400" />
-              <h2 class="font-display text-xl text-white">Choisir une carte</h2>
+              <h2 class="font-display text-xl text-white">Choose a map</h2>
             </div>
 
             <Show when={loadingMaps()}>
               <div class="flex items-center gap-2 text-slate-400 text-sm py-2">
                 <Loader2 class="w-4 h-4 animate-spin text-blue-400" />
-                Chargement des cartes…
+                Loading maps…
               </div>
             </Show>
 
@@ -615,9 +616,9 @@ const CampaignLobbyPage: Component = () => {
                   <span class="text-lg">🗺️</span>
                   <div>
                     <span class={`font-medium ${quickLaunchMapId() === 'default' ? 'text-white' : 'text-slate-200'}`}>
-                      Carte par défaut
+                      Default map
                     </span>
-                    <p class="text-xs text-slate-500">Grille procédurale</p>
+                    <p class="text-xs text-slate-500">Procedural Grid</p>
                   </div>
                   <Show when={quickLaunchMapId() === 'default'}>
                     <span class="ml-auto text-blue-400 font-bold text-sm">✓</span>
@@ -648,7 +649,7 @@ const CampaignLobbyPage: Component = () => {
 
                 <Show when={campaignMaps().length === 0}>
                   <p class="text-slate-500 text-sm italic py-1">
-                    Aucune carte de campagne — seule la grille par défaut est disponible.
+                    No campaign maps - only the default grid is available.
                   </p>
                 </Show>
               </div>
@@ -665,7 +666,7 @@ const CampaignLobbyPage: Component = () => {
                 <>
                   <Show when={!allPlayersReady()}>
                     <p class="text-center text-sm text-amber-400/80 mb-4">
-                      ⚠️ Certains joueurs n'ont pas encore sélectionné leur personnage.
+                      ⚠️ Some players have not selected their character yet.
                     </p>
                   </Show>
                   <button
@@ -677,14 +678,14 @@ const CampaignLobbyPage: Component = () => {
                       <Loader2 class="w-5 h-5 animate-spin" />
                     </Show>
                     <Show when={starting()}
-                      fallback={quickLaunch() ? 'Lancer la carte' : 'Démarrer la session'}
+                      fallback={quickLaunch() ? 'Launch map' : 'Start session'}
                     >
-                      Lancement…
+                      Launching…
                     </Show>
                   </button>
                   <p class="text-center text-sm text-slate-500 mt-3">
                     {quickLaunch()
-                      ? 'Les joueurs seront redirigés vers la carte automatiquement.'
+                      ? 'Players will be automatically redirected to the map.'
                       : 'Players will be redirected automatically.'}
                   </p>
                 </>
@@ -692,17 +693,17 @@ const CampaignLobbyPage: Component = () => {
             >
               {/* Session déjà InProgress → proposer de reprendre au lieu de redémarrer */}
               <p class="text-center text-sm text-amber-400/80 mb-4">
-                ⚡ La session est déjà en cours.
+                ⚡ The session is already in progress.
               </p>
               <button
                 onClick={() => navigate(`/campaigns/${params.id}/session`)}
                 class="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-lg rounded-xl transition-all shadow-lg shadow-emerald-500/20"
               >
                 <Play class="w-5 h-5" />
-                Reprendre la session
+                Resume session
               </button>
               <p class="text-center text-sm text-slate-500 mt-3">
-                La session a déjà été lancée — reprenez depuis le scénario.
+                The session has already been launched - resume from the scenario.
               </p>
             </Show>
           </section>
@@ -722,7 +723,7 @@ const CampaignLobbyPage: Component = () => {
             {/* Session active détectée mais utilisateur pas encore dedans */}
             <section class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 text-center">
               <p class="text-sm text-amber-400/80 mb-4">
-                ⚡ Une session est déjà en cours pour cette campagne.
+                ⚡ A session is already in progress for this campaign.
               </p>
               <button
                 onClick={handleJoinActiveSession}
@@ -732,7 +733,7 @@ const CampaignLobbyPage: Component = () => {
                 <Show when={joiningActive()} fallback={<Play class="w-5 h-5" />}>
                   <Loader2 class="w-5 h-5 animate-spin" />
                 </Show>
-                {joiningActive() ? 'Connexion…' : 'Rejoindre la session'}
+                {joiningActive() ? 'Connecting…' : 'Join session'}
               </button>
               <Show when={joinActiveError()}>
                 <p class="text-red-400 text-sm mt-2">{joinActiveError()}</p>

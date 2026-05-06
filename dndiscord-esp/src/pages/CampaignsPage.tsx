@@ -108,7 +108,7 @@ export default function CampaignsPage() {
       });
       setSearchResults(res.items);
     } catch {
-      setSearchError("Impossible de charger les campagnes. Veuillez réessayer.");
+      setSearchError(t("page.campaigns.loadError"));
     } finally {
       setSearchLoading(false);
     }
@@ -134,7 +134,7 @@ export default function CampaignsPage() {
       const msg =
         err?.response?.data?.detail ??
         err?.response?.data?.title ??
-        "Impossible de rejoindre cette campagne.";
+        t("page.campaigns.joinPublicError");
       setJoinPublicError(msg);
     } finally {
       setJoiningId(null);
@@ -210,10 +210,10 @@ export default function CampaignsPage() {
       <main class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <div class="text-center mb-8">
           <h2 class="font-display text-4xl sm:text-5xl tracking-wide text-white drop-shadow-[0_2px_8px_rgba(139,92,246,0.5)]">
-            Mes Campagnes
+            My Campaigns
           </h2>
           <p class="mt-3 text-slate-300 max-w-xl mx-auto">
-            Gérez vos aventures ou rejoignez une campagne existante via un code d'invitation.
+            Manage your adventures or join an existing campaign with an invitation code.
           </p>
         </div>
 
@@ -345,7 +345,7 @@ export default function CampaignsPage() {
 
               <Show when={!searchLoading() && !searchError() && searchResults().length === 0}>
                 <p class="text-center text-slate-500 py-10 text-sm">
-                  {searchQuery() ? "Aucune campagne publique trouvée." : "Tapez un nom pour commencer la recherche."}
+                  {searchQuery() ? t("page.campaigns.search.noResults") : t("page.campaigns.search.startTyping")}
                 </p>
               </Show>
 
@@ -367,7 +367,7 @@ export default function CampaignsPage() {
                           </span>
                           <span class="flex items-center gap-1">
                             <Crown class="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
-                            MJ
+                            DM
                           </span>
                         </div>
                       </div>
@@ -377,14 +377,14 @@ export default function CampaignsPage() {
                         when={!alreadyJoined()}
                         fallback={
                           <span class="text-xs text-emerald-400 font-medium px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 shrink-0">
-                            Déjà membre
+                            Already a member
                           </span>
                         }
                       >
                         <button
                           onClick={() => handleJoinPublic(c.id)}
                           disabled={joiningId() === c.id}
-                          aria-label={`Rejoindre la campagne ${c.name}`}
+                          aria-label={`Join campaign ${c.name}`}
                           class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-sm font-medium transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60"
                         >
                           <Show
@@ -393,7 +393,7 @@ export default function CampaignsPage() {
                           >
                             <UserPlus class="w-3.5 h-3.5" aria-hidden="true" />
                           </Show>
-                          Rejoindre
+                          Join
                         </button>
                       </Show>
                     </div>
@@ -408,7 +408,7 @@ export default function CampaignsPage() {
 
             {/* Footer hint */}
             <div class="px-6 py-3 border-t border-white/10 text-center">
-              <p class="text-xs text-slate-500">Seules les campagnes publiques apparaissent ici. Pour une campagne privée, utilisez un code d'invitation.</p>
+              <p class="text-xs text-slate-500">{t("page.campaigns.search.publicOnly")}</p>
             </div>
           </div>
         </div>
@@ -427,7 +427,7 @@ function CampaignCard(props: { campaign: Campaign; onClick: () => void; index?: 
   return (
     <button
       onClick={props.onClick}
-      aria-label={`Ouvrir la campagne : ${campaign().title}`}
+      aria-label={`Open campaign: ${campaign().title}`}
       class="campaign-card group relative bg-ink-700 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-xl motion-safe:hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-purple-500/10 hover:border-purple-500/40 transition-all text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
     >
       <div class="h-28 bg-gradient-to-br from-purple-800/50 via-indigo-800/40 to-violet-800/50 relative">
@@ -435,7 +435,7 @@ function CampaignCard(props: { campaign: Campaign; onClick: () => void; index?: 
         <div class="absolute top-3 right-3">
           <span
             class={`px-2.5 py-1 text-xs font-medium rounded-lg border backdrop-blur-sm ${getStatusColor(campaign().status)}`}
-            aria-label={`Statut : ${getStatusLabel(campaign().status)}`}
+            aria-label={`Status: ${getStatusLabel(campaign().status)}`}
           >
             {getStatusLabel(campaign().status)}
           </span>
@@ -457,7 +457,7 @@ function CampaignCard(props: { campaign: Campaign; onClick: () => void; index?: 
         <div class="flex items-center gap-3 text-sm text-slate-300 mb-3">
           <div class="flex items-center gap-1.5">
             <Users class="w-4 h-4 text-slate-400" aria-hidden="true" />
-            <span aria-label={`${campaign().currentPlayers} joueurs sur ${campaign().maxPlayers}`}>
+            <span aria-label={`${campaign().currentPlayers} players out of ${campaign().maxPlayers}`}>
               {campaign().currentPlayers}/{campaign().maxPlayers}
             </span>
           </div>
@@ -465,8 +465,8 @@ function CampaignCard(props: { campaign: Campaign; onClick: () => void; index?: 
 
         <div class="pt-3 border-t border-white/10 flex items-center gap-2">
           <Crown class="w-4 h-4 text-amber-400" aria-hidden="true" />
-          <span class="text-sm text-slate-500 sr-only">Maître du jeu</span>
-          <span class="text-sm text-slate-500" aria-hidden="true">MJ</span>
+          <span class="text-sm text-slate-500 sr-only">Dungeon Master</span>
+          <span class="text-sm text-slate-500" aria-hidden="true">DM</span>
           <span class="text-sm text-white font-medium">
             {displayDungeonMasterName(campaign(), authStore.user()?.username)}
           </span>
@@ -486,7 +486,7 @@ function NewCampaignCard(props: { onClick: () => void }) {
   return (
     <button
       onClick={props.onClick}
-      aria-label="Créer une nouvelle campagne"
+      aria-label={t("page.campaigns.createCampaignAria")}
       class="group flex flex-col items-center justify-center gap-4 px-6 py-8 bg-game-dark/80 backdrop-blur-xl border-2 border-dashed border-purple-500/30 rounded-2xl hover:bg-purple-500/10 hover:border-purple-500/60 motion-safe:hover:-translate-y-0.5 transition-all min-h-[180px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
     >
       <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-600/30 to-indigo-600/30 border border-purple-500/30 flex items-center justify-center group-hover:from-purple-600/50 group-hover:to-indigo-600/50 transition-all">
@@ -494,10 +494,10 @@ function NewCampaignCard(props: { onClick: () => void }) {
       </div>
       <div class="text-center">
         <p class="font-semibold text-white group-hover:text-purple-200 transition-colors">
-          Nouvelle Campagne
+          New Campaign
         </p>
         <p class="text-sm text-slate-400 mt-0.5">
-          Créez et gérez votre propre aventure
+          Create and manage your own adventure
         </p>
       </div>
     </button>

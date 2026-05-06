@@ -731,7 +731,7 @@ const CampaignSessionPage: Component = () => {
         </div>
         <div class="flex items-center gap-3 min-w-[80px] justify-end">
           <Show when={isSaving()}><Loader2 class="w-3 h-3 animate-spin text-purple-400" /></Show>
-          <Show when={history().length > 0}><span class="text-sm text-slate-400">{history().length + 1} blocs</span></Show>
+          <Show when={history().length > 0}><span class="text-sm text-slate-400">{history().length + 1} blocks</span></Show>
           {/* Bouton Inventaire — visible pour les joueurs (avec perso) et le MJ */}
           <Show when={myCharacterId() !== null || isHost()}>
             <button
@@ -741,10 +741,10 @@ const CampaignSessionPage: Component = () => {
                   ? 'bg-purple-600/30 border border-purple-500/50 text-purple-300'
                   : 'bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10'
               }`}
-              title="Inventaire"
+              title="Inventory"
             >
               <Package class="w-3.5 h-3.5" />
-              <span class="hidden sm:inline">Inventaire</span>
+              <span class="hidden sm:inline">Inventory</span>
             </button>
           </Show>
         </div>
@@ -799,10 +799,10 @@ const CampaignSessionPage: Component = () => {
                   {/* Nom de la carte */}
                   <div>
                     <p class="text-xs text-blue-400 uppercase tracking-widest font-semibold mb-3">
-                      Prochaine carte
+                      Next map
                     </p>
                     <h2 class="font-display text-3xl text-white leading-tight">
-                      {name() || 'Carte à venir'}
+                      {name() || 'Upcoming map'}
                     </h2>
                   </div>
 
@@ -811,11 +811,11 @@ const CampaignSessionPage: Component = () => {
                     <div class="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/5 border border-white/10">
                       <Loader2 class="w-4 h-4 animate-spin text-purple-400 flex-shrink-0" />
                       <span class="text-slate-300 text-sm">
-                        En attente du lancement par le Maître du Jeu…
+                        Waiting for the Dungeon Master to launch…
                       </span>
                     </div>
                     <p class="text-xs text-slate-600">
-                      Vous serez redirigé automatiquement
+                      You will be redirected automatically
                     </p>
                   </div>
                 </div>
@@ -865,11 +865,11 @@ const CampaignSessionPage: Component = () => {
                           fallback={
                             <p class="text-sm text-slate-500 italic flex items-center gap-2">
                               <Loader2 class="w-3.5 h-3.5 animate-spin text-purple-400" />
-                              En attente du Maître du Jeu…
+                              Waiting for the Dungeon Master…
                             </p>
                           }
                         >
-                          <button onClick={() => followPort('output')} class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-xl transition-all">Continuer <ChevronRight class="w-5 h-5" /></button>
+                          <button onClick={() => followPort('output')} class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-xl transition-all">Continue <ChevronRight class="w-5 h-5" /></button>
                         </Show>
                       </Show>
                     </div>
@@ -901,8 +901,8 @@ const CampaignSessionPage: Component = () => {
                             <svg class="w-5 h-5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
                           </div>
                           <div>
-                            <p class="text-xs text-emerald-400 uppercase tracking-wider font-medium">Choix</p>
-                            <h2 class="text-2xl font-display text-white">{node()?.title || 'Choix sans titre'}</h2>
+                            <p class="text-xs text-emerald-400 uppercase tracking-wider font-medium">Choices</p>
+                            <h2 class="text-2xl font-display text-white">{node()?.title || 'Untitled choices'}</h2>
                           </div>
                         </div>
 
@@ -914,11 +914,11 @@ const CampaignSessionPage: Component = () => {
                         <div class="flex items-center justify-between mb-3">
                           <Show when={dmIsObserver()}>
                             <span class="text-xs text-amber-400/70 flex items-center gap-1">
-                              👁 Les joueurs votent — confirmez le choix final
+                              👁 Players are voting - confirm the final choice
                             </span>
                           </Show>
                           <p class="text-xs text-slate-500 ml-auto">
-                            {Object.keys(votes()).length}/{totalPlayers()} joueur{totalPlayers() > 1 ? 's' : ''} ont voté
+                            {Object.keys(votes()).length}/{totalPlayers()} player{totalPlayers() > 1 ? 's' : ''} voted
                           </p>
                         </div>
 
@@ -935,7 +935,7 @@ const CampaignSessionPage: Component = () => {
                                     <button
                                       onClick={() => handleVote(i(), choice)}
                                       disabled={dmIsObserver()}
-                                      title={dmIsObserver() ? 'Seuls les joueurs peuvent voter' : undefined}
+                                      title={dmIsObserver() ? 'Only players can vote' : undefined}
                                       class={`flex-1 text-left px-5 py-4 rounded-xl border-2 transition-all flex flex-col gap-2 group ${
                                         dmIsObserver()
                                           ? 'border-white/10 bg-white/5 opacity-70 cursor-not-allowed'
@@ -952,7 +952,7 @@ const CampaignSessionPage: Component = () => {
                                         }`}>
                                           {i() + 1}
                                         </span>
-                                        <span class="flex-1 text-white font-medium">{choice || `Choix ${i() + 1}`}</span>
+                                        <span class="flex-1 text-white font-medium">{choice || `Choice ${i() + 1}`}</span>
                                         <Show when={hasLink()}>
                                           <ChevronRight class={`w-4 h-4 transition-colors ${isMine() ? 'text-emerald-300' : 'text-emerald-400/50 group-hover:text-emerald-400'}`} />
                                         </Show>
@@ -970,7 +970,7 @@ const CampaignSessionPage: Component = () => {
                                                 fallback={
                                                   <div
                                                     class="w-2.5 h-2.5 rounded-full bg-white/10 border border-white/20"
-                                                    title="En attente…"
+                                                    title="Waiting…"
                                                   />
                                                 }
                                               >
@@ -1000,7 +1000,7 @@ const CampaignSessionPage: Component = () => {
                                           try {
                                             await followPort(
                                               `choice-${i()}`,
-                                              choice || `Choix ${i() + 1}`,
+                                              choice || `Choice ${i() + 1}`,
                                               true,
                                             );
                                           } catch (e) {
@@ -1010,10 +1010,10 @@ const CampaignSessionPage: Component = () => {
                                           }
                                         }}
                                         class="self-center flex-shrink-0 flex flex-col items-center justify-center gap-0.5 px-3 py-3 rounded-xl bg-emerald-600/20 border border-emerald-500/50 text-emerald-300 text-[10px] font-semibold hover:bg-emerald-600/35 hover:border-emerald-400/70 transition-all"
-                                        title="Confirmer ce choix et avancer le scénario"
+                                        title="Confirm this choice and advance the scenario"
                                       >
                                         <ChevronRight class="w-4 h-4" />
-                                        <span>Confirmer</span>
+                                        <span>Confirm</span>
                                       </button>
                                     </Show>
                                   </div>
@@ -1026,7 +1026,7 @@ const CampaignSessionPage: Component = () => {
                           <Show when={!isHost() && Object.keys(votes()).length > 0}>
                             <p class="mt-4 text-center text-sm text-slate-500 flex items-center justify-center gap-2">
                               <Loader2 class="w-3.5 h-3.5 animate-spin text-purple-400" />
-                              En attente de la confirmation du Maître du Jeu…
+                              Waiting for the Dungeon Master's confirmation…
                             </p>
                           </Show>
                         </Show>
@@ -1042,8 +1042,8 @@ const CampaignSessionPage: Component = () => {
                       <div class="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center"><Sword class="w-5 h-5 text-red-400" /></div>
                       <div><p class="text-xs text-red-400 uppercase tracking-wider font-medium">Combat</p><h2 class="text-2xl font-display text-white">{(currentNode() as CombatData)?.title || 'Combat'}</h2></div>
                     </div>
-                    <div class="bg-red-500/5 border border-red-500/20 rounded-2xl p-6 mb-8 text-center"><Sword class="w-12 h-12 text-red-400/40 mx-auto mb-3" /><p class="text-slate-400 italic">Gestion du combat à venir.</p></div>
-                    <div class="flex justify-end"><Show when={hasPort('output')} fallback={<EndBanner />}><button onClick={() => followPort('output')} class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-semibold rounded-xl transition-all">Continuer <ChevronRight class="w-5 h-5" /></button></Show></div>
+                    <div class="bg-red-500/5 border border-red-500/20 rounded-2xl p-6 mb-8 text-center"><Sword class="w-12 h-12 text-red-400/40 mx-auto mb-3" /><p class="text-slate-400 italic">Combat management coming soon.</p></div>
+                    <div class="flex justify-end"><Show when={hasPort('output')} fallback={<EndBanner />}><button onClick={() => followPort('output')} class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-semibold rounded-xl transition-all">Continue <ChevronRight class="w-5 h-5" /></button></Show></div>
                   </div>
                 </Match>
 
@@ -1096,7 +1096,7 @@ const CampaignSessionPage: Component = () => {
                                 </Show>
                                 <Show when={(node().exitCells?.length ?? 0) > 0}>
                                   <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 text-sm">
-                                    ⬆ {node().exitCells!.length} sortie{node().exitCells!.length !== 1 ? 's' : ''}
+                                    ⬆ {node().exitCells!.length} exit{node().exitCells!.length !== 1 ? 's' : ''}
                                   </span>
                                 </Show>
                                 <Show when={(node().trapCells?.length ?? 0) > 0}>
@@ -1114,7 +1114,7 @@ const CampaignSessionPage: Component = () => {
                             fallback={
                               <div class="w-full flex items-center justify-center gap-3 px-6 py-4 mb-8 rounded-xl border border-white/10 bg-white/5 text-slate-500 text-sm italic">
                                 <Loader2 class="w-4 h-4 animate-spin text-purple-400" />
-                                En attente du lancement par le Maître du Jeu…
+                                Waiting for the Dungeon Master to launch…
                               </div>
                             }
                           >
@@ -1123,7 +1123,7 @@ const CampaignSessionPage: Component = () => {
                               class="w-full flex items-center justify-center gap-3 px-6 py-4 mb-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl transition-all text-lg shadow-lg shadow-blue-900/30"
                             >
                               <Play class="w-5 h-5" />
-                              Lancer la carte
+                              Launch map
                             </button>
                           </Show>
                         </Show>
@@ -1151,18 +1151,18 @@ const CampaignSessionPage: Component = () => {
                       <Trophy class="w-12 h-12 text-amber-400" />
                     </div>
                     <div>
-                      <p class="text-xs text-amber-400 uppercase tracking-widest font-medium mb-2">Fin de campagne</p>
+                      <p class="text-xs text-amber-400 uppercase tracking-widest font-medium mb-2">End of campaign</p>
                       <h2 class="text-4xl font-display text-white font-bold">
-                        {(currentNode() as VictoryData)?.title || 'Victoire !'}
+                        {(currentNode() as VictoryData)?.title || 'Victory!'}
                       </h2>
-                      <p class="text-slate-400 mt-3">Les héros ont triomphé. La campagne est terminée.</p>
+                      <p class="text-slate-400 mt-3">The heroes have triumphed. The campaign is complete.</p>
                     </div>
                     <Show
                       when={isHost()}
                       fallback={
                         <p class="text-sm text-slate-500 italic flex items-center gap-2">
                           <Loader2 class="w-3.5 h-3.5 animate-spin text-amber-400" />
-                          En attente du Maître du Jeu…
+                          Waiting for the Dungeon Master…
                         </p>
                       }
                     >
@@ -1170,31 +1170,31 @@ const CampaignSessionPage: Component = () => {
                         onClick={handleEnd}
                         class="px-8 py-3 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-white font-bold rounded-xl transition-all shadow-lg shadow-amber-900/30"
                       >
-                        Terminer la campagne
+                        End the campaign
                       </button>
                     </Show>
                   </div>
                 </Match>
 
-                {/* DÉFAITE */}
+                {/* DEFEAT */}
                 <Match when={currentNode()?.type === 'defeat'}>
                   <div class="flex flex-col items-center gap-8 py-10 text-center">
                     <div class="w-24 h-24 rounded-full bg-red-500/15 border-2 border-red-500/40 flex items-center justify-center shadow-lg shadow-red-900/30">
                       <Skull class="w-12 h-12 text-red-400" />
                     </div>
                     <div>
-                      <p class="text-xs text-red-400 uppercase tracking-widest font-medium mb-2">Fin de campagne</p>
+                      <p class="text-xs text-red-400 uppercase tracking-widest font-medium mb-2">End of campaign</p>
                       <h2 class="text-4xl font-display text-white font-bold">
-                        {(currentNode() as DefeatData)?.title || 'Défaite…'}
+                        {(currentNode() as DefeatData)?.title || 'Defeat…'}
                       </h2>
-                      <p class="text-slate-400 mt-3">Les héros ont échoué. La campagne est terminée.</p>
+                      <p class="text-slate-400 mt-3">The heroes have failed. The campaign is complete.</p>
                     </div>
                     <Show
                       when={isHost()}
                       fallback={
                         <p class="text-sm text-slate-500 italic flex items-center gap-2">
                           <Loader2 class="w-3.5 h-3.5 animate-spin text-red-400" />
-                          En attente du Maître du Jeu…
+                          Waiting for the Dungeon Master…
                         </p>
                       }
                     >
@@ -1202,7 +1202,7 @@ const CampaignSessionPage: Component = () => {
                         onClick={handleEnd}
                         class="px-8 py-3 bg-gradient-to-r from-red-700 to-rose-600 hover:from-red-600 hover:to-rose-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-red-900/30"
                       >
-                        Terminer la campagne
+                        End the campaign
                       </button>
                     </Show>
                   </div>
@@ -1236,9 +1236,9 @@ const CampaignSessionPage: Component = () => {
           <div class="flex items-center justify-between px-5 py-4 border-b border-white/10 flex-shrink-0">
             <div class="flex items-center gap-2">
               <Package class="w-4 h-4 text-purple-400" />
-              <span class="font-semibold text-white text-sm">Inventaire</span>
+              <span class="font-semibold text-white text-sm">Inventory</span>
               <Show when={isHost() && playersWithCharacter().length > 0}>
-                <span class="text-xs text-slate-500">— MJ</span>
+                <span class="text-xs text-slate-500">- DM</span>
               </Show>
             </div>
             <button
@@ -1260,8 +1260,8 @@ const CampaignSessionPage: Component = () => {
                   fallback={
                     <div class="flex flex-col items-center gap-3 py-16 text-slate-500 text-sm text-center px-6">
                       <Package class="w-10 h-10 opacity-30" />
-                      <p>Aucun personnage sélectionné.</p>
-                      <p class="text-xs text-slate-600">Créez un personnage depuis votre profil pour accéder à l'inventaire.</p>
+                      <p>No character selected.</p>
+                      <p class="text-xs text-slate-600">Create a character from your profile to access the inventory.</p>
                     </div>
                   }
                 >
@@ -1275,8 +1275,8 @@ const CampaignSessionPage: Component = () => {
                 fallback={
                   <div class="flex flex-col items-center gap-3 py-16 text-slate-500 text-sm text-center px-6">
                     <Package class="w-10 h-10 opacity-30" />
-                    <p>Aucun joueur connecté avec un personnage.</p>
-                    <p class="text-xs text-slate-600">Les joueurs doivent rejoindre la session pour que leur personnage apparaisse ici.</p>
+                    <p>No connected player with a character.</p>
+                    <p class="text-xs text-slate-600">Players must join the session for their character to appear here.</p>
                   </div>
                 }
               >
@@ -1306,7 +1306,7 @@ const CampaignSessionPage: Component = () => {
                   fallback={
                     <div class="flex flex-col items-center gap-2 py-12 text-slate-600 text-sm text-center px-6">
                       <span class="text-2xl">👆</span>
-                      <p>Sélectionnez un joueur pour voir son inventaire.</p>
+                      <p>Select a player to view their inventory.</p>
                     </div>
                   }
                 >

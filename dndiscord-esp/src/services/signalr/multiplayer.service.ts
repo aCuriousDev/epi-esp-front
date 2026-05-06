@@ -610,7 +610,7 @@ export function registerMultiplayerHandlers(): void {
     if (!text) return;
 
     const role = String((data as any).authorRole ?? "Player");
-    const authorName = String((data as any).authorName ?? "Joueur");
+    const authorName = String((data as any).authorName ?? "Player");
     const authorUserId = String((data as any).authorUserId ?? "").toLowerCase();
 
     if (role === "DM") {
@@ -749,7 +749,7 @@ export function registerMultiplayerHandlers(): void {
       // Navigation may be blocked (e.g. Discord Activity CSP). The board is
       // already torn down (clearSession/clearUnits/clearTiles ran above), so
       // the player is stuck with no path home — surface an actionable message.
-      setSessionError("La session a pris fin. Veuillez rafraîchir la page.");
+      setSessionError("The session has ended. Please refresh the page.");
     }
   });
 }

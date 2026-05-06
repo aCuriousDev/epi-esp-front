@@ -29,7 +29,7 @@ export const PartyChatPanel: Component = () => {
                       : "border-white/10 text-gray-300 bg-white/5"
                   }`}
                 >
-                  {m.authorRole === "DM" ? "MJ" : "Joueur"}
+                  {m.authorRole === "DM" ? "DM" : "Player"}
                 </span>
                 <span class="text-gray-200 font-medium truncate">
                   {m.authorName}

@@ -100,7 +100,7 @@ export const DmOverlay: Component<DmOverlayProps> = (props) => {
               }}
             />
             <span class="text-[11px] font-bold uppercase tracking-[0.25em] text-plum-300">
-              ✦ Maître du Jeu ✦
+              ✦ Dungeon Master ✦
             </span>
             <div
               class="w-5 h-px"

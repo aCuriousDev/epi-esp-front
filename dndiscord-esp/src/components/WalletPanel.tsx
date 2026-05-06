@@ -221,14 +221,14 @@ export default function WalletPanel(props: WalletPanelProps) {
                         onClick={() => handleModify(coin.key, -1)}
                         disabled={value() === 0}
                         class="w-6 h-6 rounded bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                        title={`Retirer 1 ${coin.label}`}
+                        title={`Remove 1 ${coin.label}`}
                       >
                         <Minus class="w-3 h-3 text-red-400" />
                       </button>
                       <button
                         onClick={() => handleModify(coin.key, 1)}
                         class="w-6 h-6 rounded bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 flex items-center justify-center transition-colors"
-                        title={`Ajouter 1 ${coin.label}`}
+                        title={`Add 1 ${coin.label}`}
                       >
                         <Plus class="w-3 h-3 text-green-400" />
                       </button>

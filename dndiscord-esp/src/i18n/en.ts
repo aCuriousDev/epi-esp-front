@@ -123,10 +123,15 @@ export const en = {
   "page.campaigns.statusCompleted": "Completed",
   "page.campaigns.statusArchived": "Archived",
   "page.campaigns.placeholder.code": "XXXX-XXXX",
-  "page.campaigns.loadError": "Failed to load campaigns. Please try again.",
+  "page.campaigns.loadError": "Unable to load campaigns. Please try again.",
   "page.campaigns.joinCodeRequired": "Enter an invitation code.",
   "page.campaigns.joinError": "Invalid code or campaign not found.",
+  "page.campaigns.joinPublicError": "Unable to join this campaign.",
   "page.campaigns.emptyHint": "Create one or join one with an invitation code above.",
+  "page.campaigns.search.noResults": "No public campaigns found.",
+  "page.campaigns.search.startTyping": "Type a name to start searching.",
+  "page.campaigns.search.publicOnly": "Only public campaigns appear here. For a private one, use an invitation code.",
+  "page.campaigns.createCampaignAria": "Create a new campaign",
 
   // Rules page
   "page.rules.heroTitle": "D&D 5e Rules Guide",
@@ -335,6 +340,11 @@ export const en = {
   "campaignView.relativeTime.daysAgo": "{n} days ago",
   "campaignView.relativeTime.monthAgo": "1 month ago",
   "campaignView.relativeTime.monthsAgo": "{n} months ago",
+  "campaignView.leave": "Leave",
+  "campaignView.leaving": "Leaving…",
+  "campaignView.leaveCampaign": "Leave campaign",
+  "campaignView.leaveCampaign.hint": "You will only be able to rejoin via an invitation.",
+  "campaignView.leaveCampaign.ariaLabel": "Leave this campaign",
 
   // CreateCampaign
   "createCampaign.subtitle": "Create your adventure and invite your players.",
@@ -408,6 +418,7 @@ export const en = {
   "sessionsList.status.abandoned": "Abandoned",
   "sessionsList.blocVisited.one": "block visited",
   "sessionsList.blocVisited.other": "blocks visited",
+  "sessionsList.endSession": "End this session",
 
   // CampaignManagerPage
   "campaignManager.toolbar.exportImport": "Export / Import",
@@ -419,8 +430,16 @@ export const en = {
   "campaignManager.block.choices": "Choices",
   "campaignManager.block.combat": "Combat",
   "campaignManager.block.map": "Map",
+  "campaignManager.block.victory": "Victory",
+  "campaignManager.block.defeat": "Defeat",
+  "campaignManager.block.comingSoon": "Soon",
+  "campaignManager.node.defaultVictory": "Victory",
+  "campaignManager.node.defaultDefeat": "Defeat",
   "campaignManager.toast.saved": "Campaign saved successfully",
   "campaignManager.toast.saveError": "Failed to save campaign",
+  "campaignManager.toast.saveCanvasNotReady": "Cannot save: the canvas is not ready.",
+  "campaignManager.toast.mapsMigrated": "{n} map migrated to the database",
+  "campaignManager.toast.mapsMigratedPlural": "{n} maps migrated to the database",
 
   // BoardGame HUD
   "boardgame.drawer.info": "Information",
@@ -454,6 +473,8 @@ export const en = {
   "characterView.ability.intelligence": "Intelligence",
   "characterView.ability.wisdom": "Wisdom",
   "characterView.ability.charisma": "Charisma",
+  "characterView.loadError": "Unable to load character.",
+  "characterView.levelUpError": "Unable to level up.",
 } as const;
 
 export type EnKey = keyof typeof en;

@@ -40,15 +40,15 @@ export function createAssetsFromFiles(
 }
 
 export const CHARACTER_ASSETS: MapAsset[] = [
-  { id: 'knight', name: 'Chevalier', path: '/models/characters/knight/knight.glb', type: 'character' },
-  { id: 'rogue', name: 'Voleur', path: '/models/characters/rogue/rogue.glb', type: 'character' },
-  { id: 'wizard', name: 'Magicien', path: '/models/characters/wizard/wizard.glb', type: 'character' },
+  { id: 'knight', name: 'Knight', path: '/models/characters/knight/knight.glb', type: 'character' },
+  { id: 'rogue', name: 'Rogue', path: '/models/characters/rogue/rogue.glb', type: 'character' },
+  { id: 'wizard', name: 'Wizard', path: '/models/characters/wizard/wizard.glb', type: 'character' },
 ];
 
 export const ENEMY_ASSETS: MapAsset[] = [
-  { id: 'skeleton_warrior', name: 'Squelette Guerrier', path: '/models/enemies/skeleton_warrior/skeleton_warrior.glb', type: 'enemy' },
-  { id: 'skeleton_mage', name: 'Squelette Mage', path: '/models/enemies/skeleton_mage/skeleton_mage.glb', type: 'enemy' },
-  { id: 'skeleton_rogue', name: 'Squelette Voleur', path: '/models/enemies/skeleton_rogue/skeleton_rogue.glb', type: 'enemy' },
+  { id: 'skeleton_warrior', name: 'Skeleton Warrior', path: '/models/enemies/skeleton_warrior/skeleton_warrior.glb', type: 'enemy' },
+  { id: 'skeleton_mage', name: 'Skeleton Mage', path: '/models/enemies/skeleton_mage/skeleton_mage.glb', type: 'enemy' },
+  { id: 'skeleton_rogue', name: 'Skeleton Rogue', path: '/models/enemies/skeleton_rogue/skeleton_rogue.glb', type: 'enemy' },
 ];
 
 /**

@@ -341,7 +341,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
               class="group px-3 py-1.5 rounded-lg bg-purple-600/70 hover:bg-purple-500/80 border border-purple-400/30 text-white text-xs font-semibold flex items-center gap-1.5 transition-all"
             >
               <Gift class="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
-              Don du MJ
+              DM gift
             </button>
           </Show>
         </div>
@@ -454,7 +454,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
                           <button
                             onClick={() => handleDrop(entry)}
                             class="w-6 h-6 rounded-lg bg-red-500/15 hover:bg-red-500/35 border border-red-500/30 flex items-center justify-center transition-colors opacity-0 group-hover:opacity-100"
-                            title="Retirer"
+                            title="Remove"
                           >
                             <Trash2 class="w-3 h-3 text-red-400" />
                           </button>

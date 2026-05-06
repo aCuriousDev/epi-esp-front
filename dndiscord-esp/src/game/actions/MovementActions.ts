@@ -403,7 +403,7 @@ export function moveUnit(targetPos: GridPosition): boolean {
             }),
           );
           addCombatLog(
-            `${unit.name} déclenche un piège ! −${effect.value} PV`,
+            `${unit.name} triggers a trap! −${effect.value} HP`,
             "damage",
           );
         }
@@ -418,7 +418,7 @@ export function moveUnit(targetPos: GridPosition): boolean {
     if (destTile.type === TileType.EXIT && unit.team === Team.PLAYER) {
       if (isSessionMapActive()) {
         const portName: string = destTile.exitPortName ?? 'exit-0';
-        addCombatLog(`${unit.name} a atteint la sortie — en attente du MJ…`, 'system');
+        addCombatLog(`${unit.name} reached the exit — waiting for DM…`, 'system');
         requestSessionExit({ unitName: unit.name, portName });
       }
     }
@@ -462,7 +462,7 @@ export function moveUnit(targetPos: GridPosition): boolean {
     );
     if (isOnTeleport) {
       addCombatLog(
-        "Portail de téléportation activé ! Transition vers la salle suivante...",
+        "Teleportation portal activated! Transitioning to the next room…",
         "system",
       );
       setTimeout(() => {

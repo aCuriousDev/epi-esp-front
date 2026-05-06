@@ -177,12 +177,12 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
     label: string;
     blurb: string;
   }> = [
-    { id: "warrior", label: "⚔️ Guerrier", blurb: "120 PV · mêlée puissante" },
-    { id: "mage", label: "🔮 Mage", blurb: "80 PV · dégâts à distance" },
+    { id: "warrior", label: "⚔️ Fighter", blurb: "120 HP · powerful melee" },
+    { id: "mage", label: "🔮 Mage", blurb: "80 HP · ranged damage" },
     {
       id: "archer",
       label: "🏹 Archer",
-      blurb: "100 PV · mobile, longue portée",
+      blurb: "100 HP · mobile, long range",
     },
   ];
 
@@ -371,8 +371,8 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                         />
                         <span class="sr-only">
                           {player.status === "Connected"
-                            ? "Connecté"
-                            : "Déconnecté"}
+                            ? "Connected"
+                            : "Disconnected"}
                         </span>
                         <span class="text-white font-medium">
                           {player.userName}
@@ -406,7 +406,7 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                   maps server-side to a different class with its own stats
                   (BuildDefaultAssignment in GameHub). */}
               <p class="text-xs text-white/60 uppercase tracking-wider mb-2">
-                Départ rapide
+                Quick start
               </p>
               <div class="grid grid-cols-3 gap-2 mb-4">
                 <For each={DEFAULT_TEMPLATES}>

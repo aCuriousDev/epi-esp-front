@@ -154,7 +154,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
         node = new VictoryNode(x, y, {
           id: existingId ?? generateId('victory'),
           type: 'victory',
-          title: nodeData.data?.title ?? 'Victoire',
+          title: nodeData.data?.title ?? 'Victory',
         });
         break;
       }
@@ -164,7 +164,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
         node = new DefeatNode(x, y, {
           id: existingId ?? generateId('defeat'),
           type: 'defeat',
-          title: nodeData.data?.title ?? 'Défaite',
+          title: nodeData.data?.title ?? 'Defeat',
         });
         break;
       }
@@ -770,11 +770,11 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
       >
         {/* Navigation (pan) — 4 arrow buttons arranged as a D-pad */}
         <div style={{ display: "flex", "flex-direction": "column", "align-items": "center", gap: "2px" }}>
-          <button onClick={panUp}    title="Monter"    style={panBtnStyle}><ChevronUp size={14} /></button>
+          <button onClick={panUp}    title="Up"    style={panBtnStyle}><ChevronUp size={14} /></button>
           <div style={{ display: "flex", gap: "2px" }}>
-            <button onClick={panLeft}  title="Gauche"    style={panBtnStyle}><ChevronLeft size={14} /></button>
-            <button onClick={panDown}  title="Descendre" style={panBtnStyle}><ChevronDown size={14} /></button>
-            <button onClick={panRight} title="Droite"    style={panBtnStyle}><ChevronRight size={14} /></button>
+            <button onClick={panLeft}  title="Left"  style={panBtnStyle}><ChevronLeft size={14} /></button>
+            <button onClick={panDown}  title="Down"  style={panBtnStyle}><ChevronDown size={14} /></button>
+            <button onClick={panRight} title="Right" style={panBtnStyle}><ChevronRight size={14} /></button>
           </div>
         </div>
 
@@ -838,7 +838,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
               width: "32px",
               height: "32px",
             }}
-            title="Zoom avant"
+            title="Zoom in"
           >
             +
           </button>
@@ -880,7 +880,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
             }}
             title="Clear all nodes"
           >
-            Effacer
+            Clear
           </button>
         </Show>
       </div>

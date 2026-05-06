@@ -1498,10 +1498,10 @@ export default function MapEditor() {
 			try {
 				parsed = JSON.parse(text) as SavedMapData;
 			} catch {
-				throw new Error('Fichier invalide : JSON malformé.');
+				throw new Error('Invalid file: malformed JSON.');
 			}
 			if (!parsed || !Array.isArray(parsed.cells)) {
-				throw new Error('Format invalide : champ "cells" manquant ou incorrect.');
+				throw new Error('Invalid format: "cells" field missing or invalid.');
 			}
 
 			// Créer la carte en DB pour obtenir un UUID
@@ -1512,7 +1512,7 @@ export default function MapEditor() {
 				const res = token ? await fetch(`${getApiUrl()}/api/maps/mine`, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-					body: JSON.stringify({ name: parsed.name ?? 'Carte importée', data: '{}' }),
+					body: JSON.stringify({ name: parsed.name ?? 'Imported map', data: '{}' }),
 				}) : null;
 				if (res?.ok) {
 					const created = await res.json();
@@ -1532,7 +1532,7 @@ export default function MapEditor() {
 			const importedMap: SavedMapData = {
 				...parsed,
 				id:        newId,
-				name:      parsed.name ?? 'Carte importée',
+				name:      parsed.name ?? 'Imported map',
 				createdAt: _mapCreatedAt,
 				updatedAt: now,
 				mapType:   parsed.mapType === 'dungeon-room' ? 'classique' : (parsed.mapType ?? 'classique'),
@@ -1574,10 +1574,10 @@ export default function MapEditor() {
 				setSaveStatus('local');
 			}
 
-			setImportStatus({ type: 'ok', message: `"${importedMap.name}" importée !` });
+			setImportStatus({ type: 'ok', message: `"${importedMap.name}" imported!` });
 			setTimeout(() => setImportStatus(null), 3000);
 		} catch (err: any) {
-			setImportStatus({ type: 'error', message: err?.message ?? 'Erreur inconnue.' });
+			setImportStatus({ type: 'error', message: err?.message ?? 'Unknown error.' });
 			setTimeout(() => setImportStatus(null), 4000);
 		}
 	};
@@ -3767,9 +3767,9 @@ export default function MapEditor() {
 							))}
 						</div>
 						<p class="mt-1.5 text-[10px] text-slate-500">
-							{placementMode() === 'center' && 'Asset centré dans la case.'}
-							{placementMode() === 'edge'   && 'Asset collé au bord selon sa rotation — idéal pour les murs.'}
-							{placementMode() === 'corner' && 'Asset dans le coin le plus proche de sa rotation — idéal pour les piliers.'}
+							{placementMode() === 'center' && 'Asset centered in the cell.'}
+							{placementMode() === 'edge'   && 'Asset snapped to the edge based on its rotation - ideal for walls.'}
+							{placementMode() === 'corner' && 'Asset in the corner nearest its rotation - ideal for pillars.'}
 						</p>
 					</div>
 				)}
@@ -4050,7 +4050,7 @@ export default function MapEditor() {
 						}`}
 						onClick={() => setShowGrid(v => !v)}
 					>
-						{showGrid() ? "⊞ Grille visible" : "⊟ Grille masquée"}
+						{showGrid() ? "⊞ Grid visible" : "⊟ Grid hidden"}
 					</button>
 				</div>
 
@@ -4110,9 +4110,9 @@ export default function MapEditor() {
 						saveStatus() === 'local'   ? 'text-amber-400' :
 						'text-slate-500'
 					}`}>
-						{saveStatus() === 'saved'   ? '✓ Sauvegardé' :
-						 saveStatus() === 'local'   ? '⚠ Sauvegardé localement uniquement' :
-						 '● En cours…'}
+						{saveStatus() === 'saved'   ? '✓ Saved' :
+						 saveStatus() === 'local'   ? '⚠ Saved locally only' :
+						 '● Saving…'}
 					</p>
 				</Show>
 				<div class="flex gap-2">
