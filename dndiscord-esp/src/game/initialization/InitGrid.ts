@@ -57,11 +57,15 @@ function applySessionMapOverrides(newTiles: Record<string, any>): void {
   for (const cell of cfg.exitCells ?? []) {
     const key = posToKey(cell);
     if (newTiles[key]) {
-      newTiles[key].type        = TileType.EXIT;
-      newTiles[key].walkable    = true;   // players must be able to step on them
+      const exitType = cell.exitType ?? 'next';
+      newTiles[key].type         = TileType.EXIT;
+      newTiles[key].walkable     = true;
       newTiles[key].movementCost = 1;
-      // Store the exit behaviour so MovementActions can forward it to the session.
-      newTiles[key].exitType    = cell.exitType ?? 'next';
+      newTiles[key].exitType     = exitType;
+      // Port draw2d à suivre dans l'arbre de campagne
+      newTiles[key].exitPortName = exitType === 'end'
+        ? 'exit-end'
+        : `exit-${cell.exitIndex ?? 0}`;
     }
   }
 

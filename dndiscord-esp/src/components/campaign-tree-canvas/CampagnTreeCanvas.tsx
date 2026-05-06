@@ -9,6 +9,8 @@ import { ChoicesNode } from "./nodes/ChoicesNode";
 import { SceneNode, SceneNodeData } from "./nodes/SceneNode";
 import { MapNode } from "./nodes/MapNode";
 import { StartNode } from "./nodes/StartNode";
+import { VictoryNode } from "./nodes/VictoryNode";
+import { DefeatNode } from "./nodes/DefeatNode";
 
 interface CampaignTreeCanvasProps {
   onNodeSelect?: (node: CampaignNode | null) => void;
@@ -41,7 +43,7 @@ export interface CampaignTreeCanvasRef {
 }
 
 interface AddNodeData {
-  type: "choices" | "combat" | "scene" | "map" | "condition";
+  type: "choices" | "combat" | "scene" | "map" | "condition" | "victory" | "defeat";
   x?: number;
   y?: number;
   data?: any;
@@ -51,6 +53,8 @@ interface AddNodeData {
 (window as any).StartNode = StartNode;
 (window as any).scene = SceneNode;
 (window as any).MapNode = MapNode;
+(window as any).VictoryNode = VictoryNode;
+(window as any).DefeatNode = DefeatNode;
 (window as any).draw2d = draw2d;
 
 export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
@@ -141,6 +145,26 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           spawnPoint: nodeData.data?.spawnPoint,
           exitCells:  nodeData.data?.exitCells,
           trapCells:  nodeData.data?.trapCells,
+        });
+        break;
+      }
+
+      case 'victory': {
+        const existingId = nodeData.data?.id as string | undefined;
+        node = new VictoryNode(x, y, {
+          id: existingId ?? generateId('victory'),
+          type: 'victory',
+          title: nodeData.data?.title ?? 'Victoire',
+        });
+        break;
+      }
+
+      case 'defeat': {
+        const existingId = nodeData.data?.id as string | undefined;
+        node = new DefeatNode(x, y, {
+          id: existingId ?? generateId('defeat'),
+          type: 'defeat',
+          title: nodeData.data?.title ?? 'Défaite',
         });
         break;
       }

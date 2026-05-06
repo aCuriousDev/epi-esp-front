@@ -164,7 +164,7 @@ const BoardGame: Component = () => {
           // autoAdvance=true pour les sorties 'next' : CampaignSessionPage
           // avancera automatiquement au bloc suivant (et lancera la carte si besoin).
           // Pour 'end' on ne s'avance pas — la session se termine.
-          setSessionExitCallback((exitType) => { backToSession(exitType, exitType === 'next').catch(console.error); });
+          setSessionExitCallback((exitType, portName) => { backToSession(exitType, exitType === 'next', portName).catch(console.error); });
 
           let attempts = 0;
           const checkEngine = () => {
@@ -458,11 +458,11 @@ const BoardGame: Component = () => {
   };
 
   /** Return to the campaign session page after playing a session map.
-   *  @param exitType  'next' = advance to next node, 'end' = end session
-   *  @param autoAdvance  If true, CampaignSessionPage will call followPort automatically
-   *                      (used by DmPanel "Prochain nœud" button — skips manual click)
+   *  @param exitType    'next' = advance to next node, 'end' = end session
+   *  @param autoAdvance If true, CampaignSessionPage will call followPort automatically
+   *  @param portName    Port draw2d à suivre (ex: 'exit-0', 'exit-1', 'exit-end')
    */
-  const backToSession = async (exitType: 'next' | 'end' = 'next', autoAdvance = false) => {
+  const backToSession = async (exitType: 'next' | 'end' = 'next', autoAdvance = false, portName = 'exit-0') => {
     const cfg = getSessionMapConfig();
     clearPendingSessionExit();
     clearSessionExitCallback();
@@ -472,6 +472,7 @@ const BoardGame: Component = () => {
       const params = new URLSearchParams({
         mapExit: exitType,
         resumeNodeId: cfg.nodeId,
+        exitPortName: portName,
         ...(autoAdvance ? { autoAdvance: '1' } : {}),
       });
       navigate(`/campaigns/${cfg.campaignId}/session?${params.toString()}`);
@@ -1071,7 +1072,7 @@ const BoardGame: Component = () => {
                             dmExitMap(exitCfg.campaignId, exitCfg.nodeId).catch(() => {});
                           }
                         }
-                        triggerSessionExit(req.exitType);
+                        triggerSessionExit(req.exitType, req.portName);
                       }}
                       class={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                         pendingSessionExit()?.exitType === 'end'

@@ -1,6 +1,6 @@
 import { Component, createEffect, createMemo, createSignal, For, onMount, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { MapNode, MapNodeData, CellCoord, ExitCell } from './nodes/MapNode';
+import { MapNode, MapNodeData, CellCoord, ExitCell, reindexExits } from './nodes/MapNode';
 import { CampaignNode } from './nodes/CampaignNode';
 import { fetchMine, loadMap, type MapMeta, type SavedCellData, type SavedMapData } from '@/services/mapRepository';
 import { getApiUrl } from '@/services/config';
@@ -88,12 +88,19 @@ function toggle(arr: CellCoord[], c: CellCoord): CellCoord[] {
  * - Si la case est absente → on l'ajoute avec l'exitType donné.
  * - Si la case a le même type → on la retire (toggle off).
  * - Si la case a un type différent → on remplace (change le type).
+ * Les exitIndex des sorties 'next' sont toujours réassignés séquentiellement.
  */
 function toggleExit(arr: ExitCell[], c: CellCoord, exitType: 'next' | 'end'): ExitCell[] {
   const existing = arr.find(a => a.x === c.x && a.z === c.z);
-  if (!existing) return [...arr, { ...c, exitType }];
-  if (existing.exitType === exitType) return arr.filter(a => !(a.x === c.x && a.z === c.z));
-  return arr.map(a => a.x === c.x && a.z === c.z ? { ...a, exitType } : a);
+  let result: ExitCell[];
+  if (!existing) {
+    result = [...arr, { ...c, exitType }];
+  } else if (existing.exitType === exitType) {
+    result = arr.filter(a => !(a.x === c.x && a.z === c.z));
+  } else {
+    result = arr.map(a => a.x === c.x && a.z === c.z ? { ...a, exitType } : a);
+  }
+  return reindexExits(result);
 }
 
 // The Map Editor always creates a GRID_SIZE×GRID_SIZE grid (10×10).
@@ -189,7 +196,7 @@ function renderGrid(
         ctx.strokeRect(px + 1, py + 1, cs - 2, cs - 2);
         const mx  = px + cs / 2;
         const tip = py + cs * 0.20;
-        const bot = py + cs * 0.76;
+        const bot = py + cs * 0.68;
         const hw  = cs * 0.18;
         ctx.strokeStyle = clr; ctx.lineWidth = 2;
         if (isEnd) {
@@ -206,6 +213,13 @@ function renderGrid(
           ctx.moveTo(mx - hw, tip + hw * 1.3); ctx.lineTo(mx, tip);
           ctx.lineTo(mx + hw, tip + hw * 1.3);
           ctx.stroke();
+          // Numéro de sortie en bas de la cellule
+          const label = `${(exit.exitIndex ?? 0) + 1}`;
+          ctx.fillStyle = clr;
+          ctx.font = `bold ${Math.max(8, cs * 0.32)}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(label, mx, py + cs - 2);
         }
       }
 

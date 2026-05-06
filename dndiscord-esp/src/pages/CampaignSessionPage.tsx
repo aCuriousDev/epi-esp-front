@@ -1,6 +1,6 @@
 import { Component, createSignal, createEffect, onMount, onCleanup, Show, For, Switch, Match } from 'solid-js';
 import { useNavigate, useParams } from '@solidjs/router';
-import { ArrowLeft, BookOpen, Map as MapIcon, Sword, ChevronRight, Loader2, Play, Package, X } from 'lucide-solid';
+import { ArrowLeft, BookOpen, Map as MapIcon, Skull, Sword, Trophy, ChevronRight, Loader2, Play, Package, X } from 'lucide-solid';
 import { writeLastCampaignId } from '../hooks/useLastCampaign';
 import {
   CampaignService,
@@ -41,7 +41,9 @@ interface MapData     {
   trapCells?:  { x: number; z: number }[];
 }
 interface CombatData  { id: string; type: 'combat'; title: string; }
-type NodeData = SceneData | ChoicesData | MapData | CombatData;
+interface VictoryData { id: string; type: 'victory'; title: string; }
+interface DefeatData  { id: string; type: 'defeat';  title: string; }
+type NodeData = SceneData | ChoicesData | MapData | CombatData | VictoryData | DefeatData;
 
 interface TreeConn { source: { node: string; port: string }; target: { node: string; port: string }; }
 interface ParsedTree {
@@ -417,8 +419,9 @@ const CampaignSessionPage: Component = () => {
         // case EXIT a été déclenchée.  Appeler followPort automatiquement sans
         // attendre un clic supplémentaire.  Seul le MJ avance ; les joueurs
         // suivront via NodeAdvanced (et CampaignMapLaunched si c'est une carte).
-        // Si pas de port 'output' → fin de scénario → handleEnd.
-        const autoAdvance = search.get('autoAdvance') === '1';
+        // exitPortName identifie quel port suivre (ex: 'exit-0', 'exit-1').
+        const autoAdvance  = search.get('autoAdvance') === '1';
+        const exitPortName = search.get('exitPortName') ?? 'exit-0';
         if (autoAdvance && isHost()) {
           // Attendre que les signaux SolidJS soient propagés (parsedTree, currentNodeId)
           // avant d'appeler followPort qui les lit en synchrone.
@@ -426,9 +429,14 @@ const CampaignSessionPage: Component = () => {
             try {
               const node = currentNode();
               if (!node) return;
-              const hasOutput = parsedTree()?.edges.has(`${node.id}::output`);
-              if (hasOutput) {
-                await followPort('output');
+              // Essayer le port exact, puis fallback sur 'output' (anciens nœuds MapNode).
+              const hasPort = parsedTree()?.edges.has(`${node.id}::${exitPortName}`)
+                ?? parsedTree()?.edges.has(`${node.id}::output`);
+              const portToFollow = parsedTree()?.edges.has(`${node.id}::${exitPortName}`)
+                ? exitPortName
+                : 'output';
+              if (hasPort) {
+                await followPort(portToFollow);
                 // Si le bloc suivant est une carte avec une map configurée,
                 // la lancer automatiquement — inutile que le MJ clique "Lancer la carte".
                 // Les joueurs recevront CampaignMapLaunched et seront redirigés.
@@ -683,7 +691,7 @@ const CampaignSessionPage: Component = () => {
         </div>
       </header>
 
-      <main class="flex-1 flex flex-col items-center justify-center px-4 py-12">
+      <main class="flex-1 flex flex-col items-center justify-center overflow-y-auto px-4 py-12">
         {/* Transition entre deux cartes côté joueur — spinner neutre.
             Masque tout contenu jusqu'à ce que le chargement soit terminé.
             CampaignMapLaunched naviguera avant qu'on montre quoi que ce soit,
@@ -1076,6 +1084,71 @@ const CampaignSessionPage: Component = () => {
                     );
                   })()}
                 </Match>
+
+                {/* VICTOIRE */}
+                <Match when={currentNode()?.type === 'victory'}>
+                  <div class="flex flex-col items-center gap-8 py-10 text-center">
+                    <div class="w-24 h-24 rounded-full bg-amber-500/15 border-2 border-amber-500/40 flex items-center justify-center shadow-lg shadow-amber-900/30">
+                      <Trophy class="w-12 h-12 text-amber-400" />
+                    </div>
+                    <div>
+                      <p class="text-xs text-amber-400 uppercase tracking-widest font-medium mb-2">Fin de campagne</p>
+                      <h2 class="text-4xl font-display text-white font-bold">
+                        {(currentNode() as VictoryData)?.title || 'Victoire !'}
+                      </h2>
+                      <p class="text-slate-400 mt-3">Les héros ont triomphé. La campagne est terminée.</p>
+                    </div>
+                    <Show
+                      when={isHost()}
+                      fallback={
+                        <p class="text-sm text-slate-500 italic flex items-center gap-2">
+                          <Loader2 class="w-3.5 h-3.5 animate-spin text-amber-400" />
+                          En attente du Maître du Jeu…
+                        </p>
+                      }
+                    >
+                      <button
+                        onClick={handleEnd}
+                        class="px-8 py-3 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-white font-bold rounded-xl transition-all shadow-lg shadow-amber-900/30"
+                      >
+                        Terminer la campagne
+                      </button>
+                    </Show>
+                  </div>
+                </Match>
+
+                {/* DÉFAITE */}
+                <Match when={currentNode()?.type === 'defeat'}>
+                  <div class="flex flex-col items-center gap-8 py-10 text-center">
+                    <div class="w-24 h-24 rounded-full bg-red-500/15 border-2 border-red-500/40 flex items-center justify-center shadow-lg shadow-red-900/30">
+                      <Skull class="w-12 h-12 text-red-400" />
+                    </div>
+                    <div>
+                      <p class="text-xs text-red-400 uppercase tracking-widest font-medium mb-2">Fin de campagne</p>
+                      <h2 class="text-4xl font-display text-white font-bold">
+                        {(currentNode() as DefeatData)?.title || 'Défaite…'}
+                      </h2>
+                      <p class="text-slate-400 mt-3">Les héros ont échoué. La campagne est terminée.</p>
+                    </div>
+                    <Show
+                      when={isHost()}
+                      fallback={
+                        <p class="text-sm text-slate-500 italic flex items-center gap-2">
+                          <Loader2 class="w-3.5 h-3.5 animate-spin text-red-400" />
+                          En attente du Maître du Jeu…
+                        </p>
+                      }
+                    >
+                      <button
+                        onClick={handleEnd}
+                        class="px-8 py-3 bg-gradient-to-r from-red-700 to-rose-600 hover:from-red-600 hover:to-rose-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-red-900/30"
+                      >
+                        Terminer la campagne
+                      </button>
+                    </Show>
+                  </div>
+                </Match>
+
               </Switch>
             </div>
           </div>
