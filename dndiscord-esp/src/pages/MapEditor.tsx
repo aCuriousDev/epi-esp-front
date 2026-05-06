@@ -2,7 +2,7 @@ import { Component, onMount, onCleanup, createSignal, For, Show, createEffect, c
 import { Portal } from "solid-js/web";
 import { A, useParams, useSearchParams, useNavigate } from "@solidjs/router";
 import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-solid";
-import { saveMap, loadMap, generateMapId, loadDungeon, saveDungeon, exportMapToFile, importMapFromJson, cacheMap, type SavedMapData, type SavedCellData, type SavedAssetData, type SavedLightData, type DungeonData } from "../services/mapStorage";
+import { saveMap, loadMap, generateMapId, loadDungeon, saveDungeon, exportMapToFile, importMapFromJson, cacheMap, ensureMapCached, type SavedMapData, type SavedCellData, type SavedAssetData, type SavedLightData, type DungeonData } from "../services/mapStorage";
 import { getApiUrl } from "../services/config";
 import { AuthService } from "../services/auth.service";
 import {
@@ -1770,10 +1770,17 @@ export default function MapEditor() {
 
 		// Load map if mapId is provided and not "new"
 		// Use setTimeout to ensure everything is initialized
-		setTimeout(() => {
+		setTimeout(async () => {
 			const currentMapId = mapId();
 			if (currentMapId && params.mapId !== "new") {
-				const savedMap = loadMap(currentMapId);
+				let savedMap = loadMap(currentMapId);
+				if (!savedMap) {
+					// Map UUID pas en cache local (autre PC) → tenter de récupérer depuis l'API
+					await ensureMapCached(currentMapId);
+					savedMap = loadMap(currentMapId);
+					// Mettre à jour le nom si on vient de le récupérer
+					if (savedMap) setMapName(savedMap.name);
+				}
 				if (savedMap) {
 					loadMapData(savedMap);
 				}
