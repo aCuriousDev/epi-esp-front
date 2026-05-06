@@ -109,6 +109,7 @@ const HUB = {
   dmAdvanceNode: "DmAdvanceNode",
   dmLaunchCampaignMap: "DmLaunchCampaignMap",
   dmExitMap: "DmExitMap",
+  broadcastCampaignSessionCompleted: "BroadcastCampaignSessionCompleted",
 } as const;
 
 async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
@@ -332,6 +333,15 @@ export async function dmExitMap(
   nodeId: string,
 ): Promise<void> {
   await signalRService.invoke(HUB.dmExitMap, campaignId, nodeId);
+}
+
+/** DM signals that the campaign session is over (victory/defeat).
+ * All campaign subscribers receive CampaignSessionCompleted and navigate away. */
+export async function broadcastCampaignSessionCompleted(
+  campaignId: string,
+  sessionId: string,
+): Promise<void> {
+  await signalRService.invoke(HUB.broadcastCampaignSessionCompleted, campaignId, sessionId);
 }
 
 /** DM broadcasts a campaign map launch to all campaign subscribers.

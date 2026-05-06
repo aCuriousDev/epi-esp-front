@@ -18,6 +18,7 @@ import {
   subscribeCampaign,
   unsubscribeCampaign,
   selectCharacter,
+  broadcastCampaignSessionCompleted,
 } from '@/services/signalr/multiplayer.service';
 import { signalRService } from '@/services/signalr/SignalRService';
 import { ensureMultiplayerHandlersRegistered } from '@/services/signalr/multiplayer.service';
@@ -333,11 +334,23 @@ const CampaignSessionPage: Component = () => {
       };
       signalRService.on('CampaignMapExited', mapExitedHandler);
 
+      // ── Fin de campagne diffusée par le MJ ───────────────────────────────
+      // Le MJ appelle BroadcastCampaignSessionCompleted après completeSession.
+      // Les joueurs reçoivent cet événement et naviguent vers la page campagne.
+      const sessionCompletedHandler = (data: Record<string, unknown>) => {
+        if (isHost()) return; // le MJ navigue lui-même dans handleEnd
+        const cid = String(data.campaignId ?? data.CampaignId ?? '');
+        if (cid && cid !== params.id) return; // mauvaise campagne
+        navigate(`/campaigns/${params.id}`);
+      };
+      signalRService.on('CampaignSessionCompleted', sessionCompletedHandler);
+
       onCleanup(() => {
         try { signalRService.off('ChoiceVoted', voteHandler); } catch {}
         try { signalRService.off('NodeAdvanced', nodeAdvancedHandler); } catch {}
         try { signalRService.off('CampaignMapLaunched', mapLaunchedHandler); } catch {}
         try { signalRService.off('CampaignMapExited', mapExitedHandler); } catch {}
+        try { signalRService.off('CampaignSessionCompleted', sessionCompletedHandler); } catch {}
         if (signalRService.isConnected) {
           unsubscribeCampaign(params.id).catch(() => undefined);
         }
@@ -621,6 +634,13 @@ const CampaignSessionPage: Component = () => {
           nodeTitle: (node as any).title ?? '',
         });
         await CampaignService.completeSession(params.id, sid);
+        // Notify all players so they navigate away too — only the DM sees the
+        // "Terminer la campagne" button, so players would otherwise stay stuck.
+        if (isHost()) {
+          await broadcastCampaignSessionCompleted(params.id, sid).catch(e =>
+            console.warn('[CampaignSession] broadcastCampaignSessionCompleted failed:', e)
+          );
+        }
       } catch (e) {
         console.warn('Failed to complete session:', e);
       }
