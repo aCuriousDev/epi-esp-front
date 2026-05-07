@@ -5,9 +5,11 @@ import { CombatNode } from '../components/campaign-tree-canvas/nodes/CombatNode'
 import { ChoicesNode } from '../components/campaign-tree-canvas/nodes/ChoicesNode';
 import { MapNode } from '../components/campaign-tree-canvas/nodes/MapNode';
 import { Component, createSignal, createEffect, Show, For, onMount, onCleanup } from 'solid-js';
-import { Book, CheckCircle, Edit, GripHorizontal, Loader2, Map as MapIcon, Save, Sword, XCircle } from 'lucide-solid';
+import { Book, CheckCircle, Edit, GripHorizontal, Loader2, Map as MapIcon, Save, Skull, Sword, Trophy, XCircle } from 'lucide-solid';
 import { CampaignService, mapCampaignResponse } from '@/services/campaign.service';
 import { Campaign } from '@/types/campaign';
+import { getApiUrl } from '@/services/config';
+import { AuthService } from '@/services/auth.service';
 import { StartNode } from '@/components/campaign-tree-canvas/nodes/StartNode';
 import ChoicesNodeEditor from '@/components/campaign-tree-canvas/ChoicesNodeEditor';
 import { SceneNode } from '@/components/campaign-tree-canvas/nodes/SceneNode';
@@ -36,10 +38,19 @@ const CampaignManager: Component = () => {
     {
       label: t('campaignManager.block.combat'), icon: <Sword class="w-5 h-5" />, blockName: 'combat',
       bgColor: '#2a0909', borderColor: '#dc2626', accentColor: '#f87171',
+      comingSoon: true,
     },
     {
       label: t('campaignManager.block.map'), icon: <MapIcon class="w-5 h-5" />, blockName: 'map',
       bgColor: '#0a1830', borderColor: '#1d4ed8', accentColor: '#60a5fa',
+    },
+    {
+      label: t('campaignManager.block.victory'), icon: <Trophy class="w-5 h-5" />, blockName: 'victory',
+      bgColor: '#1a1400', borderColor: '#f59e0b', accentColor: '#fbbf24',
+    },
+    {
+      label: t('campaignManager.block.defeat'), icon: <Skull class="w-5 h-5" />, blockName: 'defeat',
+      bgColor: '#1a0505', borderColor: '#dc2626', accentColor: '#f87171',
     },
   ];
 
@@ -83,7 +94,7 @@ const CampaignManager: Component = () => {
     canvasRef()?.importData(json);
   };
 
-  // ─── Mount: load campaign ─────────────────────────────────────────────────
+  // ─── Mount: load campaign + migration auto des maps localStorage ────────────
   onMount(async () => {
     try {
       setLoading(true);
@@ -91,12 +102,96 @@ const CampaignManager: Component = () => {
       const mappedCampaign = mapCampaignResponse(response);
       setCampaign(mappedCampaign);
       handleImport(mappedCampaign.campaignTreeDefinition ?? undefined);
+
+      // Phase 4 — migration idempotente des nœuds carte ayant un selectedMap
+      // au format localStorage ("map_timestamp_..."). On les upload en DB et on
+      // remplace l'ID dans le tree. Si au moins un nœud est mis à jour, on
+      // sauvegarde silencieusement le tree mis à jour.
+      await migrateMapNodes(params.id);
     } catch (err: any) {
       console.error('Failed to load campaign:', err);
     } finally {
       setLoading(false);
     }
   });
+
+  /**
+   * Parcourt les nœuds de type 'map' du canvas.
+   * Pour chaque nœud dont selectedMap est un ID localStorage (/^map_/),
+   * charge le blob depuis localStorage, l'uploade dans la campagne en DB,
+   * et remplace l'ID par l'UUID retourné.
+   * Idempotent : si l'ID est déjà un UUID, le nœud est ignoré.
+   * Si un nœud référence une map introuvable en localStorage, un warning
+   * est affiché dans la console (la map était déjà supprimée).
+   */
+  const migrateMapNodes = async (campaignId: string): Promise<void> => {
+    const cvs = canvasRef()?.getCanvas();
+    if (!cvs) return;
+
+    const token = AuthService.getToken();
+    if (!token) return;
+
+    // Collecter les nœuds carte avec un ID legacy (sync — draw2d est synchrone)
+    const toMigrate: Array<{ fig: any; ud: any }> = [];
+    (cvs as any).getFigures().each((_i: number, fig: any) => {
+      const ud = fig.getUserData?.();
+      if (!ud || ud.type !== 'map') return;
+      if (ud.selectedMap && /^map_/.test(String(ud.selectedMap))) {
+        toMigrate.push({ fig, ud });
+      }
+    });
+
+    if (toMigrate.length === 0) return;
+
+    let migrated = 0;
+    for (const { fig, ud } of toMigrate) {
+      const localKey = `dndiscord_maps_${ud.selectedMap}`;
+      const localData = localStorage.getItem(localKey);
+
+      if (!localData) {
+        console.warn(`[CampaignManager] migration: map "${ud.selectedMap}" not found in localStorage — node "${ud.id}" left unchanged`);
+        continue;
+      }
+
+      try {
+        const parsedMap = JSON.parse(localData) as { name?: string };
+        const res = await fetch(`${getApiUrl()}/api/campaigns/${campaignId}/maps`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ name: parsedMap.name ?? 'Map', data: localData }),
+        });
+
+        if (!res.ok) {
+          console.warn(`[CampaignManager] migration: upload failed for "${ud.selectedMap}" (HTTP ${res.status})`);
+          continue;
+        }
+
+        const created = await res.json() as { id: string };
+        fig.setUserData({ ...ud, selectedMap: created.id });
+        migrated++;
+      } catch (err) {
+        console.warn(`[CampaignManager] migration: unexpected error for "${ud.selectedMap}":`, err);
+      }
+    }
+
+    if (migrated === 0) return;
+
+    // Sauvegarder silencieusement le tree avec les nouveaux UUIDs
+    try {
+      const canvas = canvasRef();
+      if (!canvas) return;
+      await CampaignService.editCampaignManager(campaignId, {
+        campaignTreeDefinition: canvas.exportData() ?? '',
+      });
+      const treeData = buildSessionTreeFormat();
+      if (treeData) {
+        localStorage.setItem(`dnd-campaign-tree-${campaignId}`, JSON.stringify(treeData));
+      }
+      showToast(t(migrated > 1 ? 'campaignManager.toast.mapsMigratedPlural' : 'campaignManager.toast.mapsMigrated', { n: migrated }), 'success');
+    } catch (err) {
+      console.warn('[CampaignManager] migration: auto-save after migration failed:', err);
+    }
+  };
 
   // ─── Node selection ───────────────────────────────────────────────────────
   createEffect(() => {
@@ -142,14 +237,21 @@ const CampaignManager: Component = () => {
           data: { title: 'New choice', text: '', choices: ['Choice 1', 'Choice 2'] },
         });
       } else if (type === 'combat') {
-        newNode = canvas.addNode({
-          type: 'combat', x: baseX, y: baseY,
-          data: { title: 'New combat', difficulty: 'medium', villains: [] },
-        });
+        return;
       } else if (type === 'map') {
         newNode = canvas.addNode({
           type: 'map', x: baseX, y: baseY,
           data: { title: 'New map' },
+        });
+      } else if (type === 'victory') {
+        newNode = canvas.addNode({
+          type: 'victory', x: baseX, y: baseY,
+          data: { title: t('campaignManager.node.defaultVictory') },
+        });
+      } else if (type === 'defeat') {
+        newNode = canvas.addNode({
+          type: 'defeat', x: baseX, y: baseY,
+          data: { title: t('campaignManager.node.defaultDefeat') },
         });
       }
 
@@ -213,10 +315,18 @@ const CampaignManager: Component = () => {
     const canvas = canvasRef();
     if (!canvas || isSaving()) return;
 
+    // Refuser une sauvegarde avec un canvas vide — évite d'écraser la
+    // définition serveur si le canvas n'est pas encore initialisé.
+    const exported = canvas.exportData();
+    if (!exported) {
+      showToast(t('campaignManager.toast.saveCanvasNotReady'), 'error');
+      return;
+    }
+
     setIsSaving(true);
     try {
       const response = await CampaignService.editCampaignManager(campaign()!.id, {
-        campaignTreeDefinition: canvas.exportData() ?? '',
+        campaignTreeDefinition: exported,
       });
       const mappedCampaign = mapCampaignResponse(response);
       setCampaign(mappedCampaign);
@@ -243,8 +353,8 @@ const CampaignManager: Component = () => {
     }}>
       <PageMeta title={t('page.campaignManager.title')} />
 
-      {/* Toolbar */}
-      <div class="relative z-20 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-game-dark/70 backdrop-blur-md">
+      {/* Toolbar — pl-16 sm:pl-20 pour laisser la place au bouton retour du GameShell */}
+      <div class="relative z-20 flex items-center justify-between pl-28 pr-6 py-4 border-b border-white/10 bg-game-dark/70 backdrop-blur-md">
         <div class="flex flex-row gap-2">
           <button
             onClick={() => setModalOpen(true)}
@@ -311,26 +421,28 @@ const CampaignManager: Component = () => {
               <For each={blocs}>
                 {(item) => (
                   <button
-                    onClick={() => handleAddNode(item.blockName)}
+                    onClick={() => !item.comingSoon && handleAddNode(item.blockName)}
+                    disabled={item.comingSoon}
                     style={{
                       display: 'flex',
                       'align-items': 'center',
                       gap: '0.875rem',
                       width: '100%',
                       padding: '0.75rem 1rem',
-                      background: item.bgColor,
-                      border: `2px solid ${item.borderColor}`,
+                      background: item.comingSoon ? 'rgba(30,30,30,0.5)' : item.bgColor,
+                      border: `2px solid ${item.comingSoon ? 'rgba(255,255,255,0.08)' : item.borderColor}`,
                       'border-radius': '0.75rem',
-                      color: '#ffffff',
-                      cursor: 'pointer',
+                      color: item.comingSoon ? 'rgba(255,255,255,0.3)' : '#ffffff',
+                      cursor: item.comingSoon ? 'not-allowed' : 'pointer',
                       transition: 'filter 0.15s, transform 0.15s',
                       'font-size': '1rem',
                       'font-weight': '600',
                       'letter-spacing': '0.01em',
                       'text-align': 'left',
+                      opacity: item.comingSoon ? '0.6' : '1',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(1.18)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
+                    onMouseEnter={(e) => { if (!item.comingSoon) e.currentTarget.style.filter = 'brightness(1.18)'; }}
+                    onMouseLeave={(e) => { if (!item.comingSoon) e.currentTarget.style.filter = 'brightness(1)'; }}
                   >
                     {/* Coloured icon */}
                     <span style={{
@@ -339,16 +451,34 @@ const CampaignManager: Component = () => {
                       'justify-content': 'center',
                       width: '2.25rem',
                       height: '2.25rem',
-                      background: `${item.accentColor}28`,
-                      border: `1.5px solid ${item.accentColor}80`,
+                      background: item.comingSoon ? 'rgba(255,255,255,0.05)' : `${item.accentColor}28`,
+                      border: `1.5px solid ${item.comingSoon ? 'rgba(255,255,255,0.1)' : `${item.accentColor}80`}`,
                       'border-radius': '0.5rem',
-                      color: item.accentColor,
+                      color: item.comingSoon ? 'rgba(255,255,255,0.25)' : item.accentColor,
                       'flex-shrink': '0',
                     }}>
                       {item.icon}
                     </span>
                     <span style={{ flex: 1 }}>{item.label}</span>
-                    <span style={{ 'font-size': '1.25rem', opacity: '0.5', 'line-height': 1 }}>+</span>
+                    <Show
+                      when={item.comingSoon}
+                      fallback={<span style={{ 'font-size': '1.25rem', opacity: '0.5', 'line-height': 1 }}>+</span>}
+                    >
+                      <span style={{
+                        'font-size': '0.65rem',
+                        'font-weight': '600',
+                        'letter-spacing': '0.05em',
+                        'text-transform': 'uppercase',
+                        padding: '0.2rem 0.5rem',
+                        background: 'rgba(255,255,255,0.07)',
+                        border: '1px solid rgba(255,255,255,0.12)',
+                        'border-radius': '0.375rem',
+                        color: 'rgba(255,255,255,0.35)',
+                        'white-space': 'nowrap',
+                      }}>
+                        {t('campaignManager.block.comingSoon')}
+                      </span>
+                    </Show>
                   </button>
                 )}
               </For>

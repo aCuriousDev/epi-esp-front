@@ -45,7 +45,7 @@ const ChoicesNodeEditor: Component<ChoicesNodeEditorProps> = (props) => {
   };
 
   const handleAddChoice = () => {
-    const newChoices = [...choices(), 'Nouveau choix'];
+    const newChoices = [...choices(), 'New choice'];
     setChoices(newChoices);
     props.node.updateChoices(newChoices);
     props.handleUpdateNode(props.node);
@@ -68,7 +68,7 @@ const ChoicesNodeEditor: Component<ChoicesNodeEditorProps> = (props) => {
     <div>
       {/* Titre */}
       <div style={{ 'margin-bottom': '1.25rem' }}>
-        <label style={labelStyle}>🏷️ Titre du bloc :</label>
+        <label style={labelStyle}>🏷️ Block title:</label>
         <input
           type="text"
           value={title()}
@@ -96,12 +96,12 @@ const ChoicesNodeEditor: Component<ChoicesNodeEditorProps> = (props) => {
       {/* Choix */}
       <div>
         <div style={{ display: 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '0.5rem' }}>
-          <label style={{ 'font-weight': '500', 'font-size': '0.9rem' }}>Choix disponibles :</label>
+          <label style={{ 'font-weight': '500', 'font-size': '0.9rem' }}>Available choices:</label>
           <button
             onClick={handleAddChoice}
             style={{ padding: '0.25rem 0.5rem', background: '#0e639c', border: 'none', 'border-radius': '3px', color: 'white', cursor: 'pointer', 'font-size': '0.85rem' }}
           >
-            + Ajouter
+            + Add
           </button>
         </div>
 
@@ -125,7 +125,7 @@ const ChoicesNodeEditor: Component<ChoicesNodeEditorProps> = (props) => {
                   <button
                     onClick={() => handleRemoveChoice(index)}
                     style={{ padding: '0.5rem', background: '#5a1d1d', border: 'none', 'border-radius': '3px', color: '#f48771', cursor: 'pointer', 'line-height': 1 }}
-                    title="Supprimer ce choix"
+                    title="Delete this choice"
                   >✕</button>
                 </div>
               )}

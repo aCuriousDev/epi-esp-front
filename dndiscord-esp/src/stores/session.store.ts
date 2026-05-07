@@ -45,10 +45,19 @@ export const [sessionState, setSessionState] = createStore<SessionStoreState>({
 
 const STORAGE_KEY = "dndiscord_session";
 const GAME_STARTED_KEY = "dndiscord_game_started";
+// GameStarted payloads are meant to be short-lived (refresh/reconnect window).
+// Keep a bounded TTL so a tab refresh cannot revive an old session's state.
+const GAME_STARTED_TTL_MS = 10 * 60_000; // 10 minutes
 
 interface PersistedSession {
   sessionId: string;
   hubUserId: string;
+}
+
+interface PersistedGameStarted {
+  ts: number;
+  sessionId: string | null;
+  payload: Omit<GameStartedPayload, "mapData">;
 }
 
 function persistSession(sessionId: string, hubUserId: string): void {
@@ -76,7 +85,12 @@ export function getPersistedSession(): PersistedSession | null {
 function persistGameStarted(payload: GameStartedPayload): void {
   try {
     const { mapData: _, ...rest } = payload;
-    sessionStorage.setItem(GAME_STARTED_KEY, JSON.stringify(rest));
+    const persisted: PersistedGameStarted = {
+      ts: Date.now(),
+      sessionId: sessionState.session?.sessionId ?? null,
+      payload: rest,
+    };
+    sessionStorage.setItem(GAME_STARTED_KEY, JSON.stringify(persisted));
   } catch { /* quota or private mode */ }
 }
 
@@ -84,11 +98,20 @@ function clearPersistedGameStarted(): void {
   try { sessionStorage.removeItem(GAME_STARTED_KEY); } catch { /* noop */ }
 }
 
-export function getPersistedGameStarted(): GameStartedPayload | null {
+export function getPersistedGameStarted(expectedSessionId?: string | null): GameStartedPayload | null {
   try {
     const raw = sessionStorage.getItem(GAME_STARTED_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as GameStartedPayload;
+    const parsed = JSON.parse(raw) as PersistedGameStarted | GameStartedPayload;
+    // Backward compat: old format was just the payload itself (no ts/sessionId).
+    // Treat it as stale to prevent cross-session resurrection after refresh.
+    if ((parsed as any)?.payload == null) return null;
+
+    const persisted = parsed as PersistedGameStarted;
+    if (typeof persisted.ts !== "number") return null;
+    if (Date.now() - persisted.ts > GAME_STARTED_TTL_MS) return null;
+    if (expectedSessionId && persisted.sessionId && expectedSessionId !== persisted.sessionId) return null;
+    return persisted.payload as unknown as GameStartedPayload;
   } catch {
     return null;
   }
@@ -117,6 +140,14 @@ export function setHubUserId(userId: string): void {
   if (sessionState.session?.sessionId) {
     persistSession(sessionState.session.sessionId, userId);
   }
+}
+
+/** Effacer le payload GameStarted (ex. avant une nouvelle session).
+ *  Sans ce nettoyage, LobbyScreen déclenche onMultiplayerGameStart
+ *  immédiatement avec le payload de la session précédente. */
+export function clearGameStarted(): void {
+  clearPersistedGameStarted();
+  setSessionState("gameStartedPayload", null);
 }
 
 /** Stocker le payload GameStarted reçu du serveur. */

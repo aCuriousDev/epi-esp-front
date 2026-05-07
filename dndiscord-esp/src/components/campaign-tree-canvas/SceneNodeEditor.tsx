@@ -64,7 +64,7 @@ const SceneNodeEditor: Component<SceneNodeEditorProps> = (props : SceneNodeEdito
                     'font-weight': '500',
                     'font-size': '0.9rem'
                 }}>
-                    Titre du Bloc
+                    Block Title
                 </label>
                 <textarea
                     value={title()}

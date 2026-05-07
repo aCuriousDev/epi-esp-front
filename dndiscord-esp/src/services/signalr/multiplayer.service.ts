@@ -29,6 +29,7 @@ import {
 import {
   setSession,
   clearSession,
+  clearGameStarted,
   setSessionError,
   setSessionLoading,
   applyJoinResult,
@@ -45,7 +46,7 @@ import { registerGameSyncHandlers } from "./gameSync";
 import { clearUnits } from "../../game/stores/UnitsStore";
 import { clearTiles } from "../../game/stores/TilesStore";
 import { resetGameState, gameState, setGameState } from "../../game/stores/GameStateStore";
-import { GamePhase } from "../../types";
+import { GamePhase, Team } from "../../types";
 import { authStore } from "../../stores/auth.store";
 import { AuthService } from "../auth.service";
 import { loadMap } from "../mapStorage";
@@ -64,7 +65,7 @@ import {
 } from "../../stores/partyChat.store";
 import { showDmMessage, showPlayerBubble } from "../../stores/dialogue.store";
 import {
-  getPlayerUnits,
+  units,
   removeUnitsByOwnerUserId,
 } from "../../game/stores/UnitsStore";
 import {
@@ -77,6 +78,7 @@ import {
 const HUB = {
   createSession: "CreateSession",
   joinSession: "JoinSession",
+  joinCampaignSession: "JoinCampaignSession",
   leaveSession: "LeaveSession",
   kickPlayer: "KickPlayer",
   createRoom: "CreateRoom",
@@ -103,6 +105,11 @@ const HUB = {
   dmForceLevelUp: "DmForceLevelUp",
   dmGrantGold: "DmGrantGold",
   selectDefaultTemplate: "SelectDefaultTemplate",
+  voteForChoice: "VoteForChoice",
+  dmAdvanceNode: "DmAdvanceNode",
+  dmLaunchCampaignMap: "DmLaunchCampaignMap",
+  dmExitMap: "DmExitMap",
+  broadcastCampaignSessionCompleted: "BroadcastCampaignSessionCompleted",
 } as const;
 
 async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
@@ -131,7 +138,7 @@ async function tryBindDiscordVoiceToSession(sessionId: string): Promise<void> {
     );
 
     if (!res.ok) {
-      const text = await res.text().catch(() => "");
+      const text = await res.text().catch((e: unknown) => (e instanceof Error ? e.message : String(e)));
       console.warn("party-chat bind failed:", res.status, text);
     } else {
       console.log("party-chat bind ok", {
@@ -170,6 +177,10 @@ export async function createSession(campaignId: string): Promise<SessionInfo> {
   clearUnits();
   clearTiles();
   resetGameState();
+  // Effacer l'ancien payload GameStarted AVANT setSession.
+  // Sans ça, LobbyScreen lit immédiatement le payload de la session précédente
+  // et appelle onMultiplayerGameStart → le MJ atterrit sur la carte au lieu du lobby.
+  clearGameStarted();
   setSession(result);
   clearPartyChat();
   await tryBindDiscordVoiceToSession(result.sessionId);
@@ -231,6 +242,36 @@ export async function joinSession(sessionId: string): Promise<JoinResult> {
   return result;
 }
 
+/**
+ * Rejoindre la session live d'une campagne par son campaignId.
+ * Résout le problème de l'UUID base-de-données vs ID SignalR in-memory :
+ * le hub cherche directement dans le SessionManager par campaignId.
+ */
+export async function joinCampaignSession(campaignId: string): Promise<JoinResult> {
+  syncHubUserId();
+  clearUnits();
+  clearTiles();
+  resetGameState();
+  const raw = (await signalRService.invoke(
+    HUB.joinCampaignSession,
+    campaignId,
+  )) as Record<string, unknown>;
+  syncHubUserId();
+  const result: JoinResult = {
+    success: !!raw.success,
+    message: raw.message as string | undefined,
+    session: raw.session
+      ? normalizeSession(raw.session as Record<string, unknown>)
+      : undefined,
+  };
+  applyJoinResult(result);
+  if (result.success && result.session) {
+    clearPartyChat();
+    await tryBindDiscordVoiceToSession(result.session.sessionId);
+  }
+  return result;
+}
+
 /** Quitter la session courante. */
 export async function leaveSession(): Promise<void> {
   await signalRService.invoke(HUB.leaveSession);
@@ -257,8 +298,11 @@ export async function kickPlayer(targetUserId: string): Promise<KickResult> {
   return result;
 }
 
-/** Sync hubUserId from SignalR service to session store. */
-function syncHubUserId(): void {
+/** Sync hubUserId from SignalR service to session store.
+ *  Exportée pour que BoardGame.onMultiplayerGameStart puisse
+ *  garantir que hubUserId est à jour avant le démarrage du jeu
+ *  (nécessaire pour canControlUnit() dans GameCanvas). */
+export function syncHubUserId(): void {
   if (signalRService.hubUserId) {
     setHubUserId(signalRService.hubUserId);
   }
@@ -270,6 +314,7 @@ export async function createRoom(maxPlayers: number): Promise<SessionInfo> {
   const raw = await signalRService.invoke(HUB.createRoom, maxPlayers);
   syncHubUserId();
   const result = normalizeSession(raw as Record<string, unknown>);
+  clearGameStarted(); // même protection que createSession
   setSession(result);
   return result;
 }
@@ -281,6 +326,54 @@ export async function selectCharacter(
   await signalRService.invoke(HUB.selectCharacter, characterId);
 }
 
+/** DM broadcasts that the map is done and all players should return to the session.
+ * Players receive CampaignMapExited and navigate to the session page. */
+export async function dmExitMap(
+  campaignId: string,
+  nodeId: string,
+): Promise<void> {
+  await signalRService.invoke(HUB.dmExitMap, campaignId, nodeId);
+}
+
+/** DM signals that the campaign session is over (victory/defeat).
+ * All campaign subscribers receive CampaignSessionCompleted and navigate away. */
+export async function broadcastCampaignSessionCompleted(
+  campaignId: string,
+  sessionId: string,
+): Promise<void> {
+  await signalRService.invoke(HUB.broadcastCampaignSessionCompleted, campaignId, sessionId);
+}
+
+/** DM broadcasts a campaign map launch to all campaign subscribers.
+ * Players receive CampaignMapLaunched, set their sessionMapConfig and
+ * navigate to /board?fromSession=1. */
+export async function dmLaunchCampaignMap(
+  campaignId: string,
+  configJson: string,
+): Promise<void> {
+  await signalRService.invoke(HUB.dmLaunchCampaignMap, campaignId, configJson);
+}
+
+/** DM broadcasts scenario node advancement to all campaign subscribers.
+ * Players receive NodeAdvanced and navigate to nextNodeId automatically. */
+export async function dmAdvanceNode(
+  campaignId: string,
+  fromNodeId: string,
+  nextNodeId: string,
+): Promise<void> {
+  await signalRService.invoke(HUB.dmAdvanceNode, campaignId, fromNodeId, nextNodeId);
+}
+
+/** Diffuse le vote d'un joueur pour un choix sur un nœud Choices.
+ * choiceIndex = -1 pour annuler. */
+export async function voteForChoice(
+  campaignId: string,
+  nodeId: string,
+  choiceIndex: number,
+): Promise<void> {
+  await signalRService.invoke(HUB.voteForChoice, campaignId, nodeId, choiceIndex);
+}
+
 /** Pick a quickstart preset (warrior / mage / archer). Mutually exclusive with
  * selectCharacter — whichever was called most recently wins server-side. */
 export async function selectDefaultTemplate(
@@ -289,10 +382,17 @@ export async function selectDefaultTemplate(
   await signalRService.invoke(HUB.selectDefaultTemplate, templateId);
 }
 
+/** IDs réservés qui ne doivent jamais déclencher un lookup mapData.
+ *  - "default" : grille procédurale générée côté client
+ *  - "__tutorial__" et tout futur "__xxx__" : asset statique, pas de blob à envoyer */
+function isReservedMapId(mapId: string): boolean {
+  return mapId === "default" || /^__[a-z_]+__$/.test(mapId);
+}
+
 /** Lancer la partie (host uniquement). Envoie les données de la map pour les joueurs distants. */
 export async function startGame(mapId: string): Promise<void> {
   let mapData: string | null = null;
-  if (mapId && mapId !== "default") {
+  if (mapId && !isReservedMapId(mapId)) {
     const map = loadMap(mapId);
     if (map) {
       mapData = JSON.stringify(map);
@@ -306,7 +406,7 @@ export async function startGame(mapId: string): Promise<void> {
  * require the session to be in Lobby state. */
 export async function dmRestartGame(mapId: string): Promise<void> {
   let mapData: string | null = null;
-  if (mapId && mapId !== "default") {
+  if (mapId && !isReservedMapId(mapId)) {
     const map = loadMap(mapId);
     if (map) {
       mapData = JSON.stringify(map);
@@ -510,7 +610,7 @@ export function registerMultiplayerHandlers(): void {
     if (!text) return;
 
     const role = String((data as any).authorRole ?? "Player");
-    const authorName = String((data as any).authorName ?? "Joueur");
+    const authorName = String((data as any).authorName ?? "Player");
     const authorUserId = String((data as any).authorUserId ?? "").toLowerCase();
 
     if (role === "DM") {
@@ -518,15 +618,30 @@ export function registerMultiplayerHandlers(): void {
       return;
     }
 
-    const players = getPlayerUnits();
+    // Include dead units — a player can still talk after being downed.
+    const players = Object.values(units).filter(
+      (u) => u.team === Team.PLAYER,
+    );
     if (players.length === 0) return;
 
-    const unit =
-      (authorUserId
-        ? players.find(
-            (u) => String(u.ownerUserId ?? "").toLowerCase() === authorUserId,
-          )
-        : undefined) ?? players[0];
+    const unit = authorUserId
+      ? players.find(
+          (u) => String(u.ownerUserId ?? "").toLowerCase() === authorUserId,
+        )
+      : undefined;
+
+    if (!unit) {
+      // Expected for the DM (no unit on the board) — warn only when an
+      // authorUserId was provided but matched nothing, which signals a real
+      // ownership-mapping bug rather than a legitimate DM message.
+      if (authorUserId) {
+        console.warn(
+          "[partyChat] authorUserId present but matched no player unit — bubble suppressed; check ownerUserId mapping",
+          authorUserId,
+        );
+      }
+      return;
+    }
 
     // Deterministic-ish color per author
     const palette = [
@@ -631,6 +746,10 @@ export function registerMultiplayerHandlers(): void {
       }
     } catch (err) {
       console.warn("[multiplayer] SessionEnded navigate failed", err);
+      // Navigation may be blocked (e.g. Discord Activity CSP). The board is
+      // already torn down (clearSession/clearUnits/clearTiles ran above), so
+      // the player is stuck with no path home — surface an actionable message.
+      setSessionError("The session has ended. Please refresh the page.");
     }
   });
 }
@@ -736,6 +855,12 @@ export function ensureMultiplayerHandlersRegistered(): void {
       await rejoinSession(sid);
     } catch (err) {
       console.warn("Auto-rejoin after reconnect failed:", err);
+      // Both reconnect legs failed. The SignalR group membership is gone —
+      // future broadcasts won't arrive. Surface an actionable error so the
+      // player knows they need to reload rather than waiting indefinitely.
+      setSessionError(
+        "Reconnexion impossible — rechargez l'application pour rejoindre la session.",
+      );
     }
   });
 }

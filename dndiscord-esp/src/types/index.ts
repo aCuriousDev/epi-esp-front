@@ -38,6 +38,8 @@ export interface Tile {
   movementCost: number;
   occupiedBy: string | null; // Unit ID
   effects: TileEffect[];
+  /** Port draw2d à suivre dans l'arbre de campagne (ex: 'exit-0', 'exit-1'). */
+  exitPortName?: string;
 }
 
 export interface TileEffect {

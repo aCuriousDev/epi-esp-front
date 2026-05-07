@@ -1,8 +1,10 @@
 import { Component, onMount, onCleanup, createSignal, For, Show, createEffect, createMemo } from "solid-js";
 import { Portal } from "solid-js/web";
-import { useParams, useSearchParams, useNavigate } from "@solidjs/router";
-import { ChevronDown, ChevronRight } from "lucide-solid";
-import { saveMap, loadMap, generateMapId, loadDungeon, saveDungeon, exportMapToFile, importMapFromJson, type SavedMapData, type SavedCellData, type SavedAssetData, type SavedLightData, type DungeonData } from "../services/mapStorage";
+import { A, useParams, useSearchParams, useNavigate } from "@solidjs/router";
+import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-solid";
+import { saveMap, loadMap, generateMapId, loadDungeon, saveDungeon, exportMapToFile, importMapFromJson, cacheMap, ensureMapCached, type SavedMapData, type SavedCellData, type SavedAssetData, type SavedLightData, type DungeonData } from "../services/mapStorage";
+import { getApiUrl } from "../services/config";
+import { AuthService } from "../services/auth.service";
 import {
 	Engine,
 	Scene,
@@ -193,18 +195,30 @@ class GridCell {
 	 * @param assetStackManager - Le gestionnaire d'empilement pour repositionner les meshes
 	 */
 	public restackAssets(assetStackManager: AssetStackManager): void {
+		// Assets placed in edge/corner mode have a non-zero X or Z local offset.
+		// They sit at ground level beside centre assets and must NOT be treated as
+		// part of the sequential centre stack — otherwise deleting a centre asset
+		// would push them upward.
+		const EDGE_EPSILON = 0.01;
 		let currentHeight = this.groundTopY;
 		for (const stackedAsset of this.stackedAssets) {
-			// Repositionner le mesh au sommet courant de la pile
-			assetStackManager.positionMeshAtHeight(stackedAsset.mesh, currentHeight, 0);
-			
+			const isEdgeOrCorner =
+				Math.abs(stackedAsset.mesh.position.x) > EDGE_EPSILON ||
+				Math.abs(stackedAsset.mesh.position.z) > EDGE_EPSILON;
+
+			const targetY = isEdgeOrCorner ? this.groundTopY : currentHeight;
+			assetStackManager.positionMeshAtHeight(stackedAsset.mesh, targetY, 0);
+
 			// Recalculer les positions Y relatives
 			const newPositions = assetStackManager.calculateCellRelativeYPositions(stackedAsset.mesh, 0);
 			stackedAsset.bottomY = newPositions.bottomY;
 			stackedAsset.topY = newPositions.topY;
 			stackedAsset.height = newPositions.height;
-			
-			currentHeight = stackedAsset.topY;
+
+			// Only advance the centre stack cursor for centre assets
+			if (!isEdgeOrCorner) {
+				currentHeight = stackedAsset.topY;
+			}
 		}
 	}
 
@@ -305,6 +319,8 @@ class GridCell {
 				scale: sa.mesh.scaling.x, // Assume uniform scaling
 				rotationY,
 				positionY: sa.mesh.position.y,
+				offsetX: sa.mesh.position.x || undefined,
+				offsetZ: sa.mesh.position.z || undefined,
 			};
 			// Inclure les cellules affectées pour les assets multi-cases
 			if (getAffectedCells) {
@@ -737,6 +753,34 @@ class AssetStackManager {
 // Flat list of every available asset — used by the library search
 const ALL_ASSETS: MapAsset[] = ASSET_CATEGORIES.flatMap(c => c.assets);
 
+// ── Placement mode ────────────────────────────────────────────────────────
+/** Where within the cell the asset is positioned. */
+type PlacementMode = 'center' | 'edge' | 'corner';
+
+/**
+ * Returns the (x, z) local offset to apply to an asset based on the chosen
+ * placement mode and the current rotation (in radians).
+ *
+ * • center : (0, 0) — no offset
+ * • edge   : the asset hugs the wall in the direction it faces (sin/cos of rot)
+ * • corner : the asset sits in the nearest corner to the facing direction
+ *            (rotation shifted by π/4 maps each 90° quadrant to one corner)
+ */
+function computePlacementOffset(rotRad: number, mode: PlacementMode): { x: number; z: number } {
+	const SNAP_DIST = 0.45;
+	if (mode === 'edge') {
+		return { x: Math.sin(rotRad) * SNAP_DIST, z: -Math.cos(rotRad) * SNAP_DIST };
+	}
+	if (mode === 'corner') {
+		const sh = rotRad + Math.PI / 4;
+		return {
+			x: (Math.sin(sh) >= 0 ? 1 : -1) * SNAP_DIST,
+			z: (Math.cos(sh) <= 0 ? 1 : -1) * SNAP_DIST,
+		};
+	}
+	return { x: 0, z: 0 };
+}
+
 // ── User-managed favorites (localStorage) ─────────────────────────────────
 const USER_FAVORITES_KEY = 'dndiscord_editor_favorites';
 
@@ -784,6 +828,11 @@ export default function MapEditor() {
 	
 	const [mapId, setMapId] = createSignal<string | null>(null);
 	const [mapName, setMapName] = createSignal<string>("Nouvelle Map");
+	/** 'saved' = DB OK | 'local' = DB inaccessible, sauvegardé localement | 'unsaved' = en attente */
+	const [saveStatus, setSaveStatus] = createSignal<'saved' | 'local' | 'unsaved' | null>(null);
+	let _saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+	/** Timestamp de création conservé en mémoire pour éviter de le recalculer à chaque save */
+	let _mapCreatedAt: number = Date.now();
 	const [dungeonData, setDungeonData] = createSignal<DungeonData | null>(null);
 	const [selectedAsset, setSelectedAsset] = createSignal<MapAsset | null>(null);
 	const [expandedCategories, setExpandedCategories] = createSignal<Set<string>>(new Set());
@@ -797,6 +846,8 @@ export default function MapEditor() {
 		return filterCategories(base, searchQuery());
 	};
 	const [rotationAngle, setRotationAngle] = createSignal(0);
+	const [placementMode, setPlacementMode] = createSignal<PlacementMode>('center');
+	const [showGrid, setShowGrid] = createSignal(true);
 	const [deleteMode, setDeleteMode] = createSignal(false);
 	const [editMode, setEditMode] = createSignal(false);
 	const [editingAsset, setEditingAsset] = createSignal<{ asset: MapAsset; cell: GridCell; mesh: AbstractMesh } | null>(null);
@@ -926,6 +977,7 @@ export default function MapEditor() {
 	// clicks the same asset again to deselect).
 	let editingOriginalMesh: AbstractMesh | null = null;
 	let editingOriginalEmissives: Array<{ mat: StandardMaterial | PBRMaterial; orig: Color3 }> = [];
+	let gridLineMeshes: AbstractMesh[] = [];
 	const EDIT_TINT = new Color3(0.2, 0.55, 1);
 
 	const tintEditingMesh = (root: AbstractMesh) => {
@@ -1133,16 +1185,25 @@ export default function MapEditor() {
 	// Forces a world-matrix recompute so the new angle shows on the very
 	// next render instead of waiting for the user to move the cursor.
 	createEffect(() => {
-		// Read rotationAngle unconditionally so Solid tracks it even when
-		// previewMesh isn't ready yet — once the preview loads later,
-		// repositionPreviewOnCell picks up the current angle.
+		// Read rotationAngle AND placementMode unconditionally so Solid tracks
+		// both even when previewMesh isn't ready yet.
 		const rotationRad = (rotationAngle() * Math.PI) / 180;
+		const offset = computePlacementOffset(rotationRad, placementMode());
 		if (previewMesh && !previewMesh.isDisposed() && scene && (selectedAsset() || editingAsset() || lightMode())) {
 			// Always include the GLTF base offset so the ghost matches the placed mesh.
 			previewMesh.rotation.y = previewBaseRotationY + rotationRad;
+			previewMesh.position.x = offset.x;
+			previewMesh.position.z = offset.z;
 			previewMesh.computeWorldMatrix(true);
 			previewMesh.getChildMeshes(false).forEach((child) => child.computeWorldMatrix(true));
 		}
+	});
+
+	// Auto-switch placement mode based on selected asset type:
+	// Toggle grid line visibility reactively.
+	createEffect(() => {
+		const visible = showGrid();
+		gridLineMeshes.forEach(m => { if (!m.isDisposed()) m.isVisible = visible; });
 	});
 
 	// Find asset by path
@@ -1231,17 +1292,21 @@ export default function MapEditor() {
 						const cellNode = cell.getCellNode();
 						if (cellNode) {
 							mesh.parent = cellNode;
-							mesh.position.set(0, assetData.positionY, 0);
+							mesh.position.set(
+								assetData.offsetX ?? 0,
+								assetData.positionY,
+								assetData.offsetZ ?? 0,
+							);
 							mesh.computeWorldMatrix(true);
 							mesh.getChildMeshes(false).forEach(child => child.computeWorldMatrix(true));
-							
+
 							// Store asset info in metadata
 							mesh.metadata = {
 								assetId: assetData.assetId,
 								assetPath: assetData.assetPath,
 								assetType: assetData.assetType,
 							};
-							
+
 							// Position and add to stack
 							assetStackManager.positionMeshAtHeight(mesh, assetData.positionY, 0);
 							const stackedAsset = assetStackManager.createStackedAsset(mesh, asset, 0);
@@ -1283,35 +1348,53 @@ export default function MapEditor() {
 
 		try {
 			const cellsData = gridManager.exportData();
-
 			const spawnZonesRecord: Record<string, "ally" | "enemy" | "teleport"> = {};
-			spawnZones().forEach((type, key) => {
-				spawnZonesRecord[key] = type;
-			});
-
-			const existingMap = loadMap(mapId()!);
+			spawnZones().forEach((type, key) => { spawnZonesRecord[key] = type; });
 			const lightsList = placedLights();
+
 			const mapData: SavedMapData = {
 				id: mapId()!,
 				name,
-				createdAt: existingMap?.createdAt || Date.now(),
+				createdAt: _mapCreatedAt,
 				updatedAt: Date.now(),
 				cells: cellsData,
 				spawnZones: Object.keys(spawnZonesRecord).length > 0 ? spawnZonesRecord : undefined,
-				mapType: existingMap?.mapType,
-				dungeonId: existingMap?.dungeonId,
-				roomIndex: existingMap?.roomIndex,
+				// mapType / dungeonId / roomIndex : lus depuis le cache si disponible,
+				// sinon omis (les maps DB n'en ont pas besoin)
+				...(() => {
+					const cached = loadMap(mapId()!);
+					return {
+						mapType:   cached?.mapType,
+						dungeonId: cached?.dungeonId,
+						roomIndex: cached?.roomIndex,
+					};
+				})(),
 				lights: lightsList.length > 0 ? lightsList : undefined,
 				version: 2,
 			};
 
-			saveMap(mapData);
+			// Maps legacy (ID format "map_...") : pas de DB → localStorage direct
+			const isDbMap = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(mapData.id);
+			if (!isDbMap) {
+				saveMap(mapData);
+				if (dungeonData()) {
+					const d = dungeonData()!;
+					d.updatedAt = Date.now();
+					saveDungeon(d);
+				}
+				setSaveStatus('local');
+				return true;
+			}
+
+			// Maps DB (UUID) : DB en source de vérité, localStorage en cache du résultat
+			schedulePersist(mapData);
 
 			if (dungeonData()) {
 				const d = dungeonData()!;
 				d.updatedAt = Date.now();
 				saveDungeon(d);
 			}
+
 			return true;
 		} catch (error) {
 			console.error("Error saving map:", error);
@@ -1319,20 +1402,64 @@ export default function MapEditor() {
 		}
 	};
 
+	/**
+	 * Debounced API persist (UUID maps uniquement).
+	 * 1. PUT /api/maps/mine/:id
+	 * 2. Succès → cacheMap(mapData) pour que loadMap(uuid) fonctionne ensuite
+	 * 3. Échec (réseau / API down) → saveMap(mapData) en fallback localStorage
+	 */
+	const schedulePersist = (mapData: SavedMapData) => {
+		setSaveStatus('unsaved');
+		if (_saveDebounceTimer !== null) clearTimeout(_saveDebounceTimer);
+		_saveDebounceTimer = setTimeout(async () => {
+			_saveDebounceTimer = null;
+			const id = mapData.id;
+
+			try {
+				const token = AuthService.getToken();
+				if (!token) {
+					saveMap(mapData);   // fallback localStorage si pas de token
+					setSaveStatus('local');
+					return;
+				}
+				const res = await fetch(`${getApiUrl()}/api/maps/mine/${id}`, {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+					body: JSON.stringify({ name: mapData.name, data: JSON.stringify(mapData) }),
+				});
+				if (res.ok) {
+					// DB sauvegardée → mettre à jour le cache localStorage
+					cacheMap(mapData);
+					setSaveStatus('saved');
+				} else {
+					console.warn('[MapEditor] API save failed:', res.status);
+					saveMap(mapData);   // fallback localStorage
+					setSaveStatus('local');
+				}
+			} catch {
+				saveMap(mapData);       // fallback localStorage (réseau down)
+				setSaveStatus('local');
+			}
+		}, 1500);
+	};
+
 	const saveCurrentMap = () => {
 		if (!gridManager || !mapId()) {
-			alert("Erreur: Impossible de sauvegarder la map");
+			// alert() interdit dans Discord Activity (CSP) — utiliser saveStatus
+			setSaveStatus('local');
+			console.warn('[MapEditor] saveCurrentMap: gridManager or mapId missing');
 			return;
 		}
 		const name = mapName().trim();
 		if (!name) {
-			alert("Veuillez entrer un nom pour la map");
+			// Laisser le champ en état d'erreur plutôt que d'alerter
+			setSaveStatus('unsaved');
 			return;
 		}
 		if (saveMapSilent()) {
-			alert("Map saved successfully!");
+			setSaveStatus('saved');
 		} else {
-			alert("Failed to save map");
+			setSaveStatus('local');
 		}
 	};
 
@@ -1360,19 +1487,97 @@ export default function MapEditor() {
 		exportMapToFile(mapData);
 	};
 
-	/** Lit le fichier sélectionné, importe la carte et navigue vers le nouvel ID. */
+	/** Lit le fichier sélectionné, importe la carte et recharge le plateau. */
 	const handleImportFile = async (file: File) => {
 		setImportStatus(null);
 		try {
 			const text = await file.text();
-			const imported = importMapFromJson(text);
-			setImportStatus({ type: 'ok', message: `"${imported.name}" imported!` });
-			// Naviguer vers la carte importée après un court délai pour que le feedback soit visible
-			setTimeout(() => {
-				navigate(`/map-editor/${imported.id}`);
-			}, 1200);
+
+			// Parser et valider le JSON
+			let parsed: SavedMapData;
+			try {
+				parsed = JSON.parse(text) as SavedMapData;
+			} catch {
+				throw new Error('Invalid file: malformed JSON.');
+			}
+			if (!parsed || !Array.isArray(parsed.cells)) {
+				throw new Error('Invalid format: "cells" field missing or invalid.');
+			}
+
+			// Créer la carte en DB pour obtenir un UUID
+			let newId: string;
+			const token = AuthService.getToken();
+			const now = Date.now();
+			try {
+				const res = token ? await fetch(`${getApiUrl()}/api/maps/mine`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+					body: JSON.stringify({ name: parsed.name ?? 'Imported map', data: '{}' }),
+				}) : null;
+				if (res?.ok) {
+					const created = await res.json();
+					newId = created.id;
+					_mapCreatedAt = created.createdAt ? new Date(created.createdAt).getTime() : now;
+				} else {
+					// Fallback : ID legacy si l'API est inaccessible
+					newId = generateMapId();
+					_mapCreatedAt = now;
+				}
+			} catch {
+				newId = generateMapId();
+				_mapCreatedAt = now;
+			}
+
+			// Construire la map avec le nouvel ID
+			const importedMap: SavedMapData = {
+				...parsed,
+				id:        newId,
+				name:      parsed.name ?? 'Imported map',
+				createdAt: _mapCreatedAt,
+				updatedAt: now,
+				mapType:   parsed.mapType === 'dungeon-room' ? 'classique' : (parsed.mapType ?? 'classique'),
+				dungeonId: undefined,
+				roomIndex: undefined,
+			};
+
+			// Mettre à jour l'état du composant
+			setMapId(newId);
+			setMapName(importedMap.name);
+			navigate(`/map-editor/${newId}`, { replace: true });
+
+			// Recharger le plateau avec les données importées
+			await loadMapData(importedMap);
+
+			// Sauvegarder : DB si UUID, localStorage si fallback legacy
+			const isDbMap = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newId);
+			if (isDbMap) {
+				const t = AuthService.getToken();
+				if (t) {
+					const res = await fetch(`${getApiUrl()}/api/maps/mine/${newId}`, {
+						method: 'PUT',
+						headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+						body: JSON.stringify({ name: importedMap.name, data: JSON.stringify(importedMap) }),
+					});
+					if (res.ok) {
+						cacheMap(importedMap);
+						setSaveStatus('saved');
+					} else {
+						saveMap(importedMap);
+						setSaveStatus('local');
+					}
+				} else {
+					saveMap(importedMap);
+					setSaveStatus('local');
+				}
+			} else {
+				saveMap(importedMap);
+				setSaveStatus('local');
+			}
+
+			setImportStatus({ type: 'ok', message: `"${importedMap.name}" imported!` });
+			setTimeout(() => setImportStatus(null), 3000);
 		} catch (err: any) {
-			setImportStatus({ type: 'error', message: err?.message ?? 'Erreur inconnue.' });
+			setImportStatus({ type: 'error', message: err?.message ?? 'Unknown error.' });
 			setTimeout(() => setImportStatus(null), 4000);
 		}
 	};
@@ -1382,15 +1587,39 @@ export default function MapEditor() {
 
 		const paramMapId = params.mapId;
 		if (paramMapId === "new") {
-			const newId = generateMapId();
-			setMapId(newId);
+			// Tenter de créer la map en DB pour obtenir un UUID, fallback localStorage
+			(async () => {
+				try {
+					const token = AuthService.getToken();
+					const res = token ? await fetch(`${getApiUrl()}/api/maps/mine`, {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+						body: JSON.stringify({ name: 'Nouvelle Map', data: '{}' }),
+					}) : null;
+					if (res?.ok) {
+						const created = await res.json();
+						setMapId(created.id);
+						_mapCreatedAt = created.createdAt ? new Date(created.createdAt).getTime() : Date.now();
+						setSaveStatus('saved');
+						navigate(`/map-editor/${created.id}`, { replace: true });
+					} else {
+						setMapId(generateMapId());
+						setSaveStatus('local');
+					}
+				} catch {
+					setMapId(generateMapId());
+					setSaveStatus('local');
+				}
+			})();
 			setMapName("Nouvelle Map");
 		} else if (paramMapId) {
 			setMapId(paramMapId);
 			const savedMap = loadMap(paramMapId);
 			if (savedMap) {
 				setMapName(savedMap.name);
+				_mapCreatedAt = savedMap.createdAt;
 			}
+			setSaveStatus('saved');
 		}
 
 		const dId = getDungeonId();
@@ -1541,10 +1770,17 @@ export default function MapEditor() {
 
 		// Load map if mapId is provided and not "new"
 		// Use setTimeout to ensure everything is initialized
-		setTimeout(() => {
+		setTimeout(async () => {
 			const currentMapId = mapId();
 			if (currentMapId && params.mapId !== "new") {
-				const savedMap = loadMap(currentMapId);
+				let savedMap = loadMap(currentMapId);
+				if (!savedMap) {
+					// Map UUID pas en cache local (autre PC) → tenter de récupérer depuis l'API
+					await ensureMapCached(currentMapId);
+					savedMap = loadMap(currentMapId);
+					// Mettre à jour le nom si on vient de le récupérer
+					if (savedMap) setMapName(savedMap.name);
+				}
 				if (savedMap) {
 					loadMapData(savedMap);
 				}
@@ -1595,21 +1831,26 @@ export default function MapEditor() {
 		const minZ = -halfSize;
 		const maxZ = halfSize;
 		
-		// Grid lines
+		// Grid lines — stored in gridLineMeshes so visibility can be toggled.
+		gridLineMeshes = [];
 		for (let i = 0; i <= GRID_SIZE; i++) {
 			const x = minX + (i * TILE_SIZE);
 			const line = MeshBuilder.CreateLines(`gridLineX_${i}`, {
-				points: [new Vector3(x, 0.01, minZ), new Vector3(x, 0.01, maxZ)],
+				points: [new Vector3(x, 0.12, minZ), new Vector3(x, 0.12, maxZ)],
 			}, scene);
 			line.color = gridColor;
+			line.isVisible = showGrid();
+			gridLineMeshes.push(line);
 		}
 
 		for (let i = 0; i <= GRID_SIZE; i++) {
 			const z = minZ + (i * TILE_SIZE);
 			const line = MeshBuilder.CreateLines(`gridLineZ_${i}`, {
-				points: [new Vector3(minX, 0.01, z), new Vector3(maxX, 0.01, z)],
+				points: [new Vector3(minX, 0.12, z), new Vector3(maxX, 0.12, z)],
 			}, scene);
 			line.color = gridColor;
+			line.isVisible = showGrid();
+			gridLineMeshes.push(line);
 		}
 
 		// Invisible pickable planes for each cell
@@ -1620,8 +1861,8 @@ export default function MapEditor() {
 			if (!cellNode) return;
 			
 			const plane = MeshBuilder.CreatePlane(`cellPlane_${cell.x}_${cell.z}`, {
-				width: TILE_SIZE * 0.98,
-				height: TILE_SIZE * 0.98
+				width: TILE_SIZE * 1.0,
+				height: TILE_SIZE * 1.0
 			}, scene);
 			plane.rotation.x = Math.PI / 2;
 			plane.position.set(0, 0.5, 0); // Position plus haute pour être au-dessus des assets
@@ -1819,7 +2060,10 @@ export default function MapEditor() {
 		const cellNode = cell.getCellNode();
 		if (!cellNode) return;
 		previewMesh.parent = cellNode;
-		previewMesh.position.set(0, 0, 0);
+		// Apply placement-mode offset so the preview ghost matches exactly where
+		// the asset will be committed (centre / bord / coin).
+		const offset = computePlacementOffset(rotationRad, placementMode());
+		previewMesh.position.set(offset.x, 0, offset.z);
 		previewMesh.computeWorldMatrix(true);
 		previewMesh.getChildMeshes(false).forEach((child) => child.computeWorldMatrix(true));
 
@@ -2354,9 +2598,11 @@ export default function MapEditor() {
 			const cellNode = cell.getCellNode();
 			if (!cellNode) return;
 			mesh.parent = cellNode;
-			
-			// 4. Initialiser la position au centre de la cellule
-			mesh.position.set(0, 0, 0);
+
+			// 4. Appliquer l'offset de placement (centre / bord / coin)
+			const rotRad = (rotationAngle() * Math.PI) / 180;
+			const pOffset = computePlacementOffset(rotRad, placementMode());
+			mesh.position.set(pOffset.x, 0, pOffset.z);
 			
 			// 5. Forcer le recalcul des matrices world après le parenting
 			mesh.computeWorldMatrix(true);
@@ -2384,17 +2630,26 @@ export default function MapEditor() {
 			} else {
 				const wh = workingHeight();
 				if (wh === 'auto') {
-					// Auto: empiler au-dessus de la pile effective (comportement par défaut)
-					let effectiveStackHeight = cell.getStackHeight();
+					let effectiveStackHeight: number;
 
-					// Vérifier les assets d'autres cellules qui débordent sur celle-ci
-					const externalAssets = gridManager.getAssetsAffectingCell(gridX, gridZ);
-					for (const extMesh of externalAssets) {
-						const isInStack = cell.getStackedAssets().some(sa => sa.mesh === extMesh);
-						const isGround = cell.getGround() === extMesh;
-						if (isInStack || isGround) continue;
-						const extTopY = assetStackManager.calculateWorldTopY(extMesh);
-						effectiveStackHeight = Math.max(effectiveStackHeight, extTopY);
+					if (placementMode() !== 'center') {
+						// Bord / coin : l'asset est décalé en XZ et n'entre pas en
+						// collision avec les objets au centre. On part du ras du sol
+						// pour ne pas le faire flotter au-dessus de la pile centrale.
+						effectiveStackHeight = cell.getGroundTopY();
+					} else {
+						// Centre : empiler au-dessus de la pile effective (défaut).
+						effectiveStackHeight = cell.getStackHeight();
+
+						// Vérifier les assets d'autres cellules qui débordent sur celle-ci
+						const externalAssets = gridManager.getAssetsAffectingCell(gridX, gridZ);
+						for (const extMesh of externalAssets) {
+							const isInStack = cell.getStackedAssets().some(sa => sa.mesh === extMesh);
+							const isGround = cell.getGround() === extMesh;
+							if (isInStack || isGround) continue;
+							const extTopY = assetStackManager.calculateWorldTopY(extMesh);
+							effectiveStackHeight = Math.max(effectiveStackHeight, extTopY);
+						}
 					}
 
 					assetStackManager.positionMeshAtHeight(mesh, effectiveStackHeight, 0);
@@ -3372,10 +3627,9 @@ export default function MapEditor() {
 					<div class="space-y-2">
 						<For each={visibleCategories()}>
 							{(category) => {
-								// Auto-expand when in Favoris tab or when searching so the
-								// user doesn't have to click every accordion header.
+								// Auto-expand when searching so the user doesn't have to
+								// click every accordion header. Toggle works freely otherwise.
 								const isExpanded = () =>
-									activePaletteTab() === "favoris" ||
 									searchQuery().length > 0 ||
 									expandedCategories().has(category.id);
 								const toggleCategory = () => {
@@ -3485,6 +3739,37 @@ export default function MapEditor() {
 						<p class="mt-2 text-xs text-slate-400">
 							Shortcuts Q / D. Rotation is applied to the preview
 							and saved with the placed object.
+						</p>
+					</div>
+				)}
+
+				{/* ── Placement Mode ─────────────────────────────────── */}
+				{(selectedAsset() || editingAsset()) && selectedAsset()?.type !== 'floor' && (
+					<div class="mb-4">
+						<label class="block text-sm text-slate-300 mb-2">Position dans la case</label>
+						<div class="flex gap-1">
+							{([
+								{ mode: 'center' as PlacementMode, label: '⬛', title: 'Centre' },
+								{ mode: 'edge'   as PlacementMode, label: '🧱', title: 'Bord (mur)' },
+								{ mode: 'corner' as PlacementMode, label: '🏛️', title: 'Coin / pilier' },
+							] as const).map(({ mode, label, title }) => (
+								<button
+									class={`flex-1 py-1.5 rounded-lg border text-sm transition ${
+										placementMode() === mode
+											? 'bg-purple-600/50 border-purple-400/60 text-white'
+											: 'bg-black/30 border-white/10 text-slate-400 hover:text-slate-200 hover:bg-black/50'
+									}`}
+									onClick={() => setPlacementMode(mode)}
+									title={title}
+								>
+									{label} {title}
+								</button>
+							))}
+						</div>
+						<p class="mt-1.5 text-[10px] text-slate-500">
+							{placementMode() === 'center' && 'Asset centered in the cell.'}
+							{placementMode() === 'edge'   && 'Asset snapped to the edge based on its rotation - ideal for walls.'}
+							{placementMode() === 'corner' && 'Asset in the corner nearest its rotation - ideal for pillars.'}
 						</p>
 					</div>
 				)}
@@ -3755,6 +4040,20 @@ export default function MapEditor() {
 					</Show>
 				</div>
 
+				{/* ── Affichage grille ────────────────────────────── */}
+				<div class="mb-3">
+					<button
+						class={`w-full px-4 py-2 rounded-lg text-sm transition ${
+							showGrid()
+								? "bg-teal-600/70 hover:bg-teal-600 text-white border border-teal-400/40"
+								: "bg-black/40 hover:bg-black/60 border border-white/10 text-slate-200"
+						}`}
+						onClick={() => setShowGrid(v => !v)}
+					>
+						{showGrid() ? "⊞ Grid visible" : "⊟ Grid hidden"}
+					</button>
+				</div>
+
 				{/* ── Export / Import ─────────────────────────────── */}
 				<div class="flex gap-2 mb-2">
 					<button
@@ -3804,6 +4103,18 @@ export default function MapEditor() {
 					)}
 				</Show>
 
+				{/* Indicateur de sauvegarde */}
+				<Show when={saveStatus() !== null}>
+					<p class={`text-xs text-center mb-2 ${
+						saveStatus() === 'saved'   ? 'text-green-400' :
+						saveStatus() === 'local'   ? 'text-amber-400' :
+						'text-slate-500'
+					}`}>
+						{saveStatus() === 'saved'   ? '✓ Saved' :
+						 saveStatus() === 'local'   ? '⚠ Saved locally only' :
+						 '● Saving…'}
+					</p>
+				</Show>
 				<div class="flex gap-2">
 					<button
 						class="flex-1 px-4 py-2 rounded-lg bg-red-600/80 hover:bg-red-600 text-white text-sm transition"

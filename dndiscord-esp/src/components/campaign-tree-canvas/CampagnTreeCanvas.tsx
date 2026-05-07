@@ -1,4 +1,5 @@
 import { onMount, onCleanup, createSignal, Show } from "solid-js";
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-solid";
 import draw2d from "draw2d";
 import { CampaignNode } from "./nodes/CampaignNode";
 import { CombatNode } from "./nodes/CombatNode";
@@ -8,6 +9,8 @@ import { ChoicesNode } from "./nodes/ChoicesNode";
 import { SceneNode, SceneNodeData } from "./nodes/SceneNode";
 import { MapNode } from "./nodes/MapNode";
 import { StartNode } from "./nodes/StartNode";
+import { VictoryNode } from "./nodes/VictoryNode";
+import { DefeatNode } from "./nodes/DefeatNode";
 
 interface CampaignTreeCanvasProps {
   onNodeSelect?: (node: CampaignNode | null) => void;
@@ -40,7 +43,7 @@ export interface CampaignTreeCanvasRef {
 }
 
 interface AddNodeData {
-  type: "choices" | "combat" | "scene" | "map" | "condition";
+  type: "choices" | "combat" | "scene" | "map" | "condition" | "victory" | "defeat";
   x?: number;
   y?: number;
   data?: any;
@@ -50,13 +53,31 @@ interface AddNodeData {
 (window as any).StartNode = StartNode;
 (window as any).scene = SceneNode;
 (window as any).MapNode = MapNode;
+(window as any).VictoryNode = VictoryNode;
+(window as any).DefeatNode = DefeatNode;
 (window as any).draw2d = draw2d;
 
 export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
   let canvasRef: HTMLDivElement | undefined;
+  let viewportRef: HTMLDivElement | undefined;
   let canvas: draw2d.Canvas | null = null;
   let selectedNode: CampaignNode | null = null;
   const [currentZoom, setCurrentZoom] = createSignal(1.0);
+
+  const panBtnStyle = {
+    padding: "0.25rem",
+    background: tokens.ink[500],
+    border: `1px solid ${tokens.ink[500]}`,
+    "border-radius": "4px",
+    color: tokens.text.high,
+    cursor: "pointer",
+    "font-size": "0.75rem",
+    width: "28px",
+    height: "28px",
+    display: "flex",
+    "align-items": "center",
+    "justify-content": "center",
+  } as const;
 
   const addStartNode = () => {
     if (!canvas) return;
@@ -124,6 +145,26 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           spawnPoint: nodeData.data?.spawnPoint,
           exitCells:  nodeData.data?.exitCells,
           trapCells:  nodeData.data?.trapCells,
+        });
+        break;
+      }
+
+      case 'victory': {
+        const existingId = nodeData.data?.id as string | undefined;
+        node = new VictoryNode(x, y, {
+          id: existingId ?? generateId('victory'),
+          type: 'victory',
+          title: nodeData.data?.title ?? 'Victory',
+        });
+        break;
+      }
+
+      case 'defeat': {
+        const existingId = nodeData.data?.id as string | undefined;
+        node = new DefeatNode(x, y, {
+          id: existingId ?? generateId('defeat'),
+          type: 'defeat',
+          title: nodeData.data?.title ?? 'Defeat',
         });
         break;
       }
@@ -284,13 +325,13 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
 
   // Naviguer vers un node
   const gotoFigure = (figure: any) => {
-    if (!canvas || !canvasRef) return;
+    if (!canvas || !viewportRef) return;
     canvas.setCurrentSelection(figure);
     const bb = figure.getBoundingBox();
     const x = (bb.x + bb.w / 2) * (1 / currentZoom());
     const y = (bb.y + bb.h / 2) * (1 / currentZoom());
-    canvasRef.scrollLeft = x - canvasRef.offsetWidth / 2;
-    canvasRef.scrollTop = y - canvasRef.offsetHeight / 2;
+    viewportRef.scrollLeft = x - viewportRef.offsetWidth / 2;
+    viewportRef.scrollTop = y - viewportRef.offsetHeight / 2;
   };
 
   // Bounding box de tout le canvas
@@ -327,15 +368,28 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     });
   };
 
-  // Zoom vers la position de la souris
+  /**
+   * Wheel handler — two behaviours:
+   *
+   *   Ctrl + scroll  (or trackpad pinch)  → zoom in / out.
+   *   Two-finger scroll on touchpad       → pan the canvas (no modifier needed).
+   *
+   * We always call preventDefault() so the browser never attempts to scroll
+   * the page while the user is working inside the canvas.
+   */
   const handleWheelZoom = (event: WheelEvent) => {
-    if (!canvas || !event.ctrlKey) return;
+    if (!canvas) return;
     event.preventDefault();
-    const delta = event.deltaY * 0.001;
-    const newZoom = Math.min(Math.max(currentZoom() + delta, 0.3), 3);
-    const pos = canvas.fromDocumentToCanvasCoordinate(event.clientX, event.clientY);
-    setCurrentZoom(newZoom);
-    canvas.setZoom(newZoom);
+
+    if (event.ctrlKey) {
+      const delta = event.deltaY * 0.001;
+      const newZoom = Math.min(Math.max(currentZoom() + delta, 0.3), 3);
+      setCurrentZoom(newZoom);
+      canvas.setZoom(newZoom);
+    } else if (viewportRef) {
+      viewportRef.scrollLeft += event.deltaX;
+      viewportRef.scrollTop  += event.deltaY;
+    }
   };
 
   /**
@@ -394,6 +448,12 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
     setCurrentZoom(1.0);
     canvas.setZoom(currentZoom());
   };
+
+  const PAN_STEP = 120;
+  const panLeft  = () => { if (viewportRef) viewportRef.scrollLeft -= PAN_STEP; };
+  const panRight = () => { if (viewportRef) viewportRef.scrollLeft += PAN_STEP; };
+  const panUp    = () => { if (viewportRef) viewportRef.scrollTop  -= PAN_STEP; };
+  const panDown  = () => { if (viewportRef) viewportRef.scrollTop  += PAN_STEP; };
 
   /**
    * Highlight visited nodes and traversed connections in green (for replay view)
@@ -467,8 +527,8 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
 
     const width = maxX - minX;
     const height = maxY - minY;
-    const canvasWidth = canvasRef?.clientWidth || 800;
-    const canvasHeight = canvasRef?.clientHeight || 600;
+    const canvasWidth = viewportRef?.clientWidth || 800;
+    const canvasHeight = viewportRef?.clientHeight || 600;
 
     const zoomX = canvasWidth / width;
     const zoomY = canvasHeight / height;
@@ -480,16 +540,90 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
   onMount(() => {
     if (!canvasRef) return;
 
-    // Créer le canvas draw2d
-    canvas = new draw2d.Canvas(canvasRef.id);
+    // draw2d host: 5000×5000 virtual canvas. draw2d forces overflow:hidden on
+    // this div internally, so the actual scrollable viewport is viewportRef (its
+    // parent). Panning is implemented via custom mouse drag on viewportRef so we
+    // don't rely on PanningSelectionPolicy (which only works when draw2d owns
+    // the scroll container).
+    canvas = new (draw2d.Canvas as any)(canvasRef.id, 5000, 5000) as draw2d.Canvas;
     if (canvas.paper && canvas.paper.canvas) {
       canvas.paper.canvas.style.backgroundColor = "transparent";
     }
-    // Installer les politiques
+
     canvas.installEditPolicy(new draw2d.policy.canvas.SnapToGridEditPolicy(20));
-    canvas.installEditPolicy(new draw2d.policy.canvas.WheelZoomPolicy());
-    canvas.installEditPolicy(new draw2d.policy.canvas.PanningSelectionPolicy());
+    // No WheelZoomPolicy — handled by our custom handleWheelZoom.
+    // No PanningSelectionPolicy — handled by custom mouse drag below.
+    canvas.installEditPolicy(new draw2d.policy.canvas.SingleSelectionPolicy());
     canvas.installEditPolicy(new draw2d.policy.canvas.KeyboardPolicy());
+
+    // ── Custom drag-to-pan ───────────────────────────────────────────────
+    {
+      let _panActive = false;
+      let _startX = 0, _startY = 0;
+      let _scrollLeft = 0, _scrollTop = 0;
+      let rafId: number | null = null;
+      let nextScrollLeft = 0;
+      let nextScrollTop = 0;
+
+      const flushScroll = () => {
+        rafId = null;
+        if (!viewportRef) return;
+        viewportRef.scrollLeft = nextScrollLeft;
+        viewportRef.scrollTop = nextScrollTop;
+      };
+
+      const onMouseDown = (e: MouseEvent) => {
+        // Pan uniquement avec le clic molette (bouton milieu) pour éviter
+        // d'interférer avec la sélection (clic gauche).
+        if (e.button !== 1) return;
+
+        // Empêcher les comportements navigateur liés au bouton milieu.
+        e.preventDefault?.();
+        e.stopPropagation?.();
+
+        const target = e.target as Element;
+        // On laisse pan sur tout (y compris figures), le clic gauche reste
+        // pour la sélection/édition draw2d.
+        _panActive = true;
+        _startX = e.clientX;
+        _startY = e.clientY;
+        _scrollLeft = viewportRef!.scrollLeft;
+        _scrollTop  = viewportRef!.scrollTop;
+        viewportRef!.classList.add('is-panning');
+      };
+      const onMouseMove = (e: MouseEvent) => {
+        if (!_panActive || !viewportRef) return;
+
+        nextScrollLeft = _scrollLeft - (e.clientX - _startX);
+        nextScrollTop  = _scrollTop  - (e.clientY - _startY);
+
+        // Throttle via rAF pour éviter le lag sur scrollLeft/scrollTop.
+        if (rafId == null) {
+          rafId = requestAnimationFrame(flushScroll);
+        }
+      };
+      const onMouseUp = () => {
+        if (_panActive) {
+          _panActive = false;
+          viewportRef?.classList.remove('is-panning');
+        }
+        if (rafId != null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+      };
+
+      // mousedown on the draw2d host so clicks on the SVG background trigger pan
+      canvasRef!.addEventListener('mousedown', onMouseDown);
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+
+      (canvasRef as any).__panCleanup = () => {
+        canvasRef!.removeEventListener('mousedown', onMouseDown);
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+      };
+    }
 
     // Read-only mode: replace selection policy so nothing can be moved/edited
     if (props.readOnly) {
@@ -500,8 +634,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
       }
     }
 
-    //Listener
-    canvasRef.addEventListener('wheel', handleWheelZoom, { passive: false });
+    viewportRef!.addEventListener('wheel', handleWheelZoom, { passive: false });
 
     addStartNode();
 
@@ -576,7 +709,8 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
    * Nettoyage
    */
   onCleanup(() => {
-    canvasRef?.removeEventListener('wheel', handleWheelZoom);
+    viewportRef?.removeEventListener('wheel', handleWheelZoom);
+    (canvasRef as any)?.__panCleanup?.();
     canvas?.clear();
     canvas = null;
   });
@@ -591,21 +725,33 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
         overflow: "hidden",
       }}
     >
-      {/* Canvas draw2d */}
+      {/* Scroll viewport — overflow:auto so we can pan via scrollLeft/scrollTop.
+          draw2d forces overflow:hidden on its host div, so this wrapper is
+          the actual scroll container. Background grid scrolls with it. */}
       <div
-        class="campaign-view-page"
-        ref={canvasRef}
-        id={props.canvasId ?? "campaign-tree-canvas"}
+        ref={viewportRef}
+        class="campaign-tree-canvas-scroll"
         style={{
-          width: "5000px",
-          height: "5000px",
+          width: "100%",
+          height: "100%",
+          overflow: "auto",
+          cursor: "default",
           "background-image": `
             linear-gradient(${tokens.ink[800]} 1px, transparent 1px),
             linear-gradient(90deg, ${tokens.ink[800]} 1px, transparent 1px)
           `,
           "background-size": "20px 20px",
+          "background-attachment": "local",
         }}
-      />
+      >
+        {/* draw2d host — will be forced to 5000×5000 with overflow:hidden by draw2d */}
+        <div
+          class="campaign-view-page"
+          ref={canvasRef}
+          id={props.canvasId ?? "campaign-tree-canvas"}
+          style={{ position: "relative" }}
+        />
+      </div>
 
       {/* Contrôles du canvas (en bas à droite) */}
       <div
@@ -622,7 +768,16 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
           border: `1px solid ${tokens.ink[600]}`,
         }}
       >
-        {/* Zoom controls always visible */}
+        {/* Navigation (pan) — 4 arrow buttons arranged as a D-pad */}
+        <div style={{ display: "flex", "flex-direction": "column", "align-items": "center", gap: "2px" }}>
+          <button onClick={panUp}    title="Up"    style={panBtnStyle}><ChevronUp size={14} /></button>
+          <div style={{ display: "flex", gap: "2px" }}>
+            <button onClick={panLeft}  title="Left"  style={panBtnStyle}><ChevronLeft size={14} /></button>
+            <button onClick={panDown}  title="Down"  style={panBtnStyle}><ChevronDown size={14} /></button>
+            <button onClick={panRight} title="Right" style={panBtnStyle}><ChevronRight size={14} /></button>
+          </div>
+        </div>
+
         {/* Zoom controls */}
         <div
           style={{
@@ -683,7 +838,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
               width: "32px",
               height: "32px",
             }}
-            title="Zoom avant"
+            title="Zoom in"
           >
             +
           </button>
@@ -725,7 +880,7 @@ export function CampaignTreeCanvas(props: CampaignTreeCanvasProps) {
             }}
             title="Clear all nodes"
           >
-            Effacer
+            Clear
           </button>
         </Show>
       </div>

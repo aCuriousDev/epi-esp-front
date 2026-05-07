@@ -8,6 +8,7 @@ import {
   AbstractMesh,
   ShadowGenerator,
   Animation,
+  DynamicTexture,
 } from '@babylonjs/core';
 import { setRotationYRadians } from '../../components/map-editor/rotation';
 import { Tile, TileType } from '../../types';
@@ -24,6 +25,7 @@ export class GridRenderer {
   private shadowGenerator: ShadowGenerator | null;
   private tileMeshes: Map<string, Mesh | AbstractMesh> = new Map();
   private teleportOverlays: Mesh[] = [];
+  private exitArrowOverlays: Mesh[] = [];
   private mapAssets: Map<string, SavedCellData> = new Map();
   
   // Model paths for dungeon tiles
@@ -95,7 +97,10 @@ export class GridRenderer {
     if (mapId) {
       this.createTeleportOverlays(mapId);
     }
-    
+
+    // Create exit cell arrow overlays (ghost arrows at grid level)
+    this.createExitArrowOverlays(tileData);
+
     console.log(`Grid created with ${this.tileMeshes.size} tiles`);
   }
 
@@ -200,7 +205,11 @@ export class GridRenderer {
           assetData.assetPath,
           `${tileName}_asset_${i}`
         );
-        assetMesh.position.set(0, assetData.positionY, 0);
+        assetMesh.position.set(
+          assetData.offsetX ?? 0,
+          assetData.positionY,
+          assetData.offsetZ ?? 0,
+        );
         assetMesh.scaling.setAll(assetData.scale);
         setRotationYRadians(assetMesh, assetData.rotationY);
         assetMesh.parent = container;
@@ -369,6 +378,117 @@ export class GridRenderer {
   }
 
   /**
+   * Draw an amber upward arrow + exit number onto a 64×64 DynamicTexture canvas.
+   * @param exitIndex 0-based index — displayed as 1-based number on the tile.
+   *                  Pass -1 (unconfigured node fallback) to omit the number.
+   */
+  private drawExitArrowTexture(texture: DynamicTexture, exitIndex: number): void {
+    const ctx  = texture.getContext() as CanvasRenderingContext2D;
+    const size = 64;
+    ctx.clearRect(0, 0, size, size);
+
+    const clr = '#fbbf24';
+    ctx.strokeStyle = clr;
+    ctx.lineWidth   = 7;
+    ctx.lineCap     = 'round';
+    ctx.lineJoin    = 'round';
+    // Shaft (shifted up slightly to leave room for the number)
+    ctx.beginPath();
+    ctx.moveTo(32, 48); ctx.lineTo(32, 16);
+    ctx.stroke();
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(32, 10); ctx.lineTo(18, 26);
+    ctx.moveTo(32, 10); ctx.lineTo(46, 26);
+    ctx.stroke();
+    // Exit number (1-based) at the bottom of the tile
+    if (exitIndex >= 0) {
+      ctx.fillStyle    = clr;
+      ctx.font         = 'bold 18px sans-serif';
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(`${exitIndex + 1}`, 32, 62);
+    }
+    texture.update();
+  }
+
+  /**
+   * Create ghost arrow overlays on EXIT tiles so players can see them on the board.
+   * Arrows are rendered as semi-transparent flat planes at grid level (Y = 0.12),
+   * with a gentle pulsing alpha — same visual style as teleport overlays.
+   */
+  private createExitArrowOverlays(tileData: Record<string, Tile>): void {
+    // Dispose any stale overlays from a previous grid load
+    this.exitArrowOverlays.forEach(m => { if (!m.isDisposed()) m.dispose(); });
+    this.exitArrowOverlays = [];
+
+    const exitTiles = Object.values(tileData).filter(t => t.type === TileType.EXIT);
+    if (exitTiles.length === 0) return;
+
+    const matBase = new StandardMaterial('exitArrowMatBase', this.scene);
+    matBase.disableLighting = true;
+    matBase.alpha = 0.55;
+
+    exitTiles.forEach(tile => {
+      const { x, z } = tile.position;
+      const worldPos  = gridToWorld(tile.position);
+      // Parse 0-based index from exitPortName (e.g. 'exit-0' → 0, 'exit-2' → 2)
+      const portName  = tile.exitPortName ?? '';
+      const match     = portName.match(/^exit-(\d+)$/);
+      const exitIndex = match ? parseInt(match[1], 10) : -1;
+
+      // DynamicTexture — draw the arrow icon into a canvas
+      const texSize = 64;
+      const tex = new DynamicTexture(
+        `exitArrowTex_${x}_${z}`,
+        { width: texSize, height: texSize },
+        this.scene,
+        false // no mip maps needed for a small overlay
+      );
+      this.drawExitArrowTexture(tex, exitIndex);
+
+      // Clone the shared material so each tile can pulse independently
+      const mat = matBase.clone(`exitArrowMat_${x}_${z}`) as StandardMaterial;
+      mat.diffuseTexture  = tex;
+      mat.emissiveTexture = tex;
+      mat.opacityTexture  = tex;
+      tex.hasAlpha        = true;
+
+      // Flat plane at grid level, facing upward
+      const plane = MeshBuilder.CreatePlane(
+        `exit_arrow_${x}_${z}`,
+        { width: TILE_SIZE * 0.72, height: TILE_SIZE * 0.72 },
+        this.scene
+      );
+      plane.rotation.x = Math.PI / 2;
+      plane.position.set(worldPos.x, 0.13, worldPos.z);
+      plane.material   = mat;
+      plane.isPickable = false;
+
+      // Pulsing alpha animation — ghost feel
+      const pulseAnim = new Animation(
+        `exitArrowPulse_${x}_${z}`,
+        'material.alpha',
+        30,
+        Animation.ANIMATIONTYPE_FLOAT,
+        Animation.ANIMATIONLOOPMODE_CYCLE
+      );
+      pulseAnim.setKeys([
+        { frame:  0, value: 0.25 },
+        { frame: 30, value: 0.60 },
+        { frame: 60, value: 0.25 },
+      ]);
+      plane.animations.push(pulseAnim);
+      this.scene.beginAnimation(plane, 0, 60, true);
+
+      this.exitArrowOverlays.push(plane);
+    });
+
+    // Dispose the temporary base material (each tile uses its own clone)
+    matBase.dispose();
+  }
+
+  /**
    * Create glowing purple overlays on teleport cells so players can see portals
    */
   private createTeleportOverlays(mapId: string): void {
@@ -462,7 +582,10 @@ export class GridRenderer {
 
     this.teleportOverlays.forEach(m => { if (!m.isDisposed()) m.dispose(); });
     this.teleportOverlays = [];
-    
+
+    this.exitArrowOverlays.forEach(m => { if (!m.isDisposed()) m.dispose(); });
+    this.exitArrowOverlays = [];
+
     // Also clear border meshes
     const borderMeshes = this.scene.meshes.filter(m => m.name.startsWith('border_'));
     console.log(`[GridRenderer] Clearing ${borderMeshes.length} border meshes`);

@@ -105,6 +105,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
       setLoading(true);
       const data = await InventoryService.getCharacterInventory(
         props.characterId,
+        props.isMJ ? currentCampaignId() ?? undefined : undefined,
       );
       setEntries(data);
     } catch (err) {
@@ -319,38 +320,41 @@ export default function InventoryPanel(props: InventoryPanelProps) {
 
   return (
     <>
-      <div class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl">
+      <div class="bg-game-dark/60 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl">
         {/* Header */}
-        <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
-          <div class="flex items-center gap-3">
-            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/30 via-yellow-500/20 to-orange-500/30 border border-amber-400/30 flex items-center justify-center shadow-lg shadow-amber-500/10">
-              <Package class="w-6 h-6 text-amber-300" />
+        <div class="flex items-center justify-between mb-3 gap-2">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500/30 to-orange-500/30 border border-amber-400/30 flex items-center justify-center">
+              <Package class="w-4 h-4 text-amber-300" />
             </div>
-            <h2 class="font-display text-2xl text-white leading-tight">
-              Inventory
+            <h2 class="font-display text-lg text-white leading-tight">
+              Inventaire
             </h2>
+            <Show when={totalItems() > 0}>
+              <span class="text-xs text-slate-500 font-medium">({totalItems()})</span>
+            </Show>
           </div>
 
           <Show when={props.isMJ}>
             <button
               onClick={() => setShowCatalog(true)}
-              class="group px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600/80 to-indigo-600/80 hover:from-purple-500 hover:to-indigo-500 border border-purple-400/30 text-white text-sm font-semibold flex items-center gap-2 transition-all shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40"
+              class="group px-3 py-1.5 rounded-lg bg-purple-600/70 hover:bg-purple-500/80 border border-purple-400/30 text-white text-xs font-semibold flex items-center gap-1.5 transition-all"
             >
-              <Gift class="w-4 h-4 group-hover:rotate-12 transition-transform" />
-              Don du MJ
+              <Gift class="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
+              DM gift
             </button>
           </Show>
         </div>
 
         {/* Category filter chips */}
-        <div class="flex flex-wrap gap-2 mb-5">
+        <div class="flex flex-wrap gap-1.5 mb-3">
           <For each={CATEGORY_FILTERS}>
             {(f) => (
               <button
                 onClick={() => setCategoryFilter(f.value)}
-                class={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                class={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all ${
                   categoryFilter() === f.value
-                    ? "bg-white/15 border-white/30 text-white shadow-sm"
+                    ? "bg-white/15 border-white/30 text-white"
                     : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-slate-200"
                 }`}
               >
@@ -390,7 +394,7 @@ export default function InventoryPanel(props: InventoryPanelProps) {
               </div>
             }
           >
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div class="flex flex-col gap-1.5">
               <For each={filteredEntries()}>
                 {(entry) => {
                   const style = getCategoryStyle(entry.item.category);
@@ -398,69 +402,64 @@ export default function InventoryPanel(props: InventoryPanelProps) {
                   const isHighlighted = () => highlightId() === entry.id;
                   return (
                     <div
-                      class={`group relative rounded-2xl overflow-hidden border border-white/10 ring-1 ${
+                      class={`group flex items-center gap-3 px-3 py-2.5 rounded-xl border border-white/8 ring-1 ${
                         style.ring
-                      } bg-gradient-to-br ${style.gradient} backdrop-blur-sm p-4 shadow-lg ${
-                        style.glow
-                      } transition-all duration-500 ${
+                      } bg-gradient-to-r ${style.gradient} backdrop-blur-sm transition-all duration-300 ${
                         isRemoving()
-                          ? "opacity-0 scale-75 -translate-y-4 blur-sm"
+                          ? "opacity-0 scale-95 blur-sm"
                           : isHighlighted()
-                            ? "scale-[1.05] ring-4 ring-amber-300/80 shadow-2xl shadow-amber-500/50 animate-pulse"
-                            : "hover:scale-[1.02] hover:ring-2"
+                            ? "ring-2 ring-amber-300/70 shadow-lg shadow-amber-500/30"
+                            : "hover:border-white/15 hover:bg-white/5"
                       }`}
                     >
-                      {/* Category badge */}
-                      <div
-                        class={`absolute top-2 left-2 text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full border ${style.badge}`}
-                      >
-                        {style.label}
+                      {/* Icon */}
+                      <div class={`flex-shrink-0 w-10 h-10 rounded-lg bg-black/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-200`}>
+                        <ItemIcon iconKey={entry.item.icon} size="1.6rem" class={style.text} />
                       </div>
 
-                      {/* Top-right: quantity badge + trash icon */}
-                      <div class="absolute top-2 right-2 flex items-center gap-1.5">
+                      {/* Name + badge + desc */}
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                          <span class={`font-semibold text-sm leading-tight ${style.text}`}>
+                            {entry.item.name}
+                          </span>
+                          <span class={`text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-full border flex-shrink-0 ${style.badge}`}>
+                            {style.label}
+                          </span>
+                        </div>
+                        <p class="text-[11px] text-slate-400 leading-tight mt-0.5 truncate">
+                          {entry.item.description}
+                        </p>
+                      </div>
+
+                      {/* Right: quantity + actions */}
+                      <div class="flex-shrink-0 flex items-center gap-1.5">
                         <Show when={entry.quantity > 1}>
-                          <div class="min-w-[24px] h-6 px-2 rounded-full bg-black/50 backdrop-blur border border-white/20 flex items-center justify-center text-xs font-bold text-white">
+                          <div class="min-w-[22px] h-5 px-1.5 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-[10px] font-bold text-white">
                             ×{entry.quantity}
                           </div>
+                        </Show>
+                        <Show when={entry.item.category === "Consumable" && !props.isMJ}>
+                          <button
+                            onClick={() => handleUse(entry)}
+                            disabled={usingId() === entry.id}
+                            class="h-6 px-2 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/30 border border-emerald-400/30 text-[10px] font-semibold text-emerald-300 flex items-center gap-1 transition-colors disabled:opacity-40"
+                            title="Utiliser"
+                          >
+                            <Beaker class="w-3 h-3" />
+                            {usingId() === entry.id ? "…" : "Use"}
+                          </button>
                         </Show>
                         <Show when={props.isMJ}>
                           <button
                             onClick={() => handleDrop(entry)}
-                            class="w-6 h-6 rounded-full bg-red-500/20 hover:bg-red-500/40 border border-red-500/30 flex items-center justify-center transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
-                            title="Drop"
+                            class="w-6 h-6 rounded-lg bg-red-500/15 hover:bg-red-500/35 border border-red-500/30 flex items-center justify-center transition-colors opacity-0 group-hover:opacity-100"
+                            title="Remove"
                           >
                             <Trash2 class="w-3 h-3 text-red-400" />
                           </button>
                         </Show>
                       </div>
-
-                      {/* Item icon */}
-                      <div class="flex items-center justify-center h-20 mt-4 mb-3 drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)] group-hover:scale-110 transition-transform duration-300">
-                        <ItemIcon iconKey={entry.item.icon} size="4rem" class={style.text} />
-                      </div>
-
-                      {/* Name + desc */}
-                      <div class="text-center">
-                        <div class={`font-bold text-sm ${style.text}`}>
-                          {entry.item.name}
-                        </div>
-                        <div class="text-[11px] text-slate-300/80 mt-1 line-clamp-2 min-h-[28px]">
-                          {entry.item.description}
-                        </div>
-                      </div>
-
-                      {/* Use button on consumables (owner-only — the back enforces) */}
-                      <Show when={entry.item.category === "Consumable"}>
-                        <button
-                          onClick={() => handleUse(entry)}
-                          disabled={usingId() === entry.id}
-                          class="mt-2 py-1 w-full rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/30 text-[10px] font-semibold text-emerald-200 flex items-center justify-center gap-1 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <Beaker class="w-3 h-3" />
-                          {usingId() === entry.id ? "…" : "Use"}
-                        </button>
-                      </Show>
                     </div>
                   );
                 }}

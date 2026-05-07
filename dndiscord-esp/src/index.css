@@ -220,6 +220,26 @@ body {
   background: transparent !important;
 }
 
+/* Toast "Tour de…" — glisse depuis le haut */
+@keyframes fadeSlideDown {
+  from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Cacher les scrollbars du canvas draw2d tout en gardant le scroll actif */
+.campaign-tree-canvas-scroll {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE / Edge */
+  cursor: default;
+}
+.campaign-tree-canvas-scroll::-webkit-scrollbar {
+  display: none;                /* Chrome / Safari / Opera */
+}
+/* Curseur "main" sur le fond vide pour indiquer le pan */
+.campaign-tree-canvas-scroll.is-panning {
+  cursor: grabbing !important;
+}
+
 .menu-button-primary {
 	@apply menu-button;
 }

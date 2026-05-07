@@ -8,6 +8,7 @@ import {
   Show,
 } from "solid-js";
 import { Copy, Check } from "lucide-solid";
+import { useNavigate } from "@solidjs/router";
 import { sessionState, isHost, clearSession } from "../stores/session.store";
 import { useGameShellExit } from "../layouts/GameShell";
 import { PlayerRole, type PlayerInfo } from "../types/multiplayer";
@@ -21,7 +22,7 @@ import {
   CharacterService,
   type CharacterDto,
 } from "../services/character.service";
-import { getAllMaps, loadMap as loadMapLocal } from "../services/mapStorage";
+import { fetchMine, loadMap as loadMapLocal, ensureMapCached } from "../services/mapRepository";
 import { MapService } from "../services/map.service";
 import type { GameStartedPayload } from "../types/multiplayer";
 import { safeConfirm } from "../services/ui/confirm";
@@ -39,14 +40,17 @@ const TEMPLATE_LABELS: Record<string, string> = {
 };
 
 export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
+  const navigate = useNavigate();
   const [characters, setCharacters] = createSignal<CharacterDto[]>([]);
   const [selectedCharId, setSelectedCharId] = createSignal<string | null>(null);
   type DefaultTemplate = "warrior" | "mage" | "archer";
-  const [selectedTemplate, setSelectedTemplate] = createSignal<DefaultTemplate | null>(null);
+  const [selectedTemplate, setSelectedTemplate] =
+    createSignal<DefaultTemplate | null>(null);
   const [maps, setMaps] = createSignal<Array<{ id: string; name: string }>>([]);
   const [selectedMapId, setSelectedMapId] = createSignal<string | null>(null);
   const [copied, setCopied] = createSignal(false);
   const [starting, setStarting] = createSignal(false);
+  const [startError, setStartError] = createSignal<string | null>(null);
 
   // Cached character details for every player in the lobby. Lazy-loaded as
   // players pick a character so the row can render "Name · Class · Lvl X"
@@ -71,17 +75,27 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
       // No characters available
     }
 
-    const allMaps = getAllMaps();
-    allMaps.sort((a, b) => b.updatedAt - a.updatedAt);
-    setMaps(allMaps);
+    fetchMine().then(allMaps => setMaps(allMaps));
   });
 
   // React to gameStartedPayload
   createEffect(() => {
     const payload = sessionState.gameStartedPayload;
-    if (payload) {
-      props.onGameStart(payload);
+    if (!payload) return;
+
+    if (payload.mapId === 'campaign') {
+      // Le MJ a lancé une session avec arbre de scénario.
+      // LobbyScreen ne doit PAS appeler onGameStart (qui chargerait 'campaign'
+      // comme une vraie mapId → loadMap('campaign') = null → carte par défaut).
+      // On redirige vers CampaignSessionPage qui gère le runner de scénario.
+      const campaignId = session()?.campaignId;
+      if (campaignId) {
+        navigate(`/campaigns/${campaignId}/session`);
+        return;
+      }
     }
+
+    props.onGameStart(payload);
   });
 
   // Fetch character details for every player who has selected a real
@@ -147,7 +161,8 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
 
   const handleTemplateSelect = async (template: DefaultTemplate) => {
     // Toggle off if the same preset is tapped twice.
-    const next: DefaultTemplate | null = selectedTemplate() === template ? null : template;
+    const next: DefaultTemplate | null =
+      selectedTemplate() === template ? null : template;
     setSelectedTemplate(next);
     setSelectedCharId(null);
     try {
@@ -157,28 +172,53 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
     }
   };
 
-  const DEFAULT_TEMPLATES: Array<{ id: DefaultTemplate; label: string; blurb: string }> = [
-    { id: "warrior", label: "⚔️ Warrior", blurb: "120 HP · powerful melee" },
-    { id: "mage",    label: "🔮 Mage",    blurb: "80 HP · ranged damage" },
-    { id: "archer",  label: "🏹 Archer",  blurb: "100 HP · mobile, long range" },
+  const DEFAULT_TEMPLATES: Array<{
+    id: DefaultTemplate;
+    label: string;
+    blurb: string;
+  }> = [
+    { id: "warrior", label: "⚔️ Fighter", blurb: "120 HP · powerful melee" },
+    { id: "mage", label: "🔮 Mage", blurb: "80 HP · ranged damage" },
+    {
+      id: "archer",
+      label: "🏹 Archer",
+      blurb: "100 HP · mobile, long range",
+    },
   ];
 
   const handleStartGame = async () => {
+    setStartError(null);
     const mapId = selectedMapId();
     if (!mapId && !safeConfirm("No map selected. Use the default map?")) return;
     setStarting(true);
     try {
+      // S'assurer que la map est en cache localStorage avant startGameHub.
+      // startGame (multiplayer.service) appelle loadMap(mapId) pour inclure le
+      // blob dans le payload GameStarted. Si la map est uniquement en DB (jamais
+      // téléchargée), loadMap retourne null → mapData absent → tous les clients
+      // chargent la grille par défaut.
+      const resolvedMapId = mapId ?? "default";
+      if (resolvedMapId !== "default") {
+        const session = sessionState.session;
+        await ensureMapCached(resolvedMapId, session?.campaignId ?? undefined);
+      }
+
       // Campaign sessions only: auto-push the chosen map to the campaign's
       // server-side map pool so the DM's "Cartes" tab is populated straight
       // away, without needing the manual "Importer mes cartes locales" step.
       // Best-effort — any failure here is swallowed so the game still starts.
       const session = sessionState.session;
-      if (session?.campaignId && mapId && mapId !== "default") {
-        await maybePushMapToCampaign(session.campaignId, mapId);
+      if (session?.campaignId && resolvedMapId !== "default") {
+        await maybePushMapToCampaign(session.campaignId, resolvedMapId);
       }
-      await startGameHub(mapId ?? "default");
+      await startGameHub(resolvedMapId);
     } catch (err: any) {
       console.error("[Lobby] startGame failed:", err);
+      setStartError(
+        err?.message ??
+          err?.toString?.() ??
+          "Impossible de lancer la partie (erreur inconnue).",
+      );
       setStarting(false);
     }
   };
@@ -186,16 +226,27 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
   /** Upload the local map to the campaign if the server doesn't already have
    * one with the same name. Never throws — the start-game flow proceeds on
    * any error. */
-  async function maybePushMapToCampaign(campaignId: string, mapId: string): Promise<void> {
+  async function maybePushMapToCampaign(
+    campaignId: string,
+    mapId: string,
+  ): Promise<void> {
     try {
       const local = loadMapLocal(mapId);
       if (!local) return;
       const existing = await MapService.list(campaignId);
-      const alreadyThere = existing.some(m => m.name.toLowerCase() === local.name.toLowerCase());
+      const alreadyThere = existing.some(
+        (m) => m.name.toLowerCase() === local.name.toLowerCase(),
+      );
       if (alreadyThere) return;
-      await MapService.create(campaignId, { name: local.name, data: JSON.stringify(local) });
+      await MapService.create(campaignId, {
+        name: local.name,
+        data: JSON.stringify(local),
+      });
     } catch (err) {
-      console.warn("[Lobby] maybePushMapToCampaign: best-effort seed failed", err);
+      console.warn(
+        "[Lobby] maybePushMapToCampaign: best-effort seed failed",
+        err,
+      );
     }
   }
 
@@ -207,7 +258,10 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
       // hub throws we still want local state cleaned up, otherwise the user
       // ends up on the menu screen with a ghost session banner. Log for dev
       // visibility; clear unconditionally.
-      console.warn("[Lobby] leaveSession hub call failed, clearing local state", err);
+      console.warn(
+        "[Lobby] leaveSession hub call failed, clearing local state",
+        err,
+      );
       clearSession();
     }
     props.onLeave();
@@ -224,8 +278,10 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
   });
 
   const playerCount = () => session()?.players.length ?? 0;
+  const MIN_PLAYERS_TO_START = 2;
   // Allow host (DM) to force-start alone for testing
-  const canStart = () => (amHost() || playerCount() >= 2) && !starting();
+  const canStart = () =>
+    (amHost() || playerCount() >= MIN_PLAYERS_TO_START) && !starting();
 
   /** Short summary shown next to a player's name in the lobby list. Prefers
    *  fetched class+level, falls back to template label, then to the bare
@@ -304,7 +360,9 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                           ? "bg-white/5 border-white/5 cursor-pointer hover:bg-white/10 hover:border-white/15 focus:outline-none focus:ring-2 focus:ring-amber-400/40"
                           : "bg-white/5 border-white/5"
                       }`}
-                      title={clickable ? "View character sheet" : undefined}
+                      title={
+                        clickable ? "Voir la fiche personnage" : undefined
+                      }
                     >
                       <div class="flex items-center gap-3">
                         <div
@@ -347,7 +405,9 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
               {/* Quickstart presets — no persisted character required. Each preset
                   maps server-side to a different class with its own stats
                   (BuildDefaultAssignment in GameHub). */}
-              <p class="text-xs text-white/60 uppercase tracking-wider mb-2">Quick start</p>
+              <p class="text-xs text-white/60 uppercase tracking-wider mb-2">
+                Quick start
+              </p>
               <div class="grid grid-cols-3 gap-2 mb-4">
                 <For each={DEFAULT_TEMPLATES}>
                   {(tpl) => (
@@ -367,7 +427,9 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
               </div>
 
               <Show when={characters().length > 0}>
-                <p class="text-xs text-white/60 uppercase tracking-wider mb-2">My characters</p>
+                <p class="text-xs text-white/60 uppercase tracking-wider mb-2">
+                  Mes personnages
+                </p>
                 <div class="space-y-2">
                   <For each={characters()}>
                     {(char) => (
@@ -382,7 +444,8 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                         <div class="flex justify-between items-center">
                           <span class="font-medium">{char.name}</span>
                           <span class="text-sm text-slate-400">
-                            {char.class} Lvl {char.level} · {char.maxHitPoints} HP
+                            {char.class} Nv.{char.level} - {char.maxHitPoints}{" "}
+                            PV
                           </span>
                         </div>
                       </button>
@@ -432,9 +495,15 @@ export const LobbyScreen: Component<LobbyScreenProps> = (props) => {
                   ? "Starting..."
                   : `Start game (${playerCount()} players)`}
               </button>
-              <Show when={playerCount() < 2 && !amHost()}>
+              <Show when={playerCount() < MIN_PLAYERS_TO_START && !amHost()}>
                 <p class="text-center text-sm text-slate-400 mt-2">
-                  At least 2 players required to start.
+                  Au moins {MIN_PLAYERS_TO_START} joueur
+                  {MIN_PLAYERS_TO_START > 1 ? "s" : ""} requis pour commencer.
+                </p>
+              </Show>
+              <Show when={startError()}>
+                <p class="text-center text-sm text-red-200 mt-3" role="alert">
+                  {startError()}
                 </p>
               </Show>
             </div>

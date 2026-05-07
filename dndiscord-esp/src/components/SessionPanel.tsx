@@ -179,7 +179,7 @@ export const SessionPanel: Component = () => {
             onClick={handleLeave}
           >
             <LogOut class="w-4 h-4" />
-            Quitter la session
+            Leave session
           </button>
         </div>
       </Show>

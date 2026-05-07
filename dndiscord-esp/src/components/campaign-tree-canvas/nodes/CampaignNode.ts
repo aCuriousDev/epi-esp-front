@@ -26,6 +26,14 @@ export abstract class CampaignNode extends draw2d.shape.composite.Group {
   public x: number;
   public y: number;
 
+  /**
+   * Par défaut, les nodes du canvas doivent être supprimables.
+   * `StartNode` redéfinit cette méthode pour bloquer la suppression.
+   */
+  public isDeleteable(): boolean {
+    return true;
+  }
+
   constructor(x: number, y: number, data: BaseNodeData) {
     super();
 

@@ -49,7 +49,7 @@ export interface CampaignFilterRequest {
   search?: string;
   status?: CampaignStatus;
   isPublic?: boolean;
-  roleFilter?: "All" | "AsDungeonMaster" | "AsPlayer";
+  roleFilter?: "All" | "AsDungeonMaster" | "AsPlayer" | "AsMember";
   sortBy?: "CreatedAt" | "UpdatedAt" | "LastPlayedAt" | "Name" | "MemberCount";
   sortDescending?: boolean;
 }
@@ -74,7 +74,7 @@ export interface UpdateMemberRequest {
 }
 
 export interface UpdateCampaignManagerRequest {
-  campaignTreeDefinition:string
+  campaignTreeDefinition: string;
 }
 
 export interface CampaignListResponse {
@@ -158,34 +158,41 @@ export const CampaignService = {
   /**
    * Create a new campaign
    */
-  async createCampaign(request: CreateCampaignRequest): Promise<CampaignDetailResponse> {
+  async createCampaign(
+    request: CreateCampaignRequest,
+  ): Promise<CampaignDetailResponse> {
     const response = await axios.post<CampaignDetailResponse>(
       `${API_URL}/api/campaigns`,
       request,
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
     return response.data;
   },
 
-  async editCampaignManager(campaignId : string,request:UpdateCampaignManagerRequest) : Promise<CampaignDetailResponse>{
-     const response = await axios.put<CampaignDetailResponse>(
+  async editCampaignManager(
+    campaignId: string,
+    request: UpdateCampaignManagerRequest,
+  ): Promise<CampaignDetailResponse> {
+    const response = await axios.put<CampaignDetailResponse>(
       `${API_URL}/api/campaigns/${campaignId}/manager`,
       request,
-      { headers: getAuthHeaders() }
-      );
-      return response.data;
+      { headers: getAuthHeaders() },
+    );
+    return response.data;
   },
 
   /**
    * Get paginated list of campaigns with filters
    */
-  async listCampaigns(filters?: CampaignFilterRequest): Promise<CampaignListResponse> {
+  async listCampaigns(
+    filters?: CampaignFilterRequest,
+  ): Promise<CampaignListResponse> {
     const response = await axios.get<CampaignListResponse>(
       `${API_URL}/api/campaigns`,
       {
         headers: getAuthHeaders(),
         params: filters,
-      }
+      },
     );
     return response.data;
   },
@@ -196,7 +203,7 @@ export const CampaignService = {
   async getCampaign(id: string): Promise<CampaignDetailResponse> {
     const response = await axios.get<CampaignDetailResponse>(
       `${API_URL}/api/campaigns/${id}`,
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
     return response.data;
   },
@@ -206,12 +213,12 @@ export const CampaignService = {
    */
   async updateCampaign(
     id: string,
-    request: UpdateCampaignRequest
+    request: UpdateCampaignRequest,
   ): Promise<CampaignDetailResponse> {
     const response = await axios.put<CampaignDetailResponse>(
       `${API_URL}/api/campaigns/${id}`,
       request,
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
     return response.data;
   },
@@ -231,12 +238,12 @@ export const CampaignService = {
    */
   async generateInviteCode(
     campaignId: string,
-    request?: GenerateInviteCodeRequest
+    request?: GenerateInviteCodeRequest,
   ): Promise<InviteCodeResponse> {
     const response = await axios.post<InviteCodeResponse>(
       `${API_URL}/api/campaigns/${campaignId}/invite`,
       request || {},
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
     return response.data;
   },
@@ -244,11 +251,13 @@ export const CampaignService = {
   /**
    * Join a campaign using an invite code
    */
-  async joinCampaign(request: JoinCampaignRequest): Promise<CampaignDetailResponse> {
+  async joinCampaign(
+    request: JoinCampaignRequest,
+  ): Promise<CampaignDetailResponse> {
     const response = await axios.post<CampaignDetailResponse>(
       `${API_URL}/api/campaigns/join`,
       request,
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
     return response.data;
   },
@@ -256,10 +265,12 @@ export const CampaignService = {
   /**
    * Get campaign members
    */
-  async getCampaignMembers(campaignId: string): Promise<CampaignMemberListResponse> {
+  async getCampaignMembers(
+    campaignId: string,
+  ): Promise<CampaignMemberListResponse> {
     const response = await axios.get<CampaignMemberListResponse>(
       `${API_URL}/api/campaigns/${campaignId}/members`,
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
     return response.data;
   },
@@ -269,12 +280,12 @@ export const CampaignService = {
    */
   async addMember(
     campaignId: string,
-    request: AddMemberRequest
+    request: AddMemberRequest,
   ): Promise<CampaignMemberResponse> {
     const response = await axios.post<CampaignMemberResponse>(
       `${API_URL}/api/campaigns/${campaignId}/members`,
       request,
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
     return response.data;
   },
@@ -285,12 +296,12 @@ export const CampaignService = {
   async updateMember(
     campaignId: string,
     memberId: string,
-    request: UpdateMemberRequest
+    request: UpdateMemberRequest,
   ): Promise<CampaignMemberResponse> {
     const response = await axios.put<CampaignMemberResponse>(
       `${API_URL}/api/campaigns/${campaignId}/members/${memberId}`,
       request,
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
     return response.data;
   },
@@ -299,9 +310,24 @@ export const CampaignService = {
    * Remove a member from a campaign
    */
   async removeMember(campaignId: string, memberId: string): Promise<void> {
-    await axios.delete(`${API_URL}/api/campaigns/${campaignId}/members/${memberId}`, {
-      headers: getAuthHeaders(),
-    });
+    await axios.delete(
+      `${API_URL}/api/campaigns/${campaignId}/members/${memberId}`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+  },
+
+  /**
+   * Join a public campaign directly by its ID (no invite code required).
+   */
+  async joinPublicCampaign(campaignId: string): Promise<CampaignDetailResponse> {
+    const response = await axios.post<CampaignDetailResponse>(
+      `${API_URL}/api/campaigns/${campaignId}/join-public`,
+      {},
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
   },
 
   /**
@@ -311,7 +337,7 @@ export const CampaignService = {
     await axios.post(
       `${API_URL}/api/campaigns/${campaignId}/leave`,
       {},
-      { headers: getAuthHeaders() }
+      { headers: getAuthHeaders() },
     );
   },
 

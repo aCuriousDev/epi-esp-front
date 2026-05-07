@@ -1,27 +1,50 @@
-import { Component, createSignal, onMount, Show, For, Switch, Match } from 'solid-js';
+import { Component, createSignal, createEffect, onMount, onCleanup, Show, For, Switch, Match } from 'solid-js';
 import { useNavigate, useParams } from '@solidjs/router';
-import { BookOpen, Map as MapIcon, Sword, ChevronRight, Loader2, Play } from 'lucide-solid';
+import { ArrowLeft, BookOpen, Map as MapIcon, Skull, Sword, Trophy, ChevronRight, Loader2, Play, Package, X } from 'lucide-solid';
 import { writeLastCampaignId } from '../hooks/useLastCampaign';
 import {
   CampaignService,
   type AdvanceSessionRequest,
+  type GameSessionResponse,
 } from '@/services/campaign.service';
+import { CharacterService } from '@/services/character.service';
 import { setSessionMapConfig } from '@/stores/session-map.store';
-import { getAllMaps } from '@/services/mapStorage';
+import { ensureMapCached } from '@/services/mapRepository';
+import { MapService } from '@/services/map.service';
+import {
+  voteForChoice,
+  dmAdvanceNode,
+  dmLaunchCampaignMap,
+  subscribeCampaign,
+  unsubscribeCampaign,
+  selectCharacter,
+  broadcastCampaignSessionCompleted,
+} from '@/services/signalr/multiplayer.service';
+import { signalRService } from '@/services/signalr/SignalRService';
+import { ensureMultiplayerHandlersRegistered } from '@/services/signalr/multiplayer.service';
+import { sessionState, isHost, getHubUserId } from '@/stores/session.store';
+import { authStore } from '@/stores/auth.store';
+import { PlayerRole } from '@/types/multiplayer';
+import InventoryPanel from '@/components/InventoryPanel';
 
 // ─── Tree types ───────────────────────────────────────────────────────────────
 
 interface SceneData   { id: string; type: 'scene';   title: string; text: string; }
 interface ChoicesData { id: string; type: 'choices'; title: string; text: string; choices: string[]; }
-interface CombatData  { id: string; type: 'combat';  title: string; selectedMap?: string; difficulty?: string; villains?: any[]; }
 interface MapData     {
   id: string; type: 'map'; title: string;
   selectedMap?: string;
+  /** Nom de la carte stocké dans le nœud — disponible pour tous les clients
+   *  sans lookup localStorage (les joueurs n'ont pas la map en local). */
+  selectedMapName?: string;
   spawnPoint?: { x: number; z: number };
-  exitCells?:  { x: number; z: number }[];
+  exitCells?:  { x: number; z: number; exitIndex?: number }[];
   trapCells?:  { x: number; z: number }[];
 }
-type NodeData = SceneData | ChoicesData | CombatData | MapData;
+interface CombatData  { id: string; type: 'combat'; title: string; }
+interface VictoryData { id: string; type: 'victory'; title: string; }
+interface DefeatData  { id: string; type: 'defeat';  title: string; }
+type NodeData = SceneData | ChoicesData | MapData | CombatData | VictoryData | DefeatData;
 
 interface TreeConn { source: { node: string; port: string }; target: { node: string; port: string }; }
 interface ParsedTree {
@@ -68,6 +91,34 @@ function parseTree(json: string): ParsedTree {
   return { nodeMap, edges, firstNodeId };
 }
 
+// ─── Fix #2 — dedup createSession ────────────────────────────────────────────
+// Si le composant monte deux fois simultanément (navigation SPA rapide, hot-
+// reload), les deux instances partagent la même Promise et n'écrivent qu'une
+// seule session en base.  La Map est nettoyée 5 s après résolution pour ne pas
+// bloquer une vraie nouvelle session lors d'une visite ultérieure.
+const _pendingSessionCreate = new Map<string, Promise<GameSessionResponse>>();
+
+// ─── Fix #1 — waitUntilInSession ──────────────────────────────────────────────
+// Attend que sessionState.session soit non-null (le joueur est confirmé dans la
+// session SignalR) avant d'appeler SelectCharacter.  Après une reconnexion, le
+// hub ré-ajoute le joueur de façon asynchrone ; appeler SelectCharacter trop tôt
+// laisse selectedCharacterId vide côté serveur et l'inventaire DM reste vide.
+function waitUntilInSession(timeoutMs = 3_000): Promise<boolean> {
+  return new Promise(resolve => {
+    if (sessionState.session) { resolve(true); return; }
+    const start = Date.now();
+    let delay = 50;
+    let tid: number | undefined;
+    const tick = () => {
+      if (sessionState.session) { if (tid) clearTimeout(tid); resolve(true); return; }
+      if (Date.now() - start >= timeoutMs) { if (tid) clearTimeout(tid); resolve(false); return; }
+      delay = Math.min(Math.floor(delay * 1.5), 500);
+      tid = window.setTimeout(tick, delay);
+    };
+    tid = window.setTimeout(tick, delay);
+  });
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const CampaignSessionPage: Component = () => {
@@ -76,7 +127,17 @@ const CampaignSessionPage: Component = () => {
 
   const [loading, setLoading]               = createSignal(true);
   const [error, setError]                   = createSignal<string | null>(null);
+
+  // true quand le joueur arrive via mapExit=next (retour entre deux cartes).
+  // On masque tout contenu jusqu'à la fin du chargement : CampaignMapLaunched
+  // naviguera vers la nouvelle carte avant qu'on affiche quoi que ce soit.
+  // Sans ce flag, l'écran "Prochaine carte / En attente du MJ" flashe
+  // brièvement avant la redirection.
+  const mapExitPending = !isHost() &&
+    new URLSearchParams(window.location.search).get('mapExit') === 'next';
   const [campaignTitle, setCampaignTitle]   = createSignal('');
+  /** UUID → nom de carte, chargé depuis /api/campaigns/:id/maps */
+  const [campaignMapNames, setCampaignMapNames] = createSignal<Map<string, string>>(new Map());
   const [sessionId, setSessionId]           = createSignal<string | null>(null);
   const [isOffline, setIsOffline]           = createSignal(false);
   const [isSaving, setIsSaving]             = createSignal(false);
@@ -84,10 +145,233 @@ const CampaignSessionPage: Component = () => {
   const [currentNodeId, setCurrentNodeId]   = createSignal<string | undefined>();
   const [history, setHistory]               = createSignal<string[]>([]);
 
+  // ── Inventaire ────────────────────────────────────────────────────────────
+  const [showInventory,    setShowInventory   ] = createSignal(false);
+  const [myCharacterId,    setMyCharacterId   ] = createSignal<string | null>(null);
+  const [dmSelectedPlayer, setDmSelectedPlayer] = createSignal<string | null>(null);
+
+  /** Joueurs connectés (hors MJ) ayant un personnage sélectionné. */
+  const playersWithCharacter = () =>
+    (sessionState.session?.players ?? []).filter(
+      p => p.role !== PlayerRole.DungeonMaster && p.selectedCharacterId
+    );
+
+  // ── Votes des joueurs (bloc Choices) ──────────────────────────────────────
+  // Map<userId, choiceIndex> pour le nœud courant
+  const [playerVotes, setPlayerVotes] = createSignal<Record<string, { name: string; index: number }>>({});
+  // Verrou : évite qu'un double-déclenchement de checkConsensus (handleVote +
+  // ChoiceVoted broadcast) appelle followPort deux fois pour le même nœud.
+  const [votingLocked, setVotingLocked] = createSignal(false);
+  // Buffer for NodeAdvanced events that arrive before currentNodeId is set (page still loading).
+  const [pendingNodeAdvance, setPendingNodeAdvance] = createSignal<{ from: string; next: string } | null>(null);
+  const myUserId = () => authStore.user()?.id ?? '';
+  // Pour les votes, utiliser le Guid du hub (même format que ChoiceVoted.userId côté serveur).
+  // authStore.user().id est le Discord ID ; le hub envoie un Guid → deux clés différentes → double comptage.
+  const myVoteKey = () => getHubUserId() ?? myUserId();
+
+
   onMount(async () => {
+    writeLastCampaignId(params.id);
+    // ── SignalR subscription for votes ──────────────────────────────────────
+    // subscribeCampaign is kept in its own try/catch so a server-side binding
+    // error (e.g. InvalidDataException on Guid) does NOT abort handler
+    // registration below. Handlers must be active even if the subscribe
+    // invocation temporarily fails — a retry will recover the subscription.
+    try {
+      if (!signalRService.isConnected) {
+        await signalRService.connect();
+        ensureMultiplayerHandlersRegistered();
+      }
+      await subscribeCampaign(params.id);
+    } catch (subErr) {
+      console.warn('[CampaignSession] subscribeCampaign failed, will retry once:', subErr);
+      // Retry once after a short delay — the hub may not be ready yet on first connect.
+      setTimeout(() => {
+        subscribeCampaign(params.id).catch(e =>
+          console.warn('[CampaignSession] subscribeCampaign retry failed:', e)
+        );
+      }, 2000);
+    }
+
+    try {
+      // ── Sélection automatique du personnage (joueurs seulement) ─────────
+      // Permet à l'InventoryPanel de connaître le characterId de chaque joueur
+      // via sessionState.session.players[].selectedCharacterId.
+      // Fix #1 : on charge d'abord le personnage (pour l'inventaire local),
+      // puis on attend d'être confirmé dans la session SignalR avant d'appeler
+      // SelectCharacter — évite un selectedCharacterId vide après reconnexion.
+      if (!isHost()) {
+        try {
+          const chars = await CharacterService.getMyCharacters();
+          if (chars.length > 0) {
+            setMyCharacterId(chars[0].id);
+            const inSession = await waitUntilInSession(3_000);
+            if (inSession) {
+              await selectCharacter(chars[0].id);
+            }
+            // Si hors session (navigation directe sans lobby), myCharacterId
+            // reste défini pour l'inventaire local ; seul selectedCharacterId
+            // côté serveur sera absent jusqu'à un rejoin.
+          }
+        } catch (e) {
+          console.warn('[CampaignSession] Could not auto-select character:', e);
+        }
+      }
+
+      const voteHandler = (data: Record<string, unknown>) => {
+        const nodeId      = String(data.nodeId      ?? data.NodeId      ?? '');
+        const userId      = String(data.userId      ?? data.UserId      ?? '');
+        const userName    = String(data.userName    ?? data.UserName    ?? 'Joueur');
+        const choiceIndex = Number(data.choiceIndex ?? data.ChoiceIndex ?? -1);
+
+        // Ignore votes that belong to a different node (stale events)
+        if (nodeId !== currentNodeId()) return;
+
+        if (choiceIndex < 0) {
+          // Vote annulé
+          setPlayerVotes(prev => {
+            const next = { ...prev };
+            delete next[userId];
+            return next;
+          });
+        } else {
+          setPlayerVotes(prev => ({ ...prev, [userId]: { name: userName, index: choiceIndex } }));
+        }
+
+        // Les votes sont purement indicatifs — pas de checkConsensus.
+        // Le MJ confirme le choix final via le bouton "Confirmer".
+      };
+
+      signalRService.on('ChoiceVoted', voteHandler);
+
+      // ── Avancement de nœud par le MJ (scène / carte) ─────────────────────
+      // Le MJ avance localement via followPort, puis diffuse NodeAdvanced.
+      // Les joueurs reçoivent cet événement et se téléportent au nœud cible.
+      // La garde fromNodeId évite un double-avancement si le joueur a déjà
+      // cliqué "Continuer" lui-même (nœud carte accessible à tous).
+      const nodeAdvancedHandler = (data: Record<string, unknown>) => {
+        if (isHost()) return; // le MJ a déjà avancé localement
+        const from = String(data.fromNodeId ?? data.FromNodeId ?? '');
+        const next = String(data.nextNodeId ?? data.NextNodeId ?? '');
+        if (!next) return;
+        const curId = currentNodeId();
+        if (curId === undefined) {
+          // Page is still loading — buffer the event so the createEffect can
+          // apply it once currentNodeId is initialised. Without this, events
+          // that arrive during the async DB fetch are silently dropped and the
+          // player gets stuck on the previous map-node waiting screen.
+          setPendingNodeAdvance({ from, next });
+          return;
+        }
+        if (from && curId !== from) return; // pas sur le bon nœud
+        setHistory(h => {
+          const cur = currentNodeId();
+          return cur ? [...h, cur] : h;
+        });
+        setCurrentNodeId(next);
+      };
+      signalRService.on('NodeAdvanced', nodeAdvancedHandler);
+
+      // ── Lancement de carte par le MJ ─────────────────────────────────────
+      // Le MJ navigue lui-même dans launchMap(). Les joueurs reçoivent cet
+      // événement, chargent la carte en cache et naviguent vers le board.
+      const mapLaunchedHandler = async (data: Record<string, unknown>) => {
+        if (isHost()) return; // le MJ est déjà en train de naviguer
+        const raw = String(data.configJson ?? data.ConfigJson ?? '');
+        if (!raw) return;
+        try {
+          const cfg = JSON.parse(raw) as {
+            campaignId: string; sessionId: string | null;
+            nodeId: string; mapId: string;
+            mapData?: string | null;
+            spawnPoint?: { x: number; z: number };
+            exitCells?: { x: number; z: number; exitIndex?: number }[];
+            trapCells?: { x: number; z: number }[];
+          };
+
+          // Mettre la carte en cache depuis le blob inclus dans le broadcast.
+          // Les joueurs ne sont pas owners de la map et ne peuvent pas la
+          // récupérer via /api/maps/mine — on évite un appel API inutile.
+          if (cfg.mapData) {
+            try {
+              const { cacheMap: cacheMapFn } = await import('@/services/mapRepository');
+              const parsed = JSON.parse(cfg.mapData);
+              cacheMapFn(parsed, cfg.mapId);
+            } catch {
+              // blob corrompu — ensureMapCached tentera l'API en fallback
+              await ensureMapCached(cfg.mapId, cfg.campaignId);
+            }
+          } else {
+            await ensureMapCached(cfg.mapId, cfg.campaignId);
+          }
+
+          setSessionMapConfig({
+            campaignId: cfg.campaignId,
+            sessionId:  cfg.sessionId,
+            nodeId:     cfg.nodeId,
+            mapId:      cfg.mapId,
+            spawnPoint: cfg.spawnPoint,
+            exitCells:  cfg.exitCells,
+            trapCells:  cfg.trapCells,
+          });
+          navigate('/practice/session?fromSession=1');
+        } catch (e) {
+          console.warn('[CampaignSession] CampaignMapLaunched parse failed:', e);
+        }
+      };
+      signalRService.on('CampaignMapLaunched', mapLaunchedHandler);
+
+      // ── Fin de carte par le MJ (depuis DmPanel "Prochain nœud") ────────────
+      // Les joueurs reçoivent cet événement quand ils sont sur le board et
+      // doivent revenir à la session pour enchaîner le scénario.
+      const mapExitedHandler = (data: Record<string, unknown>) => {
+        if (isHost()) return; // le MJ navigue lui-même via backToSession
+        const nodeId = String(data.nodeId ?? data.NodeId ?? '');
+        if (!nodeId) return;
+        // Naviguer vers la session en mode "mapExit=next" sans autoAdvance —
+        // le MJ diffusera NodeAdvanced une fois qu'il aura avancé côté session.
+        navigate(`/campaigns/${params.id}/session?mapExit=next&resumeNodeId=${encodeURIComponent(nodeId)}`);
+      };
+      signalRService.on('CampaignMapExited', mapExitedHandler);
+
+      // ── Fin de campagne diffusée par le MJ ───────────────────────────────
+      // Le MJ appelle BroadcastCampaignSessionCompleted après completeSession.
+      // Les joueurs reçoivent cet événement et naviguent vers la page campagne.
+      const sessionCompletedHandler = (data: Record<string, unknown>) => {
+        if (isHost()) return; // le MJ navigue lui-même dans handleEnd
+        const cid = String(data.campaignId ?? data.CampaignId ?? '');
+        if (cid && cid !== params.id) return; // mauvaise campagne
+        navigate(`/campaigns/${params.id}`);
+      };
+      signalRService.on('CampaignSessionCompleted', sessionCompletedHandler);
+
+      onCleanup(() => {
+        try { signalRService.off('ChoiceVoted', voteHandler); } catch {}
+        try { signalRService.off('NodeAdvanced', nodeAdvancedHandler); } catch {}
+        try { signalRService.off('CampaignMapLaunched', mapLaunchedHandler); } catch {}
+        try { signalRService.off('CampaignMapExited', mapExitedHandler); } catch {}
+        try { signalRService.off('CampaignSessionCompleted', sessionCompletedHandler); } catch {}
+        if (signalRService.isConnected) {
+          unsubscribeCampaign(params.id).catch(() => undefined);
+        }
+      });
+    } catch (e) {
+      console.warn('[CampaignSession] SignalR setup failed (votes disabled):', e);
+    }
+
     try {
       setLoading(true);
-      const response = await CampaignService.getCampaign(params.id);
+
+      // Charger la campagne et les noms de cartes en parallèle.
+      // Les noms de cartes sont nécessaires côté joueur (qui n'a pas les maps
+      // en localStorage) pour afficher le nom lisible dans le bloc Carte.
+      const [response] = await Promise.all([
+        CampaignService.getCampaign(params.id),
+        MapService.list(params.id)
+          .then(maps => setCampaignMapNames(new Map(maps.map(m => [m.id, m.name]))))
+          .catch(() => undefined), // non bloquant — fallback sur selectedMapName du nœud
+      ]);
+
       setCampaignTitle(response.name);
 
       // Backend field takes priority; fall back to per-campaign then global localStorage.
@@ -111,24 +395,136 @@ const CampaignSessionPage: Component = () => {
         return;
       }
 
-      // Only mark this campaign as "last played" once we know it actually loads
-      // — otherwise an erroring session would poison the home page ResumeHero.
-      writeLastCampaignId(params.id);
+      // ── Session : reprendre l'active existante ou en créer une nouvelle ─────
+      let startNodeId = tree.firstNodeId; // fallback : début du scénario
+      // Track the DB-persisted node separately so the mapExit block can detect
+      // when the DM already advanced past resumeNodeId before this page loaded.
+      let dbNodeId: string | undefined;
 
       try {
-        const session = await CampaignService.createSession(params.id);
-        setSessionId(session.id);
+        const list = await CampaignService.listSessions(params.id);
+        const active = list.items.find(s => s.status === 'Active');
+
+        if (active) {
+          // Reprise : réutiliser la session existante
+          setSessionId(active.id);
+          // Restaurer la position si le nœud est toujours dans l'arbre
+          if (active.currentNodeId && tree.nodeMap.has(active.currentNodeId)) {
+            startNodeId = active.currentNodeId;
+            dbNodeId = active.currentNodeId;
+          }
+        } else {
+          // Première fois (ou session précédente terminée) : nouvelle session.
+          // Fix #2 : si deux instances du composant montent simultanément,
+          // elles partagent la même Promise → une seule session créée en base.
+          if (!_pendingSessionCreate.has(params.id)) {
+            const p = CampaignService
+              .createSession(params.id)
+              .finally(() => _pendingSessionCreate.delete(params.id));
+            _pendingSessionCreate.set(params.id, p);
+          }
+          const fresh = await _pendingSessionCreate.get(params.id)!;
+          setSessionId(fresh.id);
+        }
       } catch (e) {
-        console.warn('[CampaignSession] Could not create session in backend (offline mode):', e);
+        console.warn('[CampaignSession] Backend inaccessible (mode hors-ligne):', e);
         setIsOffline(true);
       }
 
-      setCurrentNodeId(tree.firstNodeId);
+      setCurrentNodeId(startNodeId);
+
+      // ── Retour depuis une carte : restaurer la position dans l'arbre ────────
+      const search       = new URLSearchParams(window.location.search);
+      const mapExit      = search.get('mapExit');
+      const resumeNodeId = search.get('resumeNodeId');
+      if (mapExit) {
+        // Nettoyer l'URL immédiatement pour éviter un re-déclenchement
+        window.history.replaceState({}, '', window.location.pathname);
+
+        // Restaurer la position dans l'arbre au nœud de la carte jouée.
+        // Ne pas écraser une position DB plus avancée : si le MJ a déjà appelé
+        // followPort avant que cette page finisse de charger, dbNodeId pointe
+        // vers le nœud suivant (ex: 'fuite') et resumeNodeId est l'ancien nœud
+        // carte ('duel'). On conserve la position DB dans ce cas.
+        if (resumeNodeId && tree.nodeMap.has(resumeNodeId)) {
+          if (!dbNodeId || dbNodeId === resumeNodeId) {
+            setCurrentNodeId(resumeNodeId);
+          }
+          // else: DB already has a more advanced node — keep startNodeId
+        }
+
+        // autoAdvance=1 : le MJ a cliqué "Prochain nœud" depuis le board, ou une
+        // case EXIT a été déclenchée.  Appeler followPort automatiquement sans
+        // attendre un clic supplémentaire.  Seul le MJ avance ; les joueurs
+        // suivront via NodeAdvanced (et CampaignMapLaunched si c'est une carte).
+        // exitPortName identifie quel port suivre (ex: 'exit-0', 'exit-1').
+        const autoAdvance  = search.get('autoAdvance') === '1';
+        const exitPortName = search.get('exitPortName') ?? 'exit-0';
+        if (autoAdvance && isHost()) {
+          // Délai de 4000 ms : le MJ et les joueurs naviguent vers la session en même
+          // temps (après CampaignMapExited). Les joueurs doivent se reconnecter à SignalR
+          // et terminer le chargement avant de recevoir NodeAdvanced.
+          // 4 s donne plus de marge que l'ancien 2500 ms pour les connexions lentes.
+          setTimeout(async () => {
+            try {
+              const node = currentNode();
+              if (!node) return;
+              // Essayer le port exact, puis fallback sur 'output' (anciens nœuds MapNode).
+              const hasPort = parsedTree()?.edges.has(`${node.id}::${exitPortName}`)
+                || parsedTree()?.edges.has(`${node.id}::output`);
+              const portToFollow = parsedTree()?.edges.has(`${node.id}::${exitPortName}`)
+                ? exitPortName
+                : 'output';
+              if (hasPort) {
+                await followPort(portToFollow);
+                // Si le bloc suivant est une carte avec une map configurée,
+                // la lancer automatiquement — inutile que le MJ clique "Lancer la carte".
+                // Les joueurs recevront CampaignMapLaunched et seront redirigés.
+                setTimeout(() => {
+                  try {
+                    const next = currentNode();
+                    if (next?.type === 'map' && (next as MapData).selectedMap) {
+                      void launchMap();
+                    }
+                  } catch (e) {
+                    console.warn('[CampaignSession] auto-launch map failed:', e);
+                  }
+                }, 0);
+              } else {
+                // Aucun nœud suivant → fin de session
+                await handleEnd();
+              }
+            } catch (e) {
+              console.warn('[CampaignSession] autoAdvance followPort failed:', e);
+            }
+          }, 4000);
+        }
+      }
     } catch (err: any) {
       console.error('Failed to load campaign session:', err);
       setError('Failed to load campaign.');
     } finally {
       setLoading(false);
+    }
+  });
+
+  // Réinitialise les votes et le verrou à chaque changement de nœud
+  createEffect(() => {
+    currentNodeId(); // track
+    setPlayerVotes({});
+    setVotingLocked(false);
+  });
+
+  // Apply a NodeAdvanced event that was buffered while the page was still loading.
+  // Runs whenever currentNodeId or pendingNodeAdvance changes.
+  createEffect(() => {
+    const curId = currentNodeId();
+    const pending = pendingNodeAdvance();
+    if (!curId || !pending) return;
+    if (!pending.from || pending.from === curId) {
+      setPendingNodeAdvance(null);
+      setHistory(h => [...h, curId]);
+      setCurrentNodeId(pending.next);
     }
   });
 
@@ -139,17 +535,27 @@ const CampaignSessionPage: Component = () => {
     return tree.nodeMap.get(id) ?? null;
   };
 
-  // ─── Map metadata lookup (name from localStorage) ─────────────────────────
-  // Deferred to call-time so it never runs inside a reactive tracking scope.
-  const getMapName = (mapId: string) =>
-    getAllMaps().find(m => m.id === mapId)?.name ?? mapId;
+  // ─── Map metadata lookup ─────────────────────────────────────────────────
+  // Priorité :
+  //  1. DB  → campaignMapNames chargé via GET /api/campaigns/:id/maps (tous)
+  //  2. Nœud → selectedMapName stocké lors de la sélection dans le Campaign Manager
+  //  3. UUID brut (dernier recours)
+  const getMapName = (node: MapData) =>
+    (node.selectedMap ? campaignMapNames().get(node.selectedMap) : undefined)
+    ?? node.selectedMapName
+    ?? node.selectedMap
+    ?? '';
 
   // ─── Launch map node in BoardGame ──────────────────────────────────────────
-  const launchMap = () => {
+  const launchMap = async () => {
     const node = currentNode() as MapData | null;
     if (!node?.selectedMap) return;
 
-    setSessionMapConfig({
+    // Si la carte est en DB (UUID) et absente du cache localStorage,
+    // on la récupère avant de naviguer — sinon InitGrid tombe sur la grille par défaut.
+    await ensureMapCached(node.selectedMap, params.id);
+
+    const cfg = {
       campaignId: params.id,
       sessionId:  sessionId(),
       nodeId:     node.id,
@@ -157,12 +563,28 @@ const CampaignSessionPage: Component = () => {
       spawnPoint: node.spawnPoint,
       exitCells:  node.exitCells,
       trapCells:  node.trapCells,
-    });
+    };
 
-    navigate("/practice/exploration?fromSession=1");
+    // Inclure le blob de la carte dans le broadcast — les joueurs ne sont pas
+    // owners de la map et ne peuvent pas la récupérer via /api/maps/mine.
+    // Même pattern que GameStarted qui envoie mapData à tous les clients.
+    const { loadMap: loadMapLocal } = await import('@/services/mapRepository');
+    const mapBlob = loadMapLocal(node.selectedMap);
+    const cfgWithData = {
+      ...cfg,
+      mapData: mapBlob ? JSON.stringify(mapBlob) : null,
+    };
+
+    // Diffuser le lancement aux joueurs AVANT de naviguer
+    dmLaunchCampaignMap(params.id, JSON.stringify(cfgWithData)).catch(e =>
+      console.warn('[CampaignSession] dmLaunchCampaignMap failed:', e)
+    );
+
+    setSessionMapConfig(cfg);
+    navigate('/practice/session?fromSession=1');
   };
 
-  const followPort = async (port: string, choiceText?: string) => {
+  const followPort = async (port: string, choiceText?: string, forceDmBroadcast = false) => {
     const tree = parsedTree();
     const node = currentNode();
     if (!tree || !node) return;
@@ -172,11 +594,14 @@ const CampaignSessionPage: Component = () => {
     const sid = sessionId();
     if (sid && !isSaving()) {
       setIsSaving(true);
+      // On enregistre la destination (nextId) comme position courante — pas le départ —
+      // pour que CurrentNodeId reflète où on SE TROUVE et permette la reprise correcte.
+      const nextNode = tree.nodeMap.get(nextId);
       const req: AdvanceSessionRequest = {
-        nodeId:     node.id,
-        nodeType:   node.type,
-        nodeTitle:  (node as any).title ?? '',
-        portUsed:   port,
+        nodeId:    nextId,
+        nodeType:  nextNode?.type ?? node.type,
+        nodeTitle: (nextNode as any)?.title ?? '',
+        portUsed:  port,
         choiceText,
       };
       CampaignService.advanceSession(params.id, sid, req)
@@ -186,6 +611,16 @@ const CampaignSessionPage: Component = () => {
 
     setHistory(h => [...h, node.id]);
     setCurrentNodeId(nextId);
+
+    // Diffuser le changement de nœud aux joueurs.
+    // Les choix sont exclus par défaut (ils passent via ChoiceVoted + checkConsensus),
+    // SAUF si le MJ force le choix (forceDmBroadcast=true) : dans ce cas on
+    // broadcase directement via NodeAdvanced pour que les joueurs suivent sans vote.
+    if (isHost() && (!port.startsWith('choice-') || forceDmBroadcast)) {
+      dmAdvanceNode(params.id, node.id, nextId).catch(e =>
+        console.warn('[CampaignSession] dmAdvanceNode failed:', e)
+      );
+    }
   };
 
   const handleEnd = async () => {
@@ -199,11 +634,57 @@ const CampaignSessionPage: Component = () => {
           nodeTitle: (node as any).title ?? '',
         });
         await CampaignService.completeSession(params.id, sid);
+        // Notify all players so they navigate away too — only the DM sees the
+        // "Terminer la campagne" button, so players would otherwise stay stuck.
+        if (isHost()) {
+          await broadcastCampaignSessionCompleted(params.id, sid).catch(e =>
+            console.warn('[CampaignSession] broadcastCampaignSessionCompleted failed:', e)
+          );
+        }
       } catch (e) {
         console.warn('Failed to complete session:', e);
       }
     }
     navigate(`/campaigns/${params.id}`);
+  };
+
+  // ── Vote helpers ─────────────────────────────────────────────────────────
+
+  /** Joueurs connectés hors MJ — ce sont les seuls qui doivent voter. */
+  const connectedPlayerCount = () => {
+    const players = (sessionState.session?.players ?? [])
+      .filter(p => p.status === 'Connected' && p.role !== PlayerRole.DungeonMaster);
+    return players.length;
+  };
+
+  /**
+   * Seuls les joueurs (non-MJ) votent — résultat purement indicatif.
+   * Le MJ voit les votes et confirme le choix final via le bouton "Confirmer".
+   * Aucun auto-avancement par consensus : le MJ a toujours le dernier mot.
+   */
+  const handleVote = async (choiceIndex: number, choiceText: string) => {
+    const node = currentNode();
+    if (!node) return;
+    // Bloquer le MJ quand des joueurs sont présents (il confirme via "Confirmer")
+    if (isHost() && connectedPlayerCount() > 0) return;
+
+    const alreadyVoted = playerVotes()[myVoteKey()]?.index === choiceIndex;
+    const newIndex = alreadyVoted ? -1 : choiceIndex; // toggle
+
+    // Mise à jour locale optimiste
+    if (newIndex < 0) {
+      setPlayerVotes(prev => { const n = { ...prev }; delete n[myVoteKey()]; return n; });
+    } else {
+      const name = authStore.user()?.username ?? 'Moi';
+      setPlayerVotes(prev => ({ ...prev, [myVoteKey()]: { name, index: newIndex } }));
+    }
+
+    try {
+      await voteForChoice(params.id, node.id, newIndex);
+    } catch (e) {
+      console.warn('[CampaignSession] voteForChoice failed:', e);
+    }
+    // Pas de checkConsensus — le MJ confirme manuellement
   };
 
   const hasPort = (port: string) => {
@@ -248,23 +729,41 @@ const CampaignSessionPage: Component = () => {
           <p class="text-xs text-purple-400 uppercase tracking-wider">Session in progress</p>
           <h1 class="font-display text-lg text-white">{campaignTitle()}</h1>
         </div>
-        <div class="flex items-center gap-2 text-sm text-slate-400 min-w-[80px] justify-end">
+        <div class="flex items-center gap-3 min-w-[80px] justify-end">
           <Show when={isSaving()}><Loader2 class="w-3 h-3 animate-spin text-purple-400" /></Show>
-          <Show when={history().length > 0}><span>{history().length + 1} blocks</span></Show>
+          <Show when={history().length > 0}><span class="text-sm text-slate-400">{history().length + 1} blocks</span></Show>
+          {/* Bouton Inventaire — visible pour les joueurs (avec perso) et le MJ */}
+          <Show when={myCharacterId() !== null || isHost()}>
+            <button
+              onClick={() => setShowInventory(v => !v)}
+              class={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                showInventory()
+                  ? 'bg-purple-600/30 border border-purple-500/50 text-purple-300'
+                  : 'bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10'
+              }`}
+              title="Inventory"
+            >
+              <Package class="w-3.5 h-3.5" />
+              <span class="hidden sm:inline">Inventory</span>
+            </button>
+          </Show>
         </div>
       </header>
 
-      <main class="flex-1 flex flex-col items-center justify-center px-4 py-12">
-        {/* Loading */}
-        <Show when={loading()}>
+      <main class="flex-1 flex flex-col items-center justify-center overflow-y-auto px-4 py-12">
+        {/* Transition entre deux cartes côté joueur — spinner neutre.
+            Masque tout contenu jusqu'à ce que le chargement soit terminé.
+            CampaignMapLaunched naviguera avant qu'on montre quoi que ce soit,
+            évitant le flash de l'écran "En attente du MJ". */}
+        <Show when={loading() || mapExitPending}>
           <div class="flex flex-col items-center gap-4 text-slate-400">
             <Loader2 class="w-10 h-10 animate-spin text-purple-400" />
             <p>Loading scenario…</p>
           </div>
         </Show>
 
-        {/* Error */}
-        <Show when={!loading() && error()}>
+        {/* Error — masqué pendant mapExitPending */}
+        <Show when={!loading() && !mapExitPending && error()}>
           <div class="max-w-md text-center">
             <div class="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
               <span class="text-3xl">⚠️</span>
@@ -275,8 +774,57 @@ const CampaignSessionPage: Component = () => {
           </div>
         </Show>
 
-        {/* Session */}
-        <Show when={!loading() && !error()}>
+        {/* Session — masqué pendant mapExitPending (CampaignMapLaunched naviguera avant) */}
+        <Show when={!loading() && !mapExitPending && !error()}>
+
+          {/* ── Écran de transition entre deux cartes (joueurs uniquement) ──────────
+              Quand le nœud courant est une carte et que l'utilisateur n'est pas MJ,
+              afficher un écran d'attente dédié plutôt que l'interface scénario complète.
+              Le MJ voit toujours son panneau normal avec le bouton "Lancer la carte".
+          ─────────────────────────────────────────────────────────────────────── */}
+          <Show when={currentNode()?.type === 'map' && !isHost()}>
+            {(() => {
+              const node = () => currentNode() as MapData;
+              const name = () => getMapName(node());
+              return (
+                <div class="w-full max-w-md flex flex-col items-center gap-8 text-center">
+                  {/* Icône pulsante */}
+                  <div class="relative">
+                    <div class="absolute inset-0 rounded-3xl bg-blue-500/20 animate-ping" style={{ 'animation-duration': '2s' }} />
+                    <div class="relative w-24 h-24 rounded-3xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center">
+                      <MapIcon class="w-12 h-12 text-blue-400" />
+                    </div>
+                  </div>
+
+                  {/* Nom de la carte */}
+                  <div>
+                    <p class="text-xs text-blue-400 uppercase tracking-widest font-semibold mb-3">
+                      Next map
+                    </p>
+                    <h2 class="font-display text-3xl text-white leading-tight">
+                      {name() || 'Upcoming map'}
+                    </h2>
+                  </div>
+
+                  {/* Attente */}
+                  <div class="flex flex-col items-center gap-3">
+                    <div class="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/5 border border-white/10">
+                      <Loader2 class="w-4 h-4 animate-spin text-purple-400 flex-shrink-0" />
+                      <span class="text-slate-300 text-sm">
+                        Waiting for the Dungeon Master to launch…
+                      </span>
+                    </div>
+                    <p class="text-xs text-slate-600">
+                      You will be redirected automatically
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+          </Show>
+
+          {/* ── Contenu scénario normal (MJ + tous les autres types de nœuds) ─────── */}
+          <Show when={!(currentNode()?.type === 'map' && !isHost())}>
           <div class="w-full max-w-2xl">
             {/* Fil d'Ariane */}
             <Show when={history().length > 0}>
@@ -312,7 +860,17 @@ const CampaignSessionPage: Component = () => {
                     </div>
                     <div class="flex justify-end">
                       <Show when={hasPort('output')} fallback={<EndBanner />}>
-                        <button onClick={() => followPort('output')} class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-xl transition-all">Continue <ChevronRight class="w-5 h-5" /></button>
+                        <Show
+                          when={isHost()}
+                          fallback={
+                            <p class="text-sm text-slate-500 italic flex items-center gap-2">
+                              <Loader2 class="w-3.5 h-3.5 animate-spin text-purple-400" />
+                              Waiting for the Dungeon Master…
+                            </p>
+                          }
+                        >
+                          <button onClick={() => followPort('output')} class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-xl transition-all">Continue <ChevronRight class="w-5 h-5" /></button>
+                        </Show>
                       </Show>
                     </div>
                   </div>
@@ -320,30 +878,161 @@ const CampaignSessionPage: Component = () => {
 
                 {/* CHOICES */}
                 <Match when={currentNode()?.type === 'choices'}>
-                  <div>
-                    <div class="flex items-center gap-3 mb-6">
-                      <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
-                        <svg class="w-5 h-5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                  {(() => {
+                    const node = () => currentNode() as ChoicesData;
+                    const votes = () => playerVotes();
+
+                    // Voters per choice index
+                    const votersFor = (idx: number) =>
+                      Object.values(votes()).filter(v => v.index === idx);
+
+                    const myVoteIndex = () => votes()[myVoteKey()]?.index ?? -1;
+
+                    // Joueurs connectés hors MJ (ceux qui doivent voter). Fallback 1 = solo DM.
+                    const totalPlayers = () => Math.max(connectedPlayerCount(), 1);
+                    // Le MJ observe seulement quand des joueurs sont là
+                    const dmIsObserver = () => isHost() && connectedPlayerCount() > 0;
+
+                    return (
+                      <div>
+                        {/* Header */}
+                        <div class="flex items-center gap-3 mb-6">
+                          <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                          </div>
+                          <div>
+                            <p class="text-xs text-emerald-400 uppercase tracking-wider font-medium">Choices</p>
+                            <h2 class="text-2xl font-display text-white">{node()?.title || 'Untitled choices'}</h2>
+                          </div>
+                        </div>
+
+                        <Show when={node()?.text}>
+                          <div class="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6 leading-relaxed text-slate-200 text-lg whitespace-pre-wrap">{node()?.text}</div>
+                        </Show>
+
+                        {/* Légende votes */}
+                        <div class="flex items-center justify-between mb-3">
+                          <Show when={dmIsObserver()}>
+                            <span class="text-xs text-amber-400/70 flex items-center gap-1">
+                              👁 Players are voting - confirm the final choice
+                            </span>
+                          </Show>
+                          <p class="text-xs text-slate-500 ml-auto">
+                            {Object.keys(votes()).length}/{totalPlayers()} player{totalPlayers() > 1 ? 's' : ''} voted
+                          </p>
+                        </div>
+
+                        <Show when={node()?.choices?.length > 0} fallback={<EndBanner />}>
+                          <div class="flex flex-col gap-3">
+                            <For each={node()?.choices}>
+                              {(choice, i) => {
+                                const voters  = () => votersFor(i());
+                                const isMine  = () => myVoteIndex() === i();
+                                const hasLink = () => parsedTree()?.edges.has(`${node()?.id}::choice-${i()}`);
+
+                                return (
+                                  <div class="flex items-stretch gap-2">
+                                    <button
+                                      onClick={() => handleVote(i(), choice)}
+                                      disabled={dmIsObserver()}
+                                      title={dmIsObserver() ? 'Only players can vote' : undefined}
+                                      class={`flex-1 text-left px-5 py-4 rounded-xl border-2 transition-all flex flex-col gap-2 group ${
+                                        dmIsObserver()
+                                          ? 'border-white/10 bg-white/5 opacity-70 cursor-not-allowed'
+                                          : isMine()
+                                            ? 'border-emerald-500 bg-emerald-500/20 shadow-lg shadow-emerald-500/10'
+                                            : 'border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/15 hover:border-emerald-500/50'
+                                      }`}
+                                    >
+                                      <div class="flex items-center gap-3 w-full">
+                                        <span class={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm flex-shrink-0 transition-colors ${
+                                          isMine()
+                                            ? 'bg-emerald-500/50 border border-emerald-400 text-white'
+                                            : 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400'
+                                        }`}>
+                                          {i() + 1}
+                                        </span>
+                                        <span class="flex-1 text-white font-medium">{choice || `Choice ${i() + 1}`}</span>
+                                        <Show when={hasLink()}>
+                                          <ChevronRight class={`w-4 h-4 transition-colors ${isMine() ? 'text-emerald-300' : 'text-emerald-400/50 group-hover:text-emerald-400'}`} />
+                                        </Show>
+                                      </div>
+
+                                      <Show when={totalPlayers() > 1 || voters().length > 0}>
+                                        <div class="flex items-center gap-1.5 pl-10">
+                                          <For each={Array.from({ length: totalPlayers() }, (_, idx) => {
+                                            const voter = voters()[idx];
+                                            return voter ?? null;
+                                          })}>
+                                            {(voter) => (
+                                              <Show
+                                                when={voter}
+                                                fallback={
+                                                  <div
+                                                    class="w-2.5 h-2.5 rounded-full bg-white/10 border border-white/20"
+                                                    title="Waiting…"
+                                                  />
+                                                }
+                                              >
+                                                <div
+                                                  class="w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-300 shadow-sm shadow-emerald-400/50"
+                                                  title={voter!.name}
+                                                />
+                                              </Show>
+                                            )}
+                                          </For>
+                                          <Show when={voters().length > 0}>
+                                            <span class="text-[10px] text-emerald-400/70 ml-0.5">
+                                              {voters().length}/{totalPlayers()}
+                                            </span>
+                                          </Show>
+                                        </div>
+                                      </Show>
+                                    </button>
+
+                                    {/* Bouton Confirmer — MJ uniquement, toujours visible sur les choix liés.
+                                        Le MJ a toujours le dernier mot, qu'il y ait des joueurs ou non. */}
+                                    <Show when={isHost() && hasLink()}>
+                                      <button
+                                        onClick={async () => {
+                                          if (votingLocked()) return;
+                                          setVotingLocked(true);
+                                          try {
+                                            await followPort(
+                                              `choice-${i()}`,
+                                              choice || `Choice ${i() + 1}`,
+                                              true,
+                                            );
+                                          } catch (e) {
+                                            console.warn('[CampaignSession] followPort(choice) failed:', e);
+                                          } finally {
+                                            setVotingLocked(false);
+                                          }
+                                        }}
+                                        class="self-center flex-shrink-0 flex flex-col items-center justify-center gap-0.5 px-3 py-3 rounded-xl bg-emerald-600/20 border border-emerald-500/50 text-emerald-300 text-[10px] font-semibold hover:bg-emerald-600/35 hover:border-emerald-400/70 transition-all"
+                                        title="Confirm this choice and advance the scenario"
+                                      >
+                                        <ChevronRight class="w-4 h-4" />
+                                        <span>Confirm</span>
+                                      </button>
+                                    </Show>
+                                  </div>
+                                );
+                              }}
+                            </For>
+                          </div>
+
+                          {/* Message d'attente uniquement pour les joueurs (pas le MJ) */}
+                          <Show when={!isHost() && Object.keys(votes()).length > 0}>
+                            <p class="mt-4 text-center text-sm text-slate-500 flex items-center justify-center gap-2">
+                              <Loader2 class="w-3.5 h-3.5 animate-spin text-purple-400" />
+                              Waiting for the Dungeon Master's confirmation…
+                            </p>
+                          </Show>
+                        </Show>
                       </div>
-                      <div><p class="text-xs text-emerald-400 uppercase tracking-wider font-medium">Choices</p><h2 class="text-2xl font-display text-white">{(currentNode() as ChoicesData)?.title || 'Untitled choices'}</h2></div>
-                    </div>
-                    <Show when={(currentNode() as ChoicesData)?.text}>
-                      <div class="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6 leading-relaxed text-slate-200 text-lg whitespace-pre-wrap">{(currentNode() as ChoicesData)?.text}</div>
-                    </Show>
-                    <Show when={(currentNode() as ChoicesData)?.choices?.length > 0} fallback={<EndBanner />}>
-                      <div class="flex flex-col gap-3">
-                        <For each={(currentNode() as ChoicesData)?.choices}>
-                          {(choice, i) => (
-                            <button onClick={() => followPort(`choice-${i()}`, choice)} class="text-left px-5 py-4 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 rounded-xl text-white font-medium transition-all flex items-center gap-3 group">
-                              <span class="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold text-sm flex-shrink-0">{i() + 1}</span>
-                              <span class="flex-1">{choice || `Choice ${i() + 1}`}</span>
-                              <Show when={parsedTree()?.edges.has(`${currentNode()?.id}::choice-${i()}`)}><ChevronRight class="w-4 h-4 text-emerald-400/60 group-hover:text-emerald-400 transition-colors" /></Show>
-                            </button>
-                          )}
-                        </For>
-                      </div>
-                    </Show>
-                  </div>
+                    );
+                  })()}
                 </Match>
 
                 {/* COMBAT */}
@@ -351,10 +1040,10 @@ const CampaignSessionPage: Component = () => {
                   <div>
                     <div class="flex items-center gap-3 mb-6">
                       <div class="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center"><Sword class="w-5 h-5 text-red-400" /></div>
-                      <div><p class="text-xs text-red-400 uppercase tracking-wider font-medium">Combat</p><h2 class="text-2xl font-display text-white">{(currentNode() as CombatData)?.title || 'Untitled combat'}</h2></div>
+                      <div><p class="text-xs text-red-400 uppercase tracking-wider font-medium">Combat</p><h2 class="text-2xl font-display text-white">{(currentNode() as CombatData)?.title || 'Combat'}</h2></div>
                     </div>
                     <div class="bg-red-500/5 border border-red-500/20 rounded-2xl p-6 mb-8 text-center"><Sword class="w-12 h-12 text-red-400/40 mx-auto mb-3" /><p class="text-slate-400 italic">Combat management coming soon.</p></div>
-                    <div class="flex justify-end"><Show when={hasPort('output')} fallback={<EndBanner />}><button onClick={() => followPort('output')} class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-semibold rounded-xl transition-all">Skip <ChevronRight class="w-5 h-5" /></button></Show></div>
+                    <div class="flex justify-end"><Show when={hasPort('output')} fallback={<EndBanner />}><button onClick={() => followPort('output')} class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-semibold rounded-xl transition-all">Continue <ChevronRight class="w-5 h-5" /></button></Show></div>
                   </div>
                 </Match>
 
@@ -362,7 +1051,7 @@ const CampaignSessionPage: Component = () => {
                 <Match when={currentNode()?.type === 'map'}>
                   {(() => {
                     const node = () => currentNode() as MapData;
-                    const mapName = () => node().selectedMap ? getMapName(node().selectedMap!) : null;
+                    const mapName = () => node().selectedMap ? getMapName(node()) : null;
                     const configured = () => !!(node().spawnPoint || (node().exitCells?.length ?? 0) > 0 || (node().trapCells?.length ?? 0) > 0);
                     return (
                       <div>
@@ -407,7 +1096,7 @@ const CampaignSessionPage: Component = () => {
                                 </Show>
                                 <Show when={(node().exitCells?.length ?? 0) > 0}>
                                   <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 text-sm">
-                                    ⬆ {node().exitCells!.length} sortie{node().exitCells!.length !== 1 ? 's' : ''}
+                                    ⬆ {node().exitCells!.length} exit{node().exitCells!.length !== 1 ? 's' : ''}
                                   </span>
                                 </Show>
                                 <Show when={(node().trapCells?.length ?? 0) > 0}>
@@ -419,17 +1108,27 @@ const CampaignSessionPage: Component = () => {
                             </Show>
                           </div>
 
-                          {/* Launch button */}
-                          <button
-                            onClick={launchMap}
-                            class="w-full flex items-center justify-center gap-3 px-6 py-4 mb-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl transition-all text-lg shadow-lg shadow-blue-900/30"
+                          {/* Launch button — MJ uniquement */}
+                          <Show
+                            when={isHost()}
+                            fallback={
+                              <div class="w-full flex items-center justify-center gap-3 px-6 py-4 mb-8 rounded-xl border border-white/10 bg-white/5 text-slate-500 text-sm italic">
+                                <Loader2 class="w-4 h-4 animate-spin text-purple-400" />
+                                Waiting for the Dungeon Master to launch…
+                              </div>
+                            }
                           >
-                            <Play class="w-5 h-5" />
-                            Launch map
-                          </button>
+                            <button
+                              onClick={launchMap}
+                              class="w-full flex items-center justify-center gap-3 px-6 py-4 mb-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl transition-all text-lg shadow-lg shadow-blue-900/30"
+                            >
+                              <Play class="w-5 h-5" />
+                              Launch map
+                            </button>
+                          </Show>
                         </Show>
 
-                        {/* Continue (after playing) */}
+                        {/* Continue (after playing) — accessible à tous */}
                         <div class="flex justify-end">
                           <Show when={hasPort('output')} fallback={<EndBanner />}>
                             <button
@@ -444,11 +1143,185 @@ const CampaignSessionPage: Component = () => {
                     );
                   })()}
                 </Match>
+
+                {/* VICTOIRE */}
+                <Match when={currentNode()?.type === 'victory'}>
+                  <div class="flex flex-col items-center gap-8 py-10 text-center">
+                    <div class="w-24 h-24 rounded-full bg-amber-500/15 border-2 border-amber-500/40 flex items-center justify-center shadow-lg shadow-amber-900/30">
+                      <Trophy class="w-12 h-12 text-amber-400" />
+                    </div>
+                    <div>
+                      <p class="text-xs text-amber-400 uppercase tracking-widest font-medium mb-2">End of campaign</p>
+                      <h2 class="text-4xl font-display text-white font-bold">
+                        {(currentNode() as VictoryData)?.title || 'Victory!'}
+                      </h2>
+                      <p class="text-slate-400 mt-3">The heroes have triumphed. The campaign is complete.</p>
+                    </div>
+                    <Show
+                      when={isHost()}
+                      fallback={
+                        <p class="text-sm text-slate-500 italic flex items-center gap-2">
+                          <Loader2 class="w-3.5 h-3.5 animate-spin text-amber-400" />
+                          Waiting for the Dungeon Master…
+                        </p>
+                      }
+                    >
+                      <button
+                        onClick={handleEnd}
+                        class="px-8 py-3 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-white font-bold rounded-xl transition-all shadow-lg shadow-amber-900/30"
+                      >
+                        End the campaign
+                      </button>
+                    </Show>
+                  </div>
+                </Match>
+
+                {/* DEFEAT */}
+                <Match when={currentNode()?.type === 'defeat'}>
+                  <div class="flex flex-col items-center gap-8 py-10 text-center">
+                    <div class="w-24 h-24 rounded-full bg-red-500/15 border-2 border-red-500/40 flex items-center justify-center shadow-lg shadow-red-900/30">
+                      <Skull class="w-12 h-12 text-red-400" />
+                    </div>
+                    <div>
+                      <p class="text-xs text-red-400 uppercase tracking-widest font-medium mb-2">End of campaign</p>
+                      <h2 class="text-4xl font-display text-white font-bold">
+                        {(currentNode() as DefeatData)?.title || 'Defeat…'}
+                      </h2>
+                      <p class="text-slate-400 mt-3">The heroes have failed. The campaign is complete.</p>
+                    </div>
+                    <Show
+                      when={isHost()}
+                      fallback={
+                        <p class="text-sm text-slate-500 italic flex items-center gap-2">
+                          <Loader2 class="w-3.5 h-3.5 animate-spin text-red-400" />
+                          Waiting for the Dungeon Master…
+                        </p>
+                      }
+                    >
+                      <button
+                        onClick={handleEnd}
+                        class="px-8 py-3 bg-gradient-to-r from-red-700 to-rose-600 hover:from-red-600 hover:to-rose-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-red-900/30"
+                      >
+                        End the campaign
+                      </button>
+                    </Show>
+                  </div>
+                </Match>
+
               </Switch>
             </div>
           </div>
-        </Show>
+          </Show>{/* fin Show !(map && !isHost()) */}
+
+        </Show>{/* fin Show !loading && !error */}
       </main>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          Drawer d'inventaire — slide depuis la droite
+          ══════════════════════════════════════════════════════════════════ */}
+      <Show when={showInventory()}>
+        {/* Backdrop */}
+        <div
+          class="fixed inset-0 bg-black/40 backdrop-blur-sm z-30"
+          onClick={() => setShowInventory(false)}
+        />
+
+        {/* Panel */}
+        <div class="fixed right-0 top-0 h-full w-full sm:w-[420px] z-40
+                    flex flex-col
+                    bg-slate-950 border-l border-white/10
+                    shadow-2xl overflow-hidden">
+
+          {/* Header du drawer */}
+          <div class="flex items-center justify-between px-5 py-4 border-b border-white/10 flex-shrink-0">
+            <div class="flex items-center gap-2">
+              <Package class="w-4 h-4 text-purple-400" />
+              <span class="font-semibold text-white text-sm">Inventory</span>
+              <Show when={isHost() && playersWithCharacter().length > 0}>
+                <span class="text-xs text-slate-500">- DM</span>
+              </Show>
+            </div>
+            <button
+              onClick={() => setShowInventory(false)}
+              class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all"
+            >
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Contenu */}
+          <div class="flex-1 overflow-y-auto">
+            <Show
+              when={isHost()}
+              fallback={
+                /* ── Vue joueur ─── */
+                <Show
+                  when={myCharacterId()}
+                  fallback={
+                    <div class="flex flex-col items-center gap-3 py-16 text-slate-500 text-sm text-center px-6">
+                      <Package class="w-10 h-10 opacity-30" />
+                      <p>No character selected.</p>
+                      <p class="text-xs text-slate-600">Create a character from your profile to access the inventory.</p>
+                    </div>
+                  }
+                >
+                  <InventoryPanel characterId={myCharacterId()!} isMJ={false} />
+                </Show>
+              }
+            >
+              {/* ── Vue MJ ─── */}
+              <Show
+                when={playersWithCharacter().length > 0}
+                fallback={
+                  <div class="flex flex-col items-center gap-3 py-16 text-slate-500 text-sm text-center px-6">
+                    <Package class="w-10 h-10 opacity-30" />
+                    <p>No connected player with a character.</p>
+                    <p class="text-xs text-slate-600">Players must join the session for their character to appear here.</p>
+                  </div>
+                }
+              >
+                {/* Tabs joueurs */}
+                <div class="flex gap-1 px-4 pt-3 pb-2 border-b border-white/5 overflow-x-auto flex-shrink-0">
+                  <For each={playersWithCharacter()}>
+                    {(player) => (
+                      <button
+                        onClick={() => setDmSelectedPlayer(
+                          dmSelectedPlayer() === player.userId ? null : player.userId
+                        )}
+                        class={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+                          dmSelectedPlayer() === player.userId
+                            ? 'bg-purple-600/30 border border-purple-500/50 text-purple-300'
+                            : 'bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10'
+                        }`}
+                      >
+                        {player.userName}
+                      </button>
+                    )}
+                  </For>
+                </div>
+
+                {/* Inventaire du joueur sélectionné */}
+                <Show
+                  when={dmSelectedPlayer()}
+                  fallback={
+                    <div class="flex flex-col items-center gap-2 py-12 text-slate-600 text-sm text-center px-6">
+                      <span class="text-2xl">👆</span>
+                      <p>Select a player to view their inventory.</p>
+                    </div>
+                  }
+                >
+                  {(() => {
+                    const player = playersWithCharacter().find(p => p.userId === dmSelectedPlayer());
+                    return player?.selectedCharacterId
+                      ? <InventoryPanel characterId={player.selectedCharacterId} isMJ={true} />
+                      : null;
+                  })()}
+                </Show>
+              </Show>
+            </Show>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 };

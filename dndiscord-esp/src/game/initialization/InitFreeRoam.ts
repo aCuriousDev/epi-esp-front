@@ -24,6 +24,21 @@ import { mapAssignmentToUnit } from '../utils/CharacterToUnit';
 import { sessionState, isDm } from '../../stores/session.store';
 import { resolveAllySpawns, LEGACY_FALLBACK_SPAWNS } from '../spawn/ResolveAllySpawns';
 
+/**
+ * Seed déterministe à partir d'une chaîne (ex. session ID).
+ * Tous les clients qui partagent la même session obtiennent le même seed →
+ * même positions de spawn, même ordre de shuffle dans getSpawnPositions.
+ * Algorithme djb2 simplifié (pas crypto, juste stable et rapide).
+ */
+function stableHashFromString(s: string): number {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) + h) + s.charCodeAt(i);
+    h |= 0; // Convertir en entier 32 bits
+  }
+  return Math.abs(h) || 1; // jamais 0
+}
+
 export function initializeFreeRoam(mapId: string | null = null, unitAssignments?: UnitAssignment[]): void {
   console.log('[initializeFreeRoam] Starting Free Roam initialization...');
 
@@ -45,11 +60,35 @@ export function initializeFreeRoam(mapId: string | null = null, unitAssignments?
     const filtered = unitAssignments.filter(
       (a) => !(isDm() && hubId && a.userId === hubId),
     );
+
+    // When the map comes from a campaign session node it may carry an explicit
+    // spawnPoint (authored in the Campaign Manager). Prefer that over per-
+    // assignment coords so all players cluster near the designated entry.
+    const sessionSpawn = getSessionMapConfig()?.spawnPoint ?? null;
+
+    // Seed stable = même sur tous les clients pour la même session.
+    // Date.now() produisait des seeds différents selon l'heure d'arrivée
+    // du GameStarted → positions de spawn différentes (désynchro visuelle).
+    const spawnSeed = stableHashFromString(
+      sessionState.session?.sessionId ?? 'default-session',
+    );
+
+    const mpSpawns = resolveAllySpawns({
+      count: filtered.length,
+      tiles,
+      gridWidth: GRID_SIZE,
+      gridHeight: GRID_SIZE,
+      spawnPoint: sessionSpawn,
+      seed: spawnSeed,
+      legacyFallback: LEGACY_FALLBACK_SPAWNS,
+    });
+
     filtered.forEach((assignment, i) => {
+      // Priority: server-authoritative startX/Y > session spawnPoint cluster > legacy fallback
       const spawnPos =
         assignment.startX != null && assignment.startY != null
           ? { x: assignment.startX, z: assignment.startY }
-          : LEGACY_FALLBACK_SPAWNS[i % LEGACY_FALLBACK_SPAWNS.length];
+          : (mpSpawns[i] ?? LEGACY_FALLBACK_SPAWNS[i % LEGACY_FALLBACK_SPAWNS.length]);
       const unit = mapAssignmentToUnit(assignment, spawnPos);
       newUnits[unit.id] = unit;
 

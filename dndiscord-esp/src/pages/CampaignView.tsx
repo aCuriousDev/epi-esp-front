@@ -16,6 +16,10 @@ import {
   Drama,
   Loader2,
   Map as MapIcon,
+  Zap,
+  LogOut,
+  Check,
+  Copy,
 } from "lucide-solid";
 import { createSignal, onCleanup, onMount, Show, For, type JSX } from "solid-js";
 import PageMeta from "../layouts/PageMeta";
@@ -39,10 +43,12 @@ import {
   createSession,
   ensureMultiplayerHandlersRegistered,
   joinSession,
+  joinCampaignSession,
   subscribeCampaign,
   unsubscribeCampaign,
 } from "../services/signalr/multiplayer.service";
 import { signalRService } from "../services/signalr/SignalRService";
+import { GameSessionStatus, type GameSessionResponse } from "../services/campaign.service";
 
 
 export default function CampaignView() {
@@ -54,7 +60,9 @@ export default function CampaignView() {
   const [activeTab, setActiveTab] = createSignal<"overview" | "players">("overview");
   const [showInviteModal, setShowInviteModal] = createSignal(false);
   const [inviteCode, setInviteCode] = createSignal<string | null>(null);
-  const [launchingSession, setLaunchingSession] = createSignal(false);
+  // Signals indépendants — chaque bouton ne bloque que lui-même
+  const [launchingSession, setLaunchingSession] = createSignal(false); // lancement scénario
+  const [quickLaunching,   setQuickLaunching]   = createSignal(false); // lancement rapide
   const [launchError, setLaunchError] = createSignal<string | null>(null);
   const [sessionInvite, setSessionInvite] = createSignal<{
     sessionId: string;
@@ -65,6 +73,24 @@ export default function CampaignView() {
   } | null>(null);
   const [joiningInvite, setJoiningInvite] = createSignal(false);
   const [inviteError, setInviteError] = createSignal<string | null>(null);
+
+  // Active session already running when the page loads
+  const [activeSession, setActiveSession] = createSignal<GameSessionResponse | null>(null);
+  const [joiningActive, setJoiningActive] = createSignal(false);
+  const [joinActiveError, setJoinActiveError] = createSignal<string | null>(null);
+
+  // Leave campaign (non-owner)
+  const [leavingCampaign, setLeavingCampaign] = createSignal(false);
+  const [leaveError, setLeaveError] = createSignal<string | null>(null);
+
+  // Success toast (e.g. clipboard copy)
+  const [successToast, setSuccessToast] = createSignal<string | null>(null);
+  let successToastTimer: ReturnType<typeof setTimeout> | undefined;
+  const showSuccessToast = (msg: string) => {
+    clearTimeout(successToastTimer);
+    setSuccessToast(msg);
+    successToastTimer = setTimeout(() => setSuccessToast(null), 2500);
+  };
 
   const user = () => authStore.user();
   /** Le créateur/MJ peut lancer une session ; on s'appuie sur l'API (isDungeonMaster) pour éviter les écarts d'identifiants. */
@@ -83,12 +109,30 @@ export default function CampaignView() {
       const mappedCampaign = mapCampaignResponse(response);
       setCampaign(mappedCampaign);
 
+      // Check if a session is already running for this campaign.
+      // N.B. we only show the "resume" banner if the session has actual
+      // progress (currentNodeId set OR at least one history entry).
+      // A session with status=Active but no progress is a ghost session
+      // created by an earlier CampaignSessionPage visit that was never
+      // played — showing the banner for it would be misleading.
+      try {
+        const sessionsRes = await CampaignService.listSessions(params.id);
+        const running = sessionsRes.items.find(
+          (s) =>
+            s.status === GameSessionStatus.Active &&
+            (!!s.currentNodeId || s.entries.length > 0)
+        );
+        if (running) setActiveSession(running);
+      } catch {
+        // Non-critical — page still works without it.
+      }
+
       // S'abonner aux notifications de la campagne (ex: "SessionStarted").
       // Permet de proposer "Rejoindre" sans code quand le MJ lance une session.
       if (!signalRService.isConnected) {
         await signalRService.connect();
-        ensureMultiplayerHandlersRegistered();
       }
+      ensureMultiplayerHandlersRegistered();
 
       const handler = (data: Record<string, unknown>) => {
         const payload = {
@@ -103,6 +147,16 @@ export default function CampaignView() {
         };
 
         if (!payload.sessionId) return;
+
+        // Update / create the active-session banner regardless of who started it.
+        setActiveSession((prev) => prev ?? {
+          id: payload.sessionId,
+          campaignId: payload.campaignId,
+          status: GameSessionStatus.Active,
+          startedBy: payload.startedByUserId ?? "",
+          startedAt: payload.timestamp ?? new Date().toISOString(),
+          entries: [],
+        } as GameSessionResponse);
 
         // Ne pas afficher la modale au joueur qui a démarré la session.
         const me = authStore.user()?.id;
@@ -171,28 +225,31 @@ export default function CampaignView() {
     return t("campaignView.relativeTime.monthsAgo", { n: diffMonths });
   };
 
-  /** Créer une session GameHub pour cette campagne et aller au board (DM uniquement). */
+  /** Lancement rapide — session SignalR pure, SANS session DB ni historique.
+   *
+   *  createSession (SignalR hub) ≠ CampaignService.createSession (HTTP).
+   *  L'appel SignalR crée uniquement la session en mémoire et broadcast
+   *  SessionStarted au groupe campagne (les joueurs sont invités automatiquement),
+   *  sans écrire de CampaignGameSession en base.
+   *  La session DB n'est créée que dans CampaignSessionPage — que le lancement
+   *  rapide ne visite jamais → aucun historique généré. */
   const handleLaunchSession = async () => {
     const c = campaign();
-    if (!c || !isOwner()) return;
+    if (!c || !isOwner() || quickLaunching()) return;
     setLaunchError(null);
-    setLaunchingSession(true);
+    setQuickLaunching(true);
     try {
       if (!signalRService.isConnected) {
         await signalRService.connect();
-        ensureMultiplayerHandlersRegistered();
       }
+      ensureMultiplayerHandlersRegistered();
+      // createSession (SignalR) : in-memory + broadcast SessionStarted — pas de DB
       await createSession(c.id);
-      // Quick Launch reuses the sandbox multiplayer lobby (LobbyScreen) — the
-      // session is already in the store with `campaignId` set, so BoardGame's
-      // onMount session-rehydration jumps straight to AppPhase.LOBBY.
-      // Routing through the stripped CampaignLobbyPage was the post-rework
-      // regression: it dropped map selection + default templates.
       navigate(`/practice/multiplayer`);
     } catch (e: any) {
       setLaunchError(e?.message ?? "Failed to create session.");
     } finally {
-      setLaunchingSession(false);
+      setQuickLaunching(false);
     }
   };
 
@@ -204,8 +261,8 @@ export default function CampaignView() {
     try {
       if (!signalRService.isConnected) {
         await signalRService.connect();
-        ensureMultiplayerHandlersRegistered();
       }
+      ensureMultiplayerHandlersRegistered();
       const res = await joinSession(invite.sessionId);
       if (!res.success) {
         setInviteError(res.message ?? "Failed to join session.");
@@ -225,6 +282,41 @@ export default function CampaignView() {
       setInviteError(e?.message ?? "Failed to join session.");
     } finally {
       setJoiningInvite(false);
+    }
+  };
+
+  /** Rejoindre la session active détectée au chargement de la page. */
+  const handleJoinActiveSession = async () => {
+    const c = campaign();
+    if (!c) return;
+    setJoinActiveError(null);
+    setJoiningActive(true);
+    try {
+      if (!signalRService.isConnected) {
+        await signalRService.connect();
+      }
+      ensureMultiplayerHandlersRegistered();
+      // Utilise joinCampaignSession (cherche par campaignId dans le SessionManager)
+      // plutôt que joinSession(db_uuid) qui cherche par l'ID SignalR in-memory.
+      const res = await joinCampaignSession(c.id);
+      if (!res.success) {
+        // Plus de session SignalR active (terminée entre-temps) → masquer le bandeau.
+        if (res.message?.toLowerCase().includes('aucune session')) {
+          setActiveSession(null);
+        } else {
+          setJoinActiveError(res.message ?? "Impossible de rejoindre la session.");
+        }
+        return;
+      }
+      if (hasScenario(c.campaignTreeDefinition)) {
+        navigate(`/campaigns/${c.id}/lobby`);
+      } else {
+        navigate("/board");
+      }
+    } catch (e: any) {
+      setJoinActiveError(e?.message ?? "Impossible de rejoindre la session.");
+    } finally {
+      setJoiningActive(false);
     }
   };
 
@@ -257,14 +349,14 @@ export default function CampaignView() {
 
   const handleLaunchCampaignSession = async () => {
     const c = campaign();
-    if (!c || !isOwner()) return;
+    if (!c || !isOwner() || launchingSession()) return; // signal indépendant du quick launch
     setLaunchError(null);
     setLaunchingSession(true);
     try {
       if (!signalRService.isConnected) {
         await signalRService.connect();
-        ensureMultiplayerHandlersRegistered();
       }
+      ensureMultiplayerHandlersRegistered();
       await createSession(c.id);
       navigate(`/campaigns/${params.id}/lobby`);
     } catch (e: any) {
@@ -296,6 +388,31 @@ export default function CampaignView() {
     } catch (err) {
       console.error("Failed to delete campaign:", err);
       setError("Failed to delete campaign.");
+    }
+  };
+
+  const handleLeaveCampaign = async () => {
+    const c = campaign();
+    if (!c) return;
+
+    if (
+      !safeConfirm(
+        `Are you sure you want to leave "${c.title}"? You will need to be re-invited to rejoin.`,
+      )
+    ) {
+      return;
+    }
+
+    setLeaveError(null);
+    setLeavingCampaign(true);
+    try {
+      await CampaignService.leaveCampaign(c.id);
+      navigate("/campaigns");
+    } catch (err: any) {
+      console.error("Failed to leave campaign:", err);
+      setLeaveError(err?.response?.data?.message ?? "Impossible de quitter la campagne.");
+    } finally {
+      setLeavingCampaign(false);
     }
   };
 
@@ -477,6 +594,57 @@ export default function CampaignView() {
                 </div>
               </div>
 
+              {/* ── Active session banner ───────────────────────────────── */}
+              <Show when={activeSession()}>
+                {(session) => (
+                  <div class="mb-6 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 overflow-hidden shadow-lg shadow-emerald-500/10">
+                    {/* Pulsing top bar */}
+                    <div class="h-1 w-full bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500 animate-pulse" aria-hidden="true" />
+
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-5">
+                      {/* Icon + text */}
+                      <div class="flex items-center gap-4 flex-1 min-w-0">
+                        <div class="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                          <Zap class="w-6 h-6 text-emerald-400" aria-hidden="true" />
+                        </div>
+                        <div class="min-w-0">
+                          <p class="text-emerald-300 font-semibold text-sm uppercase tracking-wider mb-0.5">
+                            Session in progress
+                          </p>
+                          <p class="text-white font-display text-lg leading-tight">
+                            A session is currently active
+                          </p>
+                          <p class="text-slate-400 text-sm mt-0.5">
+                            Started {formatRelativeTime(session().startedAt)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Join / Rejoin button */}
+                      <div class="flex flex-col items-end gap-2 shrink-0">
+                        <button
+                          onClick={handleJoinActiveSession}
+                          disabled={joiningActive()}
+                          aria-label="Join the ongoing session"
+                          class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                        >
+                          <Show
+                            when={!joiningActive()}
+                            fallback={<Loader2 class="w-4 h-4 animate-spin" aria-hidden="true" />}
+                          >
+                            <Play class="w-4 h-4" aria-hidden="true" />
+                          </Show>
+                          {joiningActive() ? "Connecting…" : (isOwner() ? "Resume session" : "Join session")}
+                        </button>
+                        <Show when={joinActiveError()}>
+                          <p class="text-red-400 text-xs" role="alert">{joinActiveError()}</p>
+                        </Show>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </Show>
+
               {/* Tabs */}
               <div
                 role="tablist"
@@ -640,23 +808,23 @@ export default function CampaignView() {
               <Show when={isOwner()}>
                 {/* Row 1: Primary (Lancement rapide) + Secondary (Lancer la session) */}
                 <div class="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* PRIMARY — POC fast launch */}
+                  {/* PRIMARY — Lancement rapide (createRoom, sans historique) */}
                   <button
                     class="py-3 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold transition-all shadow-lg shadow-purple-500/20 flex items-center justify-center gap-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 motion-safe:hover:-translate-y-0.5"
                     onClick={handleLaunchSession}
-                    disabled={launchingSession()}
+                    disabled={quickLaunching()}
                     aria-label={t("campaignView.quickLaunch.ariaLabel")}
                   >
                     <Show
-                      when={launchingSession()}
+                      when={quickLaunching()}
                       fallback={<Swords class="w-5 h-5" aria-hidden="true" />}
                     >
                       <Loader2 class="w-5 h-5 animate-spin" aria-hidden="true" />
                     </Show>
-                    {launchingSession() ? t("campaignView.launchingSession") : t("campaignView.quickLaunch")}
+                    {quickLaunching() ? t("campaignView.launchingSession") : t("campaignView.quickLaunch")}
                   </button>
 
-                  {/* SECONDARY — story-tree lobby flow */}
+                  {/* SECONDARY — Lancement avec scénario (createSession, avec historique) */}
                   <button
                     onClick={handleLaunchCampaignSession}
                     disabled={launchingSession()}
@@ -723,11 +891,34 @@ export default function CampaignView() {
                 </div>
               </Show>
 
-              {/* Non-owner: read-only indicator */}
+              {/* Non-owner: leave campaign */}
               <Show when={!isOwner()}>
-                <div class="mt-8 py-3 px-6 rounded-xl bg-game-dark/60 border border-white/10 text-slate-400 font-semibold flex items-center justify-center gap-2">
-                  <Play class="w-5 h-5" aria-hidden="true" />
-                  {t("campaignView.quickLaunch.dmOnly")}
+                <div class="mt-8 p-4 rounded-xl border border-red-500/20 bg-red-500/5 flex items-center justify-between gap-4">
+                  <div>
+                    <p class="text-sm font-medium text-red-300">{t("campaignView.leaveCampaign")}</p>
+                    <p class="text-xs text-red-400/70 mt-0.5">
+                      {t("campaignView.leaveCampaign.hint")}
+                    </p>
+                  </div>
+                  <div class="flex flex-col items-end gap-1 shrink-0">
+                    <button
+                      onClick={handleLeaveCampaign}
+                      disabled={leavingCampaign()}
+                      aria-label={t("campaignView.leaveCampaign.ariaLabel")}
+                      class="py-2 px-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 font-semibold hover:bg-red-500/20 hover:border-red-500/50 transition-all flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                    >
+                      <Show
+                        when={!leavingCampaign()}
+                        fallback={<Loader2 class="w-4 h-4 animate-spin" aria-hidden="true" />}
+                      >
+                        <LogOut class="w-4 h-4" aria-hidden="true" />
+                      </Show>
+                      {leavingCampaign() ? t("campaignView.leaving") : t("campaignView.leave")}
+                    </button>
+                    <Show when={leaveError()}>
+                      <p class="text-red-400 text-xs" role="alert">{leaveError()}</p>
+                    </Show>
+                  </div>
                 </div>
               </Show>
             </main>
@@ -762,13 +953,36 @@ export default function CampaignView() {
             <button
               onClick={() => {
                 navigator.clipboard.writeText(inviteCode() || "");
-                alert(t("campaignView.inviteModal.copied"));
+                showSuccessToast(t("campaignView.inviteModal.copied"));
+                setShowInviteModal(false);
               }}
-              class="w-full py-2 px-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              class="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-colors flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
-              {t("campaignView.inviteModal.copyCode")}
+              <Copy class="w-4 h-4" aria-hidden="true" />
+              Copier le code
             </button>
           </div>
+        </div>
+      </Show>
+
+      {/* Success Toast */}
+      <Show when={successToast()}>
+        <div
+          class="fixed bottom-4 right-4 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-xl border border-emerald-500/30 bg-emerald-500/15 backdrop-blur-sm text-emerald-200 animate-in slide-in-from-bottom-4 duration-300"
+          role="status"
+          aria-live="polite"
+        >
+          <div class="w-7 h-7 rounded-full bg-emerald-500/25 flex items-center justify-center shrink-0">
+            <Check class="w-4 h-4 text-emerald-400" aria-hidden="true" />
+          </div>
+          <span class="text-sm font-medium">{successToast()}</span>
+          <button
+            onClick={() => setSuccessToast(null)}
+            aria-label="Fermer"
+            class="ml-1 text-emerald-400/70 hover:text-emerald-300 transition-colors focus-visible:outline-none rounded"
+          >
+            <X class="w-4 h-4" aria-hidden="true" />
+          </button>
         </div>
       </Show>
 

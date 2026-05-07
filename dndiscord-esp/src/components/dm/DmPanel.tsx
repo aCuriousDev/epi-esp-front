@@ -20,6 +20,7 @@ import {
   Sparkles,
   Swords,
   X,
+  ChevronRight,
 } from "lucide-solid";
 import { isDm, getOtherPlayers, getCurrentSession } from "../../stores/session.store";
 import DiceRequestPanel from "./DiceRequestPanel";
@@ -85,7 +86,13 @@ const ENEMY_CATALOGUE: EnemyTemplate[] = [
 
 // ═══════════════════════════════════════════════════════════════════
 
-export const DmPanel: Component = () => {
+interface DmPanelProps {
+  /** Appelé quand le MJ veut passer au prochain nœud du scénario depuis le board.
+   *  Défini uniquement en mode fromSession=1. */
+  onNextNode?: () => void;
+}
+
+export const DmPanel: Component<DmPanelProps> = (props) => {
   const [isExpanded, setIsExpanded] = createSignal(true);
   // Default to "select": clicking a unit in this mode opens the inspect
   // panel via GameCanvas.handleUnitClick (BUG-D) without staging a drag or
@@ -136,10 +143,12 @@ export const DmPanel: Component = () => {
       const tpl = ENEMY_CATALOGUE.find((t) => t.id === tplId);
       if (!tpl) return;
 
-      // crypto.randomUUID() is CSP-safe and collision-free across concurrent
-      // DMs; the previous module-local counter reused ids across browser
-      // tabs which caused duplicate-spawn races.
-      const uid = `dm_spawn_${tpl.id}_${crypto.randomUUID()}`;
+      // crypto.randomUUID() n'est disponible qu'en contexte sécurisé (HTTPS).
+      // Fallback pour HTTP (dev local, Discord Activity) : timestamp + random.
+      const uuid = typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+      const uid = `dm_spawn_${tpl.id}_${uuid}`;
       const unit: Unit = {
         id: uid, name: tpl.name, type: tpl.unitType, team: Team.ENEMY, position: pos,
         stats: { ...tpl.stats }, abilities: cloneAbilities(tpl.abilities),
@@ -371,6 +380,18 @@ export const DmPanel: Component = () => {
               Click a token to inspect it without moving it. Switch to
               <span class="text-purple-200/80"> Move</span> to teleport.
             </p>
+
+            {/* Prochain nœud de scénario — visible uniquement en mode session */}
+            <Show when={props.onNextNode}>
+              <button
+                onClick={props.onNextNode}
+                class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-indigo-600/80 to-purple-600/80 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-semibold border border-indigo-400/40 shadow-lg transition-colors cursor-pointer"
+                title="Return to session and advance to the next scenario block"
+              >
+                <ChevronRight class="w-3.5 h-3.5" />
+                Next scenario node
+              </button>
+            </Show>
           </Show>
 
           {/* Status flash */}

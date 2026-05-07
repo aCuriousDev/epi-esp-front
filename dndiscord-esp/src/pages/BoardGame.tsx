@@ -28,6 +28,7 @@ import DiceRollPrompt from "../components/dice/DiceRollPrompt";
 import DiceResultToast from "../components/dice/DiceResultToast";
 import InventoryPanel from "../components/InventoryPanel";
 import WalletPanel from "../components/WalletPanel";
+import ShopPanel from "../components/ShopPanel";
 import { PlayerHotbar } from "../components/hotbar/PlayerHotbar";
 import { EnemyHotbar } from "../components/hotbar/EnemyHotbar";
 import { UnitInfoCardTop } from "../components/hotbar/UnitInfoCardPosition";
@@ -51,7 +52,7 @@ import { t } from "../i18n";
 import { GamePhase, AppPhase, GameMode } from "../types";
 import { sessionState, clearSession, getPersistedSession } from "../stores/session.store";
 import { isDm } from "../stores/session.store";
-import { leaveSession, dmRestartGame as dmRestartGameHub, tryRecoverSession } from "../services/signalr/multiplayer.service";
+import { leaveSession, dmRestartGame as dmRestartGameHub, tryRecoverSession, syncHubUserId } from "../services/signalr/multiplayer.service";
 import { isInSession } from "../stores/session.store";
 import {
   getSessionMapConfig,
@@ -59,10 +60,15 @@ import {
   isSessionMapActive,
   setSessionExitCallback,
   clearSessionExitCallback,
+  pendingSessionExit,
+  clearPendingSessionExit,
+  triggerSessionExit,
 } from "../stores/session-map.store";
 import type { GameStartedPayload } from "../types/multiplayer";
-import { saveMap, type SavedMapData } from "../services/mapStorage";
-import { LogOut } from "lucide-solid";
+import { cacheMap, preloadBuiltin, ensureMapCached, type SavedMapData } from "../services/mapRepository";
+import { dmExitMap } from "../services/signalr/multiplayer.service";
+import { signalRService } from "../services/signalr/SignalRService";
+import { LogOut, ShoppingBag } from "lucide-solid";
 import { PartyChatPanel } from "../components/PartyChatPanel";
 import RollHistoryPanel from "../components/dm/RollHistoryPanel";
 import { SessionState } from "../types/multiplayer";
@@ -78,7 +84,14 @@ const BoardGame: Component = () => {
   // reads this flag before scheduling the next tick so orphaned timeouts
   // that fire after an unmount are no-ops.
   let mounted = true;
-  onCleanup(() => { mounted = false; });
+  onCleanup(() => {
+    mounted = false;
+    // Nettoyer pendingSessionExit pour que la prochaine carte parte d'un état vierge.
+    // Sans ce nettoyage, si un joueur quitte le board via CampaignMapExited
+    // (navigate direct, pas via backToSession), le signal reste non-null et
+    // la notification "en attente du MJ" réapparaît immédiatement sur la carte suivante.
+    clearPendingSessionExit();
+  });
 
   const [appPhase, setAppPhase] = createSignal<AppPhase>(
     AppPhase.MODE_SELECTION,
@@ -94,17 +107,22 @@ const BoardGame: Component = () => {
   onMount(async () => {
     const qs = new URLSearchParams(location.search);
 
-    // ── Demo mode ───────────────────────────────────────────────────────────
+    // ── Demo mode (tutoriel) ────────────────────────────────────────────────
     if (qs.get("demo") === "1") {
+      // Pré-charger la carte tutoriel dans le cache mémoire avant startGame.
+      // Si le fichier statique n'existe pas encore, preloadBuiltin échoue
+      // silencieusement et on retombe sur la grille procédurale par défaut.
+      await preloadBuiltin("__tutorial__");
+      const tutorialMapId = "__tutorial__";
       setSelectedMode(GameMode.COMBAT);
-      setSelectedMapId(null);
+      setSelectedMapId(tutorialMapId);
       setAppPhase(AppPhase.IN_GAME);
 
       let attempts = 0;
       const checkEngine = () => {
         if (++attempts > 50) return;
         if (isEngineReady()) {
-          setTimeout(() => startGame(GameMode.COMBAT, null), 150);
+          setTimeout(() => startGame(GameMode.COMBAT, tutorialMapId), 150);
         } else {
           if (mounted) setTimeout(checkEngine, 100);
         }
@@ -118,26 +136,31 @@ const BoardGame: Component = () => {
       const cfg = getSessionMapConfig();
       if (cfg) {
         console.log("[BoardGame] Session map mode — mapId:", cfg.mapId);
-        // Guard 1 — leave any active SignalR session before entering the
-        // story-tree FREE_ROAM flow. The two session concepts (campaign
-        // story-tree vs combat hub) coexist at the lobby layer; inside the
-        // board they must not overlap or the hub keeps broadcasting into a
-        // scene it no longer owns.
+        // La session SignalR reste active pendant la carte — on ne la quitte
+        // PAS ici. Appeler leaveSession() broadcastait SessionEnded à tous les
+        // joueurs et les renvoyait vers "/". La session est gardée en vie le
+        // temps du board et peut être reprise quand on revient à la session.
         (async () => {
-          if (sessionState.session) {
-            try {
-              await leaveSession();
-            } catch (err) {
-              console.warn("[BoardGame] leaveSession on fromSession entry failed", err);
-              clearSession();
-            }
-          }
+          // ── Nettoyage de la carte précédente ─────────────────────────────────
+          // Évite que pendingSessionExit de la carte N-1 réapparaisse sur la
+          // carte N, et que les tiles/units de l'ancienne carte restent en mémoire.
+          clearPendingSessionExit();
+          await clearEngineState();
+
+          // En mode session, on passe toujours un tableau pour rester sur la
+          // branche multiplayer de initializeFreeRoam. Si undefined, cette
+          // branche spawne les 3 personnages solo par défaut (Sir Roland /
+          // Elara / Theron), ce qui est incorrect quand on vient d'une session
+          // avec de vrais joueurs. Un tableau vide = aucun spawn = correct.
+          const unitAssignments: import("../types/multiplayer").UnitAssignment[] =
+            sessionState.gameStartedPayload?.unitAssignments ?? [];
+
           setFromSession(true);
           setSelectedMode(GameMode.FREE_ROAM);
           setSelectedMapId(cfg.mapId);
           setAppPhase(AppPhase.IN_GAME);
 
-          setSessionExitCallback(() => backToSession());
+          setSessionExitCallback((portName) => { backToSession(true, portName).catch(console.error); });
 
           let attempts = 0;
           const checkEngine = () => {
@@ -147,7 +170,9 @@ const BoardGame: Component = () => {
               return;
             }
             if (isEngineReady()) {
-              setTimeout(() => startGame(GameMode.FREE_ROAM, cfg.mapId), 150);
+              // Pass multiplayer assignments when available so one character is
+              // spawned per player who was in the lobby. undefined → solo defaults.
+              setTimeout(() => startGame(GameMode.FREE_ROAM, cfg.mapId, null, unitAssignments), 150);
             } else {
               if (mounted) setTimeout(checkEngine, 100);
             }
@@ -218,22 +243,26 @@ const BoardGame: Component = () => {
     setSelectedMapId(mapId);
     setAppPhase(AppPhase.IN_GAME);
 
-    let attempts = 0;
-    const checkEngine = () => {
-      if (++attempts > 50) {
-        console.error("[BoardGame] Engine failed to initialize");
-        backToModeSelection();
-        return;
-      }
-      if (isEngineReady()) {
-        setTimeout(() => {
-          startGame(selectedMode()!, mapId);
-        }, 150);
-      } else {
-        if (mounted) setTimeout(checkEngine, 100);
-      }
-    };
-    checkEngine();
+    // Assure que la map est en cache localStorage avant que l'engine l'appelle
+    // en synchrone. Pour les maps DB (UUID), on fait un fetch API si nécessaire.
+    // Pour null/"default"/legacy, ensureMapCached est un no-op immédiat (<1ms).
+    (async () => {
+      await ensureMapCached(mapId);
+      let attempts = 0;
+      const checkEngine = () => {
+        if (++attempts > 50) {
+          console.error("[BoardGame] Engine failed to initialize");
+          backToModeSelection();
+          return;
+        }
+        if (isEngineReady()) {
+          setTimeout(() => startGame(selectedMode()!, mapId), 150);
+        } else {
+          if (mounted) setTimeout(checkEngine, 100);
+        }
+      };
+      checkEngine();
+    })();
   };
 
   const selectDungeon = (dungeonId: string) => {
@@ -270,7 +299,16 @@ const BoardGame: Component = () => {
 
   onMount(() => {
     const m = params.mode?.toLowerCase();
+    // Tutorial demo mode (and session-map mode) manage their own boot path
+    // in the main onMount above; don't override them by forcing MAP_SELECTION.
+    const qs = new URLSearchParams(location.search);
+    if (qs.get("demo") === "1" || qs.get("fromSession") === "1") return;
     if (!m) return; // No param → keep legacy behavior (mode picker fallback).
+    // If the first onMount already moved us away from MODE_SELECTION (session
+    // detected, recovery, etc.), don't override that phase.  Without this guard
+    // the second onMount can race and call goToMultiplayer() on top of LOBBY /
+    // IN_GAME, sending players to RoomJoinScreen even though they already joined.
+    if (appPhase() !== AppPhase.MODE_SELECTION) return;
     switch (m) {
       case "exploration":
         startMode(GameMode.FREE_ROAM);
@@ -286,6 +324,7 @@ const BoardGame: Component = () => {
         break;
       default:
         // Unknown mode → keep mode picker as fallback.
+        startMode(GameMode.FREE_ROAM);
         break;
     }
   });
@@ -300,19 +339,27 @@ const BoardGame: Component = () => {
     if (lastInitPayload === payload) return;
     lastInitPayload = payload;
 
+    // S'assurer que hubUserId est synchronisé AVANT d'initialiser les unités.
+    // canControlUnit() dans GameCanvas retourne false si hubUserId est null,
+    // empêchant le joueur de bouger son unité. Peut arriver si le joueur est
+    // arrivé via un chemin qui n'a pas appelé syncHubUserId() (ex: rejoin rapide).
+    syncHubUserId();
+
     console.log(
       "[BoardGame] ========== MULTIPLAYER GAME STARTED ==========",
       payload,
     );
 
-    // Save received map data to localStorage so loadMap() finds it
+    // Cache received map data to localStorage so loadMap(payload.mapId) finds it.
+    // cacheMap with overrideId = payload.mapId ensures the blob is stored under
+    // the DB UUID key regardless of the id embedded inside the blob itself.
     if (payload.mapData) {
       try {
         const parsedMap: SavedMapData = JSON.parse(payload.mapData);
-        saveMap(parsedMap);
+        cacheMap(parsedMap, payload.mapId !== "default" ? payload.mapId : undefined);
         console.log(
-          "[BoardGame] Saved remote map data to localStorage:",
-          parsedMap.id,
+          "[BoardGame] Cached remote map data:",
+          payload.mapId,
         );
       } catch (e) {
         console.error("[BoardGame] Failed to parse received mapData:", e);
@@ -406,18 +453,39 @@ const BoardGame: Component = () => {
     clearSession();
   };
 
-  /** Return to the campaign session page after playing a session map. */
-  const backToSession = () => {
+  const backToSession = async (autoAdvance = false, portName = 'exit-0') => {
     const cfg = getSessionMapConfig();
+    clearPendingSessionExit();
     clearSessionExitCallback();
     clearSessionMapConfig();
-    clearEngineState();
+    await clearEngineState(); // doit être awaité : ghost render loop sinon
     if (cfg) {
-      navigate(`/campaigns/${cfg.campaignId}/session`);
+      const params = new URLSearchParams({
+        mapExit: 'next',
+        resumeNodeId: cfg.nodeId,
+        exitPortName: portName,
+        ...(autoAdvance ? { autoAdvance: '1' } : {}),
+      });
+      navigate(`/campaigns/${cfg.campaignId}/session?${params.toString()}`);
     } else {
       backToModeSelection();
     }
   };
+
+  // Quand le MJ clique "Continuer" depuis le board, il diffuse CampaignMapExited.
+  // Les joueurs reçoivent cet événement ici (ils ne sont plus sur CampaignSessionPage)
+  // et doivent aussi revenir à la session. backToSession est déclaré avant ce bloc.
+  const _mapExitedFromBoardHandler = (data: Record<string, unknown>) => {
+    if (isDm()) return;
+    if (!getSessionMapConfig()) return; // pas en mode session map → ignorer
+    const nodeId = String(data.nodeId ?? data.NodeId ?? '');
+    if (!nodeId) return;
+    backToSession(false).catch(console.error);
+  };
+  signalRService.on('CampaignMapExited', _mapExitedFromBoardHandler);
+  onCleanup(() => {
+    try { signalRService.off('CampaignMapExited', _mapExitedFromBoardHandler); } catch {}
+  });
 
   const returnToMenu = async () => {
     console.log("[BoardGame] ========== RETURNING TO MENU ==========");
@@ -602,8 +670,41 @@ const BoardGame: Component = () => {
     }
   });
 
+  // ── Toast "Tour de…" ──────────────────────────────────────────────────────
+  // Affiché pendant 2.5 s à chaque changement de tour en PLAYER_TURN.
+  // isMyTurn = true → style accentué ("C'est votre tour !").
+  // isMyTurn = false → style sobre ("Tour de [nom]").
+  const [turnToast, setTurnToast] = createSignal<{ unitName: string; isMyTurn: boolean } | null>(null);
+  let turnToastTimer: number | null = null;
+  {
+    let lastTurnKey = '';
+    createEffect(() => {
+      const phase = gameState.phase;
+      const idx   = gameState.currentUnitIndex;
+      if (phase !== GamePhase.PLAYER_TURN) return;
+
+      const current = getCurrentUnit();
+      if (!current) return;
+
+      const key = `${idx}-${current.id}`;
+      if (key === lastTurnKey) return; // même tour, ne pas re-déclencher
+      lastTurnKey = key;
+
+      const mine = isCurrentUnitMine();
+      setTurnToast({ unitName: current.name, isMyTurn: mine });
+
+      if (turnToastTimer !== null) clearTimeout(turnToastTimer);
+      turnToastTimer = window.setTimeout(() => {
+        setTurnToast(null);
+        turnToastTimer = null;
+      }, 2500);
+    });
+  }
+  onCleanup(() => { if (turnToastTimer !== null) clearTimeout(turnToastTimer); });
+
   const [endTurnPending, setEndTurnPending] = createSignal(false);
   const [settingsOpen, setSettingsOpen] = createSignal(false);
+  const [shopOpen, setShopOpen] = createSignal(false);
   let endTurnPendingTimer: number | null = null;
   const handleEndTurnClick = () => {
     if (!canEndPlayerTurn()) return;
@@ -661,7 +762,15 @@ const BoardGame: Component = () => {
       </Show>
       {/* DM Panel — only visible to the Dungeon Master */}
       <Show when={sessionState.session && isDm()}>
-        <DmPanel />
+        <DmPanel onNextNode={fromSession() ? () => {
+          const cfg = getSessionMapConfig();
+          if (cfg) {
+            // Diffuser aux joueurs pour qu'ils quittent aussi le board
+            dmExitMap(cfg.campaignId, cfg.nodeId).catch(() => {});
+          }
+          // autoAdvance=true : CampaignSessionPage appellera followPort automatiquement
+          backToSession(true).catch(console.error);
+        } : undefined} />
         <DmPlayerInspectPanel />
       </Show>
       {/* Board-side inventory + wallet for the current player (not DM), so they
@@ -807,6 +916,17 @@ const BoardGame: Component = () => {
                 <span class="hidden sm:inline">Back to session</span>
               </button>
             </Show>
+            {/* Shop — visible uniquement pour les joueurs (pas le DM) en session */}
+            <Show when={isInSession() && !isDm()}>
+              <button
+                class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-yellow-400/30 bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-300 text-sm transition-colors"
+                onClick={() => setShopOpen(true)}
+                title="Boutique"
+              >
+                <ShoppingBag class="w-3.5 h-3.5" />
+                <span class="hidden sm:inline">Boutique</span>
+              </button>
+            </Show>
             {/* Quitter — any MP participant (BUG-I). Drawer Quitter is DM-only. */}
             <Show when={isInSession()}>
               <button
@@ -862,6 +982,84 @@ const BoardGame: Component = () => {
             <DiceRollPrompt />
             <DiceResultToast />
 
+            {/* ── Session-map exit request ─────────────────────────────────────────
+                When a player steps on an EXIT tile, MovementActions sets
+                pendingSessionExit instead of navigating immediately.
+                – DM sees a full confirmation banner and decides when to trigger.
+                – Other players see a small "waiting for DM" toast.
+            ─────────────────────────────────────────────────────────────────── */}
+            <Show when={isSessionMapActive() && pendingSessionExit() !== null}>
+              <Show
+                when={isSessionHost()}
+                fallback={
+                  /* ── Player toast ──────────────────────────────────────────── */
+                  <div class="absolute bottom-28 left-1/2 -translate-x-1/2 z-50
+                              flex items-center gap-3
+                              px-5 py-3 rounded-2xl
+                              bg-slate-900/90 border border-white/10
+                              backdrop-blur-sm shadow-2xl
+                              pointer-events-none select-none">
+                    <div class="w-5 h-5 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
+                    <span class="text-sm text-slate-300">
+                      <span class="text-amber-400 font-semibold">{pendingSessionExit()?.unitName}</span>
+                      {' '}reached the exit - waiting for DM…
+                    </span>
+                  </div>
+                }
+              >
+                {/* ── DM confirmation banner ────────────────────────────────── */}
+                <div class="absolute bottom-28 left-1/2 -translate-x-1/2 z-50
+                            flex items-center gap-4
+                            px-5 py-4 rounded-2xl
+                            bg-slate-900/95 border border-white/15
+                            backdrop-blur-sm shadow-2xl">
+
+                  {/* Icon */}
+                  <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-amber-500/20 border border-amber-500/40">
+                    <span class="text-xl">🚪</span>
+                  </div>
+
+                  {/* Text */}
+                  <div class="flex flex-col gap-0.5 min-w-0">
+                    <p class="text-sm font-semibold text-white leading-snug">
+                      <span class="text-amber-400">{pendingSessionExit()?.unitName}</span>
+                      {' '}a atteint la sortie
+                    </p>
+                    <p class="text-xs text-slate-400">
+                      Cette sortie continue vers le bloc suivant.
+                    </p>
+                  </div>
+
+                  {/* Buttons */}
+                  <div class="flex gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => clearPendingSessionExit()}
+                      class="px-3 py-2 rounded-xl text-xs font-medium
+                             bg-white/5 border border-white/10 text-slate-400
+                             hover:bg-white/10 hover:text-white transition-all"
+                    >
+                      {t("common.cancel")}
+                    </button>
+                    <button
+                      onClick={() => {
+                        const req = pendingSessionExit();
+                        if (!req) return;
+                        clearPendingSessionExit();
+                        const exitCfg = getSessionMapConfig();
+                        if (exitCfg) {
+                          dmExitMap(exitCfg.campaignId, exitCfg.nodeId).catch(() => {});
+                        }
+                        triggerSessionExit(req.portName);
+                      }}
+                      class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-amber-600 hover:bg-amber-500 text-white border border-amber-500"
+                    >
+                      🚪 Continuer
+                    </button>
+                  </div>
+                </div>
+              </Show>
+            </Show>
+
             {/* Compact unit info card (top-center) + persistent player hotbar
                 (bottom-center) — non-DM UX replacing the old auto-opening
                 drawer. DM keeps the drawer via the effect above. The
@@ -871,6 +1069,32 @@ const BoardGame: Component = () => {
             <UnitInfoCardTop mode={getCurrentMode()} />
             <PlayerHotbar />
             <EnemyHotbar />
+
+            {/* ── Toast "Tour de…" ────────────────────────────────────────────
+                Centré en haut du canvas, visible 2.5 s à chaque début de tour
+                joueur. Style accentué si c'est le tour du joueur local.
+            ──────────────────────────────────────────────────────────────── */}
+            <Show when={turnToast()}>
+              <div
+                class={`absolute top-16 left-1/2 -translate-x-1/2 z-50
+                        flex items-center gap-3 px-5 py-3 rounded-2xl
+                        backdrop-blur-sm shadow-2xl
+                        pointer-events-none select-none
+                        animate-[fadeSlideDown_0.3s_ease-out]
+                        ${turnToast()!.isMyTurn
+                          ? 'bg-amber-500/90 border border-amber-300/60 text-white shadow-amber-500/30'
+                          : 'bg-slate-800/90 border border-white/15 text-slate-200 shadow-black/40'
+                        }`}
+                style={{ 'animation-fill-mode': 'both' }}
+              >
+                <span class="text-lg">{turnToast()!.isMyTurn ? '⚔️' : '🎲'}</span>
+                <span class="font-semibold text-sm whitespace-nowrap">
+                  {turnToast()!.isMyTurn
+                    ? `C'est votre tour, ${turnToast()!.unitName} !`
+                    : `Tour de ${turnToast()!.unitName}`}
+                </span>
+              </div>
+            </Show>
 
             {/* Loading Overlay */}
             <Show when={!isEngineReady()}>
@@ -1241,6 +1465,13 @@ const BoardGame: Component = () => {
 
         {/* Quick settings overlay — opens over the canvas without
             unmounting the engine. Game state persists. */}
+        <Show when={shopOpen() && !isDm() && myBoardCharacterId()}>
+          <ShopPanel
+            characterId={myBoardCharacterId()!}
+            campaignId={sessionState.session?.campaignId ?? undefined}
+            onClose={() => setShopOpen(false)}
+          />
+        </Show>
         <Show when={settingsOpen()}>
           <InGameSettingsModal onClose={() => setSettingsOpen(false)} />
         </Show>

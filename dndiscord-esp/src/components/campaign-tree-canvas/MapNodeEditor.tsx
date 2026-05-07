@@ -1,14 +1,54 @@
 import { Component, createEffect, createMemo, createSignal, For, onMount, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { MapNode, MapNodeData, CellCoord } from './nodes/MapNode';
+import { MapNode, MapNodeData, CellCoord, ExitCell, reindexExits } from './nodes/MapNode';
 import { CampaignNode } from './nodes/CampaignNode';
-import { getAllMaps, loadMap, SavedCellData } from '@/services/mapStorage';
+import { fetchMine, loadMap, type MapMeta, type SavedCellData, type SavedMapData } from '@/services/mapRepository';
+import { getApiUrl } from '@/services/config';
+import { AuthService } from '@/services/auth.service';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type EditorMode = 'spawn' | 'exit' | 'trap' | 'erase';
+type EditorMode = 'spawn' | 'exit-next' | 'trap' | 'erase';
 
-interface MapMeta { id: string; name: string; createdAt: number; updatedAt: number }
+// MapMeta imported from mapRepository
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Charge les cellules d'une map pour la prévisualisation.
+ * - ID legacy → localStorage (synchrone, pas de cache ajouté)
+ * - UUID DB   → GET API direct, sans passer par le cache localStorage
+ *               (pas de raison de polluer localStorage juste pour une preview)
+ */
+async function loadCellsForPreview(mapId: string): Promise<SavedCellData[]> {
+  const local = loadMap(mapId);
+  if (local) return local.cells;
+
+  if (!UUID_RE.test(mapId)) return [];
+
+  try {
+    const token = AuthService.getToken();
+    if (!token) return [];
+
+    // Tenter d'abord les maps de campagne, puis les maps user
+    for (const url of [
+      // on n'a pas le campaignId ici — on tente directement les maps user
+      `${getApiUrl()}/api/maps/mine/${mapId}`,
+    ]) {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const record = await res.json() as { data?: string };
+        if (record.data) {
+          const parsed = JSON.parse(record.data) as SavedMapData;
+          return parsed.cells ?? [];
+        }
+      }
+    }
+  } catch {
+    // preview non disponible — grille vide
+  }
+  return [];
+}
 interface Bounds  { minX: number; minZ: number; w: number; h: number }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -18,10 +58,10 @@ const CELL_MAX  = 52;
 const H_RESERVE = 240; // px reserved for board chrome (header + toolbar + footer)
 
 const MODE_CFG: Record<EditorMode, { label: string; clr: string; bg: string; border: string; hint: string }> = {
-  spawn: { label: '⊙ Spawn',   clr: '#22c55e', bg: 'rgba(34,197,94,0.15)',  border: '#22c55e', hint: 'Click to define the player spawn point.' },
-  exit:  { label: '⬆ Exit',  clr: '#fbbf24', bg: 'rgba(251,191,36,0.15)', border: '#fbbf24', hint: 'Click (or drag) to mark map exits.' },
-  trap:  { label: '✕ Trap',   clr: '#ef4444', bg: 'rgba(239,68,68,0.15)',  border: '#ef4444', hint: 'Click (or drag) to mark trap tiles.' },
-  erase: { label: '✦ Erase', clr: '#94a3b8', bg: 'rgba(148,163,184,0.1)', border: '#475569', hint: 'Click to clear the marker on this tile.' },
+  spawn:      { label: '⊙ Spawn', clr: '#22c55e', bg: 'rgba(34,197,94,0.15)',  border: '#22c55e', hint: 'Click to set the player spawn point.' },
+  'exit-next':{ label: '⬆ Exit',  clr: '#fbbf24', bg: 'rgba(251,191,36,0.15)', border: '#fbbf24', hint: 'Exit cell — each exit can be linked to a different node (Victory, Defeat, Map…).' },
+  trap:       { label: '✕ Trap',  clr: '#ef4444', bg: 'rgba(239,68,68,0.15)',  border: '#ef4444', hint: 'Click (or drag) to mark trap cells.' },
+  erase:      { label: '✦ Erase', clr: '#94a3b8', bg: 'rgba(148,163,184,0.1)', border: '#475569', hint: 'Click to clear the marker from this cell.' },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -40,6 +80,15 @@ function toggle(arr: CellCoord[], c: CellCoord): CellCoord[] {
   return hasCoord(arr, c)
     ? arr.filter(a => !(a.x === c.x && a.z === c.z))
     : [...arr, c];
+}
+
+/** Place ou retire une case de sortie (toggle). Réassigne les exitIndex séquentiellement. */
+function toggleExit(arr: ExitCell[], c: CellCoord): ExitCell[] {
+  const existing = arr.find(a => a.x === c.x && a.z === c.z);
+  const result = existing
+    ? arr.filter(a => !(a.x === c.x && a.z === c.z))
+    : [...arr, { ...c }];
+  return reindexExits(result);
 }
 
 // The Map Editor always creates a GRID_SIZE×GRID_SIZE grid (10×10).
@@ -75,7 +124,7 @@ function renderGrid(
   b: Bounds,
   cs: number,
   spawn: CellCoord | undefined,
-  exits: CellCoord[],
+  exits: ExitCell[],
   traps: CellCoord[],
   hover: CellCoord | null,
 ) {
@@ -85,7 +134,7 @@ function renderGrid(
   const cellMap = new Map<string, SavedCellData>();
   for (const c of cells) cellMap.set(ck(c), c);
 
-  const exitSet = new Set(exits.map(ck));
+  const exitMap = new Map<string, ExitCell>(exits.map(e => [ck(e), e]));
   const trapSet = new Set(traps.map(ck));
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -123,23 +172,33 @@ function renderGrid(
       ctx.strokeRect(px, py, cs, cs);
 
       // ── Exit overlay ──
-      if (exitSet.has(k)) {
-        ctx.fillStyle = 'rgba(251,191,36,0.35)';
+      if (exitMap.has(k)) {
+        const exit  = exitMap.get(k)!;
+        const clr   = '#fbbf24';
+        const clrBg = 'rgba(251,191,36,0.35)';
+        ctx.fillStyle = clrBg;
         ctx.fillRect(px, py, cs, cs);
-        ctx.strokeStyle = '#fbbf24';
+        ctx.strokeStyle = clr;
         ctx.lineWidth = 2;
         ctx.strokeRect(px + 1, py + 1, cs - 2, cs - 2);
-        // Arrow up
         const mx  = px + cs / 2;
         const tip = py + cs * 0.20;
-        const bot = py + cs * 0.76;
+        const bot = py + cs * 0.68;
         const hw  = cs * 0.18;
-        ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2;
+        ctx.strokeStyle = clr; ctx.lineWidth = 2;
+        // ⬆ flèche vers le haut
         ctx.beginPath();
         ctx.moveTo(mx, tip); ctx.lineTo(mx, bot);
         ctx.moveTo(mx - hw, tip + hw * 1.3); ctx.lineTo(mx, tip);
         ctx.lineTo(mx + hw, tip + hw * 1.3);
         ctx.stroke();
+        // Numéro de sortie en bas de la cellule
+        const label = `${(exit.exitIndex ?? 0) + 1}`;
+        ctx.fillStyle = clr;
+        ctx.font = `bold ${Math.max(8, cs * 0.32)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(label, mx, py + cs - 2);
       }
 
       // ── Trap overlay ──
@@ -221,7 +280,9 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
   const [cells,      setCells     ] = createSignal<SavedCellData[]>([]);
   const [mode,       setMode      ] = createSignal<EditorMode>('spawn');
   const [spawn,      setSpawn     ] = createSignal<CellCoord | undefined>(data.spawnPoint);
-  const [exits,      setExits     ] = createSignal<CellCoord[]>(data.exitCells  ?? []);
+  const [exits,      setExits     ] = createSignal<ExitCell[]>(
+    reindexExits(data.exitCells ?? [])
+  );
   const [traps,      setTraps     ] = createSignal<CellCoord[]>(data.trapCells  ?? []);
   const [hover,      setHover     ] = createSignal<CellCoord | null>(null);
   const [painting,   setPainting  ] = createSignal(false);
@@ -250,11 +311,11 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
   const currentMeta  = createMemo(() => maps().find(m => m.id === selMap()));
 
   // ── Mount ─────────────────────────────────────────────────────────────────
-  onMount(() => {
-    setMaps(getAllMaps().sort((a, b) => b.updatedAt - a.updatedAt));
+  onMount(async () => {
+    const maps = await fetchMine();
+    setMaps(maps);
     if (data.selectedMap) {
-      const m = loadMap(data.selectedMap);
-      if (m) setCells(m.cells);
+      setCells(await loadCellsForPreview(data.selectedMap));
     }
     setReady(true);
   });
@@ -292,8 +353,8 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
       const next = cur && cur.x === c.x && cur.z === c.z ? undefined : c;
       setSpawn(next); props.node.updateSpawnPoint(next);
 
-    } else if (m === 'exit') {
-      const next = toggle(exits(), c);
+    } else if (m === 'exit-next') {
+      const next = toggleExit(exits(), c);
       setExits(next); props.node.updateExitCells(next);
 
     } else if (m === 'trap') {
@@ -304,7 +365,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
       if (spawn() && spawn()!.x === c.x && spawn()!.z === c.z) {
         setSpawn(undefined); props.node.updateSpawnPoint(undefined);
       }
-      const ne = exits().filter(a => !(a.x === c.x && a.z === c.z));
+      const ne: ExitCell[] = exits().filter(a => !(a.x === c.x && a.z === c.z));
       const nt = traps().filter(a => !(a.x === c.x && a.z === c.z));
       setExits(ne); props.node.updateExitCells(ne);
       setTraps(nt); props.node.updateTrapCells(nt);
@@ -319,13 +380,14 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
   const onMouseLeave = () => { setHover(null); setPainting(false); };
 
   // ── Map selection ─────────────────────────────────────────────────────────
-  const handleSelectMap = (mapId: string) => {
+  const handleSelectMap = async (mapId: string) => {
     setSelMap(mapId);
-    props.node.updateMap(mapId);
+    const mapName = maps().find(m => m.id === mapId)?.name;
+    props.node.updateMap(mapId, mapName);
     setSpawn(undefined); props.node.updateSpawnPoint(undefined);
-    setExits([]);        props.node.updateExitCells([]);
+    setExits([] as ExitCell[]); props.node.updateExitCells([]);
     setTraps([]);        props.node.updateTrapCells([]);
-    setCells(mapId ? (loadMap(mapId)?.cells ?? []) : []);
+    setCells(mapId ? await loadCellsForPreview(mapId) : []);
     props.handleUpdateNode(props.node);
   };
 
@@ -344,7 +406,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
 
       {/* ── Title ──────────────────────────────────────────────────────── */}
       <div style={{ 'margin-bottom': '1.25rem' }}>
-        <label style={labelStyle}>🏷️ Titre du bloc :</label>
+        <label style={labelStyle}>🏷️ Block title:</label>
         <input
           type="text"
           value={title()}
@@ -358,7 +420,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
 
       {/* ── Map selector ───────────────────────────────────────────────── */}
       <div style={{ 'margin-bottom': '1.25rem' }}>
-        <label style={labelStyle}>🗺️ Carte :</label>
+        <label style={labelStyle}>🗺️ Map:</label>
         <Show
           when={maps().length > 0}
           fallback={
@@ -415,7 +477,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                 {currentMeta()?.name ?? selMap()}
               </p>
               <p style={{ margin: 0, 'font-size': '0.73rem', color: '#3a5a80' }}>
-                {cells().length} case{cells().length !== 1 ? 's' : ''}
+                {cells().length} cell{cells().length !== 1 ? 's' : ''}
                 {currentMeta() && <> · {fmtDate(currentMeta()!.updatedAt)}</>}
               </p>
             </div>
@@ -449,7 +511,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                 ⊙ {spawn() ? `Spawn (${spawn()!.x}, ${spawn()!.z})` : '—'}
               </span>
               <span style={{ color: exits().length > 0 ? '#fbbf24' : '#3a3020' }}>
-                ⬆ {exits().length} sortie{exits().length !== 1 ? 's' : ''}
+                ⬆ {exits().length} exit{exits().length !== 1 ? 's' : ''}
               </span>
               <span style={{ color: traps().length > 0 ? '#ef4444' : '#3a2020' }}>
                 ✕ {traps().length} trap{traps().length !== 1 ? 's' : ''}
@@ -527,7 +589,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                 <span style={{ 'font-size': '1.25rem' }}>🗺️</span>
                 <div style={{ flex: 1 }}>
                   <p style={{ margin: '0 0 0.1rem', 'font-size': '1rem', 'font-weight': '700', color: '#c8daff' }}>
-                    {currentMeta()?.name ?? 'Carte'}
+                    {currentMeta()?.name ?? 'Map'}
                   </p>
                   <p style={{ margin: 0, 'font-size': '0.73rem', color: '#3a5a80' }}>
                     Action placement · grid {b().w}×{b().h}
@@ -546,7 +608,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                     'line-height': 1,
                     transition: 'border-color 0.12s, color 0.12s',
                   }}
-                  title="Fermer"
+                  title="Close"
                 >✕</button>
               </div>
 
@@ -558,7 +620,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                 'flex-wrap': 'wrap',
                 'border-bottom': '1px solid #0e1828',
               }}>
-                <For each={(['spawn', 'exit', 'trap', 'erase'] as EditorMode[])}>
+                <For each={(['spawn', 'exit-next', 'trap', 'erase'] as EditorMode[])}>
                   {(m) => {
                     const cfg    = MODE_CFG[m];
                     const active = () => mode() === m;
@@ -626,9 +688,10 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                 {/* Legend */}
                 <div style={{ display: 'flex', gap: '1rem', flex: 1, 'flex-wrap': 'wrap' }}>
                   <span style={{ 'font-size': '0.74rem', color: '#22c55e' }}>● Spawn</span>
-                  <span style={{ 'font-size': '0.74rem', color: '#fbbf24' }}>■ Exit</span>
+                  <span style={{ 'font-size': '0.74rem', color: '#fbbf24' }}>⬆ Exit →next</span>
+                  <span style={{ 'font-size': '0.74rem', color: '#f87171' }}>⛔ Exit end</span>
                   <span style={{ 'font-size': '0.74rem', color: '#ef4444' }}>✕ Trap</span>
-                  <span style={{ 'font-size': '0.74rem', color: '#22d3ee' }}>◆ Objet</span>
+                  <span style={{ 'font-size': '0.74rem', color: '#22d3ee' }}>◆ Object</span>
                 </div>
 
                 {/* Live counters */}
@@ -637,7 +700,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                     ⊙ {spawn() ? `(${spawn()!.x}, ${spawn()!.z})` : '—'}
                   </span>
                   <span style={{ color: exits().length > 0 ? '#fbbf24' : '#3a3010' }}>
-                    ⬆ {exits().length} sortie{exits().length !== 1 ? 's' : ''}
+                    ⬆ {exits().length} exit{exits().length !== 1 ? 's' : ''}
                   </span>
                   <span style={{ color: traps().length > 0 ? '#ef4444' : '#3a1010' }}>
                     ✕ {traps().length} trap{traps().length !== 1 ? 's' : ''}

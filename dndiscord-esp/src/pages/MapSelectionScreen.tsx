@@ -1,12 +1,14 @@
 import { Component, createSignal, onMount, For, Show } from "solid-js";
-import { useNavigate } from "@solidjs/router";
-import { Map, ChevronRight, Trash2 } from "lucide-solid";
-import { getAllMaps, deleteMap, getAllDungeons, deleteDungeon } from "../services/mapStorage";
+import { useNavigate, A } from "@solidjs/router";
+import { Map, ChevronRight, Trash2, Upload } from "lucide-solid";
+import { fetchMine, deleteMineMap, getAllDungeons, deleteDungeon, loadDungeon, generateMapId, saveMap, cacheMap, type SavedMapData } from "../services/mapRepository";
 import { DungeonCreationWizard } from "../components/DungeonCreationWizard";
-import { safeConfirm } from "../services/ui/confirm";
+import ConfirmModal from "../components/common/ConfirmModal";
 import PageMeta from "../layouts/PageMeta";
 import { SectionHeader } from "../components/common/SectionHeader";
 import { t } from "../i18n";
+import { getApiUrl } from "../services/config";
+import { AuthService } from "../services/auth.service";
 
 // House+door icon for dungeons
 const DungeonIcon: Component<{ size?: number; class?: string }> = (props) => (
@@ -46,15 +48,22 @@ export default function MapSelectionScreen() {
 	const [dungeons, setDungeons] = createSignal<Array<{ id: string; name: string; totalRooms: number; createdAt: number; updatedAt: number }>>([]);
 	const [deletingId, setDeletingId] = createSignal<string | null>(null);
 	const [showDungeonWizard, setShowDungeonWizard] = createSignal(false);
+	const [importError, setImportError] = createSignal<string | null>(null);
+	let importFileInputRef: HTMLInputElement | undefined;
+
+	// ── Confirm modal state ───────────────────────────────────────────────────
+	interface PendingDelete { kind: 'map' | 'dungeon'; id: string; name: string; }
+	const [pendingDelete, setPendingDelete] = createSignal<PendingDelete | null>(null);
 
 	onMount(() => {
 		loadData();
 	});
 
-	const loadData = () => {
-		const allMaps = getAllMaps();
-		allMaps.sort((a, b) => b.updatedAt - a.updatedAt);
-		const standaloneMaps = allMaps.filter((m) => {
+	const loadData = async () => {
+		const allMaps = await fetchMine();
+		// DB maps have no mapType in metadata — only exclude legacy dungeon-room entries
+		const standaloneMaps = allMaps.filter(m => {
+			if (!m.id.startsWith('map_')) return true; // DB map — always standalone
 			try {
 				const data = localStorage.getItem(`dndiscord_maps_${m.id}`);
 				if (!data) return true;
@@ -79,23 +88,97 @@ export default function MapSelectionScreen() {
 		navigate(`/map-editor/${mapId}`);
 	};
 
-	const handleDelete = (e: Event, mapId: string) => {
+	const handleDelete = (e: Event, mapId: string, mapName: string) => {
 		e.stopPropagation();
-		if (safeConfirm(t("page.mapSelection.deleteMapConfirm"))) {
-			setDeletingId(mapId);
-			deleteMap(mapId);
-			loadData();
-			setDeletingId(null);
-		}
+		setPendingDelete({ kind: 'map', id: mapId, name: mapName });
 	};
 
-	const handleDeleteDungeon = (e: Event, dungeonId: string) => {
+	const handleDeleteDungeon = (e: Event, dungeonId: string, dungeonName: string) => {
 		e.stopPropagation();
-		if (safeConfirm(t("page.mapSelection.deleteDungeonConfirm"))) {
-			setDeletingId(dungeonId);
-			deleteDungeon(dungeonId);
-			loadData();
-			setDeletingId(null);
+		setPendingDelete({ kind: 'dungeon', id: dungeonId, name: dungeonName });
+	};
+
+	const confirmDelete = async () => {
+		const target = pendingDelete();
+		if (!target) return;
+		setPendingDelete(null);
+		setDeletingId(target.id);
+		if (target.kind === 'map') {
+			await deleteMineMap(target.id);
+		} else {
+			deleteDungeon(target.id);
+		}
+		await loadData();
+		setDeletingId(null);
+	};
+
+	const handleImportFile = async (file: File) => {
+		setImportError(null);
+		try {
+			const text = await file.text();
+			let parsed: SavedMapData;
+			try {
+				parsed = JSON.parse(text) as SavedMapData;
+			} catch {
+				throw new Error('Invalid file: malformed JSON.');
+			}
+			if (!parsed || !Array.isArray(parsed.cells)) {
+				throw new Error('Invalid format: "cells" field missing or invalid.');
+			}
+
+			const token = AuthService.getToken();
+			const now = Date.now();
+			let newId: string;
+			let createdAt = now;
+
+			try {
+				const res = token ? await fetch(`${getApiUrl()}/api/maps/mine`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+					body: JSON.stringify({ name: parsed.name ?? 'Imported map', data: '{}' }),
+				}) : null;
+				if (res?.ok) {
+					const created = await res.json();
+					newId = created.id;
+					createdAt = created.createdAt ? new Date(created.createdAt).getTime() : now;
+				} else {
+					newId = generateMapId();
+				}
+			} catch {
+				newId = generateMapId();
+			}
+
+			const importedMap: SavedMapData = {
+				...parsed,
+				id:        newId,
+				name:      parsed.name ?? 'Imported map',
+				createdAt,
+				updatedAt: now,
+				mapType:   parsed.mapType === 'dungeon-room' ? 'classique' : (parsed.mapType ?? 'classique'),
+				dungeonId: undefined,
+				roomIndex: undefined,
+			};
+
+			const isDbMap = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newId);
+			if (isDbMap && token) {
+				const res = await fetch(`${getApiUrl()}/api/maps/mine/${newId}`, {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+					body: JSON.stringify({ name: importedMap.name, data: JSON.stringify(importedMap) }),
+				});
+				if (res.ok) {
+					cacheMap(importedMap);
+				} else {
+					saveMap(importedMap);
+				}
+			} else {
+				saveMap(importedMap);
+			}
+
+			navigate(`/map-editor/${newId}`);
+		} catch (err: any) {
+			setImportError(err?.message ?? 'Erreur inconnue.');
+			setTimeout(() => setImportError(null), 4000);
 		}
 	};
 
@@ -111,8 +194,8 @@ export default function MapSelectionScreen() {
 
 				<div class="max-w-[760px] mx-auto px-4 py-8">
 
-					{/* Action grid: two big buttons */}
-					<div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-9">
+					{/* Action grid: three buttons */}
+					<div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-9">
 						<button
 							type="button"
 							onClick={handleCreateNew}
@@ -138,7 +221,44 @@ export default function MapSelectionScreen() {
 								{t("page.mapEditor.actions.newDungeon")}
 							</span>
 						</button>
+
+						<button
+							type="button"
+							onClick={() => importFileInputRef?.click()}
+							class="menu-card flex items-center justify-center gap-2.5 !py-[18px] !px-6"
+							style={{
+								background: "linear-gradient(135deg, rgba(30,58,78,0.55) 0%, rgba(22,44,68,0.6) 100%)",
+								"border-color": "rgba(99,179,237,0.35)",
+							}}
+						>
+							<Upload size={18} class="text-sky-300" aria-hidden="true" />
+							<span class="font-display font-semibold tracking-wide text-[14px] text-sky-300">
+								Importer une carte
+							</span>
+						</button>
 					</div>
+
+					{/* Hidden file input for import */}
+					<input
+						ref={importFileInputRef}
+						type="file"
+						accept=".json,.dndmap.json"
+						class="hidden"
+						onChange={(e) => {
+							const file = e.currentTarget.files?.[0];
+							if (file) handleImportFile(file);
+							e.currentTarget.value = '';
+						}}
+					/>
+
+					{/* Import error toast */}
+					<Show when={importError()}>
+						{(msg) => (
+							<div class="mb-5 px-4 py-3 rounded-lg text-sm font-medium bg-red-900/60 border border-red-500/40 text-red-300">
+								✕ {msg()}
+							</div>
+						)}
+					</Show>
 
 					{/* Dungeons section */}
 					<Show when={dungeons().length > 0}>
@@ -211,7 +331,7 @@ export default function MapSelectionScreen() {
 													/>
 													<button
 														type="button"
-														onClick={(e) => handleDeleteDungeon(e, d.id)}
+														onClick={(e) => handleDeleteDungeon(e, d.id, d.name)}
 														class="p-1.5 rounded text-mute hover:text-danger transition"
 														title={t("common.delete")}
 														aria-label={`${t("common.delete")} ${d.name}`}
@@ -280,7 +400,7 @@ export default function MapSelectionScreen() {
 													/>
 													<button
 														type="button"
-														onClick={(e) => handleDelete(e, m.id)}
+														onClick={(e) => handleDelete(e, m.id, m.name)}
 														class="p-1.5 rounded text-mute hover:text-danger transition"
 														title={t("common.delete")}
 														aria-label={`${t("common.delete")} ${m.name}`}
@@ -305,6 +425,16 @@ export default function MapSelectionScreen() {
 					</Show>
 
 				</div>
+
+			<ConfirmModal
+				open={!!pendingDelete()}
+				title={pendingDelete()?.kind === 'map' ? "Delete map" : "Delete dungeon"}
+				message={`Delete "${pendingDelete()?.name ?? ''}"? This action is irreversible.`}
+				confirmLabel="Delete"
+				danger
+				onConfirm={confirmDelete}
+				onCancel={() => setPendingDelete(null)}
+			/>
 			</>
 		</Show>
 	);
