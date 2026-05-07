@@ -533,7 +533,7 @@ function CosmeticCard(props: { item: ShopItem; onAdd: () => void; onPreview?: ()
           {props.item.tag}
         </span>
       </Show>
-
+ 
       <div
         class={props.onPreview ? "relative cursor-pointer" : "relative"}
         style={{
