@@ -180,6 +180,36 @@ export const SHOP_DICE_SKINS: ShopItem[] = [
       diceColor: "#F5F1E4",
     },
   },
+  {
+    id: "dice-epitech",
+    category: "dice",
+    title: "Epitech Edition",
+    description: "A tribute to the school that forged the devs behind this project. Circuit boards, hex code, and blue neon.",
+    priceCents: 399,
+    tag: "Exclusive",
+    maxQuantity: 1,
+    image: "/assets/shop/dice/epitech.png",
+    preview: {
+      kind: "dice",
+      bg: "linear-gradient(135deg, #050D1A 0%, #0A2A6E 100%)",
+      diceColor: "#60A5FA",
+    },
+  },
+  {
+    id: "dice-abyssal-tide",
+    category: "dice",
+    title: "Abyssal Tide",
+    description: "Forged in the crushing depths of the Sunken Sea. Kraken runes glow in the dark — something ancient stirs with every roll.",
+    priceCents: 349,
+    tag: "New",
+    maxQuantity: 1,
+    image: "/assets/shop/dice/abyss.png",
+    preview: {
+      kind: "dice",
+      bg: "linear-gradient(135deg, #020C14 0%, #063D4A 100%)",
+      diceColor: "#22D3EE",
+    },
+  },
 ];
 
 /* ───────────────────────── Titles ───────────────────────── */

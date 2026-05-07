@@ -23,6 +23,10 @@ const DESIGN_LORE: Record<string, string> = {
     "Struck from solid saffron gold and inscribed with the court's own calligraphy, the Royal Saffron set is the choice of kings and seasoned commanders. Heavy, warm, and unmistakably regal.",
   "dice-mythic-pack":
     "An artefact of impossible craft — every face of the Mythic Pack shifts through the full spectrum of elemental power. Crimson. Frost. Verdant. Gold. Void. All five essences bound into one legendary set that defies the laws of material planes.",
+  "dice-epitech":
+    "Engineered by students who traded sleep for code and dreams for deployments. The Epitech Edition is etched with circuit traces and hex addresses — a reminder that the most powerful spells are written in C. Roll a 20 and `segfault` your enemies.",
+  "dice-abyssal-tide":
+    "Recovered from the wreck of the Leviathan's Cradle, three leagues below the Sunken Sea. The faces bear the sigils of the Drowned Court, and the cyan runes pulse with a rhythm that has no name. Sailors say that rolling a 1 calls something up from below.",
 };
 
 interface Props {
