@@ -1,6 +1,6 @@
 import { Show, createEffect, createSignal, type JSX } from "solid-js";
 import { A, useNavigate } from "@solidjs/router";
-import { Check, Swords, Drama, ScrollText } from "lucide-solid";
+import { Check, Swords, Drama, ScrollText, ShoppingBag } from "lucide-solid";
 import { authStore } from "../stores/auth.store";
 import { LoginButton } from "../components/auth";
 import { AnimatedD20 } from "../components/common/AnimatedD20";
@@ -131,7 +131,16 @@ export default function LoginPage() {
               <Show when={!authStore.isLoading()}>
                 <div class="flex flex-col items-center gap-6">
                   <LoginButton class="w-full justify-center" />
-                  
+
+                  {/* Support shop entry — secondary CTA */}
+                  <A
+                    href="/shop"
+                    class="group relative w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-gold-300/40 text-slate-200 hover:text-white text-sm font-medium transition-all focus-ring-gold"
+                  >
+                    <ShoppingBag class="w-4 h-4 text-gold-300 group-hover:scale-110 transition-transform" />
+                    Visit the support shop
+                  </A>
+
                   {/* Features preview */}
                   <div class="w-full pt-6 border-t border-white/10">
                     <p class="text-center text-xs text-slate-400 uppercase tracking-wider mb-4">

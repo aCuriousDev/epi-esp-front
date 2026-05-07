@@ -14,6 +14,9 @@ import BoardGame from "./pages/BoardGame";
 import MapEditor from "./pages/MapEditor";
 import MapSelectionScreen from "./pages/MapSelectionScreen";
 import LoginPage from "./pages/LoginPage";
+import ShopPage from "./pages/ShopPage";
+import ShopCartPage from "./pages/ShopCartPage";
+import ShopCheckoutPage from "./pages/ShopCheckoutPage";
 import ProfilePage from "./pages/ProfilePage";
 import CampaignsPage from "./pages/CampaignsPage";
 import CreateCampaign from "./pages/CreateCampaign";
@@ -78,6 +81,9 @@ render(
     <Router root={RouterRoot}>
       {/* Public — no shell */}
       <Route path="/login" component={LoginPage} />
+      <Route path="/shop" component={ShopPage} />
+      <Route path="/shop/cart" component={ShopCartPage} />
+      <Route path="/shop/checkout" component={ShopCheckoutPage} />
       <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/privacy" component={PrivacyPolicy} />
       <Route path="/terms" component={TermsOfService} />
