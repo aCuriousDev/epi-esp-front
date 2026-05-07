@@ -70,9 +70,9 @@ export default function ShopPanel(props: ShopPanelProps) {
         campaignId: props.campaignId,
       });
       setWallet((prev) => prev ? { ...prev, goldPieces: result.remainingGold } : prev);
-      setFeedback({ id: item.id, ok: true, msg: `${item.name} acheté !` });
+      setFeedback({ id: item.id, ok: true, msg: `${item.name} purchased!` });
     } catch (err: any) {
-      const msg = err?.response?.data?.error ?? "Achat impossible";
+      const msg = err?.response?.data?.error ?? "Purchase failed";
       setFeedback({ id: item.id, ok: false, msg });
     } finally {
       setBuyingId(null);
@@ -184,11 +184,11 @@ export default function ShopPanel(props: ShopPanelProps) {
         {/* Item grid */}
         <div style={{ flex: 1, "overflow-y": "auto", padding: "0.75rem 1.25rem" }}>
           <Show when={loading()}>
-            <p class="text-center text-white/30 text-sm py-8">Chargement…</p>
+            <p class="text-center text-white/30 text-sm py-8">Loading…</p>
           </Show>
 
           <Show when={!loading() && filteredCatalog().length === 0}>
-            <p class="text-center text-white/30 text-sm py-8">Aucun article disponible.</p>
+            <p class="text-center text-white/30 text-sm py-8">No items available.</p>
           </Show>
 
           <Show when={!loading() && filteredCatalog().length > 0}>
@@ -284,7 +284,7 @@ export default function ShopPanel(props: ShopPanelProps) {
             "text-align": "center",
           }}
         >
-          Les articles en rouge sont hors de portée de votre bourse.
+          Items in red are out of reach for your purse.
         </div>
       </div>
     </div>

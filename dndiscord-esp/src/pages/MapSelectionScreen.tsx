@@ -120,10 +120,10 @@ export default function MapSelectionScreen() {
 			try {
 				parsed = JSON.parse(text) as SavedMapData;
 			} catch {
-				throw new Error('Fichier invalide : JSON malformé.');
+				throw new Error('Invalid file: malformed JSON.');
 			}
 			if (!parsed || !Array.isArray(parsed.cells)) {
-				throw new Error('Format invalide : champ "cells" manquant ou incorrect.');
+				throw new Error('Invalid format: "cells" field missing or invalid.');
 			}
 
 			const token = AuthService.getToken();
@@ -135,7 +135,7 @@ export default function MapSelectionScreen() {
 				const res = token ? await fetch(`${getApiUrl()}/api/maps/mine`, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-					body: JSON.stringify({ name: parsed.name ?? 'Carte importée', data: '{}' }),
+					body: JSON.stringify({ name: parsed.name ?? 'Imported map', data: '{}' }),
 				}) : null;
 				if (res?.ok) {
 					const created = await res.json();
@@ -151,7 +151,7 @@ export default function MapSelectionScreen() {
 			const importedMap: SavedMapData = {
 				...parsed,
 				id:        newId,
-				name:      parsed.name ?? 'Carte importée',
+				name:      parsed.name ?? 'Imported map',
 				createdAt,
 				updatedAt: now,
 				mapType:   parsed.mapType === 'dungeon-room' ? 'classique' : (parsed.mapType ?? 'classique'),
@@ -428,9 +428,9 @@ export default function MapSelectionScreen() {
 
 			<ConfirmModal
 				open={!!pendingDelete()}
-				title={pendingDelete()?.kind === 'map' ? "Supprimer la carte" : "Supprimer le donjon"}
-				message={`Supprimer "${pendingDelete()?.name ?? ''}" ? Cette action est irréversible.`}
-				confirmLabel="Supprimer"
+				title={pendingDelete()?.kind === 'map' ? "Delete map" : "Delete dungeon"}
+				message={`Delete "${pendingDelete()?.name ?? ''}"? This action is irreversible.`}
+				confirmLabel="Delete"
 				danger
 				onConfirm={confirmDelete}
 				onCancel={() => setPendingDelete(null)}

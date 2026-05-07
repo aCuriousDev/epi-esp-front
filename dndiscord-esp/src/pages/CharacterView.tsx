@@ -26,6 +26,7 @@ import {
   getAbilityModifier,
 } from "../types/character";
 import { CharacterService, CharacterDto } from "../services/character.service";
+import { characterClassDisplay, characterRaceDisplay } from "../i18n/characterDisplay";
 import { GetCharacterProfilPic } from "../utils/characterProfilPic";
 import { safeConfirm } from "../services/ui/confirm";
 import InventoryPanel from "../components/InventoryPanel";
@@ -70,7 +71,7 @@ export default function CharacterView() {
       setCharacter(mappedCharacter);
     } catch (err: any) {
       console.error("Failed to load character:", err);
-      setError("Impossible de charger le personnage.");
+      setError(t("characterView.loadError"));
     } finally {
       setLoading(false);
     }
@@ -99,7 +100,7 @@ export default function CharacterView() {
     const char = character();
     if (!char) return;
 
-    if (!safeConfirm(`Faire monter ${char.name} au niveau ${char.level + 1} ?`)) {
+    if (!safeConfirm(`Level ${char.name} up to level ${char.level + 1}?`)) {
       return;
     }
 
@@ -109,7 +110,7 @@ export default function CharacterView() {
       setCharacter(updatedChar);
     } catch (err) {
       console.error("Failed to level up:", err);
-      setError("Impossible de faire monter de niveau.");
+      setError(t("characterView.levelUpError"));
     }
   };
 
@@ -202,10 +203,10 @@ export default function CharacterView() {
                         {char().name}
                       </h1>
                       <p class="text-slate-300 mt-1">
-                        <span class="text-purple-400">{char().race}</span>
+                        <span class="text-purple-400">{characterRaceDisplay[char().race] ?? char().race}</span>
                         {" • "}
                         <span class="text-amber-400">
-                          {char().characterClass}
+                          {characterClassDisplay[char().characterClass] ?? char().characterClass}
                         </span>
                         {" • "}
                         <span class="text-slate-400">

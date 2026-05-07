@@ -32,7 +32,7 @@ const ExportImportModal: Component<ExportImportModalProps> = (props) => {
         props.onImport(data);
         props.onClose();
       } catch {
-        alert('Fichier invalide');
+        alert('Invalid file');
       }
     };
     reader.readAsText(file);
@@ -54,7 +54,7 @@ const ExportImportModal: Component<ExportImportModalProps> = (props) => {
             <div class='flex flex-row'>
                 <button
                  class="mr-1 flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-white-500 hover:text-gray-100 rounded-xl transition-all shadow-lg shadow-gray-500/20"
-                 onClick={props.onClose}>Fermer</button>
+                 onClick={props.onClose}>Close</button>
                 <button
                  class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all shadow-lg shadow-purple-500/20"
                  onClick={() => {
@@ -65,7 +65,7 @@ const ExportImportModal: Component<ExportImportModalProps> = (props) => {
                    } catch {
                      // invalid JSON -- keep modal open
                    }
-                 }}>Sauvegarder</button>
+                 }}>Save</button>
             </div>
         </div>
         }

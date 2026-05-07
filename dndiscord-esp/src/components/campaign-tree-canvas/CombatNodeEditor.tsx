@@ -99,7 +99,7 @@ const CombatNodeEditor: Component<CombatNodeEditorProps> = (props) => {
     <div>
       {/* Titre */}
       <div style={{ 'margin-bottom': '1.25rem' }}>
-        <label style={labelStyle}>🏷️ Titre du bloc :</label>
+        <label style={labelStyle}>🏷️ Block title:</label>
         <input
           type="text"
           value={title()}
@@ -113,7 +113,7 @@ const CombatNodeEditor: Component<CombatNodeEditorProps> = (props) => {
 
       {/* Carte */}
       <div style={{ 'margin-bottom': '1.25rem' }}>
-        <label style={labelStyle}>🗺️ Carte :</label>
+        <label style={labelStyle}>🗺️ Map:</label>
         <select
           value={selectedMap()}
           onChange={(e) => handleUpdateMap(e.currentTarget.value)}
@@ -143,9 +143,9 @@ const CombatNodeEditor: Component<CombatNodeEditorProps> = (props) => {
           onChange={(e) => handleUpdateDifficulty(e.currentTarget.value as 'easy' | 'medium' | 'hard')}
           style={{ ...fieldStyle, cursor: 'pointer' }}
         >
-          <option value="easy">★☆☆ Facile</option>
-          <option value="medium">★★☆ Moyen</option>
-          <option value="hard">★★★ Difficile</option>
+          <option value="easy">★☆☆ Easy</option>
+          <option value="medium">★★☆ Medium</option>
+          <option value="hard">★★★ Hard</option>
         </select>
       </div>
 
@@ -157,7 +157,7 @@ const CombatNodeEditor: Component<CombatNodeEditorProps> = (props) => {
             onClick={handleAddVillain}
             style={{ padding: '0.25rem 0.5rem', background: '#8b0000', border: 'none', 'border-radius': '3px', color: 'white', cursor: 'pointer', 'font-size': '0.85rem' }}
           >
-            + Ajouter
+            + Add
           </button>
         </div>
 
@@ -170,7 +170,7 @@ const CombatNodeEditor: Component<CombatNodeEditorProps> = (props) => {
               {(villain, index) => (
                 <div style={{ background: '#1a1a2a', border: '1px solid #3c3c3f', 'border-radius': '6px', padding: '0.75rem' }}>
                   <div style={{ display: 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '0.5rem' }}>
-                    <span style={{ 'font-size': '0.8rem', color: '#888' }}>Ennemi {index() + 1}</span>
+                    <span style={{ 'font-size': '0.8rem', color: '#888' }}>Enemy {index() + 1}</span>
                     <button
                       onClick={() => handleRemoveVillain(index())}
                       style={{ padding: '0.2rem 0.4rem', background: '#5a1d1d', border: 'none', 'border-radius': '3px', color: '#f48771', cursor: 'pointer', 'font-size': '0.8rem' }}
@@ -179,7 +179,7 @@ const CombatNodeEditor: Component<CombatNodeEditorProps> = (props) => {
 
                   {/* Personnage */}
                   <div style={{ 'margin-bottom': '0.5rem' }}>
-                    <label style={{ 'font-size': '0.8rem', color: '#aaa', display: 'block', 'margin-bottom': '0.25rem' }}>Personnage :</label>
+                    <label style={{ 'font-size': '0.8rem', color: '#aaa', display: 'block', 'margin-bottom': '0.25rem' }}>Character:</label>
                     <select
                       value={villain.characterId}
                       onChange={(e) => handleVillainChange(index(), 'characterId', e.currentTarget.value)}
@@ -195,7 +195,7 @@ const CombatNodeEditor: Component<CombatNodeEditorProps> = (props) => {
                   {/* Position */}
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
                     <div style={{ flex: 1 }}>
-                      <label style={{ 'font-size': '0.8rem', color: '#aaa', display: 'block', 'margin-bottom': '0.25rem' }}>Position X :</label>
+                      <label style={{ 'font-size': '0.8rem', color: '#aaa', display: 'block', 'margin-bottom': '0.25rem' }}>Position X:</label>
                       <input
                         type="number"
                         value={villain.position.x}
@@ -207,7 +207,7 @@ const CombatNodeEditor: Component<CombatNodeEditorProps> = (props) => {
                       />
                     </div>
                     <div style={{ flex: 1 }}>
-                      <label style={{ 'font-size': '0.8rem', color: '#aaa', display: 'block', 'margin-bottom': '0.25rem' }}>Position Y :</label>
+                      <label style={{ 'font-size': '0.8rem', color: '#aaa', display: 'block', 'margin-bottom': '0.25rem' }}>Position Y:</label>
                       <input
                         type="number"
                         value={villain.position.y}

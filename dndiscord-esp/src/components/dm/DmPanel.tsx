@@ -386,10 +386,10 @@ export const DmPanel: Component<DmPanelProps> = (props) => {
               <button
                 onClick={props.onNextNode}
                 class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-indigo-600/80 to-purple-600/80 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-semibold border border-indigo-400/40 shadow-lg transition-colors cursor-pointer"
-                title="Revenir à la session et passer au bloc suivant du scénario"
+                title="Return to session and advance to the next scenario block"
               >
                 <ChevronRight class="w-3.5 h-3.5" />
-                Prochain nœud scénario
+                Next scenario node
               </button>
             </Show>
           </Show>

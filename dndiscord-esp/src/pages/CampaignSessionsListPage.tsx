@@ -82,7 +82,7 @@ const CampaignSessionsListPage: Component = () => {
 
   const handleEndSession = async (session: GameSessionResponse, e: MouseEvent) => {
     e.stopPropagation(); // ne pas déclencher la navigation vers le replay
-    if (!safeConfirm(`Mettre fin à cette session ? Cette action est irréversible.`)) return;
+    if (!safeConfirm(`End this session? This action is irreversible.`)) return;
     setEndingId(session.id);
     try {
       await CampaignService.completeSession(params.id, session.id);
@@ -205,8 +205,8 @@ const CampaignSessionsListPage: Component = () => {
                       <button
                         onClick={(e) => handleEndSession(session, e)}
                         disabled={endingId() === session.id}
-                        title="Mettre fin à cette session"
-                        aria-label="Mettre fin à cette session"
+                        title={t("sessionsList.endSession")}
+                        aria-label={t("sessionsList.endSession")}
                         class="flex items-center justify-center w-12 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 hover:border-red-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                       >
                         <Show when={endingId() === session.id}

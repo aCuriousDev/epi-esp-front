@@ -56,7 +56,7 @@ export default function ConfirmModal(props: ConfirmModalProps) {
               onClick={props.onCancel}
               class="px-4 py-2 rounded-xl text-sm font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-colors"
             >
-              {props.cancelLabel ?? "Annuler"}
+              {props.cancelLabel ?? "Cancel"}
             </button>
             <button
               onClick={props.onConfirm}
@@ -66,7 +66,7 @@ export default function ConfirmModal(props: ConfirmModalProps) {
                   : "bg-amber-600 hover:bg-amber-500 border border-amber-500/50 text-white"
               }`}
             >
-              {props.confirmLabel ?? "Confirmer"}
+              {props.confirmLabel ?? "Confirm"}
             </button>
           </div>
         </div>

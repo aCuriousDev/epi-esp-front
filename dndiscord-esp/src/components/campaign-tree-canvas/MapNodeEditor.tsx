@@ -58,10 +58,10 @@ const CELL_MAX  = 52;
 const H_RESERVE = 240; // px reserved for board chrome (header + toolbar + footer)
 
 const MODE_CFG: Record<EditorMode, { label: string; clr: string; bg: string; border: string; hint: string }> = {
-  spawn:      { label: '⊙ Spawn',    clr: '#22c55e', bg: 'rgba(34,197,94,0.15)',  border: '#22c55e', hint: 'Cliquez pour définir le point d\'apparition des joueurs.' },
-  'exit-next':{ label: '⬆ Sortie',  clr: '#fbbf24', bg: 'rgba(251,191,36,0.15)', border: '#fbbf24', hint: 'Case de sortie — chaque sortie peut être reliée à un nœud différent (Victoire, Défaite, Map…).' },
-  trap:       { label: '✕ Piège',    clr: '#ef4444', bg: 'rgba(239,68,68,0.15)',  border: '#ef4444', hint: 'Cliquez (ou glissez) pour marquer les cases de pièges.' },
-  erase:      { label: '✦ Effacer', clr: '#94a3b8', bg: 'rgba(148,163,184,0.1)', border: '#475569', hint: 'Cliquez pour effacer le marqueur de cette case.' },
+  spawn:      { label: '⊙ Spawn', clr: '#22c55e', bg: 'rgba(34,197,94,0.15)',  border: '#22c55e', hint: 'Click to set the player spawn point.' },
+  'exit-next':{ label: '⬆ Exit',  clr: '#fbbf24', bg: 'rgba(251,191,36,0.15)', border: '#fbbf24', hint: 'Exit cell — each exit can be linked to a different node (Victory, Defeat, Map…).' },
+  trap:       { label: '✕ Trap',  clr: '#ef4444', bg: 'rgba(239,68,68,0.15)',  border: '#ef4444', hint: 'Click (or drag) to mark trap cells.' },
+  erase:      { label: '✦ Erase', clr: '#94a3b8', bg: 'rgba(148,163,184,0.1)', border: '#475569', hint: 'Click to clear the marker from this cell.' },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -406,7 +406,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
 
       {/* ── Title ──────────────────────────────────────────────────────── */}
       <div style={{ 'margin-bottom': '1.25rem' }}>
-        <label style={labelStyle}>🏷️ Titre du bloc :</label>
+        <label style={labelStyle}>🏷️ Block title:</label>
         <input
           type="text"
           value={title()}
@@ -420,7 +420,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
 
       {/* ── Map selector ───────────────────────────────────────────────── */}
       <div style={{ 'margin-bottom': '1.25rem' }}>
-        <label style={labelStyle}>🗺️ Carte :</label>
+        <label style={labelStyle}>🗺️ Map:</label>
         <Show
           when={maps().length > 0}
           fallback={
@@ -477,7 +477,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                 {currentMeta()?.name ?? selMap()}
               </p>
               <p style={{ margin: 0, 'font-size': '0.73rem', color: '#3a5a80' }}>
-                {cells().length} case{cells().length !== 1 ? 's' : ''}
+                {cells().length} cell{cells().length !== 1 ? 's' : ''}
                 {currentMeta() && <> · {fmtDate(currentMeta()!.updatedAt)}</>}
               </p>
             </div>
@@ -511,7 +511,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                 ⊙ {spawn() ? `Spawn (${spawn()!.x}, ${spawn()!.z})` : '—'}
               </span>
               <span style={{ color: exits().length > 0 ? '#fbbf24' : '#3a3020' }}>
-                ⬆ {exits().length} sortie{exits().length !== 1 ? 's' : ''}
+                ⬆ {exits().length} exit{exits().length !== 1 ? 's' : ''}
               </span>
               <span style={{ color: traps().length > 0 ? '#ef4444' : '#3a2020' }}>
                 ✕ {traps().length} trap{traps().length !== 1 ? 's' : ''}
@@ -589,7 +589,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                 <span style={{ 'font-size': '1.25rem' }}>🗺️</span>
                 <div style={{ flex: 1 }}>
                   <p style={{ margin: '0 0 0.1rem', 'font-size': '1rem', 'font-weight': '700', color: '#c8daff' }}>
-                    {currentMeta()?.name ?? 'Carte'}
+                    {currentMeta()?.name ?? 'Map'}
                   </p>
                   <p style={{ margin: 0, 'font-size': '0.73rem', color: '#3a5a80' }}>
                     Action placement · grid {b().w}×{b().h}
@@ -608,7 +608,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                     'line-height': 1,
                     transition: 'border-color 0.12s, color 0.12s',
                   }}
-                  title="Fermer"
+                  title="Close"
                 >✕</button>
               </div>
 
@@ -688,10 +688,10 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                 {/* Legend */}
                 <div style={{ display: 'flex', gap: '1rem', flex: 1, 'flex-wrap': 'wrap' }}>
                   <span style={{ 'font-size': '0.74rem', color: '#22c55e' }}>● Spawn</span>
-                  <span style={{ 'font-size': '0.74rem', color: '#fbbf24' }}>⬆ Sortie →suite</span>
-                  <span style={{ 'font-size': '0.74rem', color: '#f87171' }}>⛔ Sortie fin</span>
-                  <span style={{ 'font-size': '0.74rem', color: '#ef4444' }}>✕ Piège</span>
-                  <span style={{ 'font-size': '0.74rem', color: '#22d3ee' }}>◆ Objet</span>
+                  <span style={{ 'font-size': '0.74rem', color: '#fbbf24' }}>⬆ Exit →next</span>
+                  <span style={{ 'font-size': '0.74rem', color: '#f87171' }}>⛔ Exit end</span>
+                  <span style={{ 'font-size': '0.74rem', color: '#ef4444' }}>✕ Trap</span>
+                  <span style={{ 'font-size': '0.74rem', color: '#22d3ee' }}>◆ Object</span>
                 </div>
 
                 {/* Live counters */}
@@ -700,7 +700,7 @@ const MapNodeEditor: Component<MapNodeEditorProps> = (props) => {
                     ⊙ {spawn() ? `(${spawn()!.x}, ${spawn()!.z})` : '—'}
                   </span>
                   <span style={{ color: exits().length > 0 ? '#fbbf24' : '#3a3010' }}>
-                    ⬆ {exits().length} sortie{exits().length !== 1 ? 's' : ''}
+                    ⬆ {exits().length} exit{exits().length !== 1 ? 's' : ''}
                   </span>
                   <span style={{ color: traps().length > 0 ? '#ef4444' : '#3a1010' }}>
                     ✕ {traps().length} trap{traps().length !== 1 ? 's' : ''}

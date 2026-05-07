@@ -45,11 +45,11 @@ const CampaignManager: Component = () => {
       bgColor: '#0a1830', borderColor: '#1d4ed8', accentColor: '#60a5fa',
     },
     {
-      label: 'Victoire', icon: <Trophy class="w-5 h-5" />, blockName: 'victory',
+      label: t('campaignManager.block.victory'), icon: <Trophy class="w-5 h-5" />, blockName: 'victory',
       bgColor: '#1a1400', borderColor: '#f59e0b', accentColor: '#fbbf24',
     },
     {
-      label: 'Défaite', icon: <Skull class="w-5 h-5" />, blockName: 'defeat',
+      label: t('campaignManager.block.defeat'), icon: <Skull class="w-5 h-5" />, blockName: 'defeat',
       bgColor: '#1a0505', borderColor: '#dc2626', accentColor: '#f87171',
     },
   ];
@@ -158,7 +158,7 @@ const CampaignManager: Component = () => {
         const res = await fetch(`${getApiUrl()}/api/campaigns/${campaignId}/maps`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ name: parsedMap.name ?? 'Carte', data: localData }),
+          body: JSON.stringify({ name: parsedMap.name ?? 'Map', data: localData }),
         });
 
         if (!res.ok) {
@@ -187,7 +187,7 @@ const CampaignManager: Component = () => {
       if (treeData) {
         localStorage.setItem(`dnd-campaign-tree-${campaignId}`, JSON.stringify(treeData));
       }
-      showToast(`${migrated} carte${migrated > 1 ? 's' : ''} migrée${migrated > 1 ? 's' : ''} vers la base de données`, 'success');
+      showToast(t(migrated > 1 ? 'campaignManager.toast.mapsMigratedPlural' : 'campaignManager.toast.mapsMigrated', { n: migrated }), 'success');
     } catch (err) {
       console.warn('[CampaignManager] migration: auto-save after migration failed:', err);
     }
@@ -246,12 +246,12 @@ const CampaignManager: Component = () => {
       } else if (type === 'victory') {
         newNode = canvas.addNode({
           type: 'victory', x: baseX, y: baseY,
-          data: { title: 'Victoire' },
+          data: { title: t('campaignManager.node.defaultVictory') },
         });
       } else if (type === 'defeat') {
         newNode = canvas.addNode({
           type: 'defeat', x: baseX, y: baseY,
-          data: { title: 'Défaite' },
+          data: { title: t('campaignManager.node.defaultDefeat') },
         });
       }
 
@@ -319,7 +319,7 @@ const CampaignManager: Component = () => {
     // définition serveur si le canvas n'est pas encore initialisé.
     const exported = canvas.exportData();
     if (!exported) {
-      showToast('Impossible de sauvegarder : le canvas n\'est pas prêt.', 'error');
+      showToast(t('campaignManager.toast.saveCanvasNotReady'), 'error');
       return;
     }
 
@@ -476,7 +476,7 @@ const CampaignManager: Component = () => {
                         color: 'rgba(255,255,255,0.35)',
                         'white-space': 'nowrap',
                       }}>
-                        Bientôt
+                        {t('campaignManager.block.comingSoon')}
                       </span>
                     </Show>
                   </button>

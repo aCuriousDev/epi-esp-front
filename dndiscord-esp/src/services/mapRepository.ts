@@ -443,15 +443,15 @@ export function importMapFromJson(jsonString: string): SavedMapData {
   try {
     parsed = JSON.parse(jsonString);
   } catch {
-    throw new Error('Fichier invalide : JSON malformé.');
+    throw new Error('Invalid file: malformed JSON.');
   }
   if (!parsed || !Array.isArray(parsed.cells)) {
-    throw new Error('Format invalide : champ "cells" manquant ou incorrect.');
+    throw new Error('Invalid format: "cells" field missing or invalid.');
   }
   const imported: SavedMapData = {
     ...parsed,
     id:        generateMapId(),
-    name:      parsed.name ?? 'Carte importée',
+    name:      parsed.name ?? 'Imported map',
     createdAt: Date.now(),
     updatedAt: Date.now(),
     mapType:   parsed.mapType === 'dungeon-room' ? 'classique' : (parsed.mapType ?? 'classique'),

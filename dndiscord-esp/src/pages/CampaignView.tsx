@@ -397,7 +397,7 @@ export default function CampaignView() {
 
     if (
       !safeConfirm(
-        `Êtes-vous sûr de vouloir quitter "${c.title}" ? Vous devrez être réinvité pour rejoindre à nouveau.`,
+        `Are you sure you want to leave "${c.title}"? You will need to be re-invited to rejoin.`,
       )
     ) {
       return;
@@ -609,13 +609,13 @@ export default function CampaignView() {
                         </div>
                         <div class="min-w-0">
                           <p class="text-emerald-300 font-semibold text-sm uppercase tracking-wider mb-0.5">
-                            Session en cours
+                            Session in progress
                           </p>
                           <p class="text-white font-display text-lg leading-tight">
-                            Une session est actuellement active
+                            A session is currently active
                           </p>
                           <p class="text-slate-400 text-sm mt-0.5">
-                            Démarrée {formatRelativeTime(session().startedAt)}
+                            Started {formatRelativeTime(session().startedAt)}
                           </p>
                         </div>
                       </div>
@@ -625,7 +625,7 @@ export default function CampaignView() {
                         <button
                           onClick={handleJoinActiveSession}
                           disabled={joiningActive()}
-                          aria-label="Rejoindre la session en cours"
+                          aria-label="Join the ongoing session"
                           class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                         >
                           <Show
@@ -634,7 +634,7 @@ export default function CampaignView() {
                           >
                             <Play class="w-4 h-4" aria-hidden="true" />
                           </Show>
-                          {joiningActive() ? "Connexion…" : (isOwner() ? "Reprendre la session" : "Rejoindre la session")}
+                          {joiningActive() ? "Connecting…" : (isOwner() ? "Resume session" : "Join session")}
                         </button>
                         <Show when={joinActiveError()}>
                           <p class="text-red-400 text-xs" role="alert">{joinActiveError()}</p>
@@ -895,16 +895,16 @@ export default function CampaignView() {
               <Show when={!isOwner()}>
                 <div class="mt-8 p-4 rounded-xl border border-red-500/20 bg-red-500/5 flex items-center justify-between gap-4">
                   <div>
-                    <p class="text-sm font-medium text-red-300">Quitter la campagne</p>
+                    <p class="text-sm font-medium text-red-300">{t("campaignView.leaveCampaign")}</p>
                     <p class="text-xs text-red-400/70 mt-0.5">
-                      Vous pourrez rejoindre à nouveau uniquement via une invitation.
+                      {t("campaignView.leaveCampaign.hint")}
                     </p>
                   </div>
                   <div class="flex flex-col items-end gap-1 shrink-0">
                     <button
                       onClick={handleLeaveCampaign}
                       disabled={leavingCampaign()}
-                      aria-label="Quitter cette campagne"
+                      aria-label={t("campaignView.leaveCampaign.ariaLabel")}
                       class="py-2 px-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 font-semibold hover:bg-red-500/20 hover:border-red-500/50 transition-all flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                     >
                       <Show
@@ -913,7 +913,7 @@ export default function CampaignView() {
                       >
                         <LogOut class="w-4 h-4" aria-hidden="true" />
                       </Show>
-                      {leavingCampaign() ? "Départ…" : "Quitter"}
+                      {leavingCampaign() ? t("campaignView.leaving") : t("campaignView.leave")}
                     </button>
                     <Show when={leaveError()}>
                       <p class="text-red-400 text-xs" role="alert">{leaveError()}</p>
@@ -953,7 +953,7 @@ export default function CampaignView() {
             <button
               onClick={() => {
                 navigator.clipboard.writeText(inviteCode() || "");
-                showSuccessToast("Code copié dans le presse-papiers !");
+                showSuccessToast(t("campaignView.inviteModal.copied"));
                 setShowInviteModal(false);
               }}
               class="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-colors flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"

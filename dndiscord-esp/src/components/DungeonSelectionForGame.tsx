@@ -48,7 +48,7 @@ export const DungeonSelectionForGame: Component<DungeonSelectionForGameProps> = 
 					when={dungeons().length > 0}
 					fallback={
 						<div class="bg-black/40 backdrop-blur-sm rounded-xl p-8 border border-white/10 text-center">
-							<p class="text-slate-300">Aucun donjon disponible</p>
+							<p class="text-slate-300">No dungeon available</p>
 							<p class="text-slate-400 text-sm mt-2">
 								Create a dungeon in the map editor to get started
 							</p>
