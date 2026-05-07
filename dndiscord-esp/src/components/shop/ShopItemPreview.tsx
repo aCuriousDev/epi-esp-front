@@ -113,14 +113,14 @@ const AuraPreview: Component<{ glow: string; thumb: boolean }> = (p) => (
       p.thumb ? "w-14 h-14 shrink-0" : "w-full h-24"
     }`}
   >
-    <div
-      class={`rounded-full bg-ink-700 border-2 border-white/20 grid place-items-center text-mid font-display ${
-        p.thumb ? "w-7 h-7 text-[10px]" : "w-12 h-12 text-sm"
+    <img
+      src="/assets/classes/rogue.png"
+      alt="Character portrait preview"
+      class={`rounded-full object-cover border-2 border-white/20 ${
+        p.thumb ? "w-9 h-9" : "w-14 h-14"
       }`}
       style={{ "box-shadow": p.glow }}
-    >
-      A
-    </div>
+    />
   </div>
 );
 

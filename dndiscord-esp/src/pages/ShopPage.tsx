@@ -26,6 +26,7 @@ import { shopCart } from "../stores/shopCart.store";
 import ShopHeader from "../components/shop/ShopHeader";
 import ShopItemPreview from "../components/shop/ShopItemPreview";
 import DicePreviewModal from "../components/shop/DicePreviewModal";
+import AuraPreviewModal from "../components/shop/AuraPreviewModal";
 
 /**
  * Shop Page - Catalog (entry point)
@@ -40,14 +41,20 @@ export default function ShopPage() {
   const [toast, setToast] = createSignal<string | null>(null);
   let toastTimer: number | undefined;
 
-  // Modal state
+  // Dice modal state
   const [modalItem, setModalItem] = createSignal<ShopItem | null>(null);
   const [modalAdded, setModalAdded] = createSignal(false);
   let modalAddedTimer: number | undefined;
 
+  // Aura modal state
+  const [auraModalItem, setAuraModalItem] = createSignal<ShopItem | null>(null);
+  const [auraModalAdded, setAuraModalAdded] = createSignal(false);
+  let auraModalAddedTimer: number | undefined;
+
   onCleanup(() => {
     if (toastTimer) window.clearTimeout(toastTimer);
     if (modalAddedTimer) window.clearTimeout(modalAddedTimer);
+    if (auraModalAddedTimer) window.clearTimeout(auraModalAddedTimer);
   });
 
   function showToast(msg: string) {
@@ -68,6 +75,15 @@ export default function ShopPage() {
     setModalAdded(true);
     if (modalAddedTimer) window.clearTimeout(modalAddedTimer);
     modalAddedTimer = window.setTimeout(() => setModalAdded(false), 750);
+  }
+
+  function handleAuraModalAdd() {
+    const item = auraModalItem();
+    if (!item) return;
+    shopCart.add(item.id, 1);
+    setAuraModalAdded(true);
+    if (auraModalAddedTimer) window.clearTimeout(auraModalAddedTimer);
+    auraModalAddedTimer = window.setTimeout(() => setAuraModalAdded(false), 750);
   }
 
   return (
@@ -167,7 +183,13 @@ export default function ShopPage() {
           subtitle="A glow effect around your character portrait."
         >
           <For each={SHOP_AURAS}>
-            {(item) => <CosmeticCard item={item} onAdd={() => handleAdd(item)} />}
+            {(item) => (
+              <CosmeticCard
+                item={item}
+                onAdd={() => handleAdd(item)}
+                onPreview={() => setAuraModalItem(item)}
+              />
+            )}
           </For>
         </CatalogSection>
 
@@ -214,6 +236,14 @@ export default function ShopPage() {
         onClose={() => { setModalItem(null); setModalAdded(false); }}
         onAdd={handleModalAdd}
         added={modalAdded()}
+      />
+
+      {/* Aura preview modal */}
+      <AuraPreviewModal
+        item={auraModalItem()}
+        onClose={() => { setAuraModalItem(null); setAuraModalAdded(false); }}
+        onAdd={handleAuraModalAdd}
+        added={auraModalAdded()}
       />
 
       {/* Toast (add-to-cart confirmation) */}
